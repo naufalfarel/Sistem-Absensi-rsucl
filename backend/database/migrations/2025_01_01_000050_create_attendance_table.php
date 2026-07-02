@@ -19,6 +19,8 @@ return new class extends Migration
             $table->decimal('latitude', 10, 7)->nullable();
             $table->decimal('longitude', 10, 7)->nullable();
             $table->text('note')->nullable();
+            $table->string('image_check_in')->nullable();
+            $table->string('image_check_out')->nullable();
             $table->timestamps();
             $table->softDeletes();
 

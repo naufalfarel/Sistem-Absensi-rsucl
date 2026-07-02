@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, FileText, Calendar, ChevronDown } from 'lucide-react';
+import { Search, FileText, Calendar, ChevronDown, Eye, X } from 'lucide-react';
 import { attendanceApi, AttendanceRecord } from '../../../services/api';
 
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
@@ -17,6 +17,7 @@ export function HistoryTab() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [loading, setLoading] = useState(false);
+  const [selected, setSelected] = useState<AttendanceRecord | null>(null);
 
   const loadHistory = async () => {
     setLoading(true);
@@ -125,7 +126,7 @@ export function HistoryTab() {
           <table className="w-full">
             <thead>
               <tr className="bg-gray-50/70 border-b border-gray-100">
-                {['Nama', 'Departemen', 'Tanggal', 'Shift', 'Jam Masuk', 'Jam Keluar', 'Durasi', 'Status'].map((h, i) => (
+                {['Nama', 'Departemen', 'Tanggal', 'Shift', 'Jam Masuk', 'Jam Keluar', 'Durasi', 'Status', ''].map((h, i) => (
                   <th key={i} className="text-left px-4 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -133,7 +134,7 @@ export function HistoryTab() {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={8} className="text-center py-5 text-gray-400 text-[12px]">Memuat riwayat absensi...</td>
+                  <td colSpan={9} className="text-center py-5 text-gray-400 text-[12px]">Memuat riwayat absensi...</td>
                 </tr>
               )}
               {filtered.map((r, i) => {
@@ -161,6 +162,11 @@ export function HistoryTab() {
                         {sc.label}
                       </span>
                     </td>
+                    <td className="px-4 py-3">
+                      <button onClick={() => setSelected(r)} className="w-7 h-7 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center hover:bg-gray-100 transition-colors">
+                        <Eye size={13} className="text-gray-400" />
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
@@ -174,6 +180,64 @@ export function HistoryTab() {
           <p className="text-[12px] text-gray-400">Menampilkan {filtered.length} dari {records.length} data</p>
         </div>
       </div>
+
+      {/* Detail modal with selfie */}
+      {selected && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setSelected(null)} />
+          <div className="relative bg-white rounded-2xl p-6 shadow-2xl w-full max-w-sm">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: (statusConfig[selected.status] || { bg: '#F9FAFB' }).bg }}>
+                <span className="text-lg font-bold" style={{ color: (statusConfig[selected.status] || { color: '#6B7280' }).color }}>
+                  {(selected.employee?.name ?? 'K').replace(/^(dr\.|Ns\.|Dr\.)\s*/i, '').charAt(0)}
+                </span>
+              </div>
+              <div>
+                <p className="text-[14px] font-semibold text-gray-900">{selected.employee?.name}</p>
+                <p className="text-[12px] text-gray-500">{selected.employee?.department || 'Umum'}</p>
+              </div>
+            </div>
+
+            <div className="space-y-2.5 bg-gray-50 rounded-xl p-4 mb-5">
+              {[
+                { l: 'Tanggal', v: formatDate(selected.date) },
+                { l: 'Shift', v: 'Reguler' },
+                { l: 'Jam Masuk', v: selected.check_in ? selected.check_in.substring(0, 5) : '--' },
+                { l: 'Jam Keluar', v: selected.check_out ? selected.check_out.substring(0, 5) : '--' },
+                { l: 'Status', v: (statusConfig[selected.status] || { label: selected.status }).label },
+              ].map(({ l, v }, i) => (
+                <div key={i} className="flex justify-between">
+                  <span className="text-[12px] text-gray-500">{l}</span>
+                  <span className="text-[12px] font-medium text-gray-800">{v}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Selfie Photo display if available */}
+            {(selected.image_check_in || selected.image_check_out) && (
+              <div className="mb-5 space-y-2.5">
+                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Foto Selfie Absensi</p>
+                <div className="flex gap-2">
+                  {selected.image_check_in && (
+                    <div className="flex-1 text-center bg-gray-50 rounded-xl p-2 border border-gray-100 shadow-sm">
+                      <p className="text-[9px] font-bold text-gray-400 mb-1.5 uppercase">Selfie Masuk</p>
+                      <img src={selected.image_check_in} alt="Check In Selfie" className="w-full h-24 object-cover rounded-lg border" />
+                    </div>
+                  )}
+                  {selected.image_check_out && (
+                    <div className="flex-1 text-center bg-gray-50 rounded-xl p-2 border border-gray-100 shadow-sm">
+                      <p className="text-[9px] font-bold text-gray-400 mb-1.5 uppercase">Selfie Pulang</p>
+                      <img src={selected.image_check_out} alt="Check Out Selfie" className="w-full h-24 object-cover rounded-lg border" />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <button onClick={() => setSelected(null)} className="w-full py-2.5 bg-gray-100 rounded-xl text-[13px] font-medium text-gray-600 hover:bg-gray-200 transition-colors">Tutup</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

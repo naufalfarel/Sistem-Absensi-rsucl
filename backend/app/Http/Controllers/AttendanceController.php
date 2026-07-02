@@ -94,6 +94,23 @@ class AttendanceController extends Controller
                   ? 'hadir'
                   : 'telat';
 
+        $imageUrl = null;
+        if ($request->has('image')) {
+            $imgData = $request->input('image');
+            if (preg_match('/^data:image\/(\w+);base64,/', $imgData, $type)) {
+                $imgData = substr($imgData, strpos($imgData, ',') + 1);
+                $type = strtolower($type[1]); // png, jpg, jpeg
+                if (in_array($type, ['jpg', 'jpeg', 'png'])) {
+                    $imgData = base64_decode($imgData);
+                    if ($imgData !== false) {
+                        $fileName = 'selfie_in_' . $employee->id . '_' . time() . '.' . $type;
+                        \Illuminate\Support\Facades\Storage::disk('public')->put('selfies/' . $fileName, $imgData);
+                        $imageUrl = '/storage/selfies/' . $fileName;
+                    }
+                }
+            }
+        }
+
         $record = Attendance::create([
             'employee_id' => $employee->id,
             'date'        => today()->toDateString(),
@@ -101,6 +118,7 @@ class AttendanceController extends Controller
             'status'      => $status,
             'latitude'    => $request->latitude,
             'longitude'   => $request->longitude,
+            'image_check_in' => $imageUrl,
         ]);
 
         return response()->json([
@@ -138,11 +156,29 @@ class AttendanceController extends Controller
             ], 422);
         }
 
+        $imageUrl = null;
+        if ($request->has('image')) {
+            $imgData = $request->input('image');
+            if (preg_match('/^data:image\/(\w+);base64,/', $imgData, $type)) {
+                $imgData = substr($imgData, strpos($imgData, ',') + 1);
+                $type = strtolower($type[1]); // png, jpg, jpeg
+                if (in_array($type, ['jpg', 'jpeg', 'png'])) {
+                    $imgData = base64_decode($imgData);
+                    if ($imgData !== false) {
+                        $fileName = 'selfie_out_' . $employee->id . '_' . time() . '.' . $type;
+                        \Illuminate\Support\Facades\Storage::disk('public')->put('selfies/' . $fileName, $imgData);
+                        $imageUrl = '/storage/selfies/' . $fileName;
+                    }
+                }
+            }
+        }
+
         $now = Carbon::now('Asia/Jakarta');
         $record->update([
             'check_out' => $now->format('H:i:s'),
             'latitude'  => $request->latitude ?? $record->latitude,
             'longitude' => $request->longitude ?? $record->longitude,
+            'image_check_out' => $imageUrl,
         ]);
 
         return response()->json([
@@ -189,6 +225,8 @@ class AttendanceController extends Controller
             'latitude'     => $r->latitude,
             'longitude'    => $r->longitude,
             'note'         => $r->note,
+            'image_check_in' => $r->image_check_in ? url($r->image_check_in) : null,
+            'image_check_out' => $r->image_check_out ? url($r->image_check_out) : null,
         ];
 
         if ($withEmployee && $r->employee) {

@@ -143,19 +143,21 @@ export interface AttendanceRecord {
   longitude: number | null;
   note: string | null;
   employee?: { id: number; name: string; nip: string; department: string };
+  image_check_in?: string | null;
+  image_check_out?: string | null;
 }
 
 export const attendanceApi = {
   today:    () => api.get<{ success: boolean; data: AttendanceRecord | null }>('/attendance/today'),
   allToday: () => api.get<{ success: boolean; data: AttendanceRecord[] }>('/attendance/all-today'),
   history:  () => api.get<{ success: boolean; data: AttendanceRecord[] }>('/attendance/history'),
-  checkIn:  (lat?: number, lng?: number) =>
+  checkIn:  (lat?: number, lng?: number, image?: string) =>
     api.post<{ success: boolean; message: string; data: AttendanceRecord }>(
-      '/attendance/check-in', { latitude: lat, longitude: lng }
+      '/attendance/check-in', { latitude: lat, longitude: lng, image }
     ),
-  checkOut: (lat?: number, lng?: number) =>
+  checkOut: (lat?: number, lng?: number, image?: string) =>
     api.post<{ success: boolean; message: string; data: AttendanceRecord }>(
-      '/attendance/check-out', { latitude: lat, longitude: lng }
+      '/attendance/check-out', { latitude: lat, longitude: lng, image }
     ),
 };
 

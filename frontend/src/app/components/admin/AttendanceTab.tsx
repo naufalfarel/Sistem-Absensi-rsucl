@@ -11,6 +11,8 @@ interface MappedAttendance {
   checkOut: string | null;
   status: 'working' | 'done' | 'late' | 'absent' | 'leave' | 'not_yet';
   pos: string;
+  imageCheckIn?: string | null;
+  imageCheckOut?: string | null;
 }
 
 const statusMap: Record<string, { label: string; color: string; bg: string; icon: typeof CheckCircle2; border: string }> = {
@@ -65,6 +67,8 @@ export function AttendanceTab() {
             checkOut: r.check_out ? r.check_out.substring(0, 5) : null,
             status: statusKey,
             pos: 'Staff',
+            imageCheckIn: r.image_check_in,
+            imageCheckOut: r.image_check_out,
           };
         });
         setRecords(mapped);
@@ -253,6 +257,28 @@ export function AttendanceTab() {
                 </div>
               ))}
             </div>
+
+            {/* Selfie Photo display if available */}
+            {(selected.imageCheckIn || selected.imageCheckOut) && (
+              <div className="mb-5 space-y-2.5">
+                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Foto Selfie Absensi</p>
+                <div className="flex gap-2">
+                  {selected.imageCheckIn && (
+                    <div className="flex-1 text-center bg-gray-50 rounded-xl p-2 border border-gray-100 shadow-sm">
+                      <p className="text-[9px] font-bold text-gray-400 mb-1.5 uppercase">Selfie Masuk</p>
+                      <img src={selected.imageCheckIn} alt="Check In Selfie" className="w-full h-24 object-cover rounded-lg border" />
+                    </div>
+                  )}
+                  {selected.imageCheckOut && (
+                    <div className="flex-1 text-center bg-gray-50 rounded-xl p-2 border border-gray-100 shadow-sm">
+                      <p className="text-[9px] font-bold text-gray-400 mb-1.5 uppercase">Selfie Pulang</p>
+                      <img src={selected.imageCheckOut} alt="Check Out Selfie" className="w-full h-24 object-cover rounded-lg border" />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             <button onClick={() => setSelected(null)} className="w-full py-2.5 bg-gray-100 rounded-xl text-[13px] font-medium text-gray-600 hover:bg-gray-200 transition-colors">Tutup</button>
           </div>
         </div>
