@@ -65,21 +65,19 @@ const windowConfig: Record<AttendanceWindow, { icon: typeof Lock; iconColor: str
   break:       { icon: Coffee,       iconColor: '#7C3AED', bg: '#F5F3FF', border: '#DDD6FE', title: 'Jam Istirahat',          desc: 'Absen dikunci 12:30 – 13:30 WIB.',              sub: '🍽️ Makan siang disediakan di kantor' },
   working:     { icon: Clock,        iconColor: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE', title: 'Sedang Jam Kerja',       desc: 'Check-out dibuka pukul 17:00 WIB.',             sub: 'Tetap semangat bekerja!' },
   ended:       { icon: Lock,         iconColor: '#DC2626', bg: '#FEF2F2', border: '#FECACA', title: 'Waktu Absen Berakhir',   desc: 'Batas akhir check-out pukul 18:00 WIB.',        sub: 'Absensi hari ini sudah ditutup.' },
-  checkout:    { icon: Sunset,       iconColor: '#EA580C', bg: '#FFF7ED', border: '#FED7AA', title: 'Waktu Check-Out',        desc: 'Silakan lakukan check-out sekarang.',           sub: 'Terima kasih atas dedikasi Anda hari ini!' },
+  checkout:    { icon: Sunset,       iconColor: '#EA580C', bg: '#FFF7ED', border: '#FED7AA', title: 'Waktu Check-Out',        desc: 'Silakan lakukan check-out sekarang.',           sub: 'Teria kasih atas dedikasi Anda hari ini!' },
 };
 
 // ── Face Verification ─────────────────────────────────────────────────
 type FaceStep = 'idle' | 'scanning' | 'captured' | 'confirmed';
 
-// ── Captured sub-component (needs its own useEffect) ─────────────────
 function CapturedStep({ onConfirmed }: { onConfirmed: () => void }) {
   const [countdown, setCountdown] = useState(3);
   useEffect(() => {
     const interval = setInterval(() => setCountdown(c => c - 1), 1000);
     const timeout  = setTimeout(onConfirmed, 3000);
     return () => { clearInterval(interval); clearTimeout(timeout); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [onConfirmed]);
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-4">
       <div className="px-5 py-3.5 border-b border-gray-50 flex items-center gap-2">
@@ -107,19 +105,18 @@ function CapturedStep({ onConfirmed }: { onConfirmed: () => void }) {
 }
 
 function FaceVerificationCard({
-  faceStep, onCapture, onRetake,
-}: { faceStep: FaceStep; onCapture: () => void; onRetake: () => void }) {
+  faceStep, onCapture, onRetake, employeeName, employeeNip
+}: { faceStep: FaceStep; onCapture: () => void; onRetake: () => void; employeeName: string; employeeNip: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  // Start camera when scanning
   const startCamera = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 320, height: 240 } });
       streamRef.current = stream;
       if (videoRef.current) videoRef.current.srcObject = stream;
     } catch {
-      // Camera unavailable — simulation mode still works
+      // Camera simulation fallback
     }
   }, []);
 
@@ -134,7 +131,6 @@ function FaceVerificationCard({
     return () => stopCamera();
   }, [faceStep, startCamera, stopCamera]);
 
-  // Step 1: viewfinder
   if (faceStep === 'idle') {
     return (
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-4">
@@ -146,7 +142,6 @@ function FaceVerificationCard({
         <div className="p-5 flex flex-col items-center gap-4">
           <div className="relative w-32 h-32 rounded-full bg-gray-50 border-2 border-dashed border-gray-200 flex items-center justify-center">
             <Camera size={36} className="text-gray-300" />
-            {/* Corner brackets */}
             {[['top-2 left-2', 'rounded-tl-lg border-t-2 border-l-2'], ['top-2 right-2', 'rounded-tr-lg border-t-2 border-r-2'], ['bottom-2 left-2', 'rounded-bl-lg border-b-2 border-l-2'], ['bottom-2 right-2', 'rounded-br-lg border-b-2 border-r-2']].map(([pos, cls], i) => (
               <div key={i} className={`absolute ${pos} w-5 h-5 border-[#16A34A] ${cls}`} />
             ))}
@@ -156,7 +151,7 @@ function FaceVerificationCard({
             <p className="text-[11px] text-gray-400 mt-0.5">Ambil foto wajah Anda untuk memverifikasi identitas sebelum absen</p>
           </div>
           <button
-            onClick={() => { onCapture(); }}
+            onClick={onCapture}
             className="w-full flex items-center justify-center gap-2 py-3 bg-[#16A34A] hover:bg-[#0d9240] text-white rounded-xl text-[13px] font-semibold transition-all shadow-sm shadow-green-200 active:scale-[0.98]"
           >
             <Camera size={15} /> Buka Kamera
@@ -166,7 +161,6 @@ function FaceVerificationCard({
     );
   }
 
-  // Step 2: scanning / viewfinder active
   if (faceStep === 'scanning') {
     return (
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-4">
@@ -178,10 +172,8 @@ function FaceVerificationCard({
           </span>
         </div>
         <div className="p-4">
-          {/* Viewfinder */}
           <div className="relative rounded-2xl overflow-hidden bg-gray-900 aspect-[4/3] flex items-center justify-center mb-4">
             <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover" />
-            {/* Overlay when camera not available */}
             <div className="absolute inset-0 flex items-center justify-center bg-gray-900/60 text-center">
               <div>
                 <div className="w-16 h-16 rounded-full border-2 border-white/60 flex items-center justify-center mx-auto mb-2">
@@ -190,11 +182,9 @@ function FaceVerificationCard({
                 <p className="text-white/70 text-[11px]">Posisikan wajah di tengah</p>
               </div>
             </div>
-            {/* Corner brackets */}
             {[['top-3 left-3', 'border-t-2 border-l-2 rounded-tl-lg'], ['top-3 right-3', 'border-t-2 border-r-2 rounded-tr-lg'], ['bottom-3 left-3', 'border-b-2 border-l-2 rounded-bl-lg'], ['bottom-3 right-3', 'border-b-2 border-r-2 rounded-br-lg']].map(([pos, cls], i) => (
               <div key={i} className={`absolute ${pos} w-8 h-8 border-[#16A34A] ${cls}`} />
             ))}
-            {/* Scan line */}
             <div className="absolute left-0 right-0 h-0.5 bg-[#16A34A]/60 animate-[scan_2s_ease-in-out_infinite]" style={{ top: '50%' }} />
           </div>
           <div className="flex gap-2">
@@ -213,12 +203,10 @@ function FaceVerificationCard({
     );
   }
 
-  // Step 3: captured — delegate to CapturedStep
   if (faceStep === 'captured') {
     return <CapturedStep onConfirmed={onCapture} />;
   }
 
-  // Step 4: confirmed ✅
   return (
     <div className="bg-white rounded-2xl border border-green-200 shadow-sm overflow-hidden mb-4 bg-green-50/30">
       <div className="px-5 py-3.5 border-b border-green-100 flex items-center gap-2">
@@ -233,8 +221,8 @@ function FaceVerificationCard({
           </div>
         </div>
         <div>
-          <p className="text-[13px] font-semibold text-green-800">Dr. Rina Kusumawati</p>
-          <p className="text-[11px] text-gray-500">NIP: 198501012010012001</p>
+          <p className="text-[13px] font-semibold text-green-800">{employeeName}</p>
+          <p className="text-[11px] text-gray-500">NIP: {employeeNip}</p>
           <div className="flex items-center gap-1 mt-1">
             <div className="w-1.5 h-1.5 rounded-full bg-[#16A34A]" />
             <span className="text-[11px] text-[#16A34A] font-medium">Identitas dikonfirmasi</span>
@@ -249,16 +237,32 @@ function FaceVerificationCard({
 }
 
 // ── GPS Card ──────────────────────────────────────────────────────────
-function GPSCard() {
-  const [signalBars] = useState(4);
+function GPSCard({
+  userLocation,
+  gpsActive,
+  inGeofence,
+  distance,
+  hospLat,
+  hospLng,
+  hospRadius,
+}: {
+  userLocation: { lat: number; lng: number; accuracy: number } | null;
+  gpsActive: boolean;
+  inGeofence: boolean;
+  distance: number | null;
+  hospLat: number;
+  hospLng: number;
+  hospRadius: number;
+}) {
+  const signalBars = gpsActive ? (userLocation && userLocation.accuracy <= 15 ? 4 : 3) : 0;
 
   const gpsData = [
-    { label: 'Latitude',       value: '-6.176497°' },
-    { label: 'Longitude',      value: '106.827537°' },
-    { label: 'Akurasi',        value: '±5 meter' },
-    { label: 'Radius RS',      value: '100 meter' },
-    { label: 'Status GPS',     value: 'Aktif' },
-    { label: 'Status Geofence',value: 'Dalam Area' },
+    { label: 'Latitude',       value: userLocation ? `${userLocation.lat.toFixed(7)}°` : 'Mencari...' },
+    { label: 'Longitude',      value: userLocation ? `${userLocation.lng.toFixed(7)}°` : 'Mencari...' },
+    { label: 'Akurasi',        value: userLocation ? `±${userLocation.accuracy} meter` : '—' },
+    { label: 'Radius RS',      value: `${hospRadius} meter` },
+    { label: 'Status GPS',     value: gpsActive ? 'Aktif' : 'Mencari...' },
+    { label: 'Status Geofence',value: inGeofence ? 'Dalam Area' : 'Luar Area' },
   ];
 
   return (
@@ -277,8 +281,8 @@ function GPSCard() {
             ))}
           </div>
           <div className="flex items-center gap-1">
-            <div className="w-1.5 h-1.5 rounded-full bg-[#16A34A] animate-pulse" />
-            <span className="text-[11px] text-[#16A34A] font-medium">GPS Aktif</span>
+            <div className={`w-1.5 h-1.5 rounded-full ${gpsActive ? 'bg-[#16A34A] animate-pulse' : 'bg-red-500'}`} />
+            <span className={`text-[11px] font-medium ${gpsActive ? 'text-[#16A34A]' : 'text-red-500'}`}>{gpsActive ? 'GPS Aktif' : 'GPS Mati'}</span>
           </div>
         </div>
       </div>
@@ -295,23 +299,19 @@ function GPSCard() {
         <div className="absolute top-[70%] left-0 right-0 h-3 bg-white/60" />
         <div className="absolute left-[28%] top-0 bottom-0 w-4 bg-white/80 shadow-sm" />
         <div className="absolute left-[66%] top-0 bottom-0 w-2.5 bg-white/60" />
-        {/* Buildings */}
-        <div className="absolute top-[12%] left-[8%] w-16 h-12 bg-green-300/30 rounded-lg border border-green-200/50" />
-        <div className="absolute bottom-[12%] right-[12%] w-14 h-10 bg-green-300/25 rounded-lg border border-green-200/40" />
-        <div className="absolute top-[55%] right-[30%] w-10 h-8 bg-blue-300/20 rounded border border-blue-200/40" />
 
         {/* Geofence radius circle */}
         <div className="absolute" style={{
           top:'50%', left:'50%', transform:'translate(-50%,-50%)',
           width: '120px', height: '120px', borderRadius: '50%',
-          border: '2px dashed rgba(22,163,74,0.5)',
-          background: 'rgba(22,163,74,0.07)',
+          border: inGeofence ? '2px dashed rgba(22,163,74,0.5)' : '2px dashed rgba(220,38,38,0.5)',
+          background: inGeofence ? 'rgba(22,163,74,0.07)' : 'rgba(220,38,38,0.07)',
         }} />
         {/* Outer ring pulse */}
         <div className="absolute animate-ping" style={{
           top:'50%', left:'50%', transform:'translate(-50%,-50%)',
           width:'130px', height:'130px', borderRadius:'50%',
-          border:'1px solid rgba(22,163,74,0.2)',
+          border: inGeofence ? '1px solid rgba(22,163,74,0.2)' : '1px solid rgba(220,38,38,0.2)',
           animationDuration: '3s',
         }} />
 
@@ -327,15 +327,19 @@ function GPSCard() {
         </div>
 
         {/* User location — pulsing dot */}
-        <div className="absolute" style={{ top:'54%', left:'55%', transform:'translate(-50%,-50%)' }}>
+        <div className="absolute" style={{
+          top: inGeofence ? '54%' : '20%',
+          left: inGeofence ? '55%' : '80%',
+          transform: 'translate(-50%,-50%)'
+        }}>
           <div className="relative w-5 h-5">
-            <div className="absolute inset-0 bg-blue-500 rounded-full border-2 border-white shadow-lg shadow-blue-400/60 z-10" />
-            <div className="absolute inset-0 bg-blue-400 rounded-full animate-ping opacity-70" style={{ animationDuration:'1.5s' }} />
-            <div className="absolute -inset-2 bg-blue-300 rounded-full animate-ping opacity-30" style={{ animationDuration:'2s' }} />
+            <div className={`absolute inset-0 rounded-full border-2 border-white shadow-lg z-10 ${inGeofence ? 'bg-blue-500 shadow-blue-400/60' : 'bg-red-500 shadow-red-400/60'}`} />
+            <div className={`absolute inset-0 rounded-full animate-ping opacity-70 ${inGeofence ? 'bg-blue-400' : 'bg-red-400'}`} style={{ animationDuration:'1.5s' }} />
+            <div className={`absolute -inset-2 rounded-full animate-ping opacity-30 ${inGeofence ? 'bg-blue-300' : 'bg-red-300'}`} style={{ animationDuration:'2s' }} />
           </div>
         </div>
 
-        {/* Corner brackets (Google Maps style) */}
+        {/* Corner brackets */}
         {[['top-2 left-2','border-t-2 border-l-2 rounded-tl'], ['top-2 right-2','border-t-2 border-r-2 rounded-tr'], ['bottom-2 left-2','border-b-2 border-l-2 rounded-bl'], ['bottom-2 right-2','border-b-2 border-r-2 rounded-br']].map(([pos, cls], i) => (
           <div key={i} className={`absolute ${pos} w-5 h-5 border-gray-500/40 ${cls}`} />
         ))}
@@ -346,11 +350,11 @@ function GPSCard() {
             <div className="absolute left-0 -top-0.5 w-0.5 h-1.5 bg-gray-700" />
             <div className="absolute right-0 -top-0.5 w-0.5 h-1.5 bg-gray-700" />
           </div>
-          <span className="text-[9px] text-gray-600 font-medium">100m</span>
+          <span className="text-[9px] text-gray-600 font-medium">{hospRadius}m</span>
         </div>
         {/* Accuracy badge */}
         <div className="absolute bottom-2 right-3 bg-white/85 rounded-md px-2 py-1 shadow-sm">
-          <span className="text-[9px] text-gray-600 font-medium">Akurasi ±5m</span>
+          <span className="text-[9px] text-gray-600 font-medium">Akurasi {userLocation ? `±${userLocation.accuracy}m` : '—'}</span>
         </div>
         {/* Map watermark */}
         <div className="absolute top-2 right-2 bg-white/70 rounded px-1.5 py-0.5">
@@ -369,21 +373,32 @@ function GPSCard() {
           ))}
         </div>
         <div className="grid grid-cols-3 gap-3">
-          {gpsData.slice(3).map(({ label, value }) => (
-            <div key={label} className={`rounded-xl p-2.5 ${label === 'Status Geofence' ? 'bg-green-50 border border-green-100' : label === 'Status GPS' ? 'bg-green-50 border border-green-100' : 'bg-gray-50'}`}>
-              <p className="text-[9px] text-gray-400 uppercase tracking-wide mb-0.5">{label}</p>
-              <p className={`text-[11px] font-bold ${label.startsWith('Status') ? 'text-[#16A34A]' : 'text-gray-800'} font-mono`}>{value}</p>
-            </div>
-          ))}
+          {gpsData.slice(3).map(({ label, value }) => {
+            const isOk = (label === 'Status Geofence' && inGeofence) || (label === 'Status GPS' && gpsActive);
+            return (
+              <div key={label} className={`rounded-xl p-2.5 ${isOk ? 'bg-green-50 border border-green-100' : 'bg-red-50 border border-red-100'}`}>
+                <p className="text-[9px] text-gray-400 uppercase tracking-wide mb-0.5">{label}</p>
+                <p className={`text-[11px] font-bold ${isOk ? 'text-[#16A34A]' : 'text-red-500'} font-mono`}>{value}</p>
+              </div>
+            );
+          })}
         </div>
         {/* In-range indicator */}
-        <div className="mt-3 flex items-center gap-2 px-3 py-2 bg-green-50 rounded-xl border border-green-100">
-          <Crosshair size={13} className="text-[#16A34A] flex-shrink-0" />
+        <div className={`mt-3 flex items-center gap-2 px-3 py-2 rounded-xl border ${inGeofence ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'}`}>
+          <Crosshair size={13} className={inGeofence ? 'text-[#16A34A] flex-shrink-0' : 'text-red-500 flex-shrink-0'} />
           <div className="flex-1">
-            <p className="text-[11px] font-semibold text-green-800">Di dalam area RS (~18 meter)</p>
-            <p className="text-[10px] text-green-600">Jl. Cempaka Lima No.15, Jakarta Pusat</p>
+            <p className={`text-[11px] font-semibold ${inGeofence ? 'text-green-800' : 'text-red-800'}`}>
+              {inGeofence 
+                ? `Di dalam area RS (~${Math.round(distance ?? 0)} meter)`
+                : distance !== null 
+                  ? `Di luar area RS (~${Math.round(distance)} meter)`
+                  : 'Menunggu lokasi GPS...'}
+            </p>
+            <p className={`text-[10px] ${inGeofence ? 'text-green-600' : 'text-red-600'} truncate`}>
+              Jl. Politeknik Aceh No.23, Beurawe, Kec. Kuta Alam, Kota Banda Aceh, Aceh
+            </p>
           </div>
-          <div className="w-2 h-2 rounded-full bg-[#16A34A] animate-pulse" />
+          <div className={`w-2 h-2 rounded-full ${inGeofence ? 'bg-[#16A34A] animate-pulse' : 'bg-red-500'}`} />
         </div>
       </div>
     </div>
@@ -404,7 +419,6 @@ function SuccessAnimation({ action, time, onDone }: { action: string; time: stri
     <div className={`fixed inset-0 z-50 flex items-center justify-center transition-opacity duration-500 ${visible ? 'opacity-100' : 'opacity-0'}`}>
       <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" />
       <div className="relative flex flex-col items-center gap-4">
-        {/* Ripple circles */}
         <div className="relative w-32 h-32 flex items-center justify-center">
           {[0,1,2].map(i => (
             <div key={i} className="absolute rounded-full bg-[#16A34A] opacity-0"
@@ -418,7 +432,6 @@ function SuccessAnimation({ action, time, onDone }: { action: string; time: stri
             <CheckCircle2 size={40} className="text-white" />
           </div>
         </div>
-        {/* Card */}
         <div className="bg-white rounded-2xl px-8 py-5 shadow-2xl text-center min-w-[220px]">
           <p className="text-[18px] font-bold text-gray-900">{action} Berhasil!</p>
           <p className="text-[13px] text-gray-500 mt-1">{user?.name}</p>
@@ -432,7 +445,6 @@ function SuccessAnimation({ action, time, onDone }: { action: string; time: stri
   );
 }
 
-// ── Ripple keyframes injected once ────────────────────────────────────
 const RIPPLE_STYLE = `
 @keyframes ripple {
   0%   { transform: scale(0.5); opacity: 0.4; }
@@ -456,8 +468,16 @@ export function AttendancePage() {
   const [checkInTime, setCheckInTime]   = useState('');
   const [checkOutTime, setCheckOutTime] = useState('');
 
+  // GPS and Geofence logic states
+  const HOSP_LAT = 5.552740480177099;
+  const HOSP_LNG = 95.33486560781716;
+  const HOSP_RADIUS = 100;
+
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
+  const [gpsActive, setGpsActive]       = useState<boolean>(true);
+  const [gpsSimMode, setGpsSimMode]     = useState<'inside' | 'outside' | 'real'>('inside');
+
   // Face verification state machine
-  // idle → scanning → captured → confirmed
   const [faceStep, setFaceStep] = useState<FaceStep>('idle');
 
   // Success animation
@@ -486,6 +506,64 @@ export function AttendancePage() {
     };
     loadTodayRecord();
   }, []);
+
+  // Browser watch geolocation effect
+  useEffect(() => {
+    if (gpsSimMode === 'inside') {
+      setUserLocation({ lat: 5.552820, lng: 95.334920, accuracy: 6 });
+      setGpsActive(true);
+      return;
+    }
+    if (gpsSimMode === 'outside') {
+      setUserLocation({ lat: 5.452740, lng: 95.234865, accuracy: 12 });
+      setGpsActive(true);
+      return;
+    }
+
+    if (!navigator.geolocation) {
+      alert('Browser Anda tidak mendukung Geolocation GPS.');
+      setGpsSimMode('inside');
+      return;
+    }
+
+    const id = navigator.geolocation.watchPosition(
+      (pos) => {
+        setUserLocation({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: Math.round(pos.coords.accuracy),
+        });
+        setGpsActive(true);
+      },
+      (err) => {
+        console.warn(err);
+        setGpsActive(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+    return () => navigator.geolocation.clearWatch(id);
+  }, [gpsSimMode]);
+
+  const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371e3; // metres
+    const φ1 = lat1 * Math.PI/180;
+    const φ2 = lat2 * Math.PI/180;
+    const Δφ = (lat2-lat1) * Math.PI/180;
+    const Δλ = (lon2-lon1) * Math.PI/180;
+
+    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ/2) * Math.sin(Δλ/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+    return R * c; // in metres
+  };
+
+  const distance = userLocation 
+    ? getDistance(userLocation.lat, userLocation.lng, HOSP_LAT, HOSP_LNG)
+    : null;
+
+  const inGeofence = distance !== null ? distance <= HOSP_RADIUS : false;
 
   useEffect(() => {
     if (simIdx !== null) return;
@@ -520,13 +598,15 @@ export function AttendancePage() {
   };
 
   const handleAction = () => {
-    if ((canCheckIn || canCheckOut) && faceVerified) setShowModal(true);
+    if ((canCheckIn || canCheckOut) && faceVerified && inGeofence) setShowModal(true);
   };
 
   const confirmAction = async () => {
     try {
+      const latVal = userLocation?.lat ?? HOSP_LAT;
+      const lngVal = userLocation?.lng ?? HOSP_LNG;
       if (canCheckIn) {
-        const res = await attendanceApi.checkIn(5.5503, 95.3182); // RSUCL coordinates
+        const res = await attendanceApi.checkIn(latVal, lngVal);
         if (res.success && res.data.check_in) {
           const t = res.data.check_in.substring(0, 5);
           setCheckInTime(t);
@@ -537,7 +617,7 @@ export function AttendancePage() {
           setShowSuccess(true);
         }
       } else if (canCheckOut) {
-        const res = await attendanceApi.checkOut(5.5503, 95.3182);
+        const res = await attendanceApi.checkOut(latVal, lngVal);
         if (res.success && res.data.check_out) {
           const t = res.data.check_out.substring(0, 5);
           setCheckOutTime(t);
@@ -587,14 +667,12 @@ export function AttendancePage() {
   const phaseOrder: AttendanceWindow[] = ['too_early','checkin','late_locked','break','working','checkout','ended'];
   const currentPhaseIdx = phaseOrder.indexOf(window);
 
-  // Face step handlers
   const handleFaceCapture = () => {
     if (faceStep === 'idle')     { setFaceStep('scanning'); return; }
     if (faceStep === 'scanning') { setFaceStep('captured'); return; }
     if (faceStep === 'captured') { setFaceStep('confirmed'); }
   };
   const handleFaceRetake = () => {
-    if (faceStep === 'scanning') { setFaceStep('idle'); return; }
     setFaceStep('idle');
   };
 
@@ -607,7 +685,6 @@ export function AttendancePage() {
 
   return (
     <div className="p-5 md:p-7 max-w-2xl mx-auto">
-      {/* Inject keyframes */}
       <style>{RIPPLE_STYLE}</style>
 
       {/* Header */}
@@ -622,25 +699,49 @@ export function AttendancePage() {
         </div>
       </div>
 
-      {/* Demo mode banner */}
-      <div className="mb-4">
+      {/* Demo / Simulation Mode Panel */}
+      <div className="mb-4 space-y-2">
         <button onClick={() => setShowSim(!showSim)}
           className="w-full flex items-center justify-between px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-[12px] text-amber-700 font-medium hover:bg-amber-100 transition-colors">
-          <span>🧪 Mode Simulasi Jam – klik untuk menguji jam berbeda</span>
+          <span>🧪 Mode Simulasi Absensi – Jam & Lokasi GPS</span>
           <span className={`transition-transform ${showSim ? 'rotate-180' : ''}`}>▾</span>
         </button>
         {showSim && (
-          <div className="mt-1.5 p-3 bg-amber-50 border border-amber-100 rounded-xl grid grid-cols-2 gap-1.5">
-            <button onClick={() => resetSim(null)}
-              className={`px-2.5 py-2 rounded-lg text-[11px] font-medium text-left transition-colors ${simIdx === null ? 'bg-amber-500 text-white' : 'bg-white border border-amber-200 text-amber-700 hover:bg-amber-50'}`}>
-              ⏱ Waktu Nyata
-            </button>
-            {SIM_TIMES.map((s, i) => (
-              <button key={i} onClick={() => resetSim(i)}
-                className={`px-2.5 py-2 rounded-lg text-[11px] font-medium text-left transition-colors ${simIdx === i ? 'bg-amber-500 text-white' : 'bg-white border border-amber-200 text-amber-700 hover:bg-amber-50'}`}>
-                {s.label}
-              </button>
-            ))}
+          <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl space-y-3">
+            <div>
+              <p className="text-[11px] font-semibold text-amber-800 mb-1.5">1. Simulasikan Jam Absen</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                <button onClick={() => resetSim(null)}
+                  className={`px-2.5 py-2 rounded-lg text-[11px] font-medium text-left transition-colors ${simIdx === null ? 'bg-amber-500 text-white' : 'bg-white border border-amber-200 text-amber-700 hover:bg-amber-50'}`}>
+                  ⏱ Waktu Nyata
+                </button>
+                {SIM_TIMES.map((s, i) => (
+                  <button key={i} onClick={() => resetSim(i)}
+                    className={`px-2.5 py-2 rounded-lg text-[11px] font-medium text-left transition-colors ${simIdx === i ? 'bg-amber-500 text-white' : 'bg-white border border-amber-200 text-amber-700 hover:bg-amber-50'}`}>
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="border-t border-amber-200 pt-2.5">
+              <p className="text-[11px] font-semibold text-amber-800 mb-1.5">2. Simulasikan Lokasi GPS & Geofence</p>
+              <div className="grid grid-cols-3 gap-1.5">
+                {[
+                  { mode: 'inside', label: '📍 Di Dalam RS (In-Range)' },
+                  { mode: 'outside', label: '🚗 Di Luar RS (Out-Range)' },
+                  { mode: 'real', label: '🌐 GPS Nyata (HP/Laptop)' },
+                ].map(opt => (
+                  <button
+                    key={opt.mode}
+                    onClick={() => setGpsSimMode(opt.mode as any)}
+                    className={`px-2 py-2 rounded-lg text-[10px] font-medium text-center transition-colors ${gpsSimMode === opt.mode ? 'bg-amber-500 text-white' : 'bg-white border border-amber-200 text-amber-700 hover:bg-amber-50'}`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -668,34 +769,34 @@ export function AttendancePage() {
                   <p className="text-[9px] font-mono text-gray-500 mt-1 whitespace-nowrap">{item.time}</p>
                   <p className={`text-[9px] font-medium mt-0.5 whitespace-nowrap ${isActive ? 'text-[#16A34A]' : isDone ? 'text-gray-400' : 'text-gray-300'}`}>{item.label}</p>
                 </div>
-                {i < timelineItems.length - 1 && <div className={`flex-1 h-0.5 mx-1 rounded-full ${isDone ? 'bg-[#16A34A]' : 'bg-gray-200'}`} />}
+                {i < timelineItems.length - 1 && (
+                  <div className={`flex-1 h-0.5 mx-1 -mt-4 transition-all ${isDone ? 'bg-[#16A34A]' : 'bg-gray-150'}`} />
+                )}
               </div>
             );
           })}
         </div>
       </div>
 
-      {/* Status Banner */}
-      {!checkedOut && (
-        <div className="rounded-2xl border p-4 mb-4 flex items-start gap-3" style={{ background: wc.bg, borderColor: wc.border }}>
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-white/60">
-            <wc.icon size={18} style={{ color: wc.iconColor }} />
-          </div>
-          <div className="flex-1">
-            <p className="text-[13px] font-semibold text-gray-900">{wc.title}</p>
-            <p className="text-[12px] text-gray-600 mt-0.5">{wc.desc}</p>
-            {wc.sub && <p className="text-[11px] text-gray-500 mt-1">{wc.sub}</p>}
-          </div>
-        </div>
-      )}
+      {/* Face Verification viewfinder */}
+      <FaceVerificationCard
+        faceStep={faceStep}
+        onCapture={handleFaceCapture}
+        onRetake={handleFaceRetake}
+        employeeName={user?.name ?? 'Dr. Rina Kusumawati'}
+        employeeNip={user?.nip ?? '198501012010012001'}
+      />
 
-      {/* GPS Card */}
-      <GPSCard />
-
-      {/* Face Verification — only show when check-in/out time is active */}
-      {(canCheckIn || canCheckOut || faceStep !== 'idle') && !checkedOut && (
-        <FaceVerificationCard faceStep={faceStep} onCapture={handleFaceCapture} onRetake={handleFaceRetake} />
-      )}
+      {/* GPS Map Geofence Card */}
+      <GPSCard
+        userLocation={userLocation}
+        gpsActive={gpsActive}
+        inGeofence={inGeofence}
+        distance={distance}
+        hospLat={HOSP_LAT}
+        hospLng={HOSP_LNG}
+        hospRadius={HOSP_RADIUS}
+      />
 
       {/* Rekap if checked in */}
       {checkedIn && (
@@ -726,10 +827,10 @@ export function AttendancePage() {
       {/* Connection badges */}
       <div className="flex gap-2.5 mb-4">
         {[
-          { icon: Wifi,       label: 'WiFi RS',  st: 'Terhubung',    ok: true },
-          { icon: Navigation, label: 'GPS',       st: 'Aktif',        ok: true },
-          { icon: Signal,     label: 'Sinyal',    st: 'Kuat (4/4)',   ok: true },
-          { icon: Target,     label: 'Geofence',  st: 'Terverifikasi',ok: true },
+          { icon: Wifi,       label: 'WiFi RS',  st: inGeofence ? 'Terhubung' : 'Terputus',    ok: inGeofence },
+          { icon: Navigation, label: 'GPS',       st: gpsActive ? 'Aktif' : 'Nonaktif',        ok: gpsActive },
+          { icon: Signal,     label: 'Sinyal',    st: userLocation ? (userLocation.accuracy <= 15 ? 'Kuat (4/4)' : 'Sedang (3/4)') : 'Mencari...',   ok: gpsActive },
+          { icon: Target,     label: 'Geofence',  st: inGeofence ? 'Terverifikasi' : 'Di Luar Area',ok: inGeofence },
         ].map(({ icon: Icon, label, st, ok }, i) => (
           <div key={i} className="flex-1 bg-white rounded-xl border border-gray-100 p-2 flex items-center gap-1.5 shadow-sm">
             <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${ok ? 'bg-green-50' : 'bg-red-50'}`}>
@@ -757,40 +858,48 @@ export function AttendancePage() {
         </div>
       ) : canCheckIn ? (
         <div className="space-y-2">
-          {!faceVerified && (
+          {(!faceVerified || !inGeofence) && (
             <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl">
               <AlertCircle size={14} className="text-amber-500 flex-shrink-0" />
-              <p className="text-[12px] text-amber-700">Selesaikan verifikasi wajah terlebih dahulu</p>
+              <p className="text-[12px] text-amber-700">
+                {!faceVerified 
+                  ? 'Selesaikan verifikasi wajah terlebih dahulu'
+                  : 'Anda harus berada di dalam area geofence RSUCL'}
+              </p>
             </div>
           )}
-          <button onClick={handleAction} disabled={!faceVerified}
+          <button onClick={handleAction} disabled={!faceVerified || !inGeofence}
             className={`w-full py-4 rounded-2xl font-semibold text-[16px] transition-all flex items-center justify-center gap-3 ${
-              faceVerified
+              (faceVerified && inGeofence)
                 ? 'bg-[#16A34A] hover:bg-[#0d9240] text-white shadow-lg shadow-green-200/60 active:scale-[0.98]'
                 : 'bg-gray-100 text-gray-300 cursor-not-allowed border-2 border-dashed border-gray-200'
             }`}
           >
-            {faceVerified ? <CheckCircle2 size={20} /> : <Lock size={18} />}
-            {faceVerified ? 'CHECK IN' : 'Verifikasi Wajah Diperlukan'}
+            {faceVerified && inGeofence ? <CheckCircle2 size={20} /> : <Lock size={18} />}
+            {faceVerified && inGeofence ? 'CHECK IN' : !inGeofence ? 'Di Luar Area Geofence' : 'Verifikasi Wajah Diperlukan'}
           </button>
         </div>
       ) : canCheckOut ? (
         <div className="space-y-2">
-          {!faceVerified && (
+          {(!faceVerified || !inGeofence) && (
             <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl">
               <AlertCircle size={14} className="text-amber-500 flex-shrink-0" />
-              <p className="text-[12px] text-amber-700">Selesaikan verifikasi wajah untuk check-out</p>
+              <p className="text-[12px] text-amber-700">
+                {!faceVerified 
+                  ? 'Selesaikan verifikasi wajah untuk check-out'
+                  : 'Anda harus berada di dalam area geofence RSUCL'}
+              </p>
             </div>
           )}
-          <button onClick={handleAction} disabled={!faceVerified}
+          <button onClick={handleAction} disabled={!faceVerified || !inGeofence}
             className={`w-full py-4 rounded-2xl font-semibold text-[16px] transition-all flex items-center justify-center gap-3 ${
-              faceVerified
+              (faceVerified && inGeofence)
                 ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-200/60 active:scale-[0.98]'
                 : 'bg-gray-100 text-gray-300 cursor-not-allowed border-2 border-dashed border-gray-200'
             }`}
           >
-            {faceVerified ? <Clock size={20} /> : <Lock size={18} />}
-            {faceVerified ? 'CHECK OUT' : 'Verifikasi Wajah Diperlukan'}
+            {faceVerified && inGeofence ? <Clock size={20} /> : <Lock size={18} />}
+            {faceVerified && inGeofence ? 'CHECK OUT' : !inGeofence ? 'Di Luar Area Geofence' : 'Verifikasi Wajah Diperlukan'}
           </button>
         </div>
       ) : (
@@ -847,7 +956,7 @@ export function AttendancePage() {
                 { label: 'NIP',              value: user?.nip ?? '198501012010012001' },
                 { label: 'Waktu',            value: `${current.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB` },
                 { label: 'Jenis',            value: canCheckIn ? 'Check-In Masuk' : 'Check-Out Pulang' },
-                { label: 'Lokasi',           value: 'RSUCL – Dalam Area (~18m)' },
+                { label: 'Lokasi',           value: inGeofence ? `Dalam Area (~${Math.round(distance ?? 0)}m)` : `Luar Area (~${Math.round(distance ?? 0)}m)` },
                 { label: 'Verifikasi Wajah', value: '✅ Terverifikasi' },
               ].map(({ label, value }, i) => (
                 <div key={i} className="flex justify-between">

@@ -122,8 +122,8 @@ class DatabaseSeeder extends Seeder
             'checkout_open' => '17:00',
             'checkout_close'=> '18:00',
             'gps_radius'    => '100',
-            'hospital_lat'  => '5.5503',
-            'hospital_lng'  => '95.3182',
+            'hospital_lat'  => '5.552740480177099',
+            'hospital_lng'  => '95.33486560781716',
         ];
         foreach ($defaults as $key => $value) {
             Setting::create(['key' => $key, 'value' => $value]);
