@@ -1,58 +1,147 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Backend — Sistem Absensi RSUCL
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Backend **Laravel 12** yang menyediakan REST API untuk aplikasi Sistem Absensi RS Umum Cempaka Lima.
 
-## About Laravel
+---
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Stack
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+- **PHP** ≥ 8.3
+- **Laravel** 12.x
+- **Autentikasi**: Laravel Sanctum (Bearer Token)
+- **Database**: SQLite (development) / MySQL (production)
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+---
 
-## Learning Laravel
-
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
-
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+## Setup Awal
 
 ```bash
-composer require laravel/boost --dev
+cd backend
 
-php artisan boost:install
+# 1. Install dependensi PHP
+composer install
+
+# 2. Salin file konfigurasi
+copy .env.example .env
+
+# 3. Generate application key
+php artisan key:generate
+
+# 4. Buat database & jalankan migrasi + seeder
+php artisan migrate:fresh --seed
+
+# 5. Jalankan server lokal
+php artisan serve
+# → berjalan di http://localhost:8000
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+---
 
-## Contributing
+## Akun Default (Seeder)
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+| Role | NIP | Username | Password |
+|------|-----|----------|----------|
+| Admin | `ADMIN001` | `admin` | `Admin@RSUCL2025` |
+| Karyawan 1 | `198501012010012001` | `rina.kusumawati` | `Karyawan@RSUCL1` |
+| Karyawan 2 | `198805122012011002` | `ahmad.fauzi` | `Karyawan@RSUCL2` |
+| Karyawan 3 | `199508152018012007` | `rini.handayani` | `Karyawan@RSUCL3` |
 
-## Code of Conduct
+> ⚠️ Ganti semua password sebelum deploy ke production.
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+---
 
-## Security Vulnerabilities
+## Daftar Endpoint API
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+Base URL: `http://localhost:8000/api`
+Format respons: `{ success, message, data }` atau `{ success, message, errors }`
 
-## License
+### Auth (Public)
+| Method | Endpoint | Deskripsi |
+|--------|----------|-----------|
+| `POST` | `/login` | Login, terima token |
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+### Auth (Perlu Token)
+| Method | Endpoint | Deskripsi |
+|--------|----------|-----------|
+| `GET` | `/me` | Data user yang sedang login |
+| `POST` | `/logout` | Logout, hapus token |
+
+### Absensi (Semua role)
+| Method | Endpoint | Deskripsi |
+|--------|----------|-----------|
+| `GET` | `/attendance/today` | Absensi hari ini (milik sendiri) |
+| `GET` | `/attendance/history` | Riwayat 100 data terakhir |
+| `POST` | `/attendance/check-in` | Check-in dengan GPS opsional |
+| `POST` | `/attendance/check-out` | Check-out |
+
+### Cuti & Izin (Semua role)
+| Method | Endpoint | Deskripsi |
+|--------|----------|-----------|
+| `GET` | `/leave-requests` | Daftar pengajuan (milik sendiri / semua jika admin) |
+| `POST` | `/leave-requests` | Ajukan cuti/izin/sakit |
+
+### Notifikasi (Semua role)
+| Method | Endpoint | Deskripsi |
+|--------|----------|-----------|
+| `GET` | `/notifications` | Daftar notifikasi + jumlah belum dibaca |
+| `PUT` | `/notifications/{id}/read` | Tandai 1 notifikasi dibaca |
+| `PUT` | `/notifications/read-all` | Tandai semua dibaca |
+
+### Admin Only
+| Method | Endpoint | Deskripsi |
+|--------|----------|-----------|
+| `GET` | `/attendance/all-today` | Kehadiran semua karyawan hari ini |
+| `GET/POST/PUT/DELETE` | `/employees` | CRUD karyawan |
+| `GET` | `/employees/meta` | Data departemen & jabatan |
+| `PUT` | `/leave-requests/{id}/approve` | Setujui pengajuan |
+| `PUT` | `/leave-requests/{id}/reject` | Tolak pengajuan |
+| `GET/POST/PUT/DELETE` | `/schedules` | CRUD jadwal shift |
+| `GET` | `/reports/summary` | Ringkasan laporan |
+| `GET` | `/settings` | Baca pengaturan sistem |
+| `PUT` | `/settings` | Simpan pengaturan sistem |
+
+---
+
+## Struktur Folder
+
+```
+app/
+├── Http/
+│   ├── Controllers/
+│   │   ├── AuthController.php
+│   │   ├── EmployeeController.php
+│   │   ├── AttendanceController.php
+│   │   ├── LeaveRequestController.php
+│   │   ├── NotificationController.php
+│   │   ├── ReportController.php
+│   │   ├── ScheduleController.php
+│   │   └── SettingController.php
+│   └── Middleware/
+│       └── EnsureIsAdmin.php
+└── Models/
+    ├── User.php
+    ├── Employee.php
+    ├── Department.php
+    ├── Position.php
+    ├── Attendance.php
+    ├── LeaveRequest.php
+    ├── Schedule.php
+    ├── Notification.php
+    └── Setting.php
+routes/
+└── api.php
+database/
+├── migrations/
+└── seeders/
+    └── DatabaseSeeder.php
+```
+
+---
+
+## Keamanan
+
+- Password di-hash dengan bcrypt via Eloquent cast `hashed`
+- Token Sanctum dihapus saat logout
+- Endpoint admin dilindungi middleware `EnsureIsAdmin` → mengembalikan `403`
+- CORS dikonfigurasi hanya untuk `localhost:5173` (Vite dev server)
+- Tidak ada password yang ter-commit di source code

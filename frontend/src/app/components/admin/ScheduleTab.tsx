@@ -1,53 +1,251 @@
 import { useState } from 'react';
-import { Sun, Sunset, Moon, Edit2, Check, X, Plus, Users } from 'lucide-react';
+import { Sun, Sunset, Moon, Edit2, Check, X, Plus, Users, Trash2, Star, Zap } from 'lucide-react';
 
-type Shift = { id: string; name: string; start: string; end: string; color: string; bg: string; border: string; icon: typeof Sun };
+// ── Types ──────────────────────────────────────────────────────────────
+type IconKey = 'sun' | 'sunset' | 'moon' | 'star' | 'zap';
 
-const defaultShifts: Shift[] = [
-  { id: 'pagi',    name: 'Shift Pagi',   start: '07:00', end: '14:00', color: '#D97706', bg: '#FFFBEB', border: '#FDE68A', icon: Sun },
-  { id: 'siang',   name: 'Shift Siang',  start: '14:00', end: '21:00', color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE', icon: Sunset },
-  { id: 'malam',   name: 'Shift Malam',  start: '21:00', end: '07:00', color: '#7C3AED', bg: '#F5F3FF', border: '#DDD6FE', icon: Moon },
-  { id: 'reguler', name: 'Shift Reguler (Sen–Jum)', start: '08:30', end: '17:00', color: '#16A34A', bg: '#F0FDF4', border: '#BBF7D0', icon: Sun },
-];
-
-const employeeShifts: Record<string, { name: string; dept: string; shift: string }[]> = {
-  pagi:    [
-    { name: 'Fajar Nugroho', dept: 'Laboratorium', shift: 'pagi' },
-    { name: 'Sri Wahyuni', dept: 'ICU', shift: 'pagi' },
-  ],
-  siang:   [
-    { name: 'dr. Amir Hamzah', dept: 'Poli Umum', shift: 'siang' },
-  ],
-  malam:   [
-    { name: 'Ns. Rizky Pratama', dept: 'IGD', shift: 'malam' },
-    { name: 'Ns. Yanti Susanti', dept: 'ICU', shift: 'malam' },
-  ],
-  reguler: [
-    { name: 'Dr. Rina Kusumawati', dept: 'Poli Umum', shift: 'reguler' },
-    { name: 'Ns. Ahmad Fauzi', dept: 'ICU', shift: 'reguler' },
-    { name: 'dr. Siti Rahma', dept: 'Poli Anak', shift: 'reguler' },
-    { name: 'Budi Santoso', dept: 'Administrasi', shift: 'reguler' },
-    { name: 'Rini Handayani', dept: 'Farmasi', shift: 'reguler' },
-  ],
+const ICON_MAP: Record<IconKey, { component: typeof Sun; label: string; emoji: string }> = {
+  sun:    { component: Sun,    label: 'Matahari',  emoji: '☀️' },
+  sunset: { component: Sunset, label: 'Senja',     emoji: '🌅' },
+  moon:   { component: Moon,   label: 'Bulan',     emoji: '🌙' },
+  star:   { component: Star,   label: 'Bintang',   emoji: '⭐' },
+  zap:    { component: Zap,    label: 'Kilat',     emoji: '⚡' },
 };
 
+const COLOR_PRESETS = [
+  { id: 'amber',  color: '#D97706', bg: '#FFFBEB', border: '#FDE68A', label: 'Kuning'  },
+  { id: 'blue',   color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE', label: 'Biru'    },
+  { id: 'violet', color: '#7C3AED', bg: '#F5F3FF', border: '#DDD6FE', label: 'Ungu'    },
+  { id: 'green',  color: '#16A34A', bg: '#F0FDF4', border: '#BBF7D0', label: 'Hijau'   },
+  { id: 'rose',   color: '#E11D48', bg: '#FFF1F2', border: '#FECDD3', label: 'Merah'   },
+  { id: 'cyan',   color: '#0891B2', bg: '#ECFEFF', border: '#A5F3FC', label: 'Biru Muda'},
+];
+
+type Shift = {
+  id: string;
+  name: string;
+  start: string;
+  end: string;
+  color: string;
+  bg: string;
+  border: string;
+  icon: IconKey;
+};
+
+const defaultShifts: Shift[] = [
+  { id: 'pagi',    name: 'Shift Pagi',               start: '07:00', end: '14:00', color: '#D97706', bg: '#FFFBEB', border: '#FDE68A', icon: 'sun' },
+  { id: 'siang',   name: 'Shift Siang',              start: '14:00', end: '21:00', color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE', icon: 'sunset' },
+  { id: 'malam',   name: 'Shift Malam',              start: '21:00', end: '07:00', color: '#7C3AED', bg: '#F5F3FF', border: '#DDD6FE', icon: 'moon' },
+  { id: 'reguler', name: 'Shift Reguler (Sen–Jum)',  start: '08:30', end: '17:00', color: '#16A34A', bg: '#F0FDF4', border: '#BBF7D0', icon: 'sun' },
+];
+
+const employeeShifts: Record<string, { name: string; dept: string }[]> = {
+  pagi:    [{ name: 'Fajar Nugroho', dept: 'Laboratorium' }, { name: 'Sri Wahyuni', dept: 'ICU' }],
+  siang:   [{ name: 'dr. Amir Hamzah', dept: 'Poli Umum' }],
+  malam:   [{ name: 'Ns. Rizky Pratama', dept: 'IGD' }, { name: 'Ns. Yanti Susanti', dept: 'ICU' }],
+  reguler: [{ name: 'Dr. Rina Kusumawati', dept: 'Poli Umum' }, { name: 'Ns. Ahmad Fauzi', dept: 'ICU' }, { name: 'dr. Siti Rahma', dept: 'Poli Anak' }, { name: 'Budi Santoso', dept: 'Administrasi' }, { name: 'Rini Handayani', dept: 'Farmasi' }],
+};
+
+// ── Add Shift Modal ────────────────────────────────────────────────────
+function AddShiftModal({ onClose, onAdd }: { onClose: () => void; onAdd: (s: Shift) => void }) {
+  const [name, setName]       = useState('');
+  const [start, setStart]     = useState('07:00');
+  const [end, setEnd]         = useState('15:00');
+  const [icon, setIcon]       = useState<IconKey>('sun');
+  const [colorId, setColorId] = useState('amber');
+
+  const preset = COLOR_PRESETS.find(c => c.id === colorId)!;
+  const IconComp = ICON_MAP[icon].component;
+
+  const handleSubmit = () => {
+    if (!name.trim()) return;
+    onAdd({
+      id: `shift-${Date.now()}`,
+      name: name.trim(),
+      start, end,
+      color: preset.color, bg: preset.bg, border: preset.border,
+      icon,
+    });
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-t-3xl sm:rounded-2xl w-full sm:max-w-md p-6 shadow-2xl mx-0 sm:mx-4 max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h3 className="text-[16px] font-bold text-gray-900">Tambah Shift Baru</h3>
+            <p className="text-[12px] text-gray-400 mt-0.5">Isi detail shift dan lihat preview-nya</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-colors">
+            <X size={16} className="text-gray-500" />
+          </button>
+        </div>
+
+        {/* Live Preview */}
+        <div className="mb-5 p-4 rounded-2xl border-2 transition-all" style={{ background: preset.bg, borderColor: preset.border }}>
+          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-3">Preview</p>
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center border-2" style={{ background: 'white', borderColor: preset.border }}>
+              <IconComp size={20} style={{ color: preset.color }} />
+            </div>
+            <div>
+              <p className="text-[14px] font-bold" style={{ color: preset.color }}>{name || 'Nama Shift'}</p>
+              <p className="text-[11px] text-gray-500">{ICON_MAP[icon].label}</p>
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <div className="flex-1 text-center py-2 bg-white/70 rounded-xl border" style={{ borderColor: preset.border }}>
+              <p className="text-[9px] text-gray-400">Masuk</p>
+              <p className="text-[16px] font-bold font-mono" style={{ color: preset.color }}>{start}</p>
+            </div>
+            <span className="self-center text-gray-300 font-bold">–</span>
+            <div className="flex-1 text-center py-2 bg-white/70 rounded-xl border" style={{ borderColor: preset.border }}>
+              <p className="text-[9px] text-gray-400">Pulang</p>
+              <p className="text-[16px] font-bold font-mono" style={{ color: preset.color }}>{end}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Form Fields */}
+        <div className="space-y-4">
+          {/* Name */}
+          <div>
+            <label className="block text-[12px] font-semibold text-gray-700 mb-1.5">Nama Shift</label>
+            <input
+              type="text"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="Contoh: Shift Pagi"
+              maxLength={40}
+              className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all"
+            />
+          </div>
+
+          {/* Time */}
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className="block text-[12px] font-semibold text-gray-700 mb-1.5">Jam Masuk</label>
+              <input type="time" value={start} onChange={e => setStart(e.target.value)}
+                className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-[13px] font-mono bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all" />
+            </div>
+            <div className="flex-1">
+              <label className="block text-[12px] font-semibold text-gray-700 mb-1.5">Jam Pulang</label>
+              <input type="time" value={end} onChange={e => setEnd(e.target.value)}
+                className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-[13px] font-mono bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all" />
+            </div>
+          </div>
+
+          {/* Icon Picker */}
+          <div>
+            <label className="block text-[12px] font-semibold text-gray-700 mb-2">Pilih Ikon</label>
+            <div className="flex gap-2">
+              {(Object.entries(ICON_MAP) as [IconKey, typeof ICON_MAP[IconKey]][]).map(([key, { component: Ic, emoji, label }]) => (
+                <button
+                  key={key}
+                  onClick={() => setIcon(key)}
+                  title={label}
+                  className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-xl border-2 transition-all ${icon === key ? 'border-[#16A34A] bg-green-50 shadow-sm' : 'border-gray-100 bg-gray-50 hover:border-gray-200'}`}
+                >
+                  <Ic size={16} style={{ color: icon === key ? preset.color : '#9CA3AF' }} />
+                  <span className="text-[9px] text-gray-500">{emoji}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Color Picker */}
+          <div>
+            <label className="block text-[12px] font-semibold text-gray-700 mb-2">Pilih Warna</label>
+            <div className="grid grid-cols-6 gap-2">
+              {COLOR_PRESETS.map(c => (
+                <button
+                  key={c.id}
+                  onClick={() => setColorId(c.id)}
+                  title={c.label}
+                  className={`relative w-full aspect-square rounded-xl border-2 transition-all ${colorId === c.id ? 'border-gray-800 scale-110 shadow-md' : 'border-transparent hover:scale-105'}`}
+                  style={{ background: c.color }}
+                >
+                  {colorId === c.id && (
+                    <Check size={12} className="absolute inset-0 m-auto text-white drop-shadow" />
+                  )}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-gray-400 mt-1.5">Dipilih: <span className="font-semibold" style={{ color: preset.color }}>{COLOR_PRESETS.find(c => c.id === colorId)?.label}</span></p>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-2 mt-6">
+          <button onClick={onClose} className="flex-1 py-3 border border-gray-200 rounded-xl text-[13px] font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+            Batal
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={!name.trim()}
+            className="flex-1 py-3 rounded-xl text-[13px] font-semibold text-white transition-all bg-[#16A34A] hover:bg-[#0d9240] shadow-sm shadow-green-200 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            <Plus size={15} /> Tambah Shift
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Delete Confirmation Modal ──────────────────────────────────────────
+function DeleteModal({ shift, onClose, onConfirm }: { shift: Shift; onClose: () => void; onConfirm: () => void }) {
+  const IconComp = ICON_MAP[shift.icon].component;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl w-full max-w-xs p-6 shadow-2xl mx-4">
+        <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 bg-red-50">
+          <Trash2 size={26} className="text-red-500" />
+        </div>
+        <h3 className="text-[15px] font-bold text-gray-900 text-center mb-1">Hapus Shift?</h3>
+        <p className="text-[12px] text-gray-500 text-center mb-4">Shift berikut akan dihapus permanen dari sistem.</p>
+        {/* Shift preview */}
+        <div className="flex items-center gap-3 p-3 rounded-xl mb-5 border" style={{ background: shift.bg, borderColor: shift.border }}>
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/70">
+            <IconComp size={15} style={{ color: shift.color }} />
+          </div>
+          <div>
+            <p className="text-[13px] font-semibold" style={{ color: shift.color }}>{shift.name}</p>
+            <p className="text-[11px] text-gray-500">{shift.start} – {shift.end}</p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-[13px] font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+            Batal
+          </button>
+          <button onClick={onConfirm} className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 rounded-xl text-[13px] font-semibold text-white transition-colors">
+            Ya, Hapus
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main ScheduleTab ───────────────────────────────────────────────────
 export function ScheduleTab() {
-  const [shifts, setShifts] = useState<Shift[]>(defaultShifts);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editStart, setEditStart] = useState('');
-  const [editEnd, setEditEnd] = useState('');
+  const [shifts, setShifts]           = useState<Shift[]>(defaultShifts);
+  const [editingId, setEditingId]     = useState<string | null>(null);
+  const [editStart, setEditStart]     = useState('');
+  const [editEnd, setEditEnd]         = useState('');
   const [expandedShift, setExpandedShift] = useState<string | null>(null);
+  const [showAddModal, setShowAddModal]   = useState(false);
+  const [deleteTarget, setDeleteTarget]   = useState<Shift | null>(null);
 
-  const startEdit = (shift: Shift) => {
-    setEditingId(shift.id);
-    setEditStart(shift.start);
-    setEditEnd(shift.end);
-  };
+  const startEdit = (shift: Shift) => { setEditingId(shift.id); setEditStart(shift.start); setEditEnd(shift.end); };
+  const saveEdit  = (id: string)   => { setShifts(prev => prev.map(s => s.id === id ? { ...s, start: editStart, end: editEnd } : s)); setEditingId(null); };
 
-  const saveEdit = (id: string) => {
-    setShifts(prev => prev.map(s => s.id === id ? { ...s, start: editStart, end: editEnd } : s));
-    setEditingId(null);
-  };
+  const handleAdd = (shift: Shift) => setShifts(prev => [...prev, shift]);
+  const handleDelete = (id: string) => { setShifts(prev => prev.filter(s => s.id !== id)); setDeleteTarget(null); };
 
   const totalDays = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
   const scheduleMatrix = [
@@ -58,105 +256,145 @@ export function ScheduleTab() {
     { emp: 'Ns. Rizky Pratama',  shifts: ['M','M','M','-','-','M'] },
     { emp: 'Sri Wahyuni',        shifts: ['-','-','P','P','P','P'] },
   ];
-  const shiftColors: Record<string, { bg: string; text: string; label: string }> = {
-    R: { bg: '#F0FDF4', text: '#16A34A', label: 'Reguler' },
-    P: { bg: '#FFFBEB', text: '#D97706', label: 'Pagi' },
-    S: { bg: '#EFF6FF', text: '#2563EB', label: 'Siang' },
-    M: { bg: '#F5F3FF', text: '#7C3AED', label: 'Malam' },
-    '-': { bg: '#F9FAFB', text: '#9CA3AF', label: 'Libur' },
+  const shiftColors: Record<string, { bg: string; text: string }> = {
+    R: { bg: '#F0FDF4', text: '#16A34A' },
+    P: { bg: '#FFFBEB', text: '#D97706' },
+    S: { bg: '#EFF6FF', text: '#2563EB' },
+    M: { bg: '#F5F3FF', text: '#7C3AED' },
+    '-': { bg: '#F9FAFB', text: '#9CA3AF' },
   };
 
   return (
     <div className="max-w-5xl mx-auto space-y-5">
-      <div>
-        <h2 className="text-[16px] font-bold text-gray-900">Jadwal Shift</h2>
-        <p className="text-[12px] text-gray-400 mt-0.5">Kelola jadwal shift dan penugasan karyawan</p>
+      {/* Page header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-[16px] font-bold text-gray-900">Jadwal Shift</h2>
+          <p className="text-[12px] text-gray-400 mt-0.5">Kelola jadwal shift dan penugasan karyawan</p>
+        </div>
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="flex items-center gap-2 px-4 py-2.5 bg-[#16A34A] hover:bg-[#0d9240] text-white text-[13px] font-semibold rounded-xl transition-all shadow-sm shadow-green-200 active:scale-95"
+        >
+          <Plus size={15} /> Tambah Shift
+        </button>
       </div>
 
-      {/* Shift cards */}
+      {/* Shift cards grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {shifts.map(shift => (
-          <div key={shift.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="p-4 border-b border-gray-50">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: shift.bg, border: `1.5px solid ${shift.border}` }}>
-                    <shift.icon size={17} style={{ color: shift.color }} />
+        {shifts.map(shift => {
+          const IconComp = ICON_MAP[shift.icon].component;
+          return (
+            <div key={shift.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden group">
+              <div className="p-4 border-b border-gray-50">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: shift.bg, border: `1.5px solid ${shift.border}` }}>
+                      <IconComp size={17} style={{ color: shift.color }} />
+                    </div>
+                    <p className="text-[14px] font-semibold text-gray-800">{shift.name}</p>
                   </div>
-                  <p className="text-[14px] font-semibold text-gray-800">{shift.name}</p>
+
+                  <div className="flex items-center gap-1">
+                    {/* Delete button */}
+                    {editingId !== shift.id && (
+                      <button
+                        onClick={() => setDeleteTarget(shift)}
+                        className="w-7 h-7 rounded-lg bg-red-50 border border-red-100 flex items-center justify-center hover:bg-red-100 transition-colors opacity-0 group-hover:opacity-100"
+                        title="Hapus shift"
+                      >
+                        <Trash2 size={13} className="text-red-400" />
+                      </button>
+                    )}
+                    {/* Edit / Save-Cancel buttons */}
+                    {editingId !== shift.id ? (
+                      <button onClick={() => startEdit(shift)} className="w-7 h-7 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center hover:bg-gray-100 transition-colors">
+                        <Edit2 size={13} className="text-gray-400" />
+                      </button>
+                    ) : (
+                      <div className="flex gap-1">
+                        <button onClick={() => saveEdit(shift.id)} className="w-7 h-7 rounded-lg bg-green-50 border border-green-100 flex items-center justify-center hover:bg-green-100 transition-colors">
+                          <Check size={13} className="text-[#16A34A]" />
+                        </button>
+                        <button onClick={() => setEditingId(null)} className="w-7 h-7 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center hover:bg-gray-100 transition-colors">
+                          <X size={13} className="text-gray-400" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                {editingId !== shift.id ? (
-                  <button onClick={() => startEdit(shift)} className="w-7 h-7 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center hover:bg-gray-100 transition-colors">
-                    <Edit2 size={13} className="text-gray-400" />
-                  </button>
+
+                {editingId === shift.id ? (
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1">
+                      <label className="block text-[10px] text-gray-400 mb-1">Masuk</label>
+                      <input type="time" value={editStart} onChange={e => setEditStart(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[13px] font-mono bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all" />
+                    </div>
+                    <span className="text-gray-400 mt-4">–</span>
+                    <div className="flex-1">
+                      <label className="block text-[10px] text-gray-400 mb-1">Pulang</label>
+                      <input type="time" value={editEnd} onChange={e => setEditEnd(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[13px] font-mono bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all" />
+                    </div>
+                  </div>
                 ) : (
-                  <div className="flex gap-1">
-                    <button onClick={() => saveEdit(shift.id)} className="w-7 h-7 rounded-lg bg-green-50 border border-green-100 flex items-center justify-center hover:bg-green-100 transition-colors">
-                      <Check size={13} className="text-[#16A34A]" />
-                    </button>
-                    <button onClick={() => setEditingId(null)} className="w-7 h-7 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center hover:bg-gray-100 transition-colors">
-                      <X size={13} className="text-gray-400" />
-                    </button>
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 text-center py-2 rounded-xl" style={{ background: shift.bg }}>
+                      <p className="text-[11px] text-gray-400">Masuk</p>
+                      <p className="text-[18px] font-bold font-mono" style={{ color: shift.color }}>{shift.start}</p>
+                    </div>
+                    <span className="text-gray-300">–</span>
+                    <div className="flex-1 text-center py-2 rounded-xl" style={{ background: shift.bg }}>
+                      <p className="text-[11px] text-gray-400">Pulang</p>
+                      <p className="text-[18px] font-bold font-mono" style={{ color: shift.color }}>{shift.end}</p>
+                    </div>
                   </div>
                 )}
               </div>
 
-              {editingId === shift.id ? (
-                <div className="flex items-center gap-3">
-                  <div className="flex-1">
-                    <label className="block text-[10px] text-gray-400 mb-1">Mulai</label>
-                    <input type="time" value={editStart} onChange={e => setEditStart(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[13px] font-mono bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all" />
-                  </div>
-                  <span className="text-gray-400 mt-4">–</span>
-                  <div className="flex-1">
-                    <label className="block text-[10px] text-gray-400 mb-1">Selesai</label>
-                    <input type="time" value={editEnd} onChange={e => setEditEnd(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[13px] font-mono bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all" />
-                  </div>
+              {/* Employee list toggle */}
+              <button onClick={() => setExpandedShift(expandedShift === shift.id ? null : shift.id)}
+                className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 transition-colors">
+                <div className="flex items-center gap-2">
+                  <Users size={13} className="text-gray-400" />
+                  <span className="text-[12px] text-gray-500">{employeeShifts[shift.id]?.length || 0} karyawan</span>
                 </div>
-              ) : (
-                <div className="flex items-center gap-3">
-                  <div className="flex-1 text-center py-2 rounded-xl" style={{ background: shift.bg }}>
-                    <p className="text-[11px] text-gray-400">Masuk</p>
-                    <p className="text-[18px] font-bold font-mono" style={{ color: shift.color }}>{shift.start}</p>
-                  </div>
-                  <span className="text-gray-300">–</span>
-                  <div className="flex-1 text-center py-2 rounded-xl" style={{ background: shift.bg }}>
-                    <p className="text-[11px] text-gray-400">Pulang</p>
-                    <p className="text-[18px] font-bold font-mono" style={{ color: shift.color }}>{shift.end}</p>
-                  </div>
+                <span className="text-[11px] text-gray-400">{expandedShift === shift.id ? '▲' : '▼'}</span>
+              </button>
+
+              {expandedShift === shift.id && (
+                <div className="border-t border-gray-50 px-4 py-3 space-y-1.5">
+                  {(employeeShifts[shift.id] || []).map((emp, i) => (
+                    <div key={i} className="flex items-center justify-between py-1">
+                      <div>
+                        <p className="text-[12px] font-medium text-gray-800">{emp.name}</p>
+                        <p className="text-[10px] text-gray-400">{emp.dept}</p>
+                      </div>
+                    </div>
+                  ))}
+                  <button className="w-full mt-1 flex items-center justify-center gap-1.5 py-2 border border-dashed border-gray-200 rounded-xl text-[11px] text-gray-400 hover:border-[#16A34A] hover:text-[#16A34A] transition-colors">
+                    <Plus size={12} /> Tambah Karyawan
+                  </button>
                 </div>
               )}
             </div>
+          );
+        })}
 
-            {/* Employees in this shift */}
-            <button onClick={() => setExpandedShift(expandedShift === shift.id ? null : shift.id)}
-              className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 transition-colors">
-              <div className="flex items-center gap-2">
-                <Users size={13} className="text-gray-400" />
-                <span className="text-[12px] text-gray-500">{employeeShifts[shift.id]?.length || 0} karyawan</span>
-              </div>
-              <span className="text-[11px] text-gray-400">{expandedShift === shift.id ? '▲' : '▼'}</span>
-            </button>
-
-            {expandedShift === shift.id && (
-              <div className="border-t border-gray-50 px-4 py-3 space-y-1.5">
-                {(employeeShifts[shift.id] || []).map((emp, i) => (
-                  <div key={i} className="flex items-center justify-between py-1">
-                    <div>
-                      <p className="text-[12px] font-medium text-gray-800">{emp.name}</p>
-                      <p className="text-[10px] text-gray-400">{emp.dept}</p>
-                    </div>
-                  </div>
-                ))}
-                <button className="w-full mt-1 flex items-center justify-center gap-1.5 py-2 border border-dashed border-gray-200 rounded-xl text-[11px] text-gray-400 hover:border-[#16A34A] hover:text-[#16A34A] transition-colors">
-                  <Plus size={12} /> Tambah Karyawan
-                </button>
-              </div>
-            )}
+        {/* Placeholder "Add shift" card */}
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 shadow-none flex flex-col items-center justify-center gap-3 p-8 hover:border-[#16A34A] hover:bg-green-50/30 transition-all group min-h-[140px]"
+        >
+          <div className="w-11 h-11 rounded-xl bg-white border border-gray-200 flex items-center justify-center group-hover:bg-[#16A34A] group-hover:border-[#16A34A] transition-all shadow-sm">
+            <Plus size={20} className="text-gray-300 group-hover:text-white transition-colors" />
           </div>
-        ))}
+          <div className="text-center">
+            <p className="text-[13px] font-semibold text-gray-400 group-hover:text-[#16A34A] transition-colors">Tambah Shift Baru</p>
+            <p className="text-[11px] text-gray-300 mt-0.5">Klik untuk membuat shift baru</p>
+          </div>
+        </button>
       </div>
 
       {/* Schedule matrix */}
@@ -183,9 +421,7 @@ export function ScheduleTab() {
                     const sc = shiftColors[s];
                     return (
                       <td key={j} className="px-3 py-3 text-center">
-                        <span className="inline-block text-[11px] font-bold px-2.5 py-1 rounded-lg" style={{ background: sc.bg, color: sc.text }}>
-                          {s}
-                        </span>
+                        <span className="inline-block text-[11px] font-bold px-2.5 py-1 rounded-lg" style={{ background: sc.bg, color: sc.text }}>{s}</span>
                       </td>
                     );
                   })}
@@ -195,6 +431,10 @@ export function ScheduleTab() {
           </table>
         </div>
       </div>
+
+      {/* Modals */}
+      {showAddModal && <AddShiftModal onClose={() => setShowAddModal(false)} onAdd={handleAdd} />}
+      {deleteTarget && <DeleteModal shift={deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => handleDelete(deleteTarget.id)} />}
     </div>
   );
 }

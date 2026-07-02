@@ -3,7 +3,8 @@ import { Eye, EyeOff, Lock, User, CreditCard, MapPin, Clock, BarChart3, Shield, 
 import logoImg from '../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
 
 interface LoginPageProps {
-  onLogin: (nip: string, username: string, password: string) => 'ok' | 'wrong';
+  // TODO: setelah backend tersambung, password akan dikirim ke POST /api/login
+  onLogin: (password: string, nip: string, username: string) => 'ok' | 'wrong';
   onBack?: () => void;
 }
 
@@ -24,7 +25,7 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
     setError('');
     setIsLoading(true);
     setTimeout(() => {
-      const result = onLogin(nip, username, password);
+      const result = onLogin(password, nip, username);
       setIsLoading(false);
       if (result === 'wrong') {
         setError('NIP, Username, atau Password tidak sesuai. Hubungi administrator jika lupa akun.');
