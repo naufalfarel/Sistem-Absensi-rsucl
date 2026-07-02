@@ -214,6 +214,7 @@ export interface ReportSummary {
   total_employees: number;
   today: { hadir: number; telat: number; alpha: number; cuti: number; belum: number };
   this_month: { hadir: number; telat: number; alpha: number; cuti: number };
+  trends: { presence: number; late: number; alpha: number; cuti: number };
   pending_leave: number;
   daily_chart: { date: string; label: string; count: number; total: number }[];
   monthly_trend: { bulan: string; hadir: number; terlambat: number; alpha: number; cuti: number }[];

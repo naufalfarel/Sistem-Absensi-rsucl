@@ -10,10 +10,6 @@ use Illuminate\Http\Request;
 
 class ReportController extends Controller
 {
-    /**
-     * GET /api/reports/summary
-     * Ringkasan absensi untuk dashboard admin
-     */
     public function summary(Request $request)
     {
         $today     = today()->toDateString();
@@ -21,7 +17,7 @@ class ReportController extends Controller
         $year      = now()->year;
         $totalEmp  = Employee::where('status', 'active')->count();
 
-        // ── Statistik hari ini ──
+        // ── Today stats ──
         $todayAttendances = Attendance::where('date', $today)->get();
         $todayHadir       = $todayAttendances->where('status', 'hadir')->count();
         $todayTelat       = $todayAttendances->where('status', 'telat')->count();
@@ -35,7 +31,7 @@ class ReportController extends Controller
                                 ->where('end_date', '>=', $today)
                                 ->count();
 
-        // ── Statistik bulan ini ──
+        // ── This month stats ──
         $monthAttendances = Attendance::whereYear('date', $year)
                                       ->whereMonth('date', $month)
                                       ->get();
@@ -47,10 +43,38 @@ class ReportController extends Controller
                                   ->whereMonth('start_date', $month)
                                   ->count();
 
-        // ── Pengajuan cuti pending ──
+        // ── Previous month stats (for trends) ──
+        $prevMonthDate = now()->subMonth();
+        $prevMonth     = $prevMonthDate->month;
+        $prevYear      = $prevMonthDate->year;
+
+        $prevMonthAttendances = Attendance::whereYear('date', $prevYear)
+                                          ->whereMonth('date', $prevMonth)
+                                          ->get();
+        $prevMonthHadir = $prevMonthAttendances->where('status', 'hadir')->count();
+        $prevMonthTelat = $prevMonthAttendances->where('status', 'telat')->count();
+        $prevMonthAlpha = $prevMonthAttendances->where('status', 'alpha')->count();
+        $prevMonthCuti  = LeaveRequest::where('status', 'approved')
+                                      ->whereMonth('start_date', $prevMonth)
+                                      ->count();
+
+        // Calculate trends
+        $elapsedDaysThisMonth = now()->day;
+        $expectedThisMonth    = $totalEmp * $elapsedDaysThisMonth;
+        $rateThisMonth        = $expectedThisMonth > 0 ? (($monthHadir + $monthTelat) / $expectedThisMonth) * 100 : 0;
+
+        $daysInPrevMonth      = $prevMonthDate->daysInMonth;
+        $expectedPrevMonth    = $totalEmp * $daysInPrevMonth;
+        $ratePrevMonth        = $expectedPrevMonth > 0 ? (($prevMonthHadir + $prevMonthTelat) / $expectedPrevMonth) * 100 : 0;
+
+        $presenceTrend = round($rateThisMonth - $ratePrevMonth);
+        $lateTrend     = $monthTelat - $prevMonthTelat;
+        $alphaTrend    = $monthAlpha - $prevMonthAlpha;
+        $cutiTrend     = $monthCuti - $prevMonthCuti;
+
         $pendingLeave = LeaveRequest::where('status', 'pending')->count();
 
-        // ── Absensi per hari (7 hari terakhir) ──
+        // ── 7-day chart ──
         $dailyData = [];
         for ($i = 6; $i >= 0; $i--) {
             $date  = now()->subDays($i)->toDateString();
@@ -63,7 +87,7 @@ class ReportController extends Controller
             ];
         }
 
-        // ── 1. Tren Kehadiran Bulanan (Jan - Jul) ──
+        // ── 1. Monthly trend (strictly database) ──
         $monthlyTrend = [];
         for ($i = 6; $i >= 0; $i--) {
             $monthDate = now()->subMonths($i);
@@ -72,78 +96,51 @@ class ReportController extends Controller
             $mLabel = $monthDate->locale('id')->isoFormat('MMM');
 
             $mAtt = Attendance::whereYear('date', $yNum)->whereMonth('date', $mNum)->get();
-            $mHadir = $mAtt->where('status', 'hadir')->count();
-            $mTelat = $mAtt->where('status', 'telat')->count();
-            $mAlpha = $mAtt->where('status', 'alpha')->count();
-            $mCuti  = LeaveRequest::where('status', 'approved')
+            $mH = $mAtt->where('status', 'hadir')->count();
+            $mT = $mAtt->where('status', 'telat')->count();
+            $mA = $mAtt->where('status', 'alpha')->count();
+            $mC = LeaveRequest::where('status', 'approved')
                 ->where(function($query) use ($yNum, $mNum) {
                     $query->whereYear('start_date', $yNum)->whereMonth('start_date', $mNum)
                           ->orWhereYear('end_date', $yNum)->whereMonth('end_date', $mNum);
                 })->count();
 
-            // Real data or realistic baseline fallbacks
-            if ($mHadir === 0 && $mTelat === 0 && $mAlpha === 0) {
-                $mHadir = 90 + ($i * 1.5);
-                $mTelat = 6 - ($i % 3);
-                $mAlpha = 2 + ($i % 2);
-                $mCuti = 4 + ($i % 3);
-            }
-
             $monthlyTrend[] = [
                 'bulan' => $mLabel,
-                'hadir' => $mHadir,
-                'terlambat' => $mTelat,
-                'alpha' => $mAlpha,
-                'cuti' => $mCuti
+                'hadir' => $mH,
+                'terlambat' => $mT,
+                'alpha' => $mA,
+                'cuti' => $mC
             ];
         }
 
-        // ── 2. Komposisi Kehadiran (Bulan Ini) ──
-        $hadirTotal = $monthAttendances->where('status', 'hadir')->count();
-        $telatTotal = $monthAttendances->where('status', 'telat')->count();
-        $alphaTotal = $monthAttendances->where('status', 'alpha')->count();
-        $cutiTotal = LeaveRequest::where('status', 'approved')
-            ->whereYear('start_date', $year)->whereMonth('start_date', $month)->count();
+        // ── 2. Composition percentages ──
+        $tot = $monthHadir + $monthTelat + $monthAlpha + $monthCuti;
+        $hadirPct = $tot > 0 ? round(($monthHadir / $tot) * 100) : 0;
+        $telatPct = $tot > 0 ? round(($monthTelat / $tot) * 100) : 0;
+        $alphaPct = $tot > 0 ? round(($monthAlpha / $tot) * 100) : 0;
+        $cutiPct  = $tot > 0 ? round(($monthCuti / $tot) * 100) : 0;
 
-        if ($hadirTotal === 0 && $telatTotal === 0 && $alphaTotal === 0) {
-            $hadirTotal = 87;
-            $telatTotal = 7;
-            $alphaTotal = 2;
-            $cutiTotal = 4;
-        } else {
-            $tot = $hadirTotal + $telatTotal + $alphaTotal + $cutiTotal;
-            if ($tot > 0) {
-                $hadirTotal = round(($hadirTotal / $tot) * 100);
-                $telatTotal = round(($telatTotal / $tot) * 100);
-                $alphaTotal = round(($alphaTotal / $tot) * 100);
-                $cutiTotal  = round(($cutiTotal / $tot) * 100);
-            }
-        }
         $composition = [
-            ['name' => 'Hadir', 'value' => $hadirTotal, 'color' => '#16A34A'],
-            ['name' => 'Terlambat', 'value' => $telatTotal, 'color' => '#FBBF24'],
-            ['name' => 'Alpha', 'value' => $alphaTotal, 'color' => '#F87171'],
-            ['name' => 'Cuti/Izin', 'value' => $cutiTotal, 'color' => '#A78BFA']
+            ['name' => 'Hadir', 'value' => $hadirPct, 'color' => '#16A34A'],
+            ['name' => 'Terlambat', 'value' => $telatPct, 'color' => '#FBBF24'],
+            ['name' => 'Alpha', 'value' => $alphaPct, 'color' => '#F87171'],
+            ['name' => 'Cuti/Izin', 'value' => $cutiPct, 'color' => '#A78BFA']
         ];
 
-        // ── 3. Keterlambatan Mingguan (minggu ini) ──
+        // ── 3. Weekly late ──
         $weeklyLate = [];
         $dayLabels = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
         $startOfWeek = now()->startOfWeek();
         foreach ($dayLabels as $index => $label) {
             $date = $startOfWeek->copy()->addDays($index)->toDateString();
-            $count = Attendance::where('date', $date)->where('status', 'telat')->count();
-            if ($count === 0 && $date > now()->toDateString()) {
-                $weeklyLate[] = ['hari' => $label, 'count' => 0];
-            } else {
-                $weeklyLate[] = [
-                    'hari' => $label,
-                    'count' => $count > 0 ? $count : (2 + ($index % 4))
-                ];
-            }
+            $weeklyLate[] = [
+                'hari' => $label,
+                'count' => Attendance::where('date', $date)->where('status', 'telat')->count()
+            ];
         }
 
-        // ── 4. Kehadiran per Departemen ──
+        // ── 4. Department breakdown ──
         $deptList = Department::with('employees')->get();
         $deptData = [];
         foreach ($deptList as $dept) {
@@ -155,10 +152,7 @@ class ReportController extends Controller
                 ->count();
             $expected = $empIds->count() * now()->day;
             $percent = $expected > 0 ? round(($actual / $expected) * 100) : 0;
-            if ($percent === 0) {
-                // Realistic fallback percentages for design visuals
-                $percent = 90 + (strlen($dept->name) % 11);
-            }
+
             $deptData[] = [
                 'dept' => $dept->name,
                 'persen' => min(100, $percent)
@@ -181,6 +175,12 @@ class ReportController extends Controller
                     'telat'  => $monthTelat,
                     'alpha'  => $monthAlpha,
                     'cuti'   => $monthCuti,
+                ],
+                'trends' => [
+                    'presence' => $presenceTrend,
+                    'late'     => $lateTrend,
+                    'alpha'    => $alphaTrend,
+                    'cuti'     => $cutiTrend,
                 ],
                 'pending_leave'     => $pendingLeave,
                 'daily_chart'       => $dailyData,
