@@ -61,6 +61,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/leave-requests/{leaveRequest}/reject',  [LeaveRequestController::class, 'reject']);
 
         // Jadwal Shift
+        Route::get('/employee-schedules', [ScheduleController::class, 'getEmployeeSchedules']);
+        Route::post('/employee-schedules/assign', [ScheduleController::class, 'assignEmployeeSchedule']);
         Route::apiResource('/schedules', ScheduleController::class)->except(['show']);
 
         // Laporan

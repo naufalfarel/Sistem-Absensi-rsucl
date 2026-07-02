@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Sun, Sunset, Moon, Edit2, Check, X, Plus, Users, Trash2, Star, Zap } from 'lucide-react';
-import { scheduleApi, ShiftSchedule } from '../../../services/api';
+import { Sun, Sunset, Moon, Edit2, Check, X, Plus, Users, Trash2, Star, Zap, Calendar } from 'lucide-react';
+import { scheduleApi, ShiftSchedule, EmployeeWeeklySchedule } from '../../../services/api';
 
 type IconKey = 'sun' | 'sunset' | 'moon' | 'star' | 'zap';
 
@@ -221,13 +221,17 @@ function DeleteModal({ shift, onClose, onConfirm }: { shift: ShiftSchedule; onCl
 // ── Main ScheduleTab ───────────────────────────────────────────────────
 export function ScheduleTab() {
   const [shifts, setShifts]           = useState<ShiftSchedule[]>([]);
+  const [employeeSchedules, setEmployeeSchedules] = useState<EmployeeWeeklySchedule[]>([]);
   const [editingId, setEditingId]     = useState<number | null>(null);
   const [editStart, setEditStart]     = useState('');
   const [editEnd, setEditEnd]         = useState('');
   const [expandedShift, setExpandedShift] = useState<number | null>(null);
   const [showAddModal, setShowAddModal]   = useState(false);
   const [deleteTarget, setDeleteTarget]   = useState<ShiftSchedule | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading]         = useState(false);
+
+  // Active cell popover for assigning shifts
+  const [activeAssignCell, setActiveAssignCell] = useState<{ empId: number; day: string } | null>(null);
 
   const loadShifts = async () => {
     setLoading(true);
@@ -243,8 +247,20 @@ export function ScheduleTab() {
     }
   };
 
+  const loadEmployeeSchedules = async () => {
+    try {
+      const res = await scheduleApi.getEmployeeSchedules();
+      if (res.success) {
+        setEmployeeSchedules(res.data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   useEffect(() => {
     loadShifts();
+    loadEmployeeSchedules();
   }, []);
 
   const startEdit = (shift: ShiftSchedule) => {
@@ -265,35 +281,56 @@ export function ScheduleTab() {
     }
   };
 
-  const handleAdd = (shift: ShiftSchedule) => setShifts(prev => [...prev, shift]);
+  const handleAdd = (shift: ShiftSchedule) => {
+    setShifts(prev => [...prev, shift]);
+    loadEmployeeSchedules();
+  };
+
   const handleDelete = async (id: number) => {
     try {
       const res = await scheduleApi.delete(id);
       if (res.success) {
         setShifts(prev => prev.filter(s => s.id !== id));
         setDeleteTarget(null);
+        loadEmployeeSchedules();
       }
     } catch (err: any) {
       alert(err?.message ?? 'Gagal menghapus shift.');
     }
   };
 
-  const totalDays = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-  const scheduleMatrix = [
-    { emp: 'Dr. Rina Kusumawati', shifts: ['R','R','R','R','R','-'] },
-    { emp: 'Ns. Ahmad Fauzi',    shifts: ['R','R','R','R','R','-'] },
-    { emp: 'Rini Handayani',      shifts: ['R','R','R','R','R','-'] },
-  ];
-  const shiftColors: Record<string, { bg: string; text: string }> = {
-    R: { bg: '#F0FDF4', text: '#16A34A' },
-    P: { bg: '#FFFBEB', text: '#D97706' },
-    S: { bg: '#EFF6FF', text: '#2563EB' },
-    M: { bg: '#F5F3FF', text: '#7C3AED' },
-    '-': { bg: '#F9FAFB', text: '#9CA3AF' },
+  const handleAssign = async (employeeId: number, day: string, scheduleId: number | null) => {
+    try {
+      const res = await scheduleApi.assignEmployeeSchedule(employeeId, day, scheduleId);
+      if (res.success) {
+        loadEmployeeSchedules();
+        loadShifts(); // Update counters on cards
+        setActiveAssignCell(null);
+      }
+    } catch (err: any) {
+      alert(err?.message ?? 'Gagal menugaskan shift.');
+    }
+  };
+
+  const totalDays = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+
+  const getShiftInitials = (name: string) => {
+    return name.trim().charAt(0).toUpperCase();
+  };
+
+  const getShiftColors = (colorHex: string) => {
+    const pr = COLOR_PRESETS.find(c => c.color.toLowerCase() === colorHex.toLowerCase());
+    if (pr) return { bg: pr.bg, text: pr.color };
+    return { bg: `${colorHex}15`, text: colorHex };
   };
 
   return (
     <div className="max-w-5xl mx-auto space-y-5">
+      {/* Background click handler to close popovers */}
+      {activeAssignCell && (
+        <div className="fixed inset-0 z-20" onClick={() => setActiveAssignCell(null)} />
+      )}
+
       {/* Page header */}
       <div className="flex items-center justify-between">
         <div>
@@ -390,7 +427,7 @@ export function ScheduleTab() {
                 className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 transition-colors">
                 <div className="flex items-center gap-2">
                   <Users size={13} className="text-gray-400" />
-                  <span className="text-[12px] text-gray-500">{shift.employees_count || 0} karyawan</span>
+                  <span className="text-[12px] text-gray-500">{shift.employees_count || 0} Karyawan</span>
                 </div>
                 <span className="text-[11px] text-gray-400">{expandedShift === shift.id ? '▲' : '▼'}</span>
               </button>
@@ -413,11 +450,11 @@ export function ScheduleTab() {
         </button>
       </div>
 
-      {/* Schedule matrix */}
+      {/* Dynamic Schedule matrix */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-50">
           <p className="text-[14px] font-semibold text-gray-800">Jadwal Mingguan Karyawan</p>
-          <p className="text-[11px] text-gray-400 mt-0.5">R=Reguler · P=Pagi · S=Siang · M=Malam · -=Libur</p>
+          <p className="text-[11px] text-gray-400 mt-0.5">Klik pada sel hari kerja karyawan untuk menugaskan/mengubah shift secara mandiri.</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -430,14 +467,50 @@ export function ScheduleTab() {
               </tr>
             </thead>
             <tbody>
-              {scheduleMatrix.map((row, i) => (
+              {employeeSchedules.map((row, i) => (
                 <tr key={i} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                  <td className="px-4 py-3 text-[13px] font-medium text-gray-800 whitespace-nowrap">{row.emp}</td>
-                  {row.shifts.map((s, j) => {
-                    const sc = shiftColors[s];
+                  <td className="px-4 py-3 text-[13px] font-medium text-gray-800 whitespace-nowrap">{row.name}</td>
+                  {totalDays.map((d, j) => {
+                    const assigned = row.schedules[d];
+                    const sc = assigned ? getShiftColors(assigned.color) : { bg: '#F9FAFB', text: '#9CA3AF' };
+                    const initial = assigned ? getShiftInitials(assigned.name) : '-';
+                    const active = activeAssignCell?.empId === row.employee_id && activeAssignCell?.day === d;
+
                     return (
-                      <td key={j} className="px-3 py-3 text-center">
-                        <span className="inline-block text-[11px] font-bold px-2.5 py-1 rounded-lg" style={{ background: sc.bg, color: sc.text }}>{s}</span>
+                      <td key={j} className="px-3 py-3 text-center relative">
+                        <button
+                          onClick={() => setActiveAssignCell(active ? null : { empId: row.employee_id, day: d })}
+                          className="inline-block text-[11px] font-bold px-3 py-1 rounded-lg transition-all hover:scale-105 active:scale-95 shadow-sm border border-transparent hover:border-gray-200"
+                          style={{ background: sc.bg, color: sc.text }}
+                          title={assigned ? `${assigned.name} (Klik untuk ganti)` : 'Libur (Klik untuk set)'}
+                        >
+                          {initial}
+                        </button>
+
+                        {/* Popover choice selection */}
+                        {active && (
+                          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1.5 z-30 bg-white rounded-xl border border-gray-200 shadow-xl py-1.5 min-w-[130px] text-left">
+                            <p className="text-[9px] font-bold text-gray-400 px-3 py-1 uppercase border-b border-gray-50 mb-1">Set Shift ({d})</p>
+                            {shifts.map(sh => (
+                              <button
+                                key={sh.id}
+                                onClick={() => handleAssign(row.employee_id, d, sh.id)}
+                                className="w-full text-left px-3 py-2 text-[11px] font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                              >
+                                <span className="w-2.5 h-2.5 rounded-full border border-gray-100" style={{ background: sh.color }} />
+                                <span className="truncate">{sh.name}</span>
+                              </button>
+                            ))}
+                            <div className="h-px bg-gray-100 my-1" />
+                            <button
+                              onClick={() => handleAssign(row.employee_id, d, null)}
+                              className="w-full text-left px-3 py-2 text-[11px] font-bold text-red-500 hover:bg-red-50 flex items-center gap-2"
+                            >
+                              <span className="w-2.5 h-2.5 rounded-full bg-gray-300" />
+                              Libur (-)
+                            </button>
+                          </div>
+                        )}
                       </td>
                     );
                   })}

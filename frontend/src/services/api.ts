@@ -260,6 +260,17 @@ export interface ShiftSchedule {
   employees_count?: number;
 }
 
+export interface EmployeeWeeklySchedule {
+  employee_id: number;
+  name: string;
+  schedules: Record<string, {
+    id: number;
+    name: string;
+    color: string;
+    icon: string;
+  }>;
+}
+
 export const scheduleApi = {
   list:   ()                               => api.get<{ success: boolean; data: ShiftSchedule[] }>('/schedules'),
   create: (data: Omit<ShiftSchedule, 'id' | 'employees_count'>) =>
@@ -267,4 +278,7 @@ export const scheduleApi = {
   update: (id: number, data: Partial<Omit<ShiftSchedule, 'id' | 'employees_count'>>) =>
     api.put<{ success: boolean; data: ShiftSchedule }>(`/schedules/${id}`, data),
   delete: (id: number)                     => api.delete<{ success: boolean; message: string }>(`/schedules/${id}`),
+  getEmployeeSchedules: () => api.get<{ success: boolean; data: EmployeeWeeklySchedule[] }>('/employee-schedules'),
+  assignEmployeeSchedule: (employee_id: number, day_of_week: string, schedule_id: number | null) =>
+    api.post<{ success: boolean; message: string }>('/employee-schedules/assign', { employee_id, day_of_week, schedule_id }),
 };
