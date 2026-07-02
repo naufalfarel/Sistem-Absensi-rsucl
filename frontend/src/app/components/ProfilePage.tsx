@@ -1,0 +1,539 @@
+import { useState } from 'react';
+import {
+  ChevronRight, User, Lock, Bell, Globe, Info, Shield, LogOut,
+  Mail, Phone, MapPin, Calendar, Briefcase, Building2, Edit3, Camera,
+  Plus, X, CheckCircle2, Clock, XCircle, FileText, ChevronDown, AlertCircle
+} from 'lucide-react';
+
+interface ProfilePageProps {
+  onLogout: () => void;
+}
+
+type LeaveType = 'cuti' | 'izin' | 'sakit';
+type LeaveStatus = 'pending' | 'approved' | 'rejected';
+
+interface LeaveRequest {
+  id: number;
+  type: LeaveType;
+  startDate: string;
+  endDate: string;
+  days: number;
+  reason: string;
+  status: LeaveStatus;
+  submittedAt: string;
+  adminNote?: string;
+}
+
+const typeConfig: Record<LeaveType, { label: string; color: string; bg: string; border: string }> = {
+  cuti:  { label: 'Cuti Tahunan', color: '#7C3AED', bg: '#F5F3FF', border: '#DDD6FE' },
+  izin:  { label: 'Izin',         color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE' },
+  sakit: { label: 'Sakit',        color: '#0891B2', bg: '#ECFEFF', border: '#A5F3FC' },
+};
+
+const statusConfig: Record<LeaveStatus, { label: string; color: string; bg: string; icon: typeof CheckCircle2 }> = {
+  pending:  { label: 'Menunggu',  color: '#D97706', bg: '#FEF3C7', icon: Clock },
+  approved: { label: 'Disetujui', color: '#16A34A', bg: '#DCFCE7', icon: CheckCircle2 },
+  rejected: { label: 'Ditolak',   color: '#DC2626', bg: '#FEE2E2', icon: XCircle },
+};
+
+const initialRequests: LeaveRequest[] = [
+  { id: 1, type: 'cuti', startDate: '2025-07-10', endDate: '2025-07-11', days: 2, reason: 'Keperluan keluarga', status: 'pending', submittedAt: '1 Jul 2025' },
+  { id: 2, type: 'sakit', startDate: '2025-06-20', endDate: '2025-06-20', days: 1, reason: 'Demam dan flu', status: 'approved', submittedAt: '20 Jun 2025' },
+  { id: 3, type: 'izin', startDate: '2025-06-05', endDate: '2025-06-05', days: 1, reason: 'Urusan administrasi', status: 'rejected', submittedAt: '4 Jun 2025', adminNote: 'Kekurangan personel, silakan ajukan ulang.' },
+];
+
+const months = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+const formatDate = (str: string) => {
+  const d = new Date(str);
+  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+};
+
+function CreditCardIcon({ size, className }: { size: number; className?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
+      <rect x="2" y="5" width="20" height="14" rx="2" stroke="currentColor" strokeWidth="2" />
+      <path d="M2 10h20" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  );
+}
+
+export function ProfilePage({ onLogout }: ProfilePageProps) {
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [requests, setRequests] = useState<LeaveRequest[]>(initialRequests);
+  const [activeSection, setActiveSection] = useState<'profile' | 'leave'>('profile');
+
+  // Form state
+  const [leaveType, setLeaveType] = useState<LeaveType>('cuti');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [reason, setReason] = useState('');
+  const [formError, setFormError] = useState('');
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+
+  const employee = {
+    name: 'Dr. Rina Kusumawati', nip: '198501012010012001',
+    username: 'rina.kusumawati', email: 'rina.k@rsucl.id',
+    phone: '+62 812-3456-7890',
+    address: 'Jl. Melati No.12, Kelapa Gading, Jakarta Utara',
+    gender: 'Perempuan', joinDate: '1 Maret 2010',
+    position: 'Dokter Umum', department: 'Poli Umum & UGD', status: 'Aktif',
+  };
+
+  const calcDays = () => {
+    if (!startDate || !endDate) return 0;
+    const diff = new Date(endDate).getTime() - new Date(startDate).getTime();
+    return Math.max(1, Math.floor(diff / 86400000) + 1);
+  };
+
+  const handleSubmit = () => {
+    if (!startDate || !endDate || !reason.trim()) {
+      setFormError('Semua field wajib diisi.');
+      return;
+    }
+    if (new Date(endDate) < new Date(startDate)) {
+      setFormError('Tanggal selesai tidak boleh sebelum tanggal mulai.');
+      return;
+    }
+    const newReq: LeaveRequest = {
+      id: Date.now(),
+      type: leaveType,
+      startDate,
+      endDate,
+      days: calcDays(),
+      reason: reason.trim(),
+      status: 'pending',
+      submittedAt: `${new Date().getDate()} ${months[new Date().getMonth()]} ${new Date().getFullYear()}`,
+    };
+    setRequests(prev => [newReq, ...prev]);
+    setShowLeaveModal(false);
+    setStartDate(''); setEndDate(''); setReason(''); setFormError('');
+    setLeaveType('cuti');
+    setSubmitSuccess(true);
+    setActiveSection('leave');
+    setTimeout(() => setSubmitSuccess(false), 4000);
+  };
+
+  const pending = requests.filter(r => r.status === 'pending').length;
+
+  const infoPersonal = [
+    { icon: User,          label: 'Nama Lengkap',   value: employee.name },
+    { icon: CreditCardIcon,label: 'NIP',             value: employee.nip },
+    { icon: User,          label: 'Username',        value: employee.username },
+    { icon: Mail,          label: 'Email',            value: employee.email },
+    { icon: Phone,         label: 'Nomor HP',        value: employee.phone },
+    { icon: MapPin,        label: 'Alamat',           value: employee.address },
+    { icon: User,          label: 'Jenis Kelamin',   value: employee.gender },
+  ];
+
+  const infoKerja = [
+    { icon: Calendar,  label: 'Tanggal Bergabung', value: employee.joinDate, badge: false },
+    { icon: Briefcase, label: 'Jabatan',            value: employee.position, badge: false },
+    { icon: Building2, label: 'Departemen',         value: employee.department, badge: false },
+    { icon: User,      label: 'Status Pegawai',     value: employee.status, badge: true },
+  ];
+
+  const menuItems = [
+    { icon: Edit3,  label: 'Edit Profil' },
+    { icon: Lock,   label: 'Ubah Password' },
+    { icon: Bell,   label: 'Pengaturan Notifikasi' },
+    { icon: Globe,  label: 'Bahasa', value: 'Indonesia' },
+    { icon: Info,   label: 'Tentang Aplikasi' },
+    { icon: Shield, label: 'Kebijakan Privasi' },
+  ];
+
+  return (
+    <div className="p-5 md:p-7 max-w-2xl mx-auto">
+      <div className="mb-5">
+        <h1 className="text-xl font-semibold text-gray-900">Profil Saya</h1>
+        <p className="text-[13px] text-gray-500 mt-0.5">Informasi akun dan pengajuan cuti</p>
+      </div>
+
+      {/* Success banner */}
+      {submitSuccess && (
+        <div className="flex items-center gap-2.5 bg-green-50 border border-green-200 rounded-2xl px-4 py-3 mb-4">
+          <CheckCircle2 size={16} className="text-[#16A34A] flex-shrink-0" />
+          <p className="text-[13px] text-[#16A34A] font-medium">Pengajuan berhasil dikirim! Menunggu persetujuan admin.</p>
+        </div>
+      )}
+
+      {/* Tab switcher */}
+      <div className="flex gap-1.5 bg-white rounded-xl border border-gray-100 p-1 shadow-sm mb-5 w-fit">
+        {[
+          { key: 'profile', label: 'Profil' },
+          { key: 'leave',   label: `Pengajuan Cuti${pending > 0 ? ` (${pending})` : ''}` },
+        ].map(tab => (
+          <button key={tab.key} onClick={() => setActiveSection(tab.key as 'profile' | 'leave')}
+            className={`px-4 py-2 rounded-lg text-[13px] font-medium transition-all ${
+              activeSection === tab.key ? 'bg-[#16A34A] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            }`}>
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── PROFIL SECTION ── */}
+      {activeSection === 'profile' && (
+        <>
+          {/* Profile hero card */}
+          <div className="bg-gradient-to-br from-[#16A34A] to-[#0B7A36] rounded-2xl p-5 mb-5 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-40 h-40 rounded-full border-[24px] border-white/10 translate-x-12 -translate-y-12" />
+            <div className="absolute bottom-0 left-0 w-24 h-24 rounded-full border-[16px] border-white/10 -translate-x-8 translate-y-8" />
+            <div className="relative flex items-center gap-4">
+              <div className="relative">
+                <div className="w-16 h-16 rounded-2xl bg-white/20 border-2 border-white/40 flex items-center justify-center flex-shrink-0">
+                  <span className="text-white text-xl font-bold">RK</span>
+                </div>
+                <button className="absolute -bottom-1 -right-1 w-5 h-5 bg-white rounded-lg flex items-center justify-center shadow-sm">
+                  <Camera size={10} className="text-[#16A34A]" />
+                </button>
+              </div>
+              <div className="flex-1 text-white">
+                <p className="text-[16px] font-semibold">{employee.name}</p>
+                <p className="text-[13px] text-white/80 mt-0.5">{employee.position}</p>
+                <p className="text-[12px] text-white/65 mt-0.5">{employee.department}</p>
+              </div>
+              <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-white/20 text-white border border-white/30 flex-shrink-0">
+                {employee.status}
+              </span>
+            </div>
+            <div className="relative mt-5 grid grid-cols-3 gap-2">
+              {[
+                { label: 'Kehadiran', value: '96%' },
+                { label: 'Masa Kerja', value: '15 thn' },
+                { label: 'Sisa Cuti', value: '8 hari' },
+              ].map((s, i) => (
+                <div key={i} className="bg-white/15 rounded-xl p-2.5 text-center border border-white/10">
+                  <p className="text-[15px] font-bold text-white">{s.value}</p>
+                  <p className="text-[10px] text-white/65 mt-0.5">{s.label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Ajukan Cuti shortcut */}
+          <button onClick={() => setShowLeaveModal(true)}
+            className="w-full flex items-center justify-between bg-white border border-gray-100 rounded-2xl px-5 py-4 mb-4 shadow-sm hover:shadow-md hover:border-[#16A34A]/30 transition-all group">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center">
+                <FileText size={18} className="text-[#16A34A]" />
+              </div>
+              <div className="text-left">
+                <p className="text-[14px] font-semibold text-gray-800">Ajukan Cuti / Izin / Sakit</p>
+                <p className="text-[12px] text-gray-400 mt-0.5">Sisa cuti: 8 hari · {pending} pengajuan menunggu</p>
+              </div>
+            </div>
+            <ChevronRight size={16} className="text-gray-300 group-hover:text-[#16A34A] transition-colors" />
+          </button>
+
+          {/* Personal info */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-4">
+            <div className="px-5 py-3.5 border-b border-gray-50">
+              <p className="text-[13px] font-semibold text-gray-800">Informasi Pribadi</p>
+            </div>
+            <div className="p-4 space-y-3.5">
+              {infoPersonal.map(({ icon: Icon, label, value }, i) => (
+                <div key={i} className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-gray-50 flex items-center justify-center flex-shrink-0">
+                    <Icon size={14} className="text-gray-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] text-gray-400">{label}</p>
+                    <p className="text-[13px] font-medium text-gray-800 mt-0.5 break-words">{value}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Work info */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-4">
+            <div className="px-5 py-3.5 border-b border-gray-50">
+              <p className="text-[13px] font-semibold text-gray-800">Informasi Pekerjaan</p>
+            </div>
+            <div className="p-4 space-y-3.5">
+              {infoKerja.map(({ icon: Icon, label, value, badge }, i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-gray-50 flex items-center justify-center flex-shrink-0">
+                    <Icon size={14} className="text-gray-400" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-[11px] text-gray-400">{label}</p>
+                    {badge
+                      ? <span className="inline-block mt-0.5 text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-green-100 text-[#16A34A]">{value}</span>
+                      : <p className="text-[13px] font-medium text-gray-800 mt-0.5">{value}</p>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Menu */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-4">
+            <div className="px-5 py-3.5 border-b border-gray-50">
+              <p className="text-[13px] font-semibold text-gray-800">Pengaturan</p>
+            </div>
+            <div className="p-2">
+              {menuItems.map(({ icon: Icon, label, value }, i) => (
+                <button key={i} className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 transition-colors group">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-gray-50 flex items-center justify-center">
+                      <Icon size={15} className="text-gray-500" />
+                    </div>
+                    <span className="text-[13px] text-gray-700">{label}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {value && <span className="text-[12px] text-gray-400">{value}</span>}
+                    <ChevronRight size={14} className="text-gray-300 group-hover:text-gray-500 transition-colors" />
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Logout */}
+          <button onClick={() => setShowLogoutConfirm(true)}
+            className="w-full bg-red-50 border border-red-100 rounded-2xl p-4 flex items-center justify-center gap-2 text-red-600 font-medium text-[14px] hover:bg-red-100 transition-colors">
+            <LogOut size={16} /> Keluar dari Akun
+          </button>
+        </>
+      )}
+
+      {/* ── PENGAJUAN CUTI SECTION ── */}
+      {activeSection === 'leave' && (
+        <div className="space-y-4">
+          {/* Quota card */}
+          <div className="bg-gradient-to-br from-[#16A34A] to-[#0B7A36] rounded-2xl p-5 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 rounded-full border-[20px] border-white/10 translate-x-8 -translate-y-8" />
+            <p className="text-[12px] text-white/70 mb-3 relative">Kuota Cuti Tahunan 2025</p>
+            <div className="flex items-end gap-3 relative">
+              <div>
+                <span className="text-4xl font-bold text-white">8</span>
+                <span className="text-white/70 text-[14px] ml-1">/ 12 hari</span>
+              </div>
+              <div className="flex-1 mb-1.5">
+                <div className="bg-white/20 rounded-full h-2 overflow-hidden">
+                  <div className="h-2 rounded-full bg-white" style={{ width: '66%' }} />
+                </div>
+                <p className="text-[10px] text-white/60 mt-1">4 hari telah digunakan</p>
+              </div>
+            </div>
+            <div className="relative mt-4 flex gap-2">
+              {[
+                { label: 'Menunggu', value: String(pending), color: 'bg-amber-400/30 text-amber-200' },
+                { label: 'Disetujui', value: String(requests.filter(r => r.status === 'approved').length), color: 'bg-white/20 text-white' },
+                { label: 'Ditolak', value: String(requests.filter(r => r.status === 'rejected').length), color: 'bg-red-400/30 text-red-200' },
+              ].map((s, i) => (
+                <div key={i} className={`flex-1 rounded-xl px-3 py-2 text-center ${s.color}`}>
+                  <p className="text-[16px] font-bold">{s.value}</p>
+                  <p className="text-[10px] mt-0.5 opacity-80">{s.label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Ajukan button */}
+          <button onClick={() => setShowLeaveModal(true)}
+            className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#16A34A] hover:bg-[#0d9240] text-white rounded-2xl text-[14px] font-semibold transition-all shadow-md shadow-green-200/60 active:scale-[0.98]">
+            <Plus size={18} /> Ajukan Cuti / Izin / Sakit
+          </button>
+
+          {/* Request list */}
+          <div className="space-y-3">
+            <p className="text-[13px] font-semibold text-gray-700 px-1">Riwayat Pengajuan</p>
+            {requests.length === 0 && (
+              <div className="text-center py-10 bg-white rounded-2xl border border-gray-100">
+                <FileText size={28} className="text-gray-200 mx-auto mb-2" />
+                <p className="text-[13px] text-gray-400">Belum ada pengajuan</p>
+              </div>
+            )}
+            {requests.map(req => {
+              const tc = typeConfig[req.type];
+              const sc = statusConfig[req.status];
+              const StatusIcon = sc.icon;
+              return (
+                <div key={req.id} className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${req.status === 'pending' ? 'border-amber-200' : 'border-gray-100'}`}>
+                  <div className="p-4">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                          style={{ background: tc.bg, border: `1.5px solid ${tc.border}` }}>
+                          <span className="text-[12px] font-bold" style={{ color: tc.color }}>
+                            {req.type === 'cuti' ? 'C' : req.type === 'izin' ? 'I' : 'S'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[13px] font-semibold text-gray-800">{tc.label}</span>
+                          <p className="text-[11px] text-gray-400 mt-0.5">Diajukan: {req.submittedAt}</p>
+                        </div>
+                      </div>
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full flex-shrink-0"
+                        style={{ color: sc.color, background: sc.bg }}>
+                        <StatusIcon size={11} /> {sc.label}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 mb-3">
+                      <div className="bg-gray-50 rounded-xl px-3 py-2">
+                        <p className="text-[10px] text-gray-400">Tanggal Mulai</p>
+                        <p className="text-[12px] font-semibold text-gray-800 mt-0.5">{formatDate(req.startDate)}</p>
+                      </div>
+                      <div className="bg-gray-50 rounded-xl px-3 py-2">
+                        <p className="text-[10px] text-gray-400">Tanggal Selesai</p>
+                        <p className="text-[12px] font-semibold text-gray-800 mt-0.5">{formatDate(req.endDate)}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <p className="text-[12px] text-gray-500 italic flex-1 mr-3">"{req.reason}"</p>
+                      <span className="text-[11px] font-medium text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full flex-shrink-0">
+                        {req.days} hari
+                      </span>
+                    </div>
+
+                    {req.adminNote && (
+                      <div className={`mt-3 px-3 py-2 rounded-xl border text-[11px] ${
+                        req.status === 'approved' ? 'bg-green-50 border-green-100 text-green-700' : 'bg-red-50 border-red-100 text-red-600'
+                      }`}>
+                        <span className="font-semibold">Catatan Admin:</span> {req.adminNote}
+                      </div>
+                    )}
+                  </div>
+                  {req.status === 'pending' && (
+                    <div className="h-0.5 bg-gradient-to-r from-amber-400 to-transparent" />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL PENGAJUAN CUTI ── */}
+      {showLeaveModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/35 backdrop-blur-sm" onClick={() => { setShowLeaveModal(false); setFormError(''); }} />
+          <div className="relative bg-white rounded-t-3xl sm:rounded-2xl w-full sm:max-w-md shadow-2xl mx-0 sm:mx-4 max-h-[90vh] overflow-y-auto">
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white rounded-t-3xl sm:rounded-t-2xl z-10">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-green-50 flex items-center justify-center">
+                  <FileText size={15} className="text-[#16A34A]" />
+                </div>
+                <p className="text-[15px] font-semibold text-gray-900">Ajukan Cuti / Izin</p>
+              </div>
+              <button onClick={() => { setShowLeaveModal(false); setFormError(''); }}
+                className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-colors">
+                <X size={15} className="text-gray-500" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {formError && (
+                <div className="flex items-center gap-2 bg-red-50 border border-red-100 text-red-600 text-[12px] px-3.5 py-2.5 rounded-xl">
+                  <AlertCircle size={14} className="flex-shrink-0" /> {formError}
+                </div>
+              )}
+
+              {/* Type selector */}
+              <div>
+                <label className="block text-[12px] font-medium text-gray-600 mb-2">Jenis Pengajuan</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['cuti', 'izin', 'sakit'] as LeaveType[]).map(t => {
+                    const tc = typeConfig[t];
+                    return (
+                      <button key={t} onClick={() => setLeaveType(t)}
+                        className={`py-3 rounded-xl border-2 text-center transition-all ${
+                          leaveType === t ? 'shadow-sm' : 'border-gray-100 hover:border-gray-200'
+                        }`}
+                        style={leaveType === t ? { borderColor: tc.color, background: tc.bg } : { background: '#F9FAFB' }}>
+                        <p className="text-[12px] font-semibold" style={{ color: leaveType === t ? tc.color : '#6B7280' }}>{tc.label}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Dates */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[12px] font-medium text-gray-600 mb-1.5">Tanggal Mulai</label>
+                  <input type="date" value={startDate} onChange={e => { setStartDate(e.target.value); setFormError(''); }}
+                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all" />
+                </div>
+                <div>
+                  <label className="block text-[12px] font-medium text-gray-600 mb-1.5">Tanggal Selesai</label>
+                  <input type="date" value={endDate} min={startDate} onChange={e => { setEndDate(e.target.value); setFormError(''); }}
+                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all" />
+                </div>
+              </div>
+
+              {/* Duration preview */}
+              {startDate && endDate && (
+                <div className="flex items-center gap-2 bg-green-50 border border-green-100 rounded-xl px-3.5 py-2.5">
+                  <Calendar size={14} className="text-[#16A34A]" />
+                  <p className="text-[12px] text-[#16A34A] font-medium">Durasi: <strong>{calcDays()} hari</strong></p>
+                </div>
+              )}
+
+              {/* Reason */}
+              <div>
+                <label className="block text-[12px] font-medium text-gray-600 mb-1.5">
+                  Keterangan / Alasan <span className="text-red-500">*</span>
+                </label>
+                <textarea value={reason} onChange={e => { setReason(e.target.value); setFormError(''); }} rows={3}
+                  placeholder={leaveType === 'sakit' ? 'Jelaskan kondisi kesehatan Anda...' : 'Jelaskan keperluan Anda...'}
+                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all resize-none placeholder:text-gray-300" />
+              </div>
+
+              {/* Sakit note */}
+              {leaveType === 'sakit' && (
+                <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-xl px-3.5 py-2.5">
+                  <Info size={13} className="text-blue-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-blue-600">Sertakan surat keterangan dokter jika sakit lebih dari 2 hari. Bisa diserahkan langsung ke admin.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex gap-2 px-6 pb-6">
+              <button onClick={() => { setShowLeaveModal(false); setFormError(''); }}
+                className="flex-1 py-3 border border-gray-200 rounded-xl text-[13px] font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+                Batal
+              </button>
+              <button onClick={handleSubmit}
+                className="flex-1 py-3 bg-[#16A34A] hover:bg-[#0d9240] rounded-xl text-[13px] font-semibold text-white transition-all shadow-sm shadow-green-200">
+                Kirim Pengajuan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Logout confirm */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setShowLogoutConfirm(false)} />
+          <div className="relative bg-white rounded-2xl p-6 shadow-2xl w-full max-w-xs">
+            <div className="w-12 h-12 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <LogOut size={22} className="text-red-500" />
+            </div>
+            <h3 className="text-[16px] font-semibold text-gray-900 text-center mb-1">Keluar dari Akun?</h3>
+            <p className="text-[13px] text-gray-500 text-center mb-5">Anda akan keluar dari sistem absensi RSUCL.</p>
+            <div className="flex gap-2">
+              <button onClick={() => setShowLogoutConfirm(false)}
+                className="flex-1 py-2.5 border border-gray-200 rounded-xl text-[13px] font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+                Batal
+              </button>
+              <button onClick={onLogout}
+                className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 rounded-xl text-[13px] font-semibold text-white transition-colors">
+                Keluar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
