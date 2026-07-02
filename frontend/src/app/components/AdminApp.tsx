@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Users, ClipboardList, History, CalendarDays, FileText,
-  Bell, Settings, LogOut, TrendingUp, UserCheck, Clock, AlertCircle,
+  Bell, Settings, LogOut, UserCheck, Clock, AlertCircle,
   Search, Plus, Upload, Download, MoreHorizontal, Lock,
   Menu, X, CheckCircle2, BarChart3, Edit2, Trash2, ChevronDown
 } from 'lucide-react';
@@ -16,6 +16,7 @@ import { LeaveTab } from './admin/LeaveTab';
 import { ReportsTab } from './admin/ReportsTab';
 import { NotificationsTab } from './admin/NotificationsTab';
 import { SettingsTab } from './admin/SettingsTab';
+import { employeeApi, Employee, reportApi, ReportSummary } from '../../services/api';
 
 const sidebarItems = [
   { id: 'dashboard',     icon: LayoutDashboard, label: 'Dashboard' },
@@ -23,94 +24,84 @@ const sidebarItems = [
   { id: 'attendance',    icon: ClipboardList,    label: 'Absensi' },
   { id: 'history',       icon: History,          label: 'Riwayat' },
   { id: 'schedule',      icon: CalendarDays,     label: 'Jadwal Shift' },
-  { id: 'leave',         icon: FileText,         label: 'Pengajuan Cuti', badge: 2 },
+  { id: 'leave',         icon: FileText,         label: 'Pengajuan Cuti', badge: 0 },
   { id: 'reports',       icon: BarChart3,        label: 'Laporan' },
-  { id: 'notifications', icon: Bell,             label: 'Notifikasi', badge: 4 },
+  { id: 'notifications', icon: Bell,             label: 'Notifikasi', badge: 0 },
   { id: 'settings',      icon: Settings,         label: 'Pengaturan' },
-];
-
-const weeklyData = [
-  { day: 'Sen', hadir: 145, terlambat: 12, alpha: 3 },
-  { day: 'Sel', hadir: 148, terlambat: 9, alpha: 3 },
-  { day: 'Rab', hadir: 152, terlambat: 7, alpha: 1 },
-  { day: 'Kam', hadir: 140, terlambat: 15, alpha: 5 },
-  { day: 'Jum', hadir: 138, terlambat: 10, alpha: 12 },
-  { day: 'Sab', hadir: 80, terlambat: 5, alpha: 0 },
-];
-
-const monthlyTrend = [
-  { month: 'Jan', persen: 94 },
-  { month: 'Feb', persen: 92 },
-  { month: 'Mar', persen: 95 },
-  { month: 'Apr', persen: 91 },
-  { month: 'Mei', persen: 96 },
-  { month: 'Jun', persen: 93 },
-  { month: 'Jul', persen: 97 },
-];
-
-const depts = ['Poli Umum', 'ICU', 'Poli Anak', 'Administrasi', 'IGD', 'Bedah', 'Farmasi', 'Laboratorium'];
-const positions = ['Dokter Umum', 'Dokter Spesialis', 'Perawat', 'Apoteker', 'Staff Admin', 'Analis Lab', 'Radiografer'];
-
-type Employee = {
-  id: number;
-  name: string;
-  nip: string;
-  username: string;
-  password: string;
-  dept: string;
-  pos: string;
-  email: string;
-  phone: string;
-  gender: string;
-  status: string;
-  checkIn: string;
-  shift: string;
-  statusType: string;
-  joinDate: string;
-};
-
-const initialEmployees: Employee[] = [
-  { id: 1, name: 'Dr. Rina Kusumawati', nip: '198501012010012001', username: 'rina.kusumawati', password: 'Rina@2025', dept: 'Poli Umum', pos: 'Dokter Umum', email: 'rina.k@rsucl.id', phone: '081234567890', gender: 'Perempuan', status: 'Hadir', checkIn: '08:28', shift: 'Reguler', statusType: 'hadir', joinDate: '2010-03-01' },
-  { id: 2, name: 'Ns. Ahmad Fauzi', nip: '198805122012011002', username: 'ahmad.fauzi', password: 'Ahmad@2025', dept: 'ICU', pos: 'Perawat', email: 'ahmad.f@rsucl.id', phone: '082345678901', gender: 'Laki-laki', status: 'Hadir', checkIn: '08:25', shift: 'Reguler', statusType: 'hadir', joinDate: '2012-07-15' },
-  { id: 3, name: 'dr. Siti Rahma', nip: '199003232015012003', username: 'siti.rahma', password: 'Siti@2025', dept: 'Poli Anak', pos: 'Dokter Spesialis', email: 'siti.r@rsucl.id', phone: '083456789012', gender: 'Perempuan', status: 'Terlambat', checkIn: '09:10', shift: 'Reguler', statusType: 'terlambat', joinDate: '2015-01-20' },
-  { id: 4, name: 'Budi Santoso', nip: '198707142009011004', username: 'budi.santoso', password: 'Budi@2025', dept: 'Administrasi', pos: 'Staff Admin', email: 'budi.s@rsucl.id', phone: '084567890123', gender: 'Laki-laki', status: 'Cuti', checkIn: '--', shift: '--', statusType: 'cuti', joinDate: '2009-06-01' },
-  { id: 5, name: 'Ns. Dewi Lestari', nip: '199202012016012005', username: 'dewi.lestari', password: 'Dewi@2025', dept: 'IGD', pos: 'Perawat', email: 'dewi.l@rsucl.id', phone: '085678901234', gender: 'Perempuan', status: 'Hadir', checkIn: '08:29', shift: 'Reguler', statusType: 'hadir', joinDate: '2016-08-10' },
-  { id: 6, name: 'dr. Hendra Wijaya', nip: '198306192008011006', username: 'hendra.wijaya', password: 'Hendra@2025', dept: 'Bedah', pos: 'Dokter Spesialis', email: 'hendra.w@rsucl.id', phone: '086789012345', gender: 'Laki-laki', status: 'Alpha', checkIn: '--', shift: 'Reguler', statusType: 'alpha', joinDate: '2008-03-05' },
-  { id: 7, name: 'Rini Handayani', nip: '199508152018012007', username: 'rini.handayani', password: 'Rini@2025', dept: 'Farmasi', pos: 'Apoteker', email: 'rini.h@rsucl.id', phone: '087890123456', gender: 'Perempuan', status: 'Hadir', checkIn: '08:27', shift: 'Reguler', statusType: 'hadir', joinDate: '2018-09-01' },
 ];
 
 const statusColors: Record<string, { color: string; bg: string }> = {
   hadir: { color: '#16A34A', bg: '#DCFCE7' },
-  terlambat: { color: '#D97706', bg: '#FEF3C7' },
+  telat: { color: '#D97706', bg: '#FEF3C7' },
   alpha: { color: '#DC2626', bg: '#FEE2E2' },
   cuti: { color: '#2563EB', bg: '#DBEAFE' },
+  izin: { color: '#7C3AED', bg: '#F5F3FF' },
+  sakit: { color: '#EA580C', bg: '#FFF7ED' },
 };
 
 const emptyForm = {
-  name: '', nip: '', username: '', password: '', dept: depts[0], pos: positions[0],
+  name: '', nip: '', username: '', password: '', department_id: '', position_id: '',
   email: '', phone: '', gender: 'Laki-laki', joinDate: '',
 };
 
 interface AdminAppProps {
   onLogout: () => void;
-  accounts: Employee[];
-  setAccounts: React.Dispatch<React.SetStateAction<Employee[]>>;
 }
 
-export function AdminApp({ onLogout, accounts, setAccounts }: AdminAppProps) {
+export function AdminApp({ onLogout }: AdminAppProps) {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const employees = accounts.length > 0 ? accounts : initialEmployees;
-  const setEmployees = setAccounts as React.Dispatch<React.SetStateAction<Employee[]>>;
+
+  // API States
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [departments, setDepartments] = useState<{ id: number; name: string }[]>([]);
+  const [positions, setPositions] = useState<{ id: number; name: string }[]>([]);
+  const [reportSummary, setReportSummary] = useState<ReportSummary | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  // Modal States
   const [modalType, setModalType] = useState<'add' | 'edit' | 'delete' | null>(null);
   const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
   const [form, setForm] = useState({ ...emptyForm });
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
   const [formError, setFormError] = useState('');
 
+  const loadData = async () => {
+    setLoading(true);
+    setErrorMsg('');
+    try {
+      const [empRes, metaRes, reportRes] = await Promise.all([
+        employeeApi.list(),
+        employeeApi.meta(),
+        reportApi.summary()
+      ]);
+
+      if (empRes.success) setEmployees(empRes.data);
+      if (metaRes.success) {
+        setDepartments(metaRes.data.departments);
+        setPositions(metaRes.data.positions);
+      }
+      if (reportRes.success) setReportSummary(reportRes.data);
+    } catch (err: any) {
+      setErrorMsg(err?.message ?? 'Gagal terhubung ke server.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const openAdd = () => {
-    setForm({ ...emptyForm });
+    setForm({
+      ...emptyForm,
+      department_id: departments[0]?.id?.toString() ?? '',
+      position_id: positions[0]?.id?.toString() ?? '',
+    });
     setFormError('');
     setSelectedEmp(null);
     setModalType('add');
@@ -118,9 +109,16 @@ export function AdminApp({ onLogout, accounts, setAccounts }: AdminAppProps) {
 
   const openEdit = (emp: Employee) => {
     setForm({
-      name: emp.name, nip: emp.nip, username: emp.username, password: emp.password,
-      dept: emp.dept, pos: emp.pos, email: emp.email,
-      phone: emp.phone, gender: emp.gender, joinDate: emp.joinDate,
+      name: emp.name,
+      nip: emp.nip,
+      username: emp.username,
+      password: '', // blank by default on edit
+      department_id: emp.department_id?.toString() ?? '',
+      position_id: emp.position_id?.toString() ?? '',
+      email: emp.email || '',
+      phone: emp.phone || '',
+      gender: emp.gender || 'Laki-laki',
+      joinDate: emp.join_date || '',
     });
     setFormError('');
     setSelectedEmp(emp);
@@ -140,50 +138,127 @@ export function AdminApp({ onLogout, accounts, setAccounts }: AdminAppProps) {
     setFormError('');
   };
 
-  const handleSave = () => {
-    if (!form.name.trim() || !form.nip.trim() || !form.username.trim() || !form.password.trim()) {
+  const handleSave = async () => {
+    if (!form.name.trim() || !form.nip.trim() || !form.username.trim() || (modalType === 'add' && !form.password.trim())) {
       setFormError('Nama, NIP, Username, dan Password wajib diisi.');
       return;
     }
-    if (modalType === 'add') {
-      const newEmp: Employee = {
-        id: Date.now(),
-        ...form,
-        status: 'Belum Absen',
-        checkIn: '--',
-        shift: 'Reguler',
-        statusType: 'alpha',
-      };
-      setEmployees(prev => [newEmp, ...prev]);
-    } else if (modalType === 'edit' && selectedEmp) {
-      setEmployees(prev =>
-        prev.map(e => e.id === selectedEmp.id ? { ...e, ...form } : e)
-      );
+    setFormError('');
+    try {
+      if (modalType === 'add') {
+        const res = await employeeApi.create({
+          name: form.name,
+          nip: form.nip,
+          username: form.username,
+          password: form.password,
+          department_id: Number(form.department_id),
+          position_id: Number(form.position_id),
+          email: form.email,
+          phone: form.phone,
+          gender: form.gender as any,
+          join_date: form.joinDate || undefined,
+        });
+        if (res.success) {
+          setEmployees(prev => [res.data, ...prev]);
+        }
+      } else if (modalType === 'edit' && selectedEmp) {
+        const updateData: any = {
+          name: form.name,
+          email: form.email,
+          department_id: Number(form.department_id),
+          position_id: Number(form.position_id),
+          phone: form.phone,
+          gender: form.gender,
+          join_date: form.joinDate || undefined,
+        };
+        if (form.password.trim()) {
+          updateData.password = form.password;
+        }
+        const res = await employeeApi.update(selectedEmp.id, updateData);
+        if (res.success) {
+          setEmployees(prev => prev.map(e => e.id === selectedEmp.id ? res.data : e));
+        }
+      }
+      closeModal();
+      loadData(); // reload charts
+    } catch (err: any) {
+      setFormError(err?.message ?? 'Gagal menyimpan data.');
     }
-    closeModal();
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (selectedEmp) {
-      setEmployees(prev => prev.filter(e => e.id !== selectedEmp.id));
+      try {
+        const res = await employeeApi.delete(selectedEmp.id);
+        if (res.success) {
+          setEmployees(prev => prev.filter(e => e.id !== selectedEmp.id));
+        }
+        closeModal();
+        loadData();
+      } catch (err: any) {
+        alert(err?.message ?? 'Gagal menghapus data.');
+      }
     }
-    closeModal();
   };
 
+  // Re-calculate live stats from API if available, fallback to local lists otherwise
   const stats = [
-    { icon: Users, label: 'Total Pegawai', value: String(employees.length), sub: '8 Departemen', color: '#374151', bg: '#F9FAFB' },
-    { icon: UserCheck, label: 'Hadir Hari Ini', value: String(employees.filter(e => e.statusType === 'hadir').length), sub: 'dari total pegawai', color: '#16A34A', bg: '#F0FDF4' },
-    { icon: Clock, label: 'Terlambat', value: String(employees.filter(e => e.statusType === 'terlambat').length), sub: 'dari jadwal 08:30', color: '#D97706', bg: '#FFFBEB' },
-    { icon: FileText, label: 'Cuti Aktif', value: String(employees.filter(e => e.statusType === 'cuti').length), sub: 'pengajuan disetujui', color: '#2563EB', bg: '#EFF6FF' },
-    { icon: AlertCircle, label: 'Alpha', value: String(employees.filter(e => e.statusType === 'alpha').length), sub: 'tanpa keterangan', color: '#DC2626', bg: '#FEF2F2' },
+    {
+      icon: Users,
+      label: 'Total Pegawai',
+      value: reportSummary ? String(reportSummary.total_employees) : String(employees.length),
+      sub: `${departments.length} Departemen`,
+      color: '#374151',
+      bg: '#F9FAFB'
+    },
+    {
+      icon: UserCheck,
+      label: 'Hadir Hari Ini',
+      value: reportSummary ? String(reportSummary.today.hadir) : String(employees.filter(e => e.today_attendance?.status === 'hadir' || e.today_attendance?.status === 'telat').length),
+      sub: 'dari total pegawai',
+      color: '#16A34A',
+      bg: '#F0FDF4'
+    },
+    {
+      icon: Clock,
+      label: 'Terlambat',
+      value: reportSummary ? String(reportSummary.today.telat) : String(employees.filter(e => e.today_attendance?.status === 'telat').length),
+      sub: 'absen masuk > 08:30',
+      color: '#D97706',
+      bg: '#FFFBEB'
+    },
+    {
+      icon: FileText,
+      label: 'Cuti Aktif',
+      value: reportSummary ? String(reportSummary.today.cuti) : '0',
+      sub: 'hari ini',
+      color: '#2563EB',
+      bg: '#EFF6FF'
+    },
+    {
+      icon: AlertCircle,
+      label: 'Alpha',
+      value: reportSummary ? String(reportSummary.today.alpha) : '0',
+      sub: 'tanpa keterangan',
+      color: '#DC2626',
+      bg: '#FEF2F2'
+    },
   ];
 
   const filtered = employees.filter(e =>
     e.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     e.nip.includes(searchQuery) ||
-    e.dept.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    e.pos.toLowerCase().includes(searchQuery.toLowerCase())
+    e.department.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    e.position.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Map summary chart structure into recharts
+  const weeklyData = reportSummary?.daily_chart.map(c => ({
+    day: c.label,
+    hadir: c.count,
+    alpha: c.total - c.count,
+    terlambat: 0 // Simplification since backend reports total checkins count
+  })) ?? [];
 
   const SidebarContent = ({ mobile }: { mobile?: boolean }) => (
     <div className="flex flex-col h-full bg-white">
@@ -211,7 +286,7 @@ export function AdminApp({ onLogout, accounts, setAccounts }: AdminAppProps) {
           <button key={item.id} onClick={() => { setActiveTab(item.id); if (mobile) setSidebarOpen(false); }}
             className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-[13px] transition-all mb-0.5 ${activeTab === item.id ? 'bg-[#16A34A] text-white font-medium shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}>
             <div className="flex items-center gap-2.5"><item.icon size={16} />{item.label}</div>
-            {item.badge && <span className={`text-[10px] font-bold min-w-[18px] min-h-[18px] rounded-full flex items-center justify-center px-1 ${activeTab === item.id ? 'bg-white/25 text-white' : item.id === 'leave' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-600'}`}>{item.badge}</span>}
+            {item.badge && item.badge > 0 ? <span className={`text-[10px] font-bold min-w-[18px] min-h-[18px] rounded-full flex items-center justify-center px-1 bg-red-100 text-red-600`}>{item.badge}</span> : null}
           </button>
         ))}
       </nav>
@@ -259,10 +334,6 @@ export function AdminApp({ onLogout, accounts, setAccounts }: AdminAppProps) {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button className="relative w-8 h-8 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100">
-              <Bell size={15} className="text-gray-500" />
-              <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-red-500 text-white text-[8px] flex items-center justify-center font-bold">3</span>
-            </button>
             <div className="w-8 h-8 rounded-xl bg-[#16A34A]/15 flex items-center justify-center">
               <span className="text-[#16A34A] text-[10px] font-bold">SA</span>
             </div>
@@ -271,6 +342,12 @@ export function AdminApp({ onLogout, accounts, setAccounts }: AdminAppProps) {
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-5 md:p-6">
+          {errorMsg && (
+            <div className="bg-red-50 border border-red-100 rounded-2xl p-4 text-[13px] text-red-600 mb-5 flex items-center justify-between">
+              <span>{errorMsg}</span>
+              <button onClick={loadData} className="px-3 py-1 bg-red-100 hover:bg-red-200 rounded-lg font-semibold transition-all">Segarkan</button>
+            </div>
+          )}
 
           {/* ── DASHBOARD ── */}
           {activeTab === 'dashboard' && (
@@ -288,59 +365,40 @@ export function AdminApp({ onLogout, accounts, setAccounts }: AdminAppProps) {
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
                   <div className="flex items-center justify-between mb-4">
-                    <div><p className="text-[14px] font-semibold text-gray-800">Absensi Mingguan</p><p className="text-[11px] text-gray-400">25 Jun – 1 Jul 2025</p></div>
+                    <div><p className="text-[14px] font-semibold text-gray-800">Absensi Mingguan</p><p className="text-[11px] text-gray-400">7 Hari Terakhir</p></div>
                     <div className="flex gap-3">
-                      {[['#16A34A', 'Hadir'], ['#FBBF24', 'Terlambat'], ['#F87171', 'Alpha']].map(([c, l]) => (
+                      {[['#16A34A', 'Hadir'], ['#F87171', 'Alpha']].map(([c, l]) => (
                         <div key={l} className="flex items-center gap-1"><div className="w-2.5 h-2.5 rounded-sm" style={{ background: c }} /><span className="text-[10px] text-gray-400">{l}</span></div>
                       ))}
                     </div>
                   </div>
-                  <ResponsiveContainer width="100%" height={180}>
-                    <BarChart id="admin-weekly-bar" data={weeklyData} barGap={1} barCategoryGap="35%">
-                      <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} width={28} />
-                      <Tooltip contentStyle={{ borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '12px' }} cursor={{ fill: 'rgba(0,0,0,0.02)' }} />
-                      <Bar dataKey="hadir" name="Hadir-dash" fill="#16A34A" radius={[3, 3, 0, 0]} isAnimationActive={false} />
-                      <Bar dataKey="terlambat" name="Terlambat-dash" fill="#FBBF24" radius={[3, 3, 0, 0]} isAnimationActive={false} />
-                      <Bar dataKey="alpha" name="Alpha-dash" fill="#F87171" radius={[3, 3, 0, 0]} isAnimationActive={false} />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  {weeklyData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={180}>
+                      <BarChart id="admin-weekly-bar" data={weeklyData} barGap={1} barCategoryGap="35%">
+                        <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} width={28} />
+                        <Tooltip contentStyle={{ borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '12px' }} cursor={{ fill: 'rgba(0,0,0,0.02)' }} />
+                        <Bar dataKey="hadir" name="Hadir" fill="#16A34A" radius={[3, 3, 0, 0]} isAnimationActive={false} />
+                        <Bar dataKey="alpha" name="Alpha" fill="#F87171" radius={[3, 3, 0, 0]} isAnimationActive={false} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-[180px] flex items-center justify-center text-gray-300 text-[12px]">Belum ada data mingguan.</div>
+                  )}
                 </div>
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                  <div className="mb-4"><p className="text-[14px] font-semibold text-gray-800">Tren Kehadiran</p><p className="text-[11px] text-gray-400">Persentase bulanan 2025</p></div>
-                  <ResponsiveContainer width="100%" height={180}>
-                    <LineChart id="admin-trend-line" data={monthlyTrend}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
-                      <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
-                      <YAxis domain={[85, 100]} tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} width={28} />
-                      <Tooltip contentStyle={{ borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '12px' }} />
-                      <Line type="monotone" dataKey="persen" name="Persentase-dash" stroke="#16A34A" strokeWidth={2.5} dot={{ fill: '#16A34A', r: 3 }} activeDot={{ r: 5 }} isAnimationActive={false} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                <p className="text-[14px] font-semibold text-gray-800 mb-4">Kehadiran per Departemen</p>
-                <div className="space-y-3">
-                  {[
-                    { dept: 'Poli Umum & UGD', hadir: 28, total: 30, pct: 93 },
-                    { dept: 'ICU / ICCU', hadir: 18, total: 20, pct: 90 },
-                    { dept: 'Poli Spesialis', hadir: 35, total: 36, pct: 97 },
-                    { dept: 'IGD', hadir: 22, total: 24, pct: 92 },
-                    { dept: 'Administrasi', hadir: 19, total: 20, pct: 95 },
-                    { dept: 'Farmasi', hadir: 14, total: 14, pct: 100 },
-                  ].map((d, i) => (
-                    <div key={i} className="flex items-center gap-4">
-                      <p className="text-[12px] text-gray-600 w-40 flex-shrink-0">{d.dept}</p>
-                      <div className="flex-1 bg-gray-100 rounded-full h-2 overflow-hidden">
-                        <div className="h-2 rounded-full bg-[#16A34A]" style={{ width: `${d.pct}%` }} />
-                      </div>
-                      <div className="text-right flex-shrink-0 w-24">
-                        <span className="text-[12px] font-semibold text-gray-800">{d.hadir}/{d.total}</span>
-                        <span className="text-[11px] text-gray-400 ml-1.5">({d.pct}%)</span>
-                      </div>
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col justify-between">
+                  <div className="mb-4"><p className="text-[14px] font-semibold text-gray-800">Status Kehadiran Bulan Ini</p><p className="text-[11px] text-gray-400">Statistik berjalan</p></div>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[13px] text-gray-500">Total Check-In</span>
+                      <span className="text-[14px] font-bold text-[#16A34A]">{reportSummary?.this_month.hadir ?? 0} kali</span>
                     </div>
-                  ))}
+                    <div className="flex items-center justify-between">
+                      <span className="text-[13px] text-gray-500">Total Alpha</span>
+                      <span className="text-[14px] font-bold text-red-500">{reportSummary?.this_month.alpha ?? 0} kali</span>
+                    </div>
+                  </div>
+                  <div className="mt-4 text-[10px] text-gray-400 border-t border-gray-50 pt-3">Diperbarui otomatis dari database absensi.</div>
                 </div>
               </div>
             </div>
@@ -356,12 +414,6 @@ export function AdminApp({ onLogout, accounts, setAccounts }: AdminAppProps) {
                     className="w-full pl-10 pr-4 py-2.5 border border-gray-100 rounded-xl text-[13px] bg-white shadow-sm focus:outline-none focus:border-[#16A34A] transition-all placeholder:text-gray-300" />
                 </div>
                 <div className="flex gap-2 flex-wrap">
-                  <button className="flex items-center gap-2 px-3.5 py-2.5 bg-white border border-gray-100 rounded-xl text-[12px] text-gray-600 hover:bg-gray-50 transition-colors shadow-sm">
-                    <Upload size={13} /> Import Excel
-                  </button>
-                  <button className="flex items-center gap-2 px-3.5 py-2.5 bg-white border border-gray-100 rounded-xl text-[12px] text-gray-600 hover:bg-gray-50 transition-colors shadow-sm">
-                    <Download size={13} /> Export
-                  </button>
                   <button onClick={openAdd} className="flex items-center gap-2 px-3.5 py-2.5 bg-[#16A34A] rounded-xl text-[12px] text-white hover:bg-[#0d9240] transition-colors shadow-sm shadow-green-200">
                     <Plus size={13} /> Tambah Pegawai
                   </button>
@@ -372,10 +424,10 @@ export function AdminApp({ onLogout, accounts, setAccounts }: AdminAppProps) {
               <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
                 {[
                   { label: 'Total', value: employees.length, color: '#374151' },
-                  { label: 'Hadir', value: employees.filter(e => e.statusType === 'hadir').length, color: '#16A34A' },
-                  { label: 'Terlambat', value: employees.filter(e => e.statusType === 'terlambat').length, color: '#D97706' },
-                  { label: 'Alpha', value: employees.filter(e => e.statusType === 'alpha').length, color: '#DC2626' },
-                  { label: 'Cuti', value: employees.filter(e => e.statusType === 'cuti').length, color: '#2563EB' },
+                  { label: 'Hadir', value: employees.filter(e => e.today_attendance?.status === 'hadir' || e.today_attendance?.status === 'telat').length, color: '#16A34A' },
+                  { label: 'Terlambat', value: employees.filter(e => e.today_attendance?.status === 'telat').length, color: '#D97706' },
+                  { label: 'Alpha', value: employees.filter(e => !e.today_attendance || e.today_attendance.status === 'alpha').length, color: '#DC2626' },
+                  { label: 'Cuti', value: employees.filter(e => e.today_attendance?.status === 'izin' || e.today_attendance?.status === 'sakit').length, color: '#2563EB' },
                 ].map((s, i) => (
                   <div key={i} className="bg-white rounded-xl border border-gray-100 px-3 py-2.5 text-center shadow-sm">
                     <p className="text-[18px] font-bold" style={{ color: s.color }}>{s.value}</p>
@@ -396,7 +448,8 @@ export function AdminApp({ onLogout, accounts, setAccounts }: AdminAppProps) {
                     </thead>
                     <tbody>
                       {filtered.map(emp => {
-                        const sc = statusColors[emp.statusType] || { color: '#6B7280', bg: '#F3F4F6' };
+                        const todayStatus = emp.today_attendance?.status ?? 'alpha';
+                        const sc = statusColors[todayStatus] || { color: '#6B7280', bg: '#F3F4F6' };
                         return (
                           <tr key={emp.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                             <td className="px-4 py-3.5">
@@ -417,12 +470,12 @@ export function AdminApp({ onLogout, accounts, setAccounts }: AdminAppProps) {
                                 <span className="text-[12px] text-gray-500">{emp.username || '—'}</span>
                               </div>
                             </td>
-                            <td className="px-4 py-3.5 text-[13px] text-gray-600">{emp.dept}</td>
-                            <td className="px-4 py-3.5 text-[13px] text-gray-600">{emp.pos}</td>
+                            <td className="px-4 py-3.5 text-[13px] text-gray-600">{emp.department}</td>
+                            <td className="px-4 py-3.5 text-[13px] text-gray-600">{emp.position}</td>
                             <td className="px-4 py-3.5">
-                              <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full" style={{ color: sc.color, background: sc.bg }}>{emp.status}</span>
+                              <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full uppercase" style={{ color: sc.color, background: sc.bg }}>{todayStatus}</span>
                             </td>
-                            <td className="px-4 py-3.5 text-[13px] font-mono text-gray-600">{emp.checkIn}</td>
+                            <td className="px-4 py-3.5 text-[13px] font-mono text-gray-600">{emp.today_attendance?.check_in || '--:--'}</td>
                             <td className="px-4 py-3.5 relative">
                               <button
                                 onClick={e => { e.stopPropagation(); setOpenMenuId(openMenuId === emp.id ? null : emp.id); }}
@@ -461,7 +514,7 @@ export function AdminApp({ onLogout, accounts, setAccounts }: AdminAppProps) {
             </div>
           )}
 
-          {/* ── NEW DEDICATED TABS ── */}
+          {/* ── DEDICATED TABS ── */}
           {activeTab === 'attendance' && <AttendanceTab />}
           {activeTab === 'history' && <HistoryTab />}
           {activeTab === 'schedule' && <ScheduleTab />}
@@ -469,89 +522,6 @@ export function AdminApp({ onLogout, accounts, setAccounts }: AdminAppProps) {
           {activeTab === 'reports' && <ReportsTab />}
           {activeTab === 'notifications' && <NotificationsTab />}
           {activeTab === 'settings' && <SettingsTab />}
-
-          {/* ── OLD JADWAL SHIFT (kept for fallback, now replaced) ── */}
-          {activeTab === 'schedule_old' && (
-            <div className="max-w-3xl mx-auto space-y-4">
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                <div className="px-5 py-4 border-b border-gray-50 flex items-center gap-2">
-                  <CalendarDays size={16} className="text-[#16A34A]" />
-                  <p className="text-[14px] font-semibold text-gray-800">Jadwal Kerja RSUCL</p>
-                </div>
-                <div className="p-5 space-y-3">
-                  {[
-                    { days: 'Senin – Jumat', masuk: '08:30', pulang: '17:00', note: 'Termasuk istirahat 12:30 – 13:30', color: '#16A34A', bg: '#F0FDF4' },
-                    { days: 'Sabtu', masuk: '08:30', pulang: '13:00', note: 'Tanpa jam istirahat formal', color: '#2563EB', bg: '#EFF6FF' },
-                    { days: 'Minggu & Hari Libur', masuk: '--', pulang: '--', note: 'Libur (kecuali jaga darurat)', color: '#6B7280', bg: '#F9FAFB' },
-                  ].map((s, i) => (
-                    <div key={i} className="flex items-center gap-4 p-4 rounded-xl border" style={{ background: s.bg, borderColor: s.color + '20' }}>
-                      <div className="flex-1">
-                        <p className="text-[14px] font-semibold text-gray-900">{s.days}</p>
-                        <p className="text-[12px] text-gray-500 mt-0.5">{s.note}</p>
-                      </div>
-                      <div className="flex items-center gap-3 text-right">
-                        <div>
-                          <p className="text-[10px] text-gray-400">Masuk</p>
-                          <p className="text-[15px] font-bold font-mono" style={{ color: s.color }}>{s.masuk}</p>
-                        </div>
-                        <div className="text-gray-300">–</div>
-                        <div>
-                          <p className="text-[10px] text-gray-400">Pulang</p>
-                          <p className="text-[15px] font-bold font-mono" style={{ color: s.color }}>{s.pulang}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Istirahat detail */}
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                <div className="px-5 py-4 border-b border-gray-50">
-                  <p className="text-[14px] font-semibold text-gray-800">Detail Jam Istirahat</p>
-                </div>
-                <div className="p-5">
-                  <div className="flex items-center gap-4 p-4 rounded-xl bg-amber-50 border border-amber-100">
-                    <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0">
-                      <Clock size={18} className="text-amber-600" />
-                    </div>
-                    <div>
-                      <p className="text-[13px] font-semibold text-gray-800">Istirahat Makan Siang</p>
-                      <p className="text-[12px] text-gray-500 mt-0.5">Berlaku Senin – Jumat · Durasi 1 jam</p>
-                    </div>
-                    <div className="ml-auto text-right">
-                      <p className="text-[18px] font-bold font-mono text-amber-600">12:30 – 13:30</p>
-                    </div>
-                  </div>
-                  <p className="text-[12px] text-gray-400 mt-3 px-1">* Absensi check-out istirahat tidak diwajibkan. Sistem hanya merekam jam masuk dan pulang utama.</p>
-                </div>
-              </div>
-
-              {/* Toleransi */}
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                <div className="px-5 py-4 border-b border-gray-50">
-                  <p className="text-[14px] font-semibold text-gray-800">Toleransi & Ketentuan</p>
-                </div>
-                <div className="p-5 space-y-2.5">
-                  {[
-                    { label: 'Toleransi Keterlambatan', value: 0, note: 'Tidak ada toleransi – tepat 08:30' },
-                    { label: 'Batas Check-In Maksimal', value: '09:00', note: 'Setelah pukul 09:00 dianggap Alpha' },
-                    { label: 'Radius Geofence Absensi', value: '100m', note: 'Dari titik koordinat RSUCL' },
-                    { label: 'Sistem Absensi', value: 'GPS', note: 'Berbasis lokasi GPS real-time' },
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0">
-                      <div>
-                        <p className="text-[13px] font-medium text-gray-800">{item.label}</p>
-                        <p className="text-[11px] text-gray-400 mt-0.5">{item.note}</p>
-                      </div>
-                      <span className="text-[13px] font-bold text-[#16A34A] bg-green-50 px-3 py-1 rounded-lg">{item.value}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
         </div>
       </div>
 
@@ -582,7 +552,7 @@ export function AdminApp({ onLogout, accounts, setAccounts }: AdminAppProps) {
               <div className="flex items-start gap-2.5 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
                 <Lock size={13} className="text-blue-500 flex-shrink-0 mt-0.5" />
                 <p className="text-[12px] text-blue-700 leading-snug">
-                  Isi <strong>Username</strong> dan <strong>Password</strong> yang akan diberikan kepada karyawan untuk login ke sistem absensi.
+                  Isi <strong>Username</strong> dan {modalType === 'add' ? <strong>Password</strong> : <strong>Password (kosongkan jika tidak ingin diubah)</strong>} untuk akses login absensi.
                 </p>
               </div>
 
@@ -596,8 +566,8 @@ export function AdminApp({ onLogout, accounts, setAccounts }: AdminAppProps) {
                 {/* NIP */}
                 <div>
                   <label className="block text-[12px] font-medium text-gray-600 mb-1.5">NIP <span className="text-red-500">*</span></label>
-                  <input type="text" value={form.nip} onChange={e => setForm(f => ({ ...f, nip: e.target.value }))} placeholder="198501012010011001"
-                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all font-mono" />
+                  <input type="text" value={form.nip} disabled={modalType === 'edit'} onChange={e => setForm(f => ({ ...f, nip: e.target.value }))} placeholder="198501012010011001"
+                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all font-mono disabled:opacity-50" />
                 </div>
                 {/* Email */}
                 <div>
@@ -608,13 +578,13 @@ export function AdminApp({ onLogout, accounts, setAccounts }: AdminAppProps) {
                 {/* Username */}
                 <div>
                   <label className="block text-[12px] font-medium text-gray-600 mb-1.5">Username Login <span className="text-red-500">*</span></label>
-                  <input type="text" value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))} placeholder="nama.pegawai"
-                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all" />
+                  <input type="text" value={form.username} disabled={modalType === 'edit'} onChange={e => setForm(f => ({ ...f, username: e.target.value }))} placeholder="nama.pegawai"
+                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all disabled:opacity-50" />
                 </div>
                 {/* Password */}
                 <div>
-                  <label className="block text-[12px] font-medium text-gray-600 mb-1.5">Password <span className="text-red-500">*</span></label>
-                  <input type="text" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} placeholder="Min. 8 karakter"
+                  <label className="block text-[12px] font-medium text-gray-600 mb-1.5">Password {modalType === 'add' && <span className="text-red-500">*</span>}</label>
+                  <input type="text" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} placeholder={modalType === 'edit' ? 'Kosongkan jika tidak diubah' : 'Min. 6 karakter'}
                     className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all font-mono" />
                 </div>
                 {/* Phone */}
@@ -639,9 +609,9 @@ export function AdminApp({ onLogout, accounts, setAccounts }: AdminAppProps) {
                 <div>
                   <label className="block text-[12px] font-medium text-gray-600 mb-1.5">Departemen</label>
                   <div className="relative">
-                    <select value={form.dept} onChange={e => setForm(f => ({ ...f, dept: e.target.value }))}
+                    <select value={form.department_id} onChange={e => setForm(f => ({ ...f, department_id: e.target.value }))}
                       className="w-full appearance-none px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all">
-                      {depts.map(d => <option key={d}>{d}</option>)}
+                      {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                     </select>
                     <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                   </div>
@@ -650,9 +620,9 @@ export function AdminApp({ onLogout, accounts, setAccounts }: AdminAppProps) {
                 <div>
                   <label className="block text-[12px] font-medium text-gray-600 mb-1.5">Jabatan</label>
                   <div className="relative">
-                    <select value={form.pos} onChange={e => setForm(f => ({ ...f, pos: e.target.value }))}
+                    <select value={form.position_id} onChange={e => setForm(f => ({ ...f, position_id: e.target.value }))}
                       className="w-full appearance-none px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all">
-                      {positions.map(p => <option key={p}>{p}</option>)}
+                      {positions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
                     <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                   </div>

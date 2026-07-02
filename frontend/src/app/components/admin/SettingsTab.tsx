@@ -1,9 +1,11 @@
-import { useState, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   User, Mail, Lock, Eye, EyeOff, CheckCircle2, Save, Shield, MapPin, Clock,
   Bell, ToggleLeft, ToggleRight, Power, Upload, RotateCcw, AlertTriangle, ImageIcon,
 } from 'lucide-react';
 import logoImg from '../../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
+import { settingApi } from '../../../services/api';
+import { useAuth } from '../../../context/AuthContext';
 
 // ── System Status Modal ────────────────────────────────────────────────
 function SystemStatusModal({
@@ -60,6 +62,7 @@ const Toggle = ({ value, onChange }: { value: boolean; onChange: () => void }) =
 
 // ── Main SettingsTab ───────────────────────────────────────────────────
 export function SettingsTab() {
+  const { user } = useAuth();
   // ── Account ──
   const [name, setName]               = useState('Super Admin');
   const [email, setEmail]             = useState('admin@rsucl.id');
@@ -82,6 +85,7 @@ export function SettingsTab() {
   // ── System Config ──
   const [radius, setRadius]   = useState('100');
   const [maxLate, setMaxLate] = useState('09:00');
+  const [configSaved, setConfigSaved] = useState(false);
 
   // ── System Status ──
   const [systemActive, setSystemActive]         = useState(true);
@@ -93,6 +97,28 @@ export function SettingsTab() {
   const [logoSaved, setLogoSaved]     = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // ── Load Settings from API ──
+  const loadSettings = async () => {
+    try {
+      const res = await settingApi.get();
+      if (res.success) {
+        setSystemActive(res.data.system_active === '1');
+        setRadius(res.data.gps_radius);
+        setMaxLate(res.data.close_checkin);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    loadSettings();
+    if (user) {
+      setName(user.name);
+      setEmail(user.email);
+    }
+  }, [user]);
+
   // ── Handlers ──
   const saveProfile = () => { setProfileSaved(true); setTimeout(() => setProfileSaved(false), 3000); };
 
@@ -100,8 +126,7 @@ export function SettingsTab() {
     setPassError('');
     if (!oldPass || !newPass || !confirmPass) { setPassError('Semua field wajib diisi.'); return; }
     if (newPass !== confirmPass) { setPassError('Password baru tidak cocok.'); return; }
-    if (newPass.length < 8) { setPassError('Password minimal 8 karakter.'); return; }
-    if (oldPass !== 'RSUCL@2025') { setPassError('Password lama tidak sesuai.'); return; }
+    if (newPass.length < 6) { setPassError('Password minimal 6 karakter.'); return; }
     setOldPass(''); setNewPass(''); setConfirmPass('');
     setPassSaved(true); setTimeout(() => setPassSaved(false), 3000);
   };
@@ -126,15 +151,38 @@ export function SettingsTab() {
     if (fileRef.current) fileRef.current.value = '';
   };
 
-  const confirmStatusToggle = () => { setSystemActive(prev => !prev); setShowStatusModal(false); };
+  const confirmStatusToggle = async () => {
+    const nextVal = !systemActive;
+    try {
+      const res = await settingApi.update({ system_active: nextVal ? '1' : '0' });
+      if (res.success) {
+        setSystemActive(nextVal);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setShowStatusModal(false);
+    }
+  };
+
+  const handleSaveConfig = async () => {
+    setConfigSaved(false);
+    try {
+      const res = await settingApi.update({
+        gps_radius: radius,
+        close_checkin: maxLate,
+      });
+      if (res.success) {
+        setConfigSaved(true);
+        setTimeout(() => setConfigSaved(false), 3000);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   return (
     <div className="max-w-2xl mx-auto space-y-5">
-      <div>
-        <h2 className="text-[16px] font-bold text-gray-900">Pengaturan</h2>
-        <p className="text-[12px] text-gray-400 mt-0.5">Kelola akun dan konfigurasi sistem RSUCL</p>
-      </div>
-
       {/* ── System Status Banner ── */}
       <div className={`rounded-2xl border p-4 flex items-center justify-between gap-4 transition-all ${systemActive ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
         <div className="flex items-center gap-3">
@@ -236,7 +284,7 @@ export function SettingsTab() {
         <div className="p-5">
           <div className="flex items-center gap-4 mb-5 p-3.5 bg-gray-50 rounded-2xl border border-gray-100">
             <div className="w-14 h-14 rounded-2xl bg-white border border-gray-100 shadow-sm flex items-center justify-center overflow-hidden flex-shrink-0">
-              <img src={logoPreview} alt="Admin" className="w-12 h-12 object-contain" />
+              <span className="text-lg font-bold text-[#16A34A]">{(name || 'U').charAt(0)}</span>
             </div>
             <div>
               <p className="text-[14px] font-semibold text-gray-800">{name}</p>
@@ -302,7 +350,7 @@ export function SettingsTab() {
             </div>
           ))}
           <div className="bg-blue-50 border border-blue-100 rounded-xl px-3.5 py-2.5">
-            <p className="text-[11px] text-blue-600">Password minimal 8 karakter dan mengandung huruf kapital, angka, dan simbol.</p>
+            <p className="text-[11px] text-blue-600">Password minimal 6 karakter.</p>
           </div>
           <button onClick={savePassword}
             className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold transition-all shadow-sm ${passSaved ? 'bg-green-50 text-[#16A34A] border border-green-200' : 'bg-[#16A34A] text-white hover:bg-[#0d9240] shadow-green-200'}`}>
@@ -360,8 +408,8 @@ export function SettingsTab() {
             </div>
             <p className="text-[11px] text-gray-400 mt-1">Setelah pukul {maxLate} karyawan tidak dapat melakukan check-in</p>
           </div>
-          <button className="flex items-center gap-2 px-5 py-2.5 bg-[#16A34A] text-white rounded-xl text-[13px] font-semibold hover:bg-[#0d9240] transition-all shadow-sm shadow-green-200">
-            <Save size={14} /> Simpan Konfigurasi
+          <button onClick={handleSaveConfig} className="flex items-center gap-2 px-5 py-2.5 bg-[#16A34A] text-white rounded-xl text-[13px] font-semibold hover:bg-[#0d9240] transition-all shadow-sm shadow-green-200">
+            {configSaved ? <><CheckCircle2 size={14} /> Tersimpan!</> : <><Save size={14} /> Simpan Konfigurasi</>}
           </button>
         </div>
       </div>

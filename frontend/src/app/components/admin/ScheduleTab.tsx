@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Sun, Sunset, Moon, Edit2, Check, X, Plus, Users, Trash2, Star, Zap } from 'lucide-react';
+import { scheduleApi, ShiftSchedule } from '../../../services/api';
 
-// ── Types ──────────────────────────────────────────────────────────────
 type IconKey = 'sun' | 'sunset' | 'moon' | 'star' | 'zap';
 
 const ICON_MAP: Record<IconKey, { component: typeof Sun; label: string; emoji: string }> = {
@@ -21,33 +21,12 @@ const COLOR_PRESETS = [
   { id: 'cyan',   color: '#0891B2', bg: '#ECFEFF', border: '#A5F3FC', label: 'Biru Muda'},
 ];
 
-type Shift = {
-  id: string;
-  name: string;
-  start: string;
-  end: string;
-  color: string;
-  bg: string;
-  border: string;
-  icon: IconKey;
-};
-
-const defaultShifts: Shift[] = [
-  { id: 'pagi',    name: 'Shift Pagi',               start: '07:00', end: '14:00', color: '#D97706', bg: '#FFFBEB', border: '#FDE68A', icon: 'sun' },
-  { id: 'siang',   name: 'Shift Siang',              start: '14:00', end: '21:00', color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE', icon: 'sunset' },
-  { id: 'malam',   name: 'Shift Malam',              start: '21:00', end: '07:00', color: '#7C3AED', bg: '#F5F3FF', border: '#DDD6FE', icon: 'moon' },
-  { id: 'reguler', name: 'Shift Reguler (Sen–Jum)',  start: '08:30', end: '17:00', color: '#16A34A', bg: '#F0FDF4', border: '#BBF7D0', icon: 'sun' },
-];
-
-const employeeShifts: Record<string, { name: string; dept: string }[]> = {
-  pagi:    [{ name: 'Fajar Nugroho', dept: 'Laboratorium' }, { name: 'Sri Wahyuni', dept: 'ICU' }],
-  siang:   [{ name: 'dr. Amir Hamzah', dept: 'Poli Umum' }],
-  malam:   [{ name: 'Ns. Rizky Pratama', dept: 'IGD' }, { name: 'Ns. Yanti Susanti', dept: 'ICU' }],
-  reguler: [{ name: 'Dr. Rina Kusumawati', dept: 'Poli Umum' }, { name: 'Ns. Ahmad Fauzi', dept: 'ICU' }, { name: 'dr. Siti Rahma', dept: 'Poli Anak' }, { name: 'Budi Santoso', dept: 'Administrasi' }, { name: 'Rini Handayani', dept: 'Farmasi' }],
-};
+function getPresetByHex(hex: string) {
+  return COLOR_PRESETS.find(c => c.color.toLowerCase() === hex.toLowerCase()) ?? COLOR_PRESETS[0];
+}
 
 // ── Add Shift Modal ────────────────────────────────────────────────────
-function AddShiftModal({ onClose, onAdd }: { onClose: () => void; onAdd: (s: Shift) => void }) {
+function AddShiftModal({ onClose, onAdd }: { onClose: () => void; onAdd: (s: ShiftSchedule) => void }) {
   const [name, setName]       = useState('');
   const [start, setStart]     = useState('07:00');
   const [end, setEnd]         = useState('15:00');
@@ -57,16 +36,23 @@ function AddShiftModal({ onClose, onAdd }: { onClose: () => void; onAdd: (s: Shi
   const preset = COLOR_PRESETS.find(c => c.id === colorId)!;
   const IconComp = ICON_MAP[icon].component;
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!name.trim()) return;
-    onAdd({
-      id: `shift-${Date.now()}`,
-      name: name.trim(),
-      start, end,
-      color: preset.color, bg: preset.bg, border: preset.border,
-      icon,
-    });
-    onClose();
+    try {
+      const res = await scheduleApi.create({
+        name: name.trim(),
+        start_time: start,
+        end_time: end,
+        color: preset.color,
+        icon,
+      });
+      if (res.success) {
+        onAdd(res.data);
+        onClose();
+      }
+    } catch (err: any) {
+      alert(err?.message ?? 'Gagal membuat shift baru.');
+    }
   };
 
   return (
@@ -197,8 +183,9 @@ function AddShiftModal({ onClose, onAdd }: { onClose: () => void; onAdd: (s: Shi
 }
 
 // ── Delete Confirmation Modal ──────────────────────────────────────────
-function DeleteModal({ shift, onClose, onConfirm }: { shift: Shift; onClose: () => void; onConfirm: () => void }) {
-  const IconComp = ICON_MAP[shift.icon].component;
+function DeleteModal({ shift, onClose, onConfirm }: { shift: ShiftSchedule; onClose: () => void; onConfirm: () => void }) {
+  const pr = getPresetByHex(shift.color);
+  const IconComp = ICON_MAP[shift.icon as IconKey]?.component ?? Sun;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
@@ -209,13 +196,13 @@ function DeleteModal({ shift, onClose, onConfirm }: { shift: Shift; onClose: () 
         <h3 className="text-[15px] font-bold text-gray-900 text-center mb-1">Hapus Shift?</h3>
         <p className="text-[12px] text-gray-500 text-center mb-4">Shift berikut akan dihapus permanen dari sistem.</p>
         {/* Shift preview */}
-        <div className="flex items-center gap-3 p-3 rounded-xl mb-5 border" style={{ background: shift.bg, borderColor: shift.border }}>
+        <div className="flex items-center gap-3 p-3 rounded-xl mb-5 border" style={{ background: pr.bg, borderColor: pr.border }}>
           <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/70">
             <IconComp size={15} style={{ color: shift.color }} />
           </div>
           <div>
             <p className="text-[13px] font-semibold" style={{ color: shift.color }}>{shift.name}</p>
-            <p className="text-[11px] text-gray-500">{shift.start} – {shift.end}</p>
+            <p className="text-[11px] text-gray-500">{shift.start_time.substring(0, 5)} – {shift.end_time.substring(0, 5)}</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -233,28 +220,69 @@ function DeleteModal({ shift, onClose, onConfirm }: { shift: Shift; onClose: () 
 
 // ── Main ScheduleTab ───────────────────────────────────────────────────
 export function ScheduleTab() {
-  const [shifts, setShifts]           = useState<Shift[]>(defaultShifts);
-  const [editingId, setEditingId]     = useState<string | null>(null);
+  const [shifts, setShifts]           = useState<ShiftSchedule[]>([]);
+  const [editingId, setEditingId]     = useState<number | null>(null);
   const [editStart, setEditStart]     = useState('');
   const [editEnd, setEditEnd]         = useState('');
-  const [expandedShift, setExpandedShift] = useState<string | null>(null);
+  const [expandedShift, setExpandedShift] = useState<number | null>(null);
   const [showAddModal, setShowAddModal]   = useState(false);
-  const [deleteTarget, setDeleteTarget]   = useState<Shift | null>(null);
+  const [deleteTarget, setDeleteTarget]   = useState<ShiftSchedule | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const startEdit = (shift: Shift) => { setEditingId(shift.id); setEditStart(shift.start); setEditEnd(shift.end); };
-  const saveEdit  = (id: string)   => { setShifts(prev => prev.map(s => s.id === id ? { ...s, start: editStart, end: editEnd } : s)); setEditingId(null); };
+  const loadShifts = async () => {
+    setLoading(true);
+    try {
+      const res = await scheduleApi.list();
+      if (res.success) {
+        setShifts(res.data);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const handleAdd = (shift: Shift) => setShifts(prev => [...prev, shift]);
-  const handleDelete = (id: string) => { setShifts(prev => prev.filter(s => s.id !== id)); setDeleteTarget(null); };
+  useEffect(() => {
+    loadShifts();
+  }, []);
+
+  const startEdit = (shift: ShiftSchedule) => {
+    setEditingId(shift.id);
+    setEditStart(shift.start_time.substring(0, 5));
+    setEditEnd(shift.end_time.substring(0, 5));
+  };
+
+  const saveEdit  = async (id: number)   => {
+    try {
+      const res = await scheduleApi.update(id, { start_time: editStart, end_time: editEnd });
+      if (res.success) {
+        setShifts(prev => prev.map(s => s.id === id ? res.data : s));
+        setEditingId(null);
+      }
+    } catch (err: any) {
+      alert(err?.message ?? 'Gagal memperbarui shift.');
+    }
+  };
+
+  const handleAdd = (shift: ShiftSchedule) => setShifts(prev => [...prev, shift]);
+  const handleDelete = async (id: number) => {
+    try {
+      const res = await scheduleApi.delete(id);
+      if (res.success) {
+        setShifts(prev => prev.filter(s => s.id !== id));
+        setDeleteTarget(null);
+      }
+    } catch (err: any) {
+      alert(err?.message ?? 'Gagal menghapus shift.');
+    }
+  };
 
   const totalDays = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
   const scheduleMatrix = [
     { emp: 'Dr. Rina Kusumawati', shifts: ['R','R','R','R','R','-'] },
     { emp: 'Ns. Ahmad Fauzi',    shifts: ['R','R','R','R','R','-'] },
-    { emp: 'Fajar Nugroho',      shifts: ['P','P','P','P','P','P'] },
-    { emp: 'dr. Amir Hamzah',    shifts: ['-','S','S','S','S','-'] },
-    { emp: 'Ns. Rizky Pratama',  shifts: ['M','M','M','-','-','M'] },
-    { emp: 'Sri Wahyuni',        shifts: ['-','-','P','P','P','P'] },
+    { emp: 'Rini Handayani',      shifts: ['R','R','R','R','R','-'] },
   ];
   const shiftColors: Record<string, { bg: string; text: string }> = {
     R: { bg: '#F0FDF4', text: '#16A34A' },
@@ -282,14 +310,18 @@ export function ScheduleTab() {
 
       {/* Shift cards grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {loading && (
+          <div className="col-span-2 text-center py-5 text-gray-400 text-[12px]">Memuat data shift...</div>
+        )}
         {shifts.map(shift => {
-          const IconComp = ICON_MAP[shift.icon].component;
+          const IconComp = ICON_MAP[shift.icon as IconKey]?.component ?? Sun;
+          const pr = getPresetByHex(shift.color);
           return (
             <div key={shift.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden group">
               <div className="p-4 border-b border-gray-50">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: shift.bg, border: `1.5px solid ${shift.border}` }}>
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: pr.bg, border: `1.5px solid ${pr.border}` }}>
                       <IconComp size={17} style={{ color: shift.color }} />
                     </div>
                     <p className="text-[14px] font-semibold text-gray-800">{shift.name}</p>
@@ -340,14 +372,14 @@ export function ScheduleTab() {
                   </div>
                 ) : (
                   <div className="flex items-center gap-3">
-                    <div className="flex-1 text-center py-2 rounded-xl" style={{ background: shift.bg }}>
+                    <div className="flex-1 text-center py-2 rounded-xl" style={{ background: pr.bg }}>
                       <p className="text-[11px] text-gray-400">Masuk</p>
-                      <p className="text-[18px] font-bold font-mono" style={{ color: shift.color }}>{shift.start}</p>
+                      <p className="text-[18px] font-bold font-mono" style={{ color: shift.color }}>{shift.start_time.substring(0,5)}</p>
                     </div>
                     <span className="text-gray-300">–</span>
-                    <div className="flex-1 text-center py-2 rounded-xl" style={{ background: shift.bg }}>
+                    <div className="flex-1 text-center py-2 rounded-xl" style={{ background: pr.bg }}>
                       <p className="text-[11px] text-gray-400">Pulang</p>
-                      <p className="text-[18px] font-bold font-mono" style={{ color: shift.color }}>{shift.end}</p>
+                      <p className="text-[18px] font-bold font-mono" style={{ color: shift.color }}>{shift.end_time.substring(0,5)}</p>
                     </div>
                   </div>
                 )}
@@ -358,26 +390,10 @@ export function ScheduleTab() {
                 className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 transition-colors">
                 <div className="flex items-center gap-2">
                   <Users size={13} className="text-gray-400" />
-                  <span className="text-[12px] text-gray-500">{employeeShifts[shift.id]?.length || 0} karyawan</span>
+                  <span className="text-[12px] text-gray-500">{shift.employees_count || 0} karyawan</span>
                 </div>
                 <span className="text-[11px] text-gray-400">{expandedShift === shift.id ? '▲' : '▼'}</span>
               </button>
-
-              {expandedShift === shift.id && (
-                <div className="border-t border-gray-50 px-4 py-3 space-y-1.5">
-                  {(employeeShifts[shift.id] || []).map((emp, i) => (
-                    <div key={i} className="flex items-center justify-between py-1">
-                      <div>
-                        <p className="text-[12px] font-medium text-gray-800">{emp.name}</p>
-                        <p className="text-[10px] text-gray-400">{emp.dept}</p>
-                      </div>
-                    </div>
-                  ))}
-                  <button className="w-full mt-1 flex items-center justify-center gap-1.5 py-2 border border-dashed border-gray-200 rounded-xl text-[11px] text-gray-400 hover:border-[#16A34A] hover:text-[#16A34A] transition-colors">
-                    <Plus size={12} /> Tambah Karyawan
-                  </button>
-                </div>
-              )}
             </div>
           );
         })}

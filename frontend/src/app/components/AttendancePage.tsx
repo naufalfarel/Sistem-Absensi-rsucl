@@ -4,6 +4,8 @@ import {
   Target, Lock, Coffee, Moon, Sun, Sunset, Camera, RefreshCw,
   Signal, Crosshair,
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { attendanceApi } from '../../services/api';
 
 // ── Time logic ─────────────────────────────────────────────────────────
 type AttendanceWindow = 'sunday' | 'too_early' | 'checkin' | 'late_locked' | 'break' | 'working' | 'checkout' | 'ended';
@@ -390,6 +392,7 @@ function GPSCard() {
 
 // ── Success Animation ─────────────────────────────────────────────────
 function SuccessAnimation({ action, time, onDone }: { action: string; time: string; onDone: () => void }) {
+  const { user } = useAuth();
   const [visible, setVisible] = useState(true);
 
   useEffect(() => {
@@ -418,7 +421,7 @@ function SuccessAnimation({ action, time, onDone }: { action: string; time: stri
         {/* Card */}
         <div className="bg-white rounded-2xl px-8 py-5 shadow-2xl text-center min-w-[220px]">
           <p className="text-[18px] font-bold text-gray-900">{action} Berhasil!</p>
-          <p className="text-[13px] text-gray-500 mt-1">Dr. Rina Kusumawati</p>
+          <p className="text-[13px] text-gray-500 mt-1">{user?.name}</p>
           <div className="mt-3 px-4 py-2 bg-green-50 rounded-xl">
             <p className="text-[22px] font-mono font-bold text-[#16A34A]">{time}</p>
             <p className="text-[10px] text-gray-400">WIB</p>
@@ -443,6 +446,7 @@ const RIPPLE_STYLE = `
 
 // ── Main AttendancePage ───────────────────────────────────────────────
 export function AttendancePage() {
+  const { user } = useAuth();
   const [now, setNow]               = useState(new Date());
   const [simIdx, setSimIdx]         = useState<number | null>(null);
   const [showSim, setShowSim]       = useState(false);
@@ -460,6 +464,28 @@ export function AttendancePage() {
   const [successAction, setSuccessAction] = useState('');
   const [successTime, setSuccessTime]     = useState('');
   const [showSuccess, setShowSuccess]     = useState(false);
+
+  // Load today's record on mount
+  useEffect(() => {
+    const loadTodayRecord = async () => {
+      try {
+        const res = await attendanceApi.today();
+        if (res.success && res.data) {
+          if (res.data.check_in) {
+            setCheckInTime(res.data.check_in.substring(0, 5));
+            setCheckedIn(true);
+          }
+          if (res.data.check_out) {
+            setCheckOutTime(res.data.check_out.substring(0, 5));
+            setCheckedOut(true);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching today record:', err);
+      }
+    };
+    loadTodayRecord();
+  }, []);
 
   useEffect(() => {
     if (simIdx !== null) return;
@@ -497,13 +523,34 @@ export function AttendancePage() {
     if ((canCheckIn || canCheckOut) && faceVerified) setShowModal(true);
   };
 
-  const confirmAction = () => {
-    const t = current.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-    const action = canCheckIn ? 'Check-In' : 'Check-Out';
-    if (canCheckIn) { setCheckInTime(t); setCheckedIn(true); }
-    else { setCheckOutTime(t); setCheckedOut(true); }
-    setShowModal(false);
-    setSuccessAction(action); setSuccessTime(t); setShowSuccess(true);
+  const confirmAction = async () => {
+    try {
+      if (canCheckIn) {
+        const res = await attendanceApi.checkIn(5.5503, 95.3182); // RSUCL coordinates
+        if (res.success && res.data.check_in) {
+          const t = res.data.check_in.substring(0, 5);
+          setCheckInTime(t);
+          setCheckedIn(true);
+          setShowModal(false);
+          setSuccessAction('Check-In');
+          setSuccessTime(t);
+          setShowSuccess(true);
+        }
+      } else if (canCheckOut) {
+        const res = await attendanceApi.checkOut(5.5503, 95.3182);
+        if (res.success && res.data.check_out) {
+          const t = res.data.check_out.substring(0, 5);
+          setCheckOutTime(t);
+          setCheckedOut(true);
+          setShowModal(false);
+          setSuccessAction('Check-Out');
+          setSuccessTime(t);
+          setShowSuccess(true);
+        }
+      }
+    } catch (err: any) {
+      alert(err?.message ?? 'Gagal melakukan absensi.');
+    }
   };
 
   const getDuration = () => {
@@ -796,8 +843,8 @@ export function AttendancePage() {
             <p className="text-[13px] text-gray-500 text-center mb-5">Apakah Anda yakin ingin melakukan absensi?</p>
             <div className="bg-gray-50 rounded-xl p-3.5 mb-5 space-y-2">
               {[
-                { label: 'Nama',             value: 'Dr. Rina Kusumawati' },
-                { label: 'NIP',              value: '198501012010012001' },
+                { label: 'Nama',             value: user?.name ?? 'Dr. Rina Kusumawati' },
+                { label: 'NIP',              value: user?.nip ?? '198501012010012001' },
                 { label: 'Waktu',            value: `${current.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB` },
                 { label: 'Jenis',            value: canCheckIn ? 'Check-In Masuk' : 'Check-Out Pulang' },
                 { label: 'Lokasi',           value: 'RSUCL – Dalam Area (~18m)' },

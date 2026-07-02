@@ -1,52 +1,69 @@
-import { useState } from 'react';
-import { Search, Download, FileText, Calendar, ChevronDown } from 'lucide-react';
-
-const historyData = [
-  { id: 1, name: 'Dr. Rina Kusumawati', dept: 'Poli Umum', date: '2025-07-01', checkIn: '08:28', checkOut: '17:05', duration: '8j 37m', shift: 'Reguler', status: 'hadir' },
-  { id: 2, name: 'Ns. Ahmad Fauzi', dept: 'ICU', date: '2025-07-01', checkIn: '08:25', checkOut: '17:10', duration: '8j 45m', shift: 'Reguler', status: 'hadir' },
-  { id: 3, name: 'dr. Siti Rahma', dept: 'Poli Anak', date: '2025-07-01', checkIn: '09:15', checkOut: '17:00', duration: '7j 45m', shift: 'Reguler', status: 'terlambat' },
-  { id: 4, name: 'dr. Hendra Wijaya', dept: 'Bedah', date: '2025-07-01', checkIn: '--', checkOut: '--', duration: '--', shift: 'Reguler', status: 'alpha' },
-  { id: 5, name: 'Budi Santoso', dept: 'Administrasi', date: '2025-07-01', checkIn: '--', checkOut: '--', duration: '--', shift: '--', status: 'cuti' },
-  { id: 6, name: 'Rini Handayani', dept: 'Farmasi', date: '2025-07-01', checkIn: '08:27', checkOut: '17:00', duration: '8j 33m', shift: 'Reguler', status: 'hadir' },
-  { id: 7, name: 'Fajar Nugroho', dept: 'Laboratorium', date: '2025-07-01', checkIn: '07:02', checkOut: '14:05', duration: '7j 03m', shift: 'Pagi', status: 'hadir' },
-  { id: 8, name: 'Dr. Rina Kusumawati', dept: 'Poli Umum', date: '2025-06-30', checkIn: '08:30', checkOut: '17:02', duration: '8j 32m', shift: 'Reguler', status: 'hadir' },
-  { id: 9, name: 'Ns. Ahmad Fauzi', dept: 'ICU', date: '2025-06-30', checkIn: '08:35', checkOut: '17:00', duration: '8j 25m', shift: 'Reguler', status: 'terlambat' },
-  { id: 10, name: 'dr. Siti Rahma', dept: 'Poli Anak', date: '2025-06-30', checkIn: '08:28', checkOut: '17:00', duration: '8j 32m', shift: 'Reguler', status: 'hadir' },
-  { id: 11, name: 'Ns. Dewi Lestari', dept: 'IGD', date: '2025-06-30', checkIn: '--', checkOut: '--', duration: '--', shift: 'Reguler', status: 'izin' },
-  { id: 12, name: 'Rini Handayani', dept: 'Farmasi', date: '2025-06-29', checkIn: '08:29', checkOut: '17:05', duration: '8j 36m', shift: 'Reguler', status: 'hadir' },
-];
+import { useState, useEffect } from 'react';
+import { Search, FileText, Calendar, ChevronDown } from 'lucide-react';
+import { attendanceApi, AttendanceRecord } from '../../../services/api';
 
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
   hadir:    { label: 'Hadir',    color: '#16A34A', bg: '#DCFCE7' },
-  terlambat:{ label: 'Terlambat',color: '#D97706', bg: '#FEF3C7' },
+  telat:    { label: 'Terlambat',color: '#D97706', bg: '#FEF3C7' },
   alpha:    { label: 'Alpha',    color: '#DC2626', bg: '#FEE2E2' },
-  cuti:     { label: 'Cuti',     color: '#7C3AED', bg: '#EDE9FE' },
   izin:     { label: 'Izin',     color: '#2563EB', bg: '#DBEAFE' },
-  sakit:    { label: 'Sakit',    color: '#0891B2', bg: '#CFFAFE' },
+  sakit:    { label: 'Sakit',    color: '#EA580C', bg: '#FFF7ED' },
 };
 
-const filterOptions = ['Hari Ini', 'Minggu Ini', 'Bulan Ini', 'Custom'];
+const filterOptions = ['Semua Data'];
 
 export function HistoryTab() {
+  const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [search, setSearch] = useState('');
-  const [activeFilter, setActiveFilter] = useState('Bulan Ini');
-  const [showCustom, setShowCustom] = useState(false);
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [loading, setLoading] = useState(false);
 
-  const filtered = historyData.filter(r => {
-    const matchSearch = r.name.toLowerCase().includes(search.toLowerCase()) ||
-      r.dept.toLowerCase().includes(search.toLowerCase());
+  const loadHistory = async () => {
+    setLoading(true);
+    try {
+      const res = await attendanceApi.history();
+      if (res.success) {
+        setRecords(res.data);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadHistory();
+  }, []);
+
+  const getDurationStr = (mins: number | null) => {
+    if (!mins) return '--';
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return `${h}j ${m}m`;
+  };
+
+  const filtered = records.filter(r => {
+    const nameMatch = r.employee?.name.toLowerCase().includes(search.toLowerCase()) || false;
+    const deptMatch = r.employee?.department.toLowerCase().includes(search.toLowerCase()) || false;
+    const matchSearch = nameMatch || deptMatch;
+
     const matchStatus = statusFilter === 'all' || r.status === statusFilter;
     return matchSearch && matchStatus;
   });
 
   const summary = {
     hadir: filtered.filter(r => r.status === 'hadir').length,
-    terlambat: filtered.filter(r => r.status === 'terlambat').length,
+    terlambat: filtered.filter(r => r.status === 'telat').length,
     alpha: filtered.filter(r => r.status === 'alpha').length,
-    cuti: filtered.filter(r => r.status === 'cuti' || r.status === 'izin' || r.status === 'sakit').length,
+    cuti: filtered.filter(r => r.status === 'izin' || r.status === 'sakit').length,
+  };
+
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    const months = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+    return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
   };
 
   return (
@@ -55,14 +72,6 @@ export function HistoryTab() {
         <div>
           <h2 className="text-[16px] font-bold text-gray-900">Riwayat Absensi</h2>
           <p className="text-[12px] text-gray-400 mt-0.5">Rekap lengkap kehadiran seluruh karyawan</p>
-        </div>
-        <div className="flex gap-2">
-          <button className="flex items-center gap-2 px-3.5 py-2 bg-red-50 border border-red-100 rounded-xl text-[12px] font-medium text-red-600 hover:bg-red-100 transition-colors shadow-sm">
-            <FileText size={13} /> Export PDF
-          </button>
-          <button className="flex items-center gap-2 px-3.5 py-2 bg-green-50 border border-green-100 rounded-xl text-[12px] font-medium text-[#16A34A] hover:bg-green-100 transition-colors shadow-sm">
-            <Download size={13} /> Export Excel
-          </button>
         </div>
       </div>
 
@@ -87,24 +96,12 @@ export function HistoryTab() {
           {filterOptions.map(f => (
             <button
               key={f}
-              onClick={() => { setActiveFilter(f); setShowCustom(f === 'Custom'); }}
-              className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all ${
-                activeFilter === f ? 'bg-[#16A34A] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'
-              }`}
+              className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-[#16A34A] text-white shadow-sm"
             >
               {f}
             </button>
           ))}
         </div>
-        {showCustom && (
-          <div className="flex items-center gap-2">
-            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
-              className="px-3 py-2 border border-gray-200 rounded-xl text-[12px] focus:outline-none focus:border-[#16A34A] transition-all" />
-            <span className="text-gray-400 text-[12px]">s/d</span>
-            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
-              className="px-3 py-2 border border-gray-200 rounded-xl text-[12px] focus:outline-none focus:border-[#16A34A] transition-all" />
-          </div>
-        )}
         <div className="relative">
           <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
             className="appearance-none pl-3 pr-7 py-2 border border-gray-100 rounded-xl text-[12px] bg-white shadow-sm focus:outline-none focus:border-[#16A34A] transition-all text-gray-600">
@@ -134,35 +131,33 @@ export function HistoryTab() {
               </tr>
             </thead>
             <tbody>
+              {loading && (
+                <tr>
+                  <td colSpan={8} className="text-center py-5 text-gray-400 text-[12px]">Memuat riwayat absensi...</td>
+                </tr>
+              )}
               {filtered.map((r, i) => {
-                const sc = statusConfig[r.status];
-                const d = new Date(r.date);
-                const dateStr = `${d.getDate()} ${['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][d.getMonth()]} ${d.getFullYear()}`;
+                const sc = statusConfig[r.status] || { label: r.status, color: '#6B7280', bg: '#F3F4F6' };
                 return (
                   <tr key={i} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                     <td className="px-4 py-3">
-                      <p className="text-[13px] font-medium text-gray-800">{r.name}</p>
+                      <p className="text-[13px] font-medium text-gray-800">{r.employee?.name}</p>
                     </td>
-                    <td className="px-4 py-3 text-[12px] text-gray-500">{r.dept}</td>
+                    <td className="px-4 py-3 text-[12px] text-gray-500">{r.employee?.department || 'Umum'}</td>
                     <td className="px-4 py-3 text-[12px] text-gray-600 whitespace-nowrap">
                       <div className="flex items-center gap-1.5">
                         <Calendar size={11} className="text-gray-300" />
-                        {dateStr}
+                        {formatDate(r.date)}
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
-                        r.shift === 'Pagi' ? 'bg-amber-50 text-amber-700' :
-                        r.shift === 'Siang' ? 'bg-blue-50 text-blue-700' :
-                        r.shift === 'Malam' ? 'bg-indigo-50 text-indigo-700' :
-                        r.shift === 'Reguler' ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'
-                      }`}>{r.shift}</span>
+                      <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-green-50 text-green-700">Reguler</span>
                     </td>
-                    <td className="px-4 py-3 font-mono text-[12px] text-gray-700">{r.checkIn}</td>
-                    <td className="px-4 py-3 font-mono text-[12px] text-gray-700">{r.checkOut}</td>
-                    <td className="px-4 py-3 text-[12px] text-gray-600">{r.duration}</td>
+                    <td className="px-4 py-3 font-mono text-[12px] text-gray-700">{r.check_in ? r.check_in.substring(0, 5) : '--'}</td>
+                    <td className="px-4 py-3 font-mono text-[12px] text-gray-700">{r.check_out ? r.check_out.substring(0, 5) : '--'}</td>
+                    <td className="px-4 py-3 text-[12px] text-gray-600">{getDurationStr(r.duration_min)}</td>
                     <td className="px-4 py-3">
-                      <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full" style={{ color: sc.color, background: sc.bg }}>
+                      <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full uppercase" style={{ color: sc.color, background: sc.bg }}>
                         {sc.label}
                       </span>
                     </td>
@@ -172,8 +167,11 @@ export function HistoryTab() {
             </tbody>
           </table>
         </div>
+        {filtered.length === 0 && !loading && (
+          <div className="text-center py-5 text-gray-300 text-[11px]">Tidak ada data riwayat absensi.</div>
+        )}
         <div className="px-5 py-3 border-t border-gray-50 flex items-center justify-between bg-gray-50/30">
-          <p className="text-[12px] text-gray-400">Menampilkan {filtered.length} dari {historyData.length} data</p>
+          <p className="text-[12px] text-gray-400">Menampilkan {filtered.length} dari {records.length} data</p>
         </div>
       </div>
     </div>

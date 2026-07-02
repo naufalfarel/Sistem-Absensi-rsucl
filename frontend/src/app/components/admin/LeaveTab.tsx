@@ -1,31 +1,9 @@
-import { useState } from 'react';
-import { CheckCircle2, XCircle, Clock, FileText, Filter } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { CheckCircle2, XCircle, Clock, FileText } from 'lucide-react';
+import { leaveApi, LeaveRequest } from '../../../services/api';
 
-type LeaveStatus = 'pending' | 'approved' | 'rejected';
 type LeaveType = 'cuti' | 'izin' | 'sakit';
-
-interface LeaveRequest {
-  id: number;
-  name: string;
-  dept: string;
-  type: LeaveType;
-  startDate: string;
-  endDate: string;
-  days: number;
-  reason: string;
-  status: LeaveStatus;
-  submittedAt: string;
-  note?: string;
-}
-
-const initialRequests: LeaveRequest[] = [
-  { id: 1, name: 'Dr. Rina Kusumawati', dept: 'Poli Umum', type: 'cuti', startDate: '2025-07-10', endDate: '2025-07-11', days: 2, reason: 'Keperluan keluarga — pernikahan adik', status: 'pending', submittedAt: '1 Jul 2025, 09:15' },
-  { id: 2, name: 'Ns. Ahmad Fauzi', dept: 'ICU', type: 'sakit', startDate: '2025-07-02', endDate: '2025-07-03', days: 2, reason: 'Demam dan flu berat, terlampir surat dokter', status: 'pending', submittedAt: '1 Jul 2025, 07:30' },
-  { id: 3, name: 'Budi Santoso', dept: 'Administrasi', type: 'izin', startDate: '2025-07-01', endDate: '2025-07-01', days: 1, reason: 'Urusan administrasi kependudukan', status: 'approved', submittedAt: '29 Jun 2025, 16:40', note: 'Disetujui, harap konfirmasi kembali setelah selesai.' },
-  { id: 4, name: 'dr. Siti Rahma', dept: 'Poli Anak', type: 'cuti', startDate: '2025-07-15', endDate: '2025-07-19', days: 5, reason: 'Cuti tahunan reguler', status: 'approved', submittedAt: '25 Jun 2025, 11:20' },
-  { id: 5, name: 'Fajar Nugroho', dept: 'Laboratorium', type: 'izin', startDate: '2025-06-28', endDate: '2025-06-28', days: 1, reason: 'Keperluan mendadak', status: 'rejected', submittedAt: '27 Jun 2025, 20:10', note: 'Ditolak karena kekurangan personel. Silakan ajukan ulang.' },
-  { id: 6, name: 'Ns. Dewi Lestari', dept: 'IGD', type: 'sakit', startDate: '2025-06-30', endDate: '2025-06-30', days: 1, reason: 'Sakit kepala dan pusing, tidak bisa bekerja', status: 'approved', submittedAt: '30 Jun 2025, 06:50' },
-];
+type LeaveStatus = 'pending' | 'approved' | 'rejected';
 
 const typeConfig: Record<LeaveType, { label: string; color: string; bg: string; border: string }> = {
   cuti:  { label: 'Cuti Tahunan', color: '#7C3AED', bg: '#F5F3FF', border: '#DDD6FE' },
@@ -42,11 +20,30 @@ const statusConfig: Record<LeaveStatus, { label: string; color: string; bg: stri
 const filterTabs = ['Semua', 'Menunggu', 'Disetujui', 'Ditolak'];
 
 export function LeaveTab() {
-  const [requests, setRequests] = useState<LeaveRequest[]>(initialRequests);
+  const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [filter, setFilter] = useState('Semua');
   const [typeFilter, setTypeFilter] = useState('all');
   const [confirmModal, setConfirmModal] = useState<{ id: number; action: 'approve' | 'reject'; name: string } | null>(null);
-  const [rejectNote, setRejectNote] = useState('');
+  const [adminNote, setAdminNote] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const loadRequests = async () => {
+    setLoading(true);
+    try {
+      const res = await leaveApi.list();
+      if (res.success) {
+        setRequests(res.data);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadRequests();
+  }, []);
 
   const filtered = requests.filter(r => {
     const matchFilter = filter === 'Semua' ||
@@ -59,12 +56,30 @@ export function LeaveTab() {
 
   const pending = requests.filter(r => r.status === 'pending').length;
 
-  const handleAction = (id: number, action: 'approve' | 'reject', note?: string) => {
-    setRequests(prev => prev.map(r =>
-      r.id === id ? { ...r, status: action === 'approve' ? 'approved' : 'rejected', note: note || r.note } : r
-    ));
-    setConfirmModal(null);
-    setRejectNote('');
+  const handleAction = async (id: number, action: 'approve' | 'reject', note?: string) => {
+    try {
+      let res;
+      if (action === 'approve') {
+        res = await leaveApi.approve(id, note);
+      } else {
+        res = await leaveApi.reject(id, note);
+      }
+      if (res.success) {
+        setRequests(prev => prev.map(r => r.id === id ? res.data : r));
+      }
+    } catch (err: any) {
+      alert(err?.message ?? 'Gagal memproses permohonan.');
+    } finally {
+      setConfirmModal(null);
+      setAdminNote('');
+    }
+  };
+
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    const months = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+    return `${date.getDate()} ${months[date.getMonth()]}`;
   };
 
   return (
@@ -114,7 +129,10 @@ export function LeaveTab() {
 
       {/* Cards */}
       <div className="space-y-3">
-        {filtered.length === 0 && (
+        {loading && (
+          <div className="text-center py-5 text-gray-400 text-[12px]">Memuat pengajuan cuti...</div>
+        )}
+        {filtered.length === 0 && !loading && (
           <div className="text-center py-12 bg-white rounded-2xl border border-gray-100">
             <FileText size={28} className="text-gray-200 mx-auto mb-2" />
             <p className="text-[13px] text-gray-400">Tidak ada pengajuan ditemukan</p>
@@ -123,9 +141,6 @@ export function LeaveTab() {
         {filtered.map(req => {
           const tc = typeConfig[req.type];
           const sc = statusConfig[req.status];
-          const sDate = new Date(req.startDate);
-          const eDate = new Date(req.endDate);
-          const fmt = (d: Date) => `${d.getDate()} ${['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][d.getMonth()]}`;
           return (
             <div key={req.id} className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${req.status === 'pending' ? 'border-amber-200' : 'border-gray-100'}`}>
               <div className="p-5">
@@ -139,26 +154,26 @@ export function LeaveTab() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <p className="text-[14px] font-semibold text-gray-900">{req.name}</p>
+                        <p className="text-[14px] font-semibold text-gray-900">{req.employee?.name}</p>
                         <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ color: tc.color, background: tc.bg }}>{tc.label}</span>
                         <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ color: sc.color, background: sc.bg }}>{sc.label}</span>
                       </div>
-                      <p className="text-[12px] text-gray-500 mb-1">{req.dept}</p>
+                      <p className="text-[12px] text-gray-500 mb-1">{req.employee?.department || 'Karyawan'}</p>
                       <div className="flex items-center gap-4 flex-wrap">
                         <div className="flex items-center gap-1.5">
                           <Clock size={12} className="text-gray-400" />
                           <span className="text-[12px] text-gray-600">
-                            {fmt(sDate)}{req.days > 1 ? ` – ${fmt(eDate)}` : ''} ({req.days} hari)
+                            {formatDate(req.start_date)}{req.days > 1 ? ` – ${formatDate(req.end_date)}` : ''} ({req.days} hari)
                           </span>
                         </div>
-                        <span className="text-[11px] text-gray-400">Diajukan: {req.submittedAt}</span>
+                        <span className="text-[11px] text-gray-400">Diajukan: {formatDate(req.created_at)}</span>
                       </div>
                       <div className="mt-2 bg-gray-50 rounded-xl px-3 py-2">
                         <p className="text-[12px] text-gray-600 italic">"{req.reason}"</p>
                       </div>
-                      {req.note && (
+                      {req.admin_note && (
                         <div className={`mt-2 rounded-xl px-3 py-2 border ${req.status === 'approved' ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'}`}>
-                          <p className="text-[11px] font-medium text-gray-600">Catatan admin: <span className={req.status === 'approved' ? 'text-green-700' : 'text-red-600'}>{req.note}</span></p>
+                          <p className="text-[11px] font-medium text-gray-600">Catatan admin: <span className={req.status === 'approved' ? 'text-green-700' : 'text-red-600'}>{req.admin_note}</span></p>
                         </div>
                       )}
                     </div>
@@ -166,11 +181,11 @@ export function LeaveTab() {
                   {/* Actions */}
                   {req.status === 'pending' && (
                     <div className="flex flex-col gap-2 flex-shrink-0">
-                      <button onClick={() => setConfirmModal({ id: req.id, action: 'approve', name: req.name })}
+                      <button onClick={() => setConfirmModal({ id: req.id, action: 'approve', name: req.employee.name })}
                         className="flex items-center gap-1.5 px-3.5 py-2 bg-[#16A34A] hover:bg-[#0d9240] text-white rounded-xl text-[12px] font-semibold transition-all shadow-sm shadow-green-200">
                         <CheckCircle2 size={13} /> Setujui
                       </button>
-                      <button onClick={() => setConfirmModal({ id: req.id, action: 'reject', name: req.name })}
+                      <button onClick={() => setConfirmModal({ id: req.id, action: 'reject', name: req.employee.name })}
                         className="flex items-center gap-1.5 px-3.5 py-2 bg-red-50 border border-red-100 text-red-600 hover:bg-red-100 rounded-xl text-[12px] font-semibold transition-all">
                         <XCircle size={13} /> Tolak
                       </button>
@@ -196,7 +211,7 @@ export function LeaveTab() {
       {/* Confirm modal */}
       {confirmModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-          <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => { setConfirmModal(null); setRejectNote(''); }} />
+          <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => { setConfirmModal(null); setAdminNote(''); }} />
           <div className="relative bg-white rounded-2xl p-6 shadow-2xl w-full max-w-sm">
             <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-4 ${confirmModal.action === 'approve' ? 'bg-green-50' : 'bg-red-50'}`}>
               {confirmModal.action === 'approve'
@@ -209,20 +224,18 @@ export function LeaveTab() {
             <p className="text-[12px] text-gray-500 text-center mb-4">
               Pengajuan dari <strong>{confirmModal.name}</strong> akan {confirmModal.action === 'approve' ? 'disetujui' : 'ditolak'}.
             </p>
-            {confirmModal.action === 'reject' && (
-              <div className="mb-4">
-                <label className="block text-[12px] font-medium text-gray-600 mb-1.5">Alasan penolakan (opsional)</label>
-                <textarea value={rejectNote} onChange={e => setRejectNote(e.target.value)} rows={2}
-                  placeholder="Masukkan alasan penolakan..."
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-[12px] bg-gray-50 focus:outline-none focus:border-red-400 transition-all resize-none" />
-              </div>
-            )}
+            <div className="mb-4">
+              <label className="block text-[12px] font-medium text-gray-600 mb-1.5">Catatan Admin / Keterangan</label>
+              <textarea value={adminNote} onChange={e => setAdminNote(e.target.value)} rows={2}
+                placeholder="Masukkan catatan/alasan..."
+                className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-[12px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all resize-none" />
+            </div>
             <div className="flex gap-2">
-              <button onClick={() => { setConfirmModal(null); setRejectNote(''); }}
+              <button onClick={() => { setConfirmModal(null); setAdminNote(''); }}
                 className="flex-1 py-2.5 border border-gray-200 rounded-xl text-[13px] font-medium text-gray-600 hover:bg-gray-50 transition-colors">
                 Batal
               </button>
-              <button onClick={() => handleAction(confirmModal.id, confirmModal.action, rejectNote || undefined)}
+              <button onClick={() => handleAction(confirmModal.id, confirmModal.action, adminNote)}
                 className={`flex-1 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-all ${confirmModal.action === 'approve' ? 'bg-[#16A34A] hover:bg-[#0d9240]' : 'bg-red-500 hover:bg-red-600'}`}>
                 {confirmModal.action === 'approve' ? 'Ya, Setujui' : 'Ya, Tolak'}
               </button>

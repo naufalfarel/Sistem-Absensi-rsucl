@@ -1,104 +1,89 @@
-import { useState } from 'react';
-import { Search, Calendar, MapPin, Clock, TrendingUp, Filter } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-
-const attendanceData = [
-  { day: 'Sen', hadir: 1, status: 'hadir' },
-  { day: 'Sel', hadir: 1, status: 'hadir' },
-  { day: 'Rab', hadir: 1, status: 'hadir' },
-  { day: 'Kam', hadir: 1, status: 'terlambat' },
-  { day: 'Jum', hadir: 0, status: 'alpha' },
-  { day: 'Sen', hadir: 1, status: 'hadir' },
-  { day: 'Sel', hadir: 1, status: 'izin' },
-];
-
-const monthlyData = [
-  { week: 'M1', hadir: 5, terlambat: 0, alpha: 0 },
-  { week: 'M2', hadir: 4, terlambat: 1, alpha: 0 },
-  { week: 'M3', hadir: 5, terlambat: 0, alpha: 0 },
-  { week: 'M4', hadir: 3, terlambat: 1, alpha: 1 },
-];
-
-const records = [
-  {
-    date: 'Rabu, 1 Jul 2025',
-    checkIn: '07:45',
-    checkOut: '15:02',
-    duration: '7j 17m',
-    location: 'RSUCL – Dalam Area',
-    status: 'hadir',
-    shift: 'Pagi',
-    late: false,
-  },
-  {
-    date: 'Selasa, 30 Jun 2025',
-    checkIn: '07:50',
-    checkOut: '15:00',
-    duration: '7j 10m',
-    location: 'RSUCL – Dalam Area',
-    status: 'hadir',
-    shift: 'Pagi',
-    late: false,
-  },
-  {
-    date: 'Senin, 29 Jun 2025',
-    checkIn: '08:15',
-    checkOut: '15:20',
-    duration: '7j 05m',
-    location: 'RSUCL – Dalam Area',
-    status: 'terlambat',
-    shift: 'Pagi',
-    late: true,
-  },
-  {
-    date: 'Jumat, 27 Jun 2025',
-    checkIn: '--',
-    checkOut: '--',
-    duration: '--',
-    location: '--',
-    status: 'alpha',
-    shift: 'Pagi',
-    late: false,
-  },
-  {
-    date: 'Kamis, 26 Jun 2025',
-    checkIn: '--',
-    checkOut: '--',
-    duration: '-- ',
-    location: 'Pengajuan Disetujui',
-    status: 'izin',
-    shift: 'Pagi',
-    late: false,
-  },
-  {
-    date: 'Rabu, 25 Jun 2025',
-    checkIn: '07:42',
-    checkOut: '15:00',
-    duration: '7j 18m',
-    location: 'RSUCL – Dalam Area',
-    status: 'hadir',
-    shift: 'Pagi',
-    late: false,
-  },
-];
+import { useState, useEffect } from 'react';
+import { Search, Calendar, MapPin, Clock, TrendingUp } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { attendanceApi, AttendanceRecord } from '../../services/api';
 
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
   hadir: { label: 'Hadir', color: '#16A34A', bg: '#DCFCE7' },
-  terlambat: { label: 'Terlambat', color: '#D97706', bg: '#FEF3C7' },
+  telat: { label: 'Terlambat', color: '#D97706', bg: '#FEF3C7' },
   alpha: { label: 'Alpha', color: '#DC2626', bg: '#FEE2E2' },
   izin: { label: 'Izin', color: '#2563EB', bg: '#DBEAFE' },
+  sakit: { label: 'Sakit', color: '#EA580C', bg: '#FFF7ED' },
 };
 
-const filters = ['Hari Ini', 'Minggu Ini', 'Bulan Ini', 'Custom'];
+const filters = ['Semua', 'Hadir', 'Terlambat', 'Izin/Sakit'];
 
 export function HistoryPage() {
-  const [activeFilter, setActiveFilter] = useState('Bulan Ini');
+  const [activeFilter, setActiveFilter] = useState('Semua');
   const [searchQuery, setSearchQuery] = useState('');
+  const [records, setRecords] = useState<AttendanceRecord[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const filtered = records.filter(r =>
-    r.date.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    r.status.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const loadHistory = async () => {
+    setLoading(true);
+    try {
+      const res = await attendanceApi.history();
+      if (res.success) {
+        setRecords(res.data);
+      }
+    } catch (err) {
+      console.error('Error fetching history:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadHistory();
+  }, []);
+
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    return `${days[date.getDay()]}, ${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
+  };
+
+  const getDurationStr = (mins: number | null) => {
+    if (!mins) return '--';
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return `${h}j ${m}m`;
+  };
+
+  const mappedRecords = records.map(r => ({
+    date: formatDate(r.date),
+    checkIn: r.check_in ? r.check_in.substring(0, 5) : '--',
+    checkOut: r.check_out ? r.check_out.substring(0, 5) : '--',
+    duration: getDurationStr(r.duration_min),
+    location: r.latitude ? 'RSUCL – Terverifikasi' : '--',
+    status: r.status,
+    shift: 'Reguler',
+  }));
+
+  const filtered = mappedRecords.filter(r => {
+    const matchesSearch = r.date.toLowerCase().includes(searchQuery.toLowerCase()) || r.status.toLowerCase().includes(searchQuery.toLowerCase());
+    if (activeFilter === 'Semua') return matchesSearch;
+    if (activeFilter === 'Hadir') return matchesSearch && r.status === 'hadir';
+    if (activeFilter === 'Terlambat') return matchesSearch && r.status === 'telat';
+    if (activeFilter === 'Izin/Sakit') return matchesSearch && (r.status === 'izin' || r.status === 'sakit');
+    return matchesSearch;
+  });
+
+  // Calculate live statistics
+  const totalDays = records.length;
+  const hadirCount = records.filter(r => r.status === 'hadir' || r.status === 'telat').length;
+  const telatCount = records.filter(r => r.status === 'telat').length;
+  const alphaCount = records.filter(r => r.status === 'alpha').length;
+  const attendanceRate = totalDays > 0 ? Math.round((hadirCount / totalDays) * 100) : 0;
+
+  // Render simple weekly charts from records
+  const monthlyData = [
+    { week: 'Hadir', count: hadirCount, fill: '#16A34A' },
+    { week: 'Terlambat', count: telatCount, fill: '#FBBF24' },
+    { week: 'Alpha', count: alphaCount, fill: '#F87171' },
+  ];
 
   return (
     <div className="p-5 md:p-7 max-w-4xl mx-auto">
@@ -110,10 +95,10 @@ export function HistoryPage() {
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
         {[
-          { label: 'Hari Hadir', value: '24', total: '/26', color: '#16A34A', bg: '#F0FDF4' },
-          { label: 'Terlambat', value: '2', total: ' hari', color: '#D97706', bg: '#FFFBEB' },
-          { label: 'Alpha', value: '1', total: ' hari', color: '#DC2626', bg: '#FFF5F5' },
-          { label: 'Kehadiran', value: '96%', total: '', color: '#7C3AED', bg: '#F5F3FF' },
+          { label: 'Hari Hadir', value: String(hadirCount), total: `/${totalDays || 0}`, color: '#16A34A', bg: '#F0FDF4' },
+          { label: 'Terlambat', value: String(telatCount), total: ' hari', color: '#D97706', bg: '#FFFBEB' },
+          { label: 'Alpha', value: String(alphaCount), total: ' hari', color: '#DC2626', bg: '#FFF5F5' },
+          { label: 'Kehadiran', value: `${attendanceRate}%`, total: '', color: '#7C3AED', bg: '#F5F3FF' },
         ].map((s, i) => (
           <div key={i} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
             <div className="w-8 h-8 rounded-xl mb-3 flex items-center justify-center" style={{ background: s.bg }}>
@@ -130,39 +115,23 @@ export function HistoryPage() {
 
       {/* Chart */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-5">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <p className="text-[14px] font-semibold text-gray-800">Grafik Kehadiran Bulanan</p>
-            <p className="text-[12px] text-gray-400">Juni – Juli 2025</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5">
-              <div className="w-2.5 h-2.5 rounded-sm bg-[#16A34A]" />
-              <span className="text-[11px] text-gray-500">Hadir</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-2.5 h-2.5 rounded-sm bg-[#FBBF24]" />
-              <span className="text-[11px] text-gray-500">Terlambat</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-2.5 h-2.5 rounded-sm bg-[#F87171]" />
-              <span className="text-[11px] text-gray-500">Alpha</span>
-            </div>
-          </div>
-        </div>
-        <ResponsiveContainer width="100%" height={160}>
-          <BarChart data={monthlyData} barGap={2} barCategoryGap="30%">
-            <XAxis dataKey="week" tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} width={20} />
-            <Tooltip
-              contentStyle={{ borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
-              cursor={{ fill: 'rgba(0,0,0,0.03)' }}
-            />
-            <Bar key="bar-hadir" dataKey="hadir" name="Hadir" fill="#16A34A" radius={[4, 4, 0, 0]} isAnimationActive={false} />
-            <Bar key="bar-terlambat" dataKey="terlambat" name="Terlambat" fill="#FBBF24" radius={[4, 4, 0, 0]} isAnimationActive={false} />
-            <Bar key="bar-alpha" dataKey="alpha" name="Alpha" fill="#F87171" radius={[4, 4, 0, 0]} isAnimationActive={false} />
-          </BarChart>
-        </ResponsiveContainer>
+        <p className="text-[14px] font-semibold text-gray-800 mb-4">Grafik Sebaran Kehadiran</p>
+        {totalDays > 0 ? (
+          <ResponsiveContainer width="100%" height={160}>
+            <BarChart data={monthlyData} barCategoryGap="40%">
+              <XAxis dataKey="week" tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} width={20} />
+              <Tooltip contentStyle={{ borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '12px' }} />
+              <Bar dataKey="count" fill="#16A34A" name="Total Hari" radius={[4, 4, 0, 0]} isAnimationActive={false}>
+                {monthlyData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.fill} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="h-[160px] flex items-center justify-center text-gray-300 text-[12px]">Belum ada data chart.</div>
+        )}
       </div>
 
       {/* Filters & Search */}
@@ -196,8 +165,11 @@ export function HistoryPage() {
 
       {/* Records */}
       <div className="space-y-2.5">
+        {loading && (
+          <div className="text-center py-8 text-gray-400 text-[12px]">Memuat data riwayat...</div>
+        )}
         {filtered.map((record, i) => {
-          const sc = statusConfig[record.status];
+          const sc = statusConfig[record.status] || { label: record.status.toUpperCase(), color: '#6B7280', bg: '#F3F4F6' };
           return (
             <div key={i} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
               <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-50">
@@ -208,7 +180,7 @@ export function HistoryPage() {
                 <div className="flex items-center gap-2">
                   <span className="text-[11px] text-gray-400">Shift {record.shift}</span>
                   <span
-                    className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full"
+                    className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full uppercase"
                     style={{ color: sc.color, background: sc.bg }}
                   >
                     {sc.label}
@@ -224,7 +196,7 @@ export function HistoryPage() {
                 ].map(({ icon: Icon, label, value, color }, j) => (
                   <div key={j} className="px-4 py-3">
                     <p className="text-[10px] text-gray-400 mb-1">{label}</p>
-                    <p className="text-[13px] font-medium text-gray-800 truncate">{value}</p>
+                    <p className="text-[13px] font-medium text-gray-800 truncate" style={{ color: label.includes('Jam') && value !== '--' ? color : undefined }}>{value}</p>
                   </div>
                 ))}
               </div>
@@ -233,7 +205,7 @@ export function HistoryPage() {
         })}
       </div>
 
-      {filtered.length === 0 && (
+      {filtered.length === 0 && !loading && (
         <div className="text-center py-12">
           <Search size={32} className="text-gray-200 mx-auto mb-3" />
           <p className="text-[14px] text-gray-400">Tidak ada data yang ditemukan</p>

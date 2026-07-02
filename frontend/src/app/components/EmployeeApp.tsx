@@ -63,18 +63,17 @@ export function EmployeeApp({ onLogout, employee }: EmployeeAppProps) {
       <div className="mx-3 mt-3 mb-1 p-3 rounded-xl bg-gradient-to-r from-[#16A34A]/8 to-transparent border border-[#16A34A]/10">
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-xl bg-[#16A34A] flex items-center justify-center flex-shrink-0">
-            <span className="text-white text-[11px] font-bold">RK</span>
+            <span className="text-white text-[11px] font-bold">
+              {employee?.name?.replace(/^(dr\.|Ns\.|Dr\.)\s*/i, '').charAt(0) || 'U'}
+            </span>
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-[13px] font-semibold text-gray-800 truncate">
-              {employee?.name?.split(' ').slice(0, 2).join(' ') || 'Dr. Rina K.'}
+              {employee?.name?.split(' ').slice(0, 2).join(' ') || 'User'}
             </p>
             <p className="text-[11px] text-gray-500 truncate">
-              {employee?.pos || 'Dokter Umum'} · Reguler
+              {employee?.pos || 'Karyawan'} · Reguler
             </p>
-          </div>
-          <div className="flex-shrink-0">
-            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-green-100 text-[#16A34A]">Hadir</span>
           </div>
         </div>
       </div>
@@ -111,7 +110,9 @@ export function EmployeeApp({ onLogout, employee }: EmployeeAppProps) {
       <div className="p-3 border-t border-gray-100 space-y-1">
         <div className="px-3 py-2 text-center">
           <p className="text-[18px] font-mono font-semibold text-gray-800 tracking-tight">{timeStr}</p>
-          <p className="text-[10px] text-gray-400">WIB · Rabu 1 Juli 2025</p>
+          <p className="text-[10px] text-gray-400">
+            WIB · {time.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+          </p>
         </div>
         <button
           onClick={onLogout}

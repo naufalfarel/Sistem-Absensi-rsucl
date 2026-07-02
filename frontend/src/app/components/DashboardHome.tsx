@@ -1,12 +1,38 @@
 import { useState, useEffect } from 'react';
 import { CheckCircle2, Clock, Stethoscope, MapPin, Calendar, ChevronRight, Bell, TrendingUp, Users, Activity } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { attendanceApi, AttendanceRecord, notificationApi, AppNotification } from '../../services/api';
 
 export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => void }) {
+  const { user } = useAuth();
   const [time, setTime] = useState(new Date());
+  const [todayRecord, setTodayRecord] = useState<AttendanceRecord | null>(null);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [unreadNotifsCount, setUnreadNotifsCount] = useState(0);
 
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(t);
+  }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      const attendRes = await attendanceApi.today();
+      if (attendRes.success) {
+        setTodayRecord(attendRes.data);
+      }
+      const notifRes = await notificationApi.list();
+      if (notifRes.success) {
+        setNotifications(notifRes.data.notifications.slice(0, 3));
+        setUnreadNotifsCount(notifRes.data.unread_count);
+      }
+    } catch (err) {
+      console.error('Error loading dashboard data:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchDashboardData();
   }, []);
 
   const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
@@ -15,34 +41,63 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
   const dateStr = `${days[time.getDay()]}, ${time.getDate()} ${months[time.getMonth()]} ${time.getFullYear()}`;
   const timeStr = time.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
+  // Map today's attendance status
+  const getStatusLabel = () => {
+    if (!todayRecord) return 'Belum Absen';
+    const statusMap: Record<string, string> = {
+      hadir: 'Hadir',
+      telat: 'Terlambat',
+      izin: 'Cuti/Izin',
+      sakit: 'Sakit',
+      alpha: 'Alpha',
+    };
+    return statusMap[todayRecord.status] ?? 'Sudah Absen';
+  };
+
+  const getStatusBadge = () => {
+    if (!todayRecord) return 'Belum Check-In';
+    if (todayRecord.check_out) return 'Sudah Pulang';
+    if (todayRecord.status === 'telat') return 'Terlambat';
+    return 'Tepat Waktu';
+  };
+
+  const getStatusColor = () => {
+    if (!todayRecord) return { color: '#6B7280', bg: '#F9FAFB' };
+    if (todayRecord.status === 'hadir') return { color: '#16A34A', bg: '#DCFCE7' };
+    if (todayRecord.status === 'telat') return { color: '#D97706', bg: '#FEF3C7' };
+    return { color: '#DC2626', bg: '#FEE2E2' };
+  };
+
+  const statusColor = getStatusColor();
+
   const stats = [
     {
       icon: CheckCircle2,
       label: 'Status Kehadiran',
-      value: 'Hadir',
-      sub: 'Hari ini',
-      color: '#16A34A',
-      bg: '#F0FDF4',
-      badge: 'Tepat Waktu',
-      badgeColor: '#16A34A',
-      badgeBg: '#DCFCE7',
+      value: getStatusLabel(),
+      sub: todayRecord?.check_out ? 'Absensi Selesai' : 'Hari ini',
+      color: statusColor.color,
+      bg: statusColor.bg + '30',
+      badge: getStatusBadge(),
+      badgeColor: statusColor.color,
+      badgeBg: statusColor.bg,
     },
     {
       icon: Clock,
       label: 'Jam Masuk',
-      value: '08:28',
+      value: todayRecord?.check_in ? todayRecord.check_in.substring(0, 5) : '--:--',
       sub: 'WIB',
       color: '#2563EB',
       bg: '#EFF6FF',
-      badge: 'Tepat Waktu',
-      badgeColor: '#2563EB',
-      badgeBg: '#DBEAFE',
+      badge: todayRecord?.check_in ? (todayRecord.status === 'telat' ? 'Terlambat' : 'Tepat Waktu') : 'Menunggu',
+      badgeColor: todayRecord?.check_in ? (todayRecord.status === 'telat' ? '#D97706' : '#2563EB') : '#9CA3AF',
+      badgeBg: todayRecord?.check_in ? (todayRecord.status === 'telat' ? '#FEF3C7' : '#DBEAFE') : '#F3F4F6',
     },
     {
       icon: Stethoscope,
       label: 'Shift Kerja',
       value: 'Reguler',
-      sub: '08:30 – 17:00',
+      sub: '08:00 – 17:00',
       color: '#7C3AED',
       bg: '#F5F3FF',
       badge: 'Aktif',
@@ -52,7 +107,7 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
     {
       icon: MapPin,
       label: 'Status Lokasi',
-      value: 'Dalam Area',
+      value: todayRecord ? 'Terverifikasi' : 'Dalam Area',
       sub: 'RSUCL',
       color: '#EA580C',
       bg: '#FFF7ED',
@@ -62,21 +117,14 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
     },
   ];
 
-
-  const notifications = [
-    { icon: '📅', title: 'Jadwal shift besok berubah', time: '10 menit lalu', unread: true },
-    { icon: '✅', title: 'Pengajuan cuti disetujui', time: '2 jam lalu', unread: true },
-    { icon: '⏰', title: 'Pengingat: Check-out pukul 15:00', time: '3 jam lalu', unread: false },
-  ];
-
   return (
     <div className="p-5 md:p-7 max-w-5xl mx-auto">
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
           <p className="text-[13px] text-gray-500 mb-0.5">{dateStr}</p>
-          <h1 className="text-xl font-semibold text-gray-900">Selamat Pagi, <span className="text-[#16A34A]">Dr. Rina</span> 👋</h1>
-          <p className="text-[13px] text-gray-500 mt-0.5">Dokter Umum · Poli Umum & UGD</p>
+          <h1 className="text-xl font-semibold text-gray-900">Selamat Pagi, <span className="text-[#16A34A]">{user?.name}</span> 👋</h1>
+          <p className="text-[13px] text-gray-500 mt-0.5">{user?.position} · {user?.department}</p>
         </div>
         <div className="text-right hidden sm:block">
           <div className="text-2xl font-mono font-semibold text-gray-800 tracking-tight">{timeStr}</div>
@@ -121,7 +169,7 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
               </div>
               <div className="flex-1">
                 <p className="text-[13px] font-semibold text-gray-800">Shift Reguler</p>
-                <p className="text-[12px] text-gray-500 mt-0.5">Senin – Jumat · 08:30 – 17:00 WIB</p>
+                <p className="text-[12px] text-gray-500 mt-0.5">Senin – Jumat · 08:00 – 17:00 WIB</p>
               </div>
               <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-[#16A34A] text-white">Aktif</span>
             </div>
@@ -129,7 +177,7 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
             {/* Time blocks */}
             <div className="grid grid-cols-3 gap-2.5">
               {[
-                { label: 'Jam Masuk',    value: '08:30', sub: 'WIB', color: '#16A34A', bg: '#F0FDF4' },
+                { label: 'Jam Masuk',    value: '08:00', sub: 'WIB', color: '#16A34A', bg: '#F0FDF4' },
                 { label: 'Istirahat',    value: '12:30', sub: '– 13:30', color: '#7C3AED', bg: '#F5F3FF' },
                 { label: 'Jam Pulang',   value: '17:00', sub: 'WIB', color: '#EA580C', bg: '#FFF7ED' },
               ].map((b, i) => (
@@ -188,19 +236,22 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
                 <Bell size={16} className="text-[#16A34A]" />
                 <span className="text-[14px] font-semibold text-gray-800">Notifikasi</span>
               </div>
-              <span className="w-5 h-5 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center font-bold">2</span>
+              <span className="w-5 h-5 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center font-bold">{unreadNotifsCount}</span>
             </div>
             <div className="p-3 space-y-1">
               {notifications.map((n, i) => (
-                <div key={i} className={`flex items-start gap-3 p-2.5 rounded-xl ${n.unread ? 'bg-green-50/60' : ''}`}>
-                  <span className="text-lg mt-0.5">{n.icon}</span>
+                <div key={i} className={`flex items-start gap-3 p-2.5 rounded-xl ${!n.is_read ? 'bg-green-50/60' : ''}`}>
+                  <span className="text-lg mt-0.5">{n.type === 'leave' ? '📅' : n.type === 'attendance' ? '⏰' : '🔔'}</span>
                   <div className="flex-1 min-w-0">
-                    <p className={`text-[12px] leading-tight ${n.unread ? 'font-medium text-gray-800' : 'text-gray-600'}`}>{n.title}</p>
-                    <p className="text-[11px] text-gray-400 mt-0.5">{n.time}</p>
+                    <p className={`text-[12px] leading-tight ${!n.is_read ? 'font-medium text-gray-800' : 'text-gray-600'}`}>{n.title}</p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">{n.body}</p>
                   </div>
-                  {n.unread && <div className="w-1.5 h-1.5 rounded-full bg-[#16A34A] mt-1.5 flex-shrink-0" />}
+                  {!n.is_read && <div className="w-1.5 h-1.5 rounded-full bg-[#16A34A] mt-1.5 flex-shrink-0" />}
                 </div>
               ))}
+              {notifications.length === 0 && (
+                <div className="text-center py-5 text-gray-300 text-[11px]">Belum ada notifikasi.</div>
+              )}
             </div>
           </div>
         </div>

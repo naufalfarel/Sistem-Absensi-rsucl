@@ -1,24 +1,23 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, CheckCircle2, Clock, AlertTriangle, XCircle, Coffee, CalendarOff, Eye } from 'lucide-react';
+import { attendanceApi, AttendanceRecord } from '../../../services/api';
 
-const attendanceToday = [
-  { id: 1, name: 'Dr. Rina Kusumawati', dept: 'Poli Umum', shift: 'Reguler', checkIn: '08:28', checkOut: null, status: 'working', pos: 'Dokter Umum' },
-  { id: 2, name: 'Ns. Ahmad Fauzi', dept: 'ICU', shift: 'Reguler', checkIn: '08:25', checkOut: null, status: 'working', pos: 'Perawat' },
-  { id: 3, name: 'dr. Siti Rahma', dept: 'Poli Anak', shift: 'Reguler', checkIn: '09:15', checkOut: null, status: 'late', pos: 'Dokter Spesialis' },
-  { id: 4, name: 'Budi Santoso', dept: 'Administrasi', shift: '--', checkIn: '--', checkOut: '--', status: 'leave', pos: 'Staff Admin' },
-  { id: 5, name: 'Ns. Dewi Lestari', dept: 'IGD', shift: 'Reguler', checkIn: '08:29', checkOut: '17:02', status: 'done', pos: 'Perawat' },
-  { id: 6, name: 'dr. Hendra Wijaya', dept: 'Bedah', shift: 'Reguler', checkIn: '--', checkOut: '--', status: 'absent', pos: 'Dokter Spesialis' },
-  { id: 7, name: 'Rini Handayani', dept: 'Farmasi', shift: 'Reguler', checkIn: '08:27', checkOut: null, status: 'working', pos: 'Apoteker' },
-  { id: 8, name: 'Fajar Nugroho', dept: 'Laboratorium', shift: 'Pagi', checkIn: '07:02', checkOut: '14:05', status: 'done', pos: 'Analis Lab' },
-  { id: 9, name: 'Sri Wahyuni', dept: 'ICU', shift: 'Malam', checkIn: '--', checkOut: '--', status: 'not_yet', pos: 'Perawat' },
-  { id: 10, name: 'dr. Amir Hamzah', dept: 'Poli Umum', shift: 'Siang', checkIn: '--', checkOut: '--', status: 'not_yet', pos: 'Dokter Umum' },
-];
+interface MappedAttendance {
+  id: number;
+  name: string;
+  dept: string;
+  shift: string;
+  checkIn: string;
+  checkOut: string | null;
+  status: 'working' | 'done' | 'late' | 'absent' | 'leave' | 'not_yet';
+  pos: string;
+}
 
 const statusMap: Record<string, { label: string; color: string; bg: string; icon: typeof CheckCircle2; border: string }> = {
   working:  { label: 'Sedang Bekerja', color: '#2563EB', bg: '#EFF6FF', icon: Clock,         border: '#BFDBFE' },
   done:     { label: 'Sudah Pulang',   color: '#16A34A', bg: '#F0FDF4', icon: CheckCircle2,  border: '#BBF7D0' },
   late:     { label: 'Terlambat',      color: '#D97706', bg: '#FFFBEB', icon: AlertTriangle,  border: '#FDE68A' },
-  absent:   { label: 'Alpha',          color: '#DC2626', bg: '#FEF2F2', icon: XCircle,        border: '#FECACA' },
+  absent:   { label: 'Alpha',          color: '#DC2626', bg: '#FEE2E2', icon: XCircle,        border: '#FECACA' },
   leave:    { label: 'Cuti/Izin',      color: '#7C3AED', bg: '#F5F3FF', icon: CalendarOff,    border: '#DDD6FE' },
   not_yet:  { label: 'Belum Hadir',    color: '#6B7280', bg: '#F9FAFB', icon: Coffee,         border: '#E5E7EB' },
 };
@@ -27,24 +26,82 @@ const summaryStats = [
   { key: 'working', label: 'Sedang Bekerja', color: '#2563EB', bg: '#EFF6FF' },
   { key: 'done',    label: 'Sudah Pulang',   color: '#16A34A', bg: '#F0FDF4' },
   { key: 'late',    label: 'Terlambat',      color: '#D97706', bg: '#FFFBEB' },
-  { key: 'absent',  label: 'Alpha',          color: '#DC2626', bg: '#FEF2F2' },
+  { key: 'absent',  label: 'Alpha',          color: '#DC2626', bg: '#FEE2E2' },
   { key: 'leave',   label: 'Cuti/Izin',      color: '#7C3AED', bg: '#F5F3FF' },
   { key: 'not_yet', label: 'Belum Hadir',    color: '#6B7280', bg: '#F9FAFB' },
 ];
 
 export function AttendanceTab() {
+  const [records, setRecords] = useState<MappedAttendance[]>([]);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
-  const [selected, setSelected] = useState<typeof attendanceToday[0] | null>(null);
+  const [selected, setSelected] = useState<MappedAttendance | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const loadTodayRecords = async () => {
+    setLoading(true);
+    try {
+      const res = await attendanceApi.allToday();
+      if (res.success) {
+        // Map backend response into table structure
+        const mapped: MappedAttendance[] = res.data.map(r => {
+          let statusKey: MappedAttendance['status'] = 'not_yet';
+          if (r.status === 'hadir') {
+            statusKey = r.check_out ? 'done' : 'working';
+          } else if (r.status === 'telat') {
+            statusKey = r.check_out ? 'done' : 'late';
+          } else if (r.status === 'izin' || r.status === 'sakit') {
+            statusKey = 'leave';
+          } else if (r.status === 'alpha') {
+            statusKey = 'absent';
+          }
+
+          return {
+            id: r.id,
+            name: r.employee?.name ?? 'Karyawan',
+            dept: r.employee?.department ?? 'Umum',
+            shift: 'Reguler',
+            checkIn: r.check_in ? r.check_in.substring(0, 5) : '--',
+            checkOut: r.check_out ? r.check_out.substring(0, 5) : null,
+            status: statusKey,
+            pos: 'Staff',
+          };
+        });
+        setRecords(mapped);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadTodayRecords();
+  }, []);
 
   const counts: Record<string, number> = {};
-  attendanceToday.forEach(e => { counts[e.status] = (counts[e.status] || 0) + 1; });
+  records.forEach(e => { counts[e.status] = (counts[e.status] || 0) + 1; });
 
-  const filtered = attendanceToday.filter(e => {
+  const filtered = records.filter(e => {
     const matchSearch = e.name.toLowerCase().includes(search.toLowerCase()) || e.dept.toLowerCase().includes(search.toLowerCase());
     const matchStatus = filterStatus === 'all' || e.status === filterStatus;
     return matchSearch && matchStatus;
   });
+
+  const getDuration = (inTime: string, outTime: string | null) => {
+    if (inTime === '--') return '--';
+    const [ih, im] = inTime.split(':').map(Number);
+    if (outTime) {
+      const [oh, om] = outTime.split(':').map(Number);
+      const diff = (oh * 60 + om) - (ih * 60 + im);
+      return diff > 0 ? `${Math.floor(diff / 60)}j ${diff % 60}m` : '0j';
+    } else {
+      const now = new Date();
+      const diff = (now.getHours() * 60 + now.getMinutes()) - (ih * 60 + im);
+      return diff > 0 ? `${Math.floor(diff / 60)}j ${diff % 60}m` : '--';
+    }
+  };
 
   return (
     <div className="max-w-6xl mx-auto space-y-5">
@@ -52,7 +109,9 @@ export function AttendanceTab() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-[16px] font-bold text-gray-900">Kehadiran Hari Ini</h2>
-          <p className="text-[12px] text-gray-400 mt-0.5">Rabu, 1 Juli 2025 · Real-time</p>
+          <p className="text-[12px] text-gray-400 mt-0.5">
+            {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · Real-time
+          </p>
         </div>
         <div className="flex items-center gap-1.5 bg-green-50 border border-green-100 px-3 py-1.5 rounded-full">
           <div className="w-1.5 h-1.5 rounded-full bg-[#16A34A] animate-pulse" />
@@ -102,34 +161,24 @@ export function AttendanceTab() {
           <table className="w-full">
             <thead>
               <tr className="bg-gray-50/70 border-b border-gray-100">
-                {['Nama Pegawai', 'Departemen', 'Shift', 'Jam Masuk', 'Jam Keluar', 'Durasi', 'Status', ''].map((h, i) => (
+                {['Nama Karyawan', 'Departemen', 'Shift', 'Jam Masuk', 'Jam Keluar', 'Durasi', 'Status', ''].map((h, i) => (
                   <th key={i} className="text-left px-4 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
+              {loading && (
+                <tr>
+                  <td colSpan={8} className="text-center py-5 text-gray-400 text-[12px]">Memuat absensi hari ini...</td>
+                </tr>
+              )}
               {filtered.map(emp => {
-                const sc = statusMap[emp.status];
-                const dur = emp.checkIn !== '--' && emp.checkOut
-                  ? (() => {
-                    const [ih, im] = emp.checkIn.split(':').map(Number);
-                    const [oh, om] = emp.checkOut.split(':').map(Number);
-                    const diff = (oh * 60 + om) - (ih * 60 + im);
-                    return `${Math.floor(diff / 60)}j ${diff % 60}m`;
-                  })()
-                  : emp.checkIn !== '--' ? (
-                    (() => {
-                      const [ih, im] = emp.checkIn.split(':').map(Number);
-                      const now = new Date();
-                      const diff = (now.getHours() * 60 + now.getMinutes()) - (ih * 60 + im);
-                      return diff > 0 ? `${Math.floor(diff / 60)}j ${diff % 60}m` : '--';
-                    })()
-                  ) : '--';
+                const sc = statusMap[emp.status] || { label: emp.status, color: '#6B7280', bg: '#F9FAFB', icon: Coffee, border: '#E5E7EB' };
                 return (
                   <tr key={emp.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: sc.bg }}>
+                        <div className="w-8 h-8 rounded-xl bg-gray-50 flex items-center justify-center flex-shrink-0" style={{ background: sc.bg }}>
                           <span className="text-[11px] font-bold" style={{ color: sc.color }}>
                             {emp.name.replace(/^(dr\.|Ns\.|Dr\.)\s*/i, '').charAt(0)}
                           </span>
@@ -142,20 +191,15 @@ export function AttendanceTab() {
                     </td>
                     <td className="px-4 py-3.5 text-[13px] text-gray-600">{emp.dept}</td>
                     <td className="px-4 py-3.5">
-                      <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
-                        emp.shift === 'Pagi' ? 'bg-amber-50 text-amber-700' :
-                        emp.shift === 'Siang' ? 'bg-blue-50 text-blue-700' :
-                        emp.shift === 'Malam' ? 'bg-indigo-50 text-indigo-700' :
-                        'bg-green-50 text-green-700'
-                      }`}>{emp.shift}</span>
+                      <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full bg-green-50 text-green-700`}>{emp.shift}</span>
                     </td>
                     <td className="px-4 py-3.5 font-mono text-[13px] text-gray-700">{emp.checkIn}</td>
                     <td className="px-4 py-3.5 font-mono text-[13px] text-gray-700">
                       {emp.checkOut || (emp.checkIn !== '--' ? <span className="text-gray-300">Belum</span> : '--')}
                     </td>
-                    <td className="px-4 py-3.5 text-[13px] text-gray-600">{dur}</td>
+                    <td className="px-4 py-3.5 text-[13px] text-gray-600">{getDuration(emp.checkIn, emp.checkOut)}</td>
                     <td className="px-4 py-3.5">
-                      <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full border" style={{ color: sc.color, background: sc.bg, borderColor: sc.border }}>
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full border border-dashed" style={{ color: sc.color, background: sc.bg, borderColor: sc.border }}>
                         <sc.icon size={11} />
                         {sc.label}
                       </span>
@@ -171,9 +215,12 @@ export function AttendanceTab() {
             </tbody>
           </table>
         </div>
+        {filtered.length === 0 && !loading && (
+          <div className="text-center py-5 text-gray-300 text-[11px]">Tidak ada data absensi ditemukan.</div>
+        )}
         <div className="px-5 py-3 border-t border-gray-50 flex items-center justify-between bg-gray-50/30">
-          <p className="text-[12px] text-gray-400">Menampilkan {filtered.length} dari {attendanceToday.length} karyawan</p>
-          <p className="text-[12px] text-gray-400">Diperbarui otomatis setiap menit</p>
+          <p className="text-[12px] text-gray-400">Menampilkan {filtered.length} dari {records.length} karyawan</p>
+          <p className="text-[12px] text-gray-400">Diperbarui otomatis dari server</p>
         </div>
       </div>
 

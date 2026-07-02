@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   ChevronRight, User, Lock, Bell, Globe, Info, Shield, LogOut,
   Mail, Phone, MapPin, Calendar, Briefcase, Building2, Edit3, Camera,
   Plus, X, CheckCircle2, Clock, XCircle, FileText, ChevronDown, AlertCircle
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { leaveApi, LeaveRequest as ApiLeave } from '../../services/api';
 
 interface ProfilePageProps {
   onLogout: () => void;
@@ -11,18 +13,6 @@ interface ProfilePageProps {
 
 type LeaveType = 'cuti' | 'izin' | 'sakit';
 type LeaveStatus = 'pending' | 'approved' | 'rejected';
-
-interface LeaveRequest {
-  id: number;
-  type: LeaveType;
-  startDate: string;
-  endDate: string;
-  days: number;
-  reason: string;
-  status: LeaveStatus;
-  submittedAt: string;
-  adminNote?: string;
-}
 
 const typeConfig: Record<LeaveType, { label: string; color: string; bg: string; border: string }> = {
   cuti:  { label: 'Cuti Tahunan', color: '#7C3AED', bg: '#F5F3FF', border: '#DDD6FE' },
@@ -36,14 +26,9 @@ const statusConfig: Record<LeaveStatus, { label: string; color: string; bg: stri
   rejected: { label: 'Ditolak',   color: '#DC2626', bg: '#FEE2E2', icon: XCircle },
 };
 
-const initialRequests: LeaveRequest[] = [
-  { id: 1, type: 'cuti', startDate: '2025-07-10', endDate: '2025-07-11', days: 2, reason: 'Keperluan keluarga', status: 'pending', submittedAt: '1 Jul 2025' },
-  { id: 2, type: 'sakit', startDate: '2025-06-20', endDate: '2025-06-20', days: 1, reason: 'Demam dan flu', status: 'approved', submittedAt: '20 Jun 2025' },
-  { id: 3, type: 'izin', startDate: '2025-06-05', endDate: '2025-06-05', days: 1, reason: 'Urusan administrasi', status: 'rejected', submittedAt: '4 Jun 2025', adminNote: 'Kekurangan personel, silakan ajukan ulang.' },
-];
-
 const months = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
 const formatDate = (str: string) => {
+  if (!str) return '';
   const d = new Date(str);
   return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
 };
@@ -58,10 +43,12 @@ function CreditCardIcon({ size, className }: { size: number; className?: string 
 }
 
 export function ProfilePage({ onLogout }: ProfilePageProps) {
+  const { user } = useAuth();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
-  const [requests, setRequests] = useState<LeaveRequest[]>(initialRequests);
+  const [requests, setRequests] = useState<ApiLeave[]>([]);
   const [activeSection, setActiveSection] = useState<'profile' | 'leave'>('profile');
+  const [loading, setLoading] = useState(false);
 
   // Form state
   const [leaveType, setLeaveType] = useState<LeaveType>('cuti');
@@ -71,14 +58,23 @@ export function ProfilePage({ onLogout }: ProfilePageProps) {
   const [formError, setFormError] = useState('');
   const [submitSuccess, setSubmitSuccess] = useState(false);
 
-  const employee = {
-    name: 'Dr. Rina Kusumawati', nip: '198501012010012001',
-    username: 'rina.kusumawati', email: 'rina.k@rsucl.id',
-    phone: '+62 812-3456-7890',
-    address: 'Jl. Melati No.12, Kelapa Gading, Jakarta Utara',
-    gender: 'Perempuan', joinDate: '1 Maret 2010',
-    position: 'Dokter Umum', department: 'Poli Umum & UGD', status: 'Aktif',
+  const loadLeaveRequests = async () => {
+    setLoading(true);
+    try {
+      const res = await leaveApi.list();
+      if (res.success) {
+        setRequests(res.data);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  useEffect(() => {
+    loadLeaveRequests();
+  }, []);
 
   const calcDays = () => {
     if (!startDate || !endDate) return 0;
@@ -86,7 +82,7 @@ export function ProfilePage({ onLogout }: ProfilePageProps) {
     return Math.max(1, Math.floor(diff / 86400000) + 1);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!startDate || !endDate || !reason.trim()) {
       setFormError('Semua field wajib diisi.');
       return;
@@ -95,51 +91,50 @@ export function ProfilePage({ onLogout }: ProfilePageProps) {
       setFormError('Tanggal selesai tidak boleh sebelum tanggal mulai.');
       return;
     }
-    const newReq: LeaveRequest = {
-      id: Date.now(),
-      type: leaveType,
-      startDate,
-      endDate,
-      days: calcDays(),
-      reason: reason.trim(),
-      status: 'pending',
-      submittedAt: `${new Date().getDate()} ${months[new Date().getMonth()]} ${new Date().getFullYear()}`,
-    };
-    setRequests(prev => [newReq, ...prev]);
-    setShowLeaveModal(false);
-    setStartDate(''); setEndDate(''); setReason(''); setFormError('');
-    setLeaveType('cuti');
-    setSubmitSuccess(true);
-    setActiveSection('leave');
-    setTimeout(() => setSubmitSuccess(false), 4000);
+    setFormError('');
+    try {
+      const res = await leaveApi.create({
+        type: leaveType,
+        start_date: startDate,
+        end_date: endDate,
+        reason: reason.trim(),
+      });
+      if (res.success) {
+        setRequests(prev => [res.data, ...prev]);
+        setShowLeaveModal(false);
+        setStartDate(''); setEndDate(''); setReason('');
+        setLeaveType('cuti');
+        setSubmitSuccess(true);
+        setActiveSection('leave');
+        setTimeout(() => setSubmitSuccess(false), 4000);
+      }
+    } catch (err: any) {
+      setFormError(err?.message ?? 'Gagal mengirim pengajuan cuti.');
+    }
   };
 
   const pending = requests.filter(r => r.status === 'pending').length;
 
   const infoPersonal = [
-    { icon: User,          label: 'Nama Lengkap',   value: employee.name },
-    { icon: CreditCardIcon,label: 'NIP',             value: employee.nip },
-    { icon: User,          label: 'Username',        value: employee.username },
-    { icon: Mail,          label: 'Email',            value: employee.email },
-    { icon: Phone,         label: 'Nomor HP',        value: employee.phone },
-    { icon: MapPin,        label: 'Alamat',           value: employee.address },
-    { icon: User,          label: 'Jenis Kelamin',   value: employee.gender },
+    { icon: User,          label: 'Nama Lengkap',   value: user?.name ?? '' },
+    { icon: CreditCardIcon,label: 'NIP',             value: user?.nip ?? '' },
+    { icon: User,          label: 'Username',        value: user?.username ?? '' },
+    { icon: Mail,          label: 'Email',            value: user?.email ?? '' },
+    { icon: Phone,         label: 'Nomor HP',        value: user?.phone ?? '--' },
+    { icon: User,          label: 'Jenis Kelamin',   value: user?.gender ?? '--' },
   ];
 
   const infoKerja = [
-    { icon: Calendar,  label: 'Tanggal Bergabung', value: employee.joinDate, badge: false },
-    { icon: Briefcase, label: 'Jabatan',            value: employee.position, badge: false },
-    { icon: Building2, label: 'Departemen',         value: employee.department, badge: false },
-    { icon: User,      label: 'Status Pegawai',     value: employee.status, badge: true },
+    { icon: Calendar,  label: 'Tanggal Bergabung', value: user?.join_date ? formatDate(user.join_date) : '--', badge: false },
+    { icon: Briefcase, label: 'Jabatan',            value: user?.position ?? '--', badge: false },
+    { icon: Building2, label: 'Departemen',         value: user?.department ?? '--', badge: false },
+    { icon: User,      label: 'Status Pegawai',     value: 'Aktif', badge: true },
   ];
 
   const menuItems = [
-    { icon: Edit3,  label: 'Edit Profil' },
     { icon: Lock,   label: 'Ubah Password' },
     { icon: Bell,   label: 'Pengaturan Notifikasi' },
     { icon: Globe,  label: 'Bahasa', value: 'Indonesia' },
-    { icon: Info,   label: 'Tentang Aplikasi' },
-    { icon: Shield, label: 'Kebijakan Privasi' },
   ];
 
   return (
@@ -182,25 +177,22 @@ export function ProfilePage({ onLogout }: ProfilePageProps) {
             <div className="relative flex items-center gap-4">
               <div className="relative">
                 <div className="w-16 h-16 rounded-2xl bg-white/20 border-2 border-white/40 flex items-center justify-center flex-shrink-0">
-                  <span className="text-white text-xl font-bold">RK</span>
+                  <span className="text-white text-xl font-bold">{(user?.name || 'U').charAt(0)}</span>
                 </div>
-                <button className="absolute -bottom-1 -right-1 w-5 h-5 bg-white rounded-lg flex items-center justify-center shadow-sm">
-                  <Camera size={10} className="text-[#16A34A]" />
-                </button>
               </div>
               <div className="flex-1 text-white">
-                <p className="text-[16px] font-semibold">{employee.name}</p>
-                <p className="text-[13px] text-white/80 mt-0.5">{employee.position}</p>
-                <p className="text-[12px] text-white/65 mt-0.5">{employee.department}</p>
+                <p className="text-[16px] font-semibold">{user?.name}</p>
+                <p className="text-[13px] text-white/80 mt-0.5">{user?.position}</p>
+                <p className="text-[12px] text-white/65 mt-0.5">{user?.department}</p>
               </div>
               <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-white/20 text-white border border-white/30 flex-shrink-0">
-                {employee.status}
+                Aktif
               </span>
             </div>
             <div className="relative mt-5 grid grid-cols-3 gap-2">
               {[
-                { label: 'Kehadiran', value: '96%' },
-                { label: 'Masa Kerja', value: '15 thn' },
+                { label: 'Kehadiran', value: '100%' },
+                { label: 'Status Role', value: user?.role === 'admin' ? 'Admin' : 'Karyawan' },
                 { label: 'Sisa Cuti', value: '8 hari' },
               ].map((s, i) => (
                 <div key={i} className="bg-white/15 rounded-xl p-2.5 text-center border border-white/10">
@@ -268,7 +260,7 @@ export function ProfilePage({ onLogout }: ProfilePageProps) {
             </div>
           </div>
 
-          {/* Menu */}
+          {/* Settings Menu */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-4">
             <div className="px-5 py-3.5 border-b border-gray-50">
               <p className="text-[13px] font-semibold text-gray-800">Pengaturan</p>
@@ -341,7 +333,10 @@ export function ProfilePage({ onLogout }: ProfilePageProps) {
           {/* Request list */}
           <div className="space-y-3">
             <p className="text-[13px] font-semibold text-gray-700 px-1">Riwayat Pengajuan</p>
-            {requests.length === 0 && (
+            {loading && (
+              <div className="text-center py-5 text-gray-400 text-[12px]">Memuat data pengajuan...</div>
+            )}
+            {requests.length === 0 && !loading && (
               <div className="text-center py-10 bg-white rounded-2xl border border-gray-100">
                 <FileText size={28} className="text-gray-200 mx-auto mb-2" />
                 <p className="text-[13px] text-gray-400">Belum ada pengajuan</p>
@@ -364,7 +359,7 @@ export function ProfilePage({ onLogout }: ProfilePageProps) {
                         </div>
                         <div>
                           <span className="text-[13px] font-semibold text-gray-800">{tc.label}</span>
-                          <p className="text-[11px] text-gray-400 mt-0.5">Diajukan: {req.submittedAt}</p>
+                          <p className="text-[11px] text-gray-400 mt-0.5">Diajukan: {formatDate(req.created_at)}</p>
                         </div>
                       </div>
                       <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full flex-shrink-0"
@@ -376,11 +371,11 @@ export function ProfilePage({ onLogout }: ProfilePageProps) {
                     <div className="grid grid-cols-2 gap-2 mb-3">
                       <div className="bg-gray-50 rounded-xl px-3 py-2">
                         <p className="text-[10px] text-gray-400">Tanggal Mulai</p>
-                        <p className="text-[12px] font-semibold text-gray-800 mt-0.5">{formatDate(req.startDate)}</p>
+                        <p className="text-[12px] font-semibold text-gray-800 mt-0.5">{formatDate(req.start_date)}</p>
                       </div>
                       <div className="bg-gray-50 rounded-xl px-3 py-2">
                         <p className="text-[10px] text-gray-400">Tanggal Selesai</p>
-                        <p className="text-[12px] font-semibold text-gray-800 mt-0.5">{formatDate(req.endDate)}</p>
+                        <p className="text-[12px] font-semibold text-gray-800 mt-0.5">{formatDate(req.end_date)}</p>
                       </div>
                     </div>
 
@@ -391,11 +386,11 @@ export function ProfilePage({ onLogout }: ProfilePageProps) {
                       </span>
                     </div>
 
-                    {req.adminNote && (
+                    {req.admin_note && (
                       <div className={`mt-3 px-3 py-2 rounded-xl border text-[11px] ${
                         req.status === 'approved' ? 'bg-green-50 border-green-100 text-green-700' : 'bg-red-50 border-red-100 text-red-600'
                       }`}>
-                        <span className="font-semibold">Catatan Admin:</span> {req.adminNote}
+                        <span className="font-semibold">Catatan Admin:</span> {req.admin_note}
                       </div>
                     )}
                   </div>

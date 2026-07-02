@@ -3,8 +3,7 @@ import { Eye, EyeOff, Lock, User, CreditCard, MapPin, Clock, BarChart3, Shield, 
 import logoImg from '../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
 
 interface LoginPageProps {
-  // TODO: setelah backend tersambung, password akan dikirim ke POST /api/login
-  onLogin: (password: string, nip: string, username: string) => 'ok' | 'wrong';
+  onLogin: (password: string, nip: string, username: string) => Promise<'ok' | 'wrong'>;
   onBack?: () => void;
 }
 
@@ -17,20 +16,23 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!nip.trim() || !username.trim() || !password) {
       setError('NIP, Username, dan Password wajib diisi.');
       return;
     }
     setError('');
     setIsLoading(true);
-    setTimeout(() => {
-      const result = onLogin(password, nip, username);
-      setIsLoading(false);
+    try {
+      const result = await onLogin(password, nip, username);
       if (result === 'wrong') {
         setError('NIP, Username, atau Password tidak sesuai. Hubungi administrator jika lupa akun.');
       }
-    }, 800);
+    } catch (err: any) {
+      setError(err?.message ?? 'Terjadi kesalahan sistem.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleKey = (e: React.KeyboardEvent) => {
