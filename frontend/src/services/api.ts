@@ -258,6 +258,15 @@ export interface ShiftSchedule {
   color: string;
   icon: string;
   employees_count?: number;
+  employees?: Array<{
+    id: number;
+    nip: string;
+    phone: string;
+    gender: string;
+    department?: { name: string };
+    user?: { name: string; email: string; username: string };
+    pivot?: { day_of_week?: string };
+  }>;
 }
 
 export interface EmployeeWeeklySchedule {

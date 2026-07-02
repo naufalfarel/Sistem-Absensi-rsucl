@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Sun, Sunset, Moon, Edit2, Check, X, Plus, Users, Trash2, Star, Zap, Calendar } from 'lucide-react';
-import { scheduleApi, ShiftSchedule, EmployeeWeeklySchedule } from '../../../services/api';
+import { Sun, Sunset, Moon, Edit2, Check, X, Plus, Users, Trash2, Star, Zap } from 'lucide-react';
+import { scheduleApi, employeeApi, ShiftSchedule, EmployeeWeeklySchedule } from '../../../services/api';
 
 type IconKey = 'sun' | 'sunset' | 'moon' | 'star' | 'zap';
 
@@ -218,6 +218,118 @@ function DeleteModal({ shift, onClose, onConfirm }: { shift: ShiftSchedule; onCl
   );
 }
 
+// ── Add Employee To Shift Modal ─────────────────────────────────────────
+function AddEmployeeToShiftModal({
+  onClose,
+  onAssign,
+}: {
+  onClose: () => void;
+  onAssign: (empId: number, day: string) => Promise<void>;
+}) {
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [selectedEmpId, setSelectedEmpId] = useState<number | ''>('');
+  const [selectedDay, setSelectedDay] = useState<string>('Senin');
+  const [loading, setLoading]         = useState(false);
+
+  useEffect(() => {
+    const fetchEmployees = async () => {
+      try {
+        const res = await employeeApi.list();
+        if (res.success) {
+          setEmployees(res.data);
+          if (res.data.length > 0) {
+            setSelectedEmpId(res.data[0].id);
+          }
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    fetchEmployees();
+  }, []);
+
+  const handleSubmit = async () => {
+    if (selectedEmpId === '') return;
+    setLoading(true);
+    try {
+      if (selectedDay === 'Semua Hari') {
+        const days = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+        for (const day of days) {
+          await onAssign(Number(selectedEmpId), day);
+        }
+      } else {
+        await onAssign(Number(selectedEmpId), selectedDay);
+      }
+      onClose();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl">
+        <h3 className="text-[15px] font-bold text-gray-900 mb-4">Tambah Karyawan ke Shift</h3>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-[12px] font-semibold text-gray-700 mb-1.5">Pilih Karyawan</label>
+            <select
+              value={selectedEmpId}
+              onChange={e => setSelectedEmpId(Number(e.target.value))}
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all"
+            >
+              {employees.length === 0 && <option value="">Memuat data karyawan...</option>}
+              {employees.map(emp => (
+                <option key={emp.id} value={emp.id}>
+                  {emp.name} ({emp.department || 'Tanpa Dept'})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[12px] font-semibold text-gray-700 mb-1.5">Pilih Hari Kerja</label>
+            <select
+              value={selectedDay}
+              onChange={e => setSelectedDay(e.target.value)}
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all"
+            >
+              <option value="Semua Hari">Semua Hari (Senin - Minggu)</option>
+              <option value="Senin">Senin</option>
+              <option value="Selasa">Selasa</option>
+              <option value="Rabu">Rabu</option>
+              <option value="Kamis">Kamis</option>
+              <option value="Jumat">Jumat</option>
+              <option value="Sabtu">Sabtu</option>
+              <option value="Minggu">Minggu</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="flex gap-2 mt-6">
+          <button
+            onClick={onClose}
+            disabled={loading}
+            className="flex-1 py-2.5 border border-gray-200 rounded-xl text-[13px] font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+          >
+            Batal
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={loading || selectedEmpId === ''}
+            className="flex-1 py-2.5 bg-[#16A34A] hover:bg-[#0d9240] rounded-xl text-[13px] font-semibold text-white transition-colors"
+          >
+            {loading ? 'Menyimpan...' : 'Tambahkan'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main ScheduleTab ───────────────────────────────────────────────────
 export function ScheduleTab() {
   const [shifts, setShifts]           = useState<ShiftSchedule[]>([]);
@@ -229,6 +341,10 @@ export function ScheduleTab() {
   const [showAddModal, setShowAddModal]   = useState(false);
   const [deleteTarget, setDeleteTarget]   = useState<ShiftSchedule | null>(null);
   const [loading, setLoading]         = useState(false);
+
+  // States for adding employee to shift
+  const [showAddEmpModal, setShowAddEmpModal] = useState(false);
+  const [assigningShiftId, setAssigningShiftId] = useState<number | null>(null);
 
   // Active cell popover for assigning shifts
   const [activeAssignCell, setActiveAssignCell] = useState<{ empId: number; day: string } | null>(null);
@@ -312,6 +428,19 @@ export function ScheduleTab() {
     }
   };
 
+  const handleRemoveEmployeeFromShift = async (employeeId: number, days: string[]) => {
+    if (!confirm('Apakah Anda yakin ingin menghapus penugasan shift untuk karyawan ini?')) return;
+    try {
+      for (const day of days) {
+        await scheduleApi.assignEmployeeSchedule(employeeId, day, null);
+      }
+      loadShifts();
+      loadEmployeeSchedules();
+    } catch (err: any) {
+      alert(err?.message ?? 'Gagal menghapus penugasan.');
+    }
+  };
+
   const totalDays = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
 
   const getShiftInitials = (name: string) => {
@@ -353,6 +482,8 @@ export function ScheduleTab() {
         {shifts.map(shift => {
           const IconComp = ICON_MAP[shift.icon as IconKey]?.component ?? Sun;
           const pr = getPresetByHex(shift.color);
+          const isExpanded = expandedShift === shift.id;
+
           return (
             <div key={shift.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden group">
               <div className="p-4 border-b border-gray-50">
@@ -423,14 +554,62 @@ export function ScheduleTab() {
               </div>
 
               {/* Employee list toggle */}
-              <button onClick={() => setExpandedShift(expandedShift === shift.id ? null : shift.id)}
-                className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 transition-colors">
+              <button onClick={() => setExpandedShift(isExpanded ? null : shift.id)}
+                className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 transition-colors border-b border-gray-50">
                 <div className="flex items-center gap-2">
                   <Users size={13} className="text-gray-400" />
-                  <span className="text-[12px] text-gray-500">{shift.employees_count || 0} Karyawan</span>
+                  <span className="text-[12px] text-gray-500">{shift.employees_count || 0} karyawan</span>
                 </div>
-                <span className="text-[11px] text-gray-400">{expandedShift === shift.id ? '▲' : '▼'}</span>
+                <span className="text-[11px] text-gray-400">{isExpanded ? '▲' : '▼'}</span>
               </button>
+
+              {/* Expanded Employee List */}
+              {isExpanded && (
+                <div className="p-4 bg-gray-50/50 space-y-3">
+                  <div className="space-y-2">
+                    {(() => {
+                      const distinctEmployees = Array.from(
+                        new Map(shift.employees?.map(emp => [emp.id, emp]) ?? []).values()
+                      );
+
+                      if (distinctEmployees.length === 0) {
+                        return <p className="text-[11px] text-gray-400 text-center py-2">Belum ada karyawan ditugaskan di shift ini.</p>;
+                      }
+
+                      return distinctEmployees.map(emp => {
+                        const days = shift.employees
+                          ?.filter(e => e.id === emp.id && e.pivot?.day_of_week)
+                          .map(e => e.pivot?.day_of_week) ?? [];
+
+                        return (
+                          <div key={emp.id} className="flex items-center justify-between bg-white px-3.5 py-2.5 rounded-xl border border-gray-100 shadow-sm">
+                            <div>
+                              <p className="text-[12.5px] font-bold text-gray-800">{emp.user?.name}</p>
+                              <p className="text-[10px] text-gray-400">{emp.department?.name || 'Tanpa Dept'} · {days.join(', ')}</p>
+                            </div>
+                            <button
+                              onClick={() => handleRemoveEmployeeFromShift(emp.id, days as string[])}
+                              className="text-[11px] text-red-500 hover:text-red-700 font-semibold px-2 py-1 rounded-lg hover:bg-red-50 transition-colors"
+                            >
+                              Hapus
+                            </button>
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setAssigningShiftId(shift.id);
+                      setShowAddEmpModal(true);
+                    }}
+                    className="w-full py-2 border border-dashed border-gray-200 hover:border-[#16A34A] rounded-xl text-[12px] font-semibold text-gray-500 hover:text-[#16A34A] bg-white hover:bg-green-50/10 transition-all flex items-center justify-center gap-1.5"
+                  >
+                    <Plus size={13} /> Tambah Karyawan
+                  </button>
+                </div>
+              )}
             </div>
           );
         })}
@@ -524,6 +703,18 @@ export function ScheduleTab() {
       {/* Modals */}
       {showAddModal && <AddShiftModal onClose={() => setShowAddModal(false)} onAdd={handleAdd} />}
       {deleteTarget && <DeleteModal shift={deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => handleDelete(deleteTarget.id)} />}
+      
+      {showAddEmpModal && assigningShiftId !== null && (
+        <AddEmployeeToShiftModal
+          onClose={() => {
+            setShowAddEmpModal(false);
+            setAssigningShiftId(null);
+          }}
+          onAssign={async (empId, day) => {
+            await handleAssign(empId, day, assigningShiftId);
+          }}
+        />
+      )}
     </div>
   );
 }

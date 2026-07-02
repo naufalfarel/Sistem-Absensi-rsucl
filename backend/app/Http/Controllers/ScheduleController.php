@@ -9,7 +9,7 @@ class ScheduleController extends Controller
 {
     public function index()
     {
-        $schedules = Schedule::withCount('employees')->get();
+        $schedules = Schedule::with(['employees.user', 'employees.department'])->withCount('employees')->get();
         return response()->json(['success' => true, 'data' => $schedules]);
     }
 
