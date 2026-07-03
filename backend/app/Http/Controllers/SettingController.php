@@ -60,15 +60,72 @@ class SettingController extends Controller
             'gps_radius'         => 'sometimes|integer|min:10|max:1000',
             'hospital_lat'       => 'sometimes|numeric',
             'hospital_lng'       => 'sometimes|numeric',
+            'logo_url'           => 'sometimes|string|nullable',
         ]);
 
+        if ($request->has('logo_url')) {
+            $logoInput = $request->input('logo_url');
+            if ($logoInput && str_starts_with($logoInput, 'data:image/')) {
+                // Hapus logo lama dari server storage sebelum menyimpan yang baru
+                $this->deleteOldLogo();
+                $logoPath = $this->storeBase64Logo($logoInput);
+                if ($logoPath) {
+                    Setting::set('logo_url', asset($logoPath));
+                }
+            } else if ($logoInput === '' || $logoInput === null || $logoInput === 'none') {
+                // Hapus logo lama dari server storage jika admin menekan Hapus Logo
+                $this->deleteOldLogo();
+                Setting::set('logo_url', $logoInput ?? '');
+            }
+        }
+
         foreach (self::ALLOWED_KEYS as $key) {
-            if ($request->has($key)) {
+            if ($key !== 'logo_url' && $request->has($key)) {
                 Setting::set($key, (string) $request->input($key));
             }
         }
 
         return response()->json(['success' => true, 'message' => 'Pengaturan berhasil disimpan.']);
+    }
+
+    private function deleteOldLogo(): void
+    {
+        $currentLogo = Setting::get('logo_url');
+        if ($currentLogo) {
+            // Ambil path URL
+            $parsed = parse_url($currentLogo, PHP_URL_PATH);
+            if ($parsed) {
+                // Hapus awalan "/storage/" untuk mencocokkan dengan Storage disk public
+                if (str_starts_with($parsed, '/storage/')) {
+                    $relativePath = substr($parsed, 9);
+                    if (\Illuminate\Support\Facades\Storage::disk('public')->exists($relativePath)) {
+                        \Illuminate\Support\Facades\Storage::disk('public')->delete($relativePath);
+                    }
+                }
+            }
+        }
+    }
+
+    private function storeBase64Logo(string $imgData): ?string
+    {
+        if (!preg_match('/^data:image\/(\w+);base64,/', $imgData, $type)) {
+            return null;
+        }
+        $imgData = substr($imgData, strpos($imgData, ',') + 1);
+        $type    = strtolower($type[1]); // png, jpg, jpeg, webp
+
+        if (!in_array($type, ['jpg', 'jpeg', 'png', 'webp'])) {
+            return null;
+        }
+        $decoded = base64_decode($imgData);
+        if ($decoded === false) {
+            return null;
+        }
+
+        $fileName = 'hospital_logo_' . time() . '.' . $type;
+        \Illuminate\Support\Facades\Storage::disk('public')->put('logos/' . $fileName, $decoded);
+
+        return '/storage/logos/' . $fileName;
     }
 
     private function defaults(string $key): string

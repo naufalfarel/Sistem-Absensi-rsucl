@@ -307,7 +307,7 @@ export function ReportsTab() {
                   {k.trend}
                 </div>
               </div>
-              <p className="text-[22px] font-bold text-gray-900">{k.value}</p>
+              <p className="text-[22px] font-bold text-black">{k.value}</p>
               <p className="text-[11px] text-gray-500 mt-0.5">{k.label}</p>
             </div>
           );

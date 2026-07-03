@@ -25,9 +25,26 @@ class AttendanceController extends Controller
                             ->where('date', today()->toDateString())
                             ->first();
 
+        // Cek cuti aktif hari ini
+        $todayStr = today()->toDateString();
+        $activeLeave = \App\Models\LeaveRequest::where('employee_id', $employee->id)
+            ->where('status', 'approved')
+            ->where('start_date', '<=', $todayStr)
+            ->where('end_date', '>=', $todayStr)
+            ->first();
+
+        $leaveData = null;
+        if ($activeLeave) {
+            $leaveData = [
+                'type'   => $activeLeave->type,
+                'reason' => $activeLeave->reason,
+            ];
+        }
+
         return response()->json([
             'success' => true,
             'data'    => $record ? $this->formatRecord($record) : null,
+            'active_leave' => $leaveData,
         ]);
     }
 
@@ -63,6 +80,27 @@ class AttendanceController extends Controller
         $employee = $request->user()->employee;
         if (!$employee) {
             return response()->json(['success' => false, 'message' => 'Data karyawan tidak ditemukan.'], 404);
+        }
+
+        // Cek apakah sedang dalam masa cuti/izin/sakit yang disetujui hari ini
+        $todayStr = today()->toDateString();
+        $activeLeave = \App\Models\LeaveRequest::where('employee_id', $employee->id)
+            ->where('status', 'approved')
+            ->where('start_date', '<=', $todayStr)
+            ->where('end_date', '>=', $todayStr)
+            ->first();
+
+        if ($activeLeave) {
+            $typeName = 'Cuti';
+            if ($activeLeave->type === 'izin') {
+                $typeName = 'Izin';
+            } elseif ($activeLeave->type === 'sakit') {
+                $typeName = 'Sakit';
+            }
+            return response()->json([
+                'success' => false,
+                'message' => "Check-in ditolak: Anda sedang dalam masa {$typeName} yang telah disetujui untuk hari ini.",
+            ], 422);
         }
 
         // Cek apakah sudah check-in hari ini
@@ -125,21 +163,29 @@ class AttendanceController extends Controller
                 }
             } catch (\Exception $e) {}
         }
-        $lateLimit  = Setting::get('late_limit', '08:30');   // batas tepat waktu
-        $closeLimit = Setting::get('close_checkin', '09:00'); // batas tutup absen
+        // ── Tentukan batas check-in berdasarkan shift karyawan ──────────────
+        $todayShift = $this->getEmployeeTodayShift($employee);
+        if ($todayShift) {
+            $shiftStart = substr($todayShift->start_time, 0, 5); // "HH:mm"
+            $lateLimit  = $this->addMins($shiftStart, 30);       // mulai + 30 menit
+            $closeLimit = $this->addMins($shiftStart, 60);       // mulai + 60 menit
+        } else {
+            $lateLimit  = Setting::get('late_limit',    '08:30');
+            $closeLimit = Setting::get('close_checkin', '09:00');
+        }
 
-        [$closeH, $closeM] = explode(':', $closeLimit);
-        if ($now->hour > (int)$closeH || ($now->hour === (int)$closeH && $now->minute > (int)$closeM)) {
+        $nowMins   = $now->hour * 60 + $now->minute;
+        $closeMins = $this->timeToMins($closeLimit);
+
+        if ($nowMins > $closeMins) {
             return response()->json([
                 'success' => false,
                 'message' => "Batas check-in sudah tutup pukul {$closeLimit} WIB.",
             ], 422);
         }
 
-        [$lateH, $lateM] = explode(':', $lateLimit);
-        $status = ($now->hour < (int)$lateH || ($now->hour === (int)$lateH && $now->minute <= (int)$lateM))
-                  ? 'hadir'
-                  : 'telat';
+        $lateMins = $this->timeToMins($lateLimit);
+        $status   = ($nowMins <= $lateMins) ? 'hadir' : 'telat';
 
         $imageUrl = null;
         if ($request->has('image')) {
@@ -241,27 +287,62 @@ class AttendanceController extends Controller
             } catch (\Exception $e) {}
         }
 
-        // Validasi jam minimum checkout
-        $checkoutOpen  = Setting::get('checkout_open',  '17:00');
-        $checkoutClose = Setting::get('checkout_close', '18:00');
-        [$coH, $coM]  = explode(':', $checkoutOpen);
-        [$ccH, $ccM]  = explode(':', $checkoutClose);
+        // ── Tentukan jam checkout berdasarkan shift karyawan ────────────────
+        $todayShift = $this->getEmployeeTodayShift($employee);
+        if ($todayShift) {
+            $shiftStart    = substr($todayShift->start_time, 0, 5); // "HH:mm"
+            $shiftEnd      = substr($todayShift->end_time,   0, 5); // "HH:mm"
+            $checkoutOpen  = $shiftEnd;
+            $checkoutClose = $this->addMins($shiftEnd, 60); // end + 60 menit toleransi
+            $isOvernight   = $this->timeToMins($shiftEnd) < $this->timeToMins($shiftStart);
+        } else {
+            $isSaturday = $now->isSaturday();
+            if ($isSaturday) {
+                $checkoutOpen  = Setting::get('sat_checkout_open', '13:00');
+            } else {
+                $checkoutOpen  = Setting::get('checkout_open', '17:00');
+            }
+            $checkoutClose = $this->addMins($checkoutOpen, 60); // Selalu tutup 1 jam setelah buka
+            $isOvernight   = false;
+        }
 
         $nowMins   = $now->hour * 60 + $now->minute;
-        $openMins  = (int)$coH * 60 + (int)$coM;
-        $closeMins = (int)$ccH * 60 + (int)$ccM;
+        $openMins  = $this->timeToMins($checkoutOpen);
+        $closeMins = $this->timeToMins($checkoutClose);
 
-        if ($nowMins < $openMins) {
-            return response()->json([
-                'success' => false,
-                'message' => "Check-out belum dibuka. Waktu check-out dibuka mulai pukul {$checkoutOpen} WIB.",
-            ], 422);
-        }
-        if ($nowMins > $closeMins) {
-            return response()->json([
-                'success' => false,
-                'message' => "Batas akhir check-out sudah lewat pukul {$checkoutClose} WIB.",
-            ], 422);
+        if ($isOvernight) {
+            // Shift lintas tengah malam (mis. Malam 21:00–07:00)
+            // Setelah jam mulai shift: check-out belum dibuka
+            // Setelah tengah malam hingga jam tutup: dalam window check-out
+            $startMins = $this->timeToMins(isset($shiftStart) ? $shiftStart : '21:00');
+            if ($nowMins >= $startMins) {
+                // Masih malam hari (sebelum tengah malam) → belum saatnya checkout
+                return response()->json([
+                    'success' => false,
+                    'message' => "Check-out belum dibuka. Waktu check-out shift ini dibuka pukul {$checkoutOpen} WIB (hari berikutnya).",
+                ], 422);
+            }
+            // Setelah tengah malam: cek apakah masih dalam window checkout
+            if ($nowMins > $closeMins) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Batas akhir check-out sudah lewat pukul {$checkoutClose} WIB.",
+                ], 422);
+            }
+        } else {
+            // Shift normal (tidak lintas tengah malam)
+            if ($nowMins < $openMins) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Check-out belum dibuka. Waktu check-out dibuka mulai pukul {$checkoutOpen} WIB.",
+                ], 422);
+            }
+            if ($nowMins > $closeMins) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Batas akhir check-out sudah lewat pukul {$checkoutClose} WIB.",
+                ], 422);
+            }
         }
 
         $record->update([
@@ -305,6 +386,38 @@ class AttendanceController extends Controller
     }
 
     // ── Private Helpers ───────────────────────────────────────────────
+
+    /**
+     * Konversi "HH:mm" atau "HH:mm:ss" ke menit dari tengah malam.
+     */
+    private function timeToMins(string $hhmm): int
+    {
+        [$h, $m] = explode(':', $hhmm);
+        return (int)$h * 60 + (int)$m;
+    }
+
+    /**
+     * Tambah sejumlah menit ke string "HH:mm", kembalikan "HH:mm" baru.
+     */
+    private function addMins(string $hhmm, int $mins): string
+    {
+        $total = $this->timeToMins($hhmm) + $mins;
+        return sprintf('%02d:%02d', intdiv($total, 60) % 24, $total % 60);
+    }
+
+    /**
+     * Ambil shift karyawan yang berlaku hari ini berdasarkan hari dalam seminggu.
+     * Mengembalikan Schedule model atau null jika tidak ada assignment.
+     */
+    private function getEmployeeTodayShift(\App\Models\Employee $employee): ?\App\Models\Schedule
+    {
+        $dayMap = [
+            0 => 'Minggu', 1 => 'Senin', 2 => 'Selasa',
+            3 => 'Rabu',   4 => 'Kamis', 5 => 'Jumat', 6 => 'Sabtu',
+        ];
+        $todayName = $dayMap[now('Asia/Jakarta')->dayOfWeek];
+        return $employee->schedules()->wherePivot('day_of_week', $todayName)->first();
+    }
 
     /**
      * Rumus Haversine — mengembalikan jarak dalam meter.

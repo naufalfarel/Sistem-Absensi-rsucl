@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import {
   LayoutDashboard, Users, ClipboardList, History, CalendarDays, FileText,
   Bell, Settings, LogOut, UserCheck, Clock, AlertCircle,
@@ -49,6 +50,7 @@ interface AdminAppProps {
 }
 
 export function AdminApp({ onLogout }: AdminAppProps) {
+  const { logoUrl } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -264,9 +266,11 @@ export function AdminApp({ onLogout }: AdminAppProps) {
     <div className="flex flex-col h-full bg-white">
       <div className="px-5 py-5 border-b border-gray-100">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-white border border-gray-100 shadow-sm flex items-center justify-center flex-shrink-0 overflow-hidden">
-            <img src={logoImg} alt="Logo RSUCL" className="w-8 h-8 object-contain" />
-          </div>
+          {logoUrl !== 'none' && (
+            <div className="w-9 h-9 rounded-xl bg-white border border-gray-100 shadow-sm flex items-center justify-center flex-shrink-0 overflow-hidden">
+              <img src={logoUrl || logoImg} alt="Logo RSUCL" className="w-8 h-8 object-contain" />
+            </div>
+          )}
           <div>
             <p className="text-[13px] font-semibold text-gray-900 leading-tight">RSUCL Admin</p>
             <p className="text-[10px] text-gray-400">Sistem Absensi</p>
@@ -430,7 +434,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
                   { label: 'Cuti', value: employees.filter(e => e.today_attendance?.status === 'izin' || e.today_attendance?.status === 'sakit').length, color: '#2563EB' },
                 ].map((s, i) => (
                   <div key={i} className="bg-white rounded-xl border border-gray-100 px-3 py-2.5 text-center shadow-sm">
-                    <p className="text-[18px] font-bold" style={{ color: s.color }}>{s.value}</p>
+                    <p className="text-[18px] font-bold text-black">{s.value}</p>
                     <p className="text-[11px] text-gray-400">{s.label}</p>
                   </div>
                 ))}

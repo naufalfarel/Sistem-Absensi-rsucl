@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import { Eye, EyeOff, Lock, User, CreditCard, MapPin, Clock, BarChart3, Shield, AlertCircle, ArrowLeft } from 'lucide-react';
 import logoImg from '../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
 
@@ -8,6 +9,7 @@ interface LoginPageProps {
 }
 
 export function LoginPage({ onLogin, onBack }: LoginPageProps) {
+  const { logoUrl } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [nip, setNip] = useState('');
   const [username, setUsername] = useState('');
@@ -59,9 +61,11 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
 
           {/* Logo & title */}
           <div className="flex items-center gap-3 mb-8">
-            <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center shadow-md border border-gray-100 flex-shrink-0 overflow-hidden">
-              <img src={logoImg} alt="Logo RSUCL" className="w-11 h-11 object-contain" />
-            </div>
+            {logoUrl !== 'none' && (
+              <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center shadow-md border border-gray-100 flex-shrink-0 overflow-hidden">
+                <img src={logoUrl || logoImg} alt="Logo RSUCL" className="w-11 h-11 object-contain" />
+              </div>
+            )}
             <div>
               <div className="text-[15px] font-semibold text-gray-900 leading-tight">Sistem Absensi Karyawan</div>
               <div className="text-xs text-gray-500 mt-0.5">Rumah Sakit Umum Cempaka Lima</div>
@@ -193,7 +197,7 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
         <div className="relative flex flex-col items-center justify-center flex-1 p-12 text-white">
           <div className="mb-7 flex items-center justify-center">
             <div className="w-32 h-32 rounded-3xl bg-white/20 backdrop-blur-sm border-2 border-white/30 flex items-center justify-center shadow-2xl">
-              <img src={logoImg} alt="Logo RSUCL" className="w-24 h-24 object-contain drop-shadow-lg" />
+              <img src={logoUrl || logoImg} alt="Logo RSUCL" className="w-24 h-24 object-contain drop-shadow-lg" />
             </div>
           </div>
           <h2 className="text-2xl font-bold text-center mb-2">Absensi Digital RSUCL</h2>

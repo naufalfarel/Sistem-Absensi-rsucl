@@ -86,6 +86,7 @@ export interface AuthUser {
   phone?: string;
   gender?: string;
   join_date?: string;
+  profile_picture?: string | null;
 }
 
 export const authApi = {
@@ -98,7 +99,13 @@ export const authApi = {
 };
 
 export const profileApi = {
-  update: (data: { password?: string; profile_picture?: string | null }) =>
+  update: (data: {
+    name?: string;
+    email?: string;
+    password?: string;
+    old_password?: string;
+    profile_picture?: string | null;
+  }) =>
     api.put<{ success: boolean; message: string; data: AuthUser }>('/profile', data),
 };
 
@@ -155,7 +162,11 @@ export interface AttendanceRecord {
 }
 
 export const attendanceApi = {
-  today:    () => api.get<{ success: boolean; data: AttendanceRecord | null }>('/attendance/today'),
+  today:    () => api.get<{
+    success: boolean;
+    data: AttendanceRecord | null;
+    active_leave?: { type: 'cuti' | 'izin' | 'sakit'; reason: string } | null;
+  }>('/attendance/today'),
   allToday: () => api.get<{ success: boolean; data: AttendanceRecord[] }>('/attendance/all-today'),
   history:  () => api.get<{ success: boolean; data: AttendanceRecord[] }>('/attendance/history'),
   checkIn:  (lat?: number, lng?: number, accuracy?: number, image?: string, simulatedTime?: string) =>
@@ -294,6 +305,15 @@ export interface EmployeeWeeklySchedule {
   }>;
 }
 
+export interface MyShiftSchedule {
+  id: number;
+  name: string;
+  start_time: string; // "HH:mm:ss" or "HH:mm"
+  end_time: string;
+  color: string;
+  icon: string;
+}
+
 export const scheduleApi = {
   list:   ()                               => api.get<{ success: boolean; data: ShiftSchedule[] }>('/schedules'),
   create: (data: Omit<ShiftSchedule, 'id' | 'employees_count'>) =>
@@ -304,4 +324,7 @@ export const scheduleApi = {
   getEmployeeSchedules: () => api.get<{ success: boolean; data: EmployeeWeeklySchedule[] }>('/employee-schedules'),
   assignEmployeeSchedule: (employee_id: number, day_of_week: string, schedule_id: number | null) =>
     api.post<{ success: boolean; message: string }>('/employee-schedules/assign', { employee_id, day_of_week, schedule_id }),
+  /** Jadwal shift milik karyawan yang sedang login untuk hari ini */
+  mySchedule: () => api.get<{ success: boolean; data: MyShiftSchedule | null; day: string }>('/my-schedule'),
 };
+

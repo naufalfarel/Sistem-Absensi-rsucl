@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Home, MapPin, History, Bell, User, LogOut, Menu, X } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 import logoImg from '../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
 import { DashboardHome } from './DashboardHome';
 import { AttendancePage } from './AttendancePage';
@@ -16,6 +17,7 @@ interface EmployeeAppProps {
 }
 
 export function EmployeeApp({ onLogout, employee }: EmployeeAppProps) {
+  const { logoUrl } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [time, setTime] = useState(new Date());
@@ -69,9 +71,11 @@ export function EmployeeApp({ onLogout, employee }: EmployeeAppProps) {
       {/* Logo */}
       <div className="px-5 pt-6 pb-5 border-b border-gray-100">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center border border-gray-100 shadow-sm flex-shrink-0 overflow-hidden">
-            <img src={logoImg} alt="Logo RSUCL" className="w-9 h-9 object-contain" />
-          </div>
+          {logoUrl !== 'none' && (
+            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center border border-gray-100 shadow-sm flex-shrink-0 overflow-hidden">
+              <img src={logoUrl || logoImg} alt="Logo RSUCL" className="w-9 h-9 object-contain" />
+            </div>
+          )}
           <div>
             <p className="text-[14px] font-semibold text-gray-900">RSUCL</p>
             <p className="text-[11px] text-gray-400">Sistem Absensi</p>
@@ -92,7 +96,7 @@ export function EmployeeApp({ onLogout, employee }: EmployeeAppProps) {
               {employee?.name?.split(' ').slice(0, 2).join(' ') || 'User'}
             </p>
             <p className="text-[11px] text-gray-500 truncate">
-              {employee?.pos || 'Karyawan'} · Reguler
+              {employee?.pos || 'Karyawan'} · {employee?.dept || 'RSUCL'}
             </p>
           </div>
         </div>
@@ -156,7 +160,7 @@ export function EmployeeApp({ onLogout, employee }: EmployeeAppProps) {
 
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
-        <div className="md:hidden fixed inset-0 z-50 flex">
+        <div className="md:hidden fixed inset-0 z-[9999] flex">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
           <div className="relative w-72 h-full shadow-2xl">
             <SidebarContent mobile />
@@ -182,9 +186,11 @@ export function EmployeeApp({ onLogout, employee }: EmployeeAppProps) {
               <Menu size={16} className="text-gray-600" />
             </button>
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center overflow-hidden">
-                <img src={logoImg} alt="Logo RSUCL" className="w-6 h-6 object-contain" />
-              </div>
+              {logoUrl !== 'none' && (
+                <div className="w-7 h-7 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center overflow-hidden">
+                  <img src={logoUrl || logoImg} alt="Logo RSUCL" className="w-6 h-6 object-contain" />
+                </div>
+              )}
               <p className="text-[14px] font-semibold text-gray-900">
                 {navItems.find(n => n.id === activeTab)?.label}
               </p>

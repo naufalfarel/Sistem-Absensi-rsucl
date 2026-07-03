@@ -79,6 +79,56 @@ class ScheduleController extends Controller
         return response()->json(['success' => true, 'data' => $data]);
     }
 
+    /**
+     * GET /api/my-schedule
+     * Jadwal shift karyawan yang login untuk hari ini berdasarkan hari dalam seminggu.
+     */
+    public function mySchedule(\Illuminate\Http\Request $request)
+    {
+        $employee = $request->user()->employee;
+        if (!$employee) {
+            return response()->json(['success' => false, 'message' => 'Data karyawan tidak ditemukan.'], 404);
+        }
+
+        // Nama hari dalam bahasa Indonesia sesuai pivot day_of_week
+        $dayMap = [
+            0 => 'Minggu',
+            1 => 'Senin',
+            2 => 'Selasa',
+            3 => 'Rabu',
+            4 => 'Kamis',
+            5 => 'Jumat',
+            6 => 'Sabtu',
+        ];
+        $todayName = $dayMap[now('Asia/Jakarta')->dayOfWeek];
+
+        // Cari jadwal berdasarkan hari ini
+        $schedule = $employee->schedules()
+            ->wherePivot('day_of_week', $todayName)
+            ->first();
+
+        if (!$schedule) {
+            return response()->json([
+                'success' => true,
+                'data'    => null,
+                'day'     => $todayName,
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'day'     => $todayName,
+            'data'    => [
+                'id'         => $schedule->id,
+                'name'       => $schedule->name,
+                'start_time' => $schedule->start_time,
+                'end_time'   => $schedule->end_time,
+                'color'      => $schedule->color,
+                'icon'       => $schedule->icon,
+            ],
+        ]);
+    }
+
     public function assignEmployeeSchedule(Request $request)
     {
         $data = $request->validate([

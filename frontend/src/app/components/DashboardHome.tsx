@@ -1,7 +1,13 @@
 import { useState, useEffect } from 'react';
 import { CheckCircle2, Clock, Stethoscope, MapPin, Calendar, ChevronRight, Bell, TrendingUp, Users, Activity } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { attendanceApi, AttendanceRecord, notificationApi, AppNotification } from '../../services/api';
+import { attendanceApi, AttendanceRecord, notificationApi, AppNotification, scheduleApi, MyShiftSchedule } from '../../services/api';
+
+/** Format "HH:mm:ss" atau "HH:mm" menjadi "HH:mm" */
+function fmtTime(t: string | undefined | null): string {
+  if (!t) return '--:--';
+  return t.substring(0, 5);
+}
 
 export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => void }) {
   const { user } = useAuth();
@@ -9,6 +15,8 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
   const [todayRecord, setTodayRecord] = useState<AttendanceRecord | null>(null);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadNotifsCount, setUnreadNotifsCount] = useState(0);
+  const [todayShift, setTodayShift] = useState<MyShiftSchedule | null | undefined>(undefined); // undefined = loading
+  const [shiftDay, setShiftDay] = useState<string>('');
 
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
@@ -17,17 +25,28 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
 
   const fetchDashboardData = async () => {
     try {
-      const attendRes = await attendanceApi.today();
-      if (attendRes.success) {
-        setTodayRecord(attendRes.data);
+      const [attendRes, notifRes, shiftRes] = await Promise.allSettled([
+        attendanceApi.today(),
+        notificationApi.list(),
+        scheduleApi.mySchedule(),
+      ]);
+
+      if (attendRes.status === 'fulfilled' && attendRes.value.success) {
+        setTodayRecord(attendRes.value.data);
       }
-      const notifRes = await notificationApi.list();
-      if (notifRes.success) {
-        setNotifications(notifRes.data.notifications.slice(0, 3));
-        setUnreadNotifsCount(notifRes.data.unread_count);
+      if (notifRes.status === 'fulfilled' && notifRes.value.success) {
+        setNotifications(notifRes.value.data.notifications.slice(0, 3));
+        setUnreadNotifsCount(notifRes.value.data.unread_count);
+      }
+      if (shiftRes.status === 'fulfilled' && shiftRes.value.success) {
+        setTodayShift(shiftRes.value.data); // null jika tidak ada jadwal hari ini
+        setShiftDay(shiftRes.value.day ?? '');
+      } else {
+        setTodayShift(null);
       }
     } catch (err) {
       console.error('Error loading dashboard data:', err);
+      setTodayShift(null);
     }
   };
 
@@ -41,7 +60,13 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
   const dateStr = `${days[time.getDay()]}, ${time.getDate()} ${months[time.getMonth()]} ${time.getFullYear()}`;
   const timeStr = time.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-  // Map today's attendance status
+  // ── Shift display helpers ──────────────────────────────────────────────
+  const shiftName       = todayShift ? `Shift ${todayShift.name}` : todayShift === null ? 'Tidak Ada Shift' : 'Memuat…';
+  const shiftStartTime  = fmtTime(todayShift?.start_time);
+  const shiftEndTime    = fmtTime(todayShift?.end_time);
+  const shiftRange      = todayShift ? `${shiftStartTime} – ${shiftEndTime} WIB` : todayShift === null ? 'Tidak ada jadwal hari ini' : '';
+
+  // ── Stat card helpers ───────────────────────────────────────────────────
   const getStatusLabel = () => {
     if (!todayRecord) return 'Belum Absen';
     const statusMap: Record<string, string> = {
@@ -94,15 +119,26 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
       badgeBg: todayRecord?.check_in ? (todayRecord.status === 'telat' ? '#FEF3C7' : '#DBEAFE') : '#F3F4F6',
     },
     {
+      icon: Clock,
+      label: 'Jam Keluar',
+      value: todayRecord?.check_out ? todayRecord.check_out.substring(0, 5) : '--:--',
+      sub: 'WIB',
+      color: '#DC2626',
+      bg: '#FFF1F2',
+      badge: todayRecord?.check_out ? 'Selesai' : (todayRecord?.check_in ? 'Belum Pulang' : 'Belum Absen'),
+      badgeColor: todayRecord?.check_out ? '#16A34A' : (todayRecord?.check_in ? '#EA580C' : '#9CA3AF'),
+      badgeBg: todayRecord?.check_out ? '#DCFCE7' : (todayRecord?.check_in ? '#FFF7ED' : '#F3F4F6'),
+    },
+    {
       icon: Stethoscope,
       label: 'Shift Kerja',
-      value: 'Reguler',
-      sub: '08:00 – 17:00',
+      value: todayShift === undefined ? 'Memuat…' : (todayShift ? todayShift.name : 'Tidak Ada'),
+      sub: todayShift ? `${shiftStartTime} – ${shiftEndTime}` : 'Hari ini',
       color: '#7C3AED',
       bg: '#F5F3FF',
-      badge: 'Aktif',
-      badgeColor: '#7C3AED',
-      badgeBg: '#EDE9FE',
+      badge: todayShift ? 'Aktif' : (todayShift === null ? 'Libur' : '…'),
+      badgeColor: todayShift ? '#7C3AED' : '#9CA3AF',
+      badgeBg: todayShift ? '#EDE9FE' : '#F3F4F6',
     },
     {
       icon: MapPin,
@@ -127,13 +163,13 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
           <p className="text-[13px] text-gray-500 mt-0.5">{user?.position} · {user?.department}</p>
         </div>
         <div className="text-right hidden sm:block">
-          <div className="text-2xl font-mono font-semibold text-gray-800 tracking-tight">{timeStr}</div>
+          <div className="text-2xl font-mono font-semibold text-black tracking-tight">{timeStr}</div>
           <div className="text-[12px] text-gray-400 mt-0.5">Waktu Indonesia Barat</div>
         </div>
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
         {stats.map((s, i) => (
           <div key={i} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
             <div className="flex items-start justify-between mb-3">
@@ -162,38 +198,93 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
             <span className="text-[12px] text-gray-400">{dateStr}</span>
           </div>
           <div className="p-5 space-y-3">
-            {/* Shift badge */}
-            <div className="flex items-center gap-3 p-3.5 rounded-xl bg-green-50 border border-green-100">
-              <div className="w-9 h-9 rounded-xl bg-[#16A34A] flex items-center justify-center flex-shrink-0">
-                <Clock size={16} className="text-white" />
+            {todayShift === undefined ? (
+              /* Loading state */
+              <div className="flex items-center gap-3 p-3.5 rounded-xl bg-gray-50 border border-gray-100 animate-pulse">
+                <div className="w-9 h-9 rounded-xl bg-gray-200 flex-shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-3 bg-gray-200 rounded w-32" />
+                  <div className="h-3 bg-gray-200 rounded w-48" />
+                </div>
               </div>
-              <div className="flex-1">
-                <p className="text-[13px] font-semibold text-gray-800">Shift Reguler</p>
-                <p className="text-[12px] text-gray-500 mt-0.5">Senin – Jumat · 08:00 – 17:00 WIB</p>
+            ) : todayShift === null ? (
+              /* No shift assigned */
+              <div className="flex items-center gap-3 p-3.5 rounded-xl bg-gray-50 border border-gray-100">
+                <div className="w-9 h-9 rounded-xl bg-gray-200 flex items-center justify-center flex-shrink-0">
+                  <Calendar size={16} className="text-gray-400" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-[13px] font-semibold text-gray-500">Tidak Ada Jadwal Shift</p>
+                  <p className="text-[12px] text-gray-400 mt-0.5">{shiftDay} · Tidak ada shift yang ditugaskan</p>
+                </div>
+                <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-gray-500">Libur</span>
               </div>
-              <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-[#16A34A] text-white">Aktif</span>
-            </div>
+            ) : (
+              /* Shift badge */
+              <div className="flex items-center gap-3 p-3.5 rounded-xl border" style={{ background: todayShift.color + '15', borderColor: todayShift.color + '30' }}>
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: todayShift.color }}>
+                  <Clock size={16} className="text-white" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-[13px] font-semibold text-gray-800">{shiftName}</p>
+                  <p className="text-[12px] text-gray-500 mt-0.5">{shiftDay} · {shiftRange}</p>
+                </div>
+                <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full text-white" style={{ background: todayShift.color }}>Aktif</span>
+              </div>
+            )}
 
             {/* Time blocks */}
-            <div className="grid grid-cols-3 gap-2.5">
-              {[
-                { label: 'Jam Masuk',    value: '08:00', sub: 'WIB', color: '#16A34A', bg: '#F0FDF4' },
-                { label: 'Istirahat',    value: '12:30', sub: '– 13:30', color: '#16A34A', bg: '#F0FDF4' },
-                { label: 'Jam Pulang',   value: '17:00', sub: 'WIB', color: '#16A34A', bg: '#F0FDF4' },
-              ].map((b, i) => (
-                <div key={i} className="rounded-xl p-3 text-center" style={{ background: b.bg }}>
-                  <p className="text-[10px] text-gray-400 mb-1">{b.label}</p>
-                  <p className="text-[17px] font-bold font-mono" style={{ color: b.color }}>{b.value}</p>
-                  <p className="text-[10px] text-gray-400 mt-0.5">{b.sub}</p>
-                </div>
-              ))}
-            </div>
+            {todayShift !== undefined && (
+              <div className="grid grid-cols-3 gap-2.5">
+                {[
+                  {
+                    label: 'Jam Masuk',
+                    value: todayShift ? shiftStartTime : '--:--',
+                    sub: todayShift ? 'WIB' : '—',
+                    color: todayShift ? '#000000' : '#9CA3AF',
+                    bg: todayShift ? '#F0FDF4' : '#F9FAFB',
+                  },
+                  {
+                    label: 'Check-In Aktual',
+                    value: todayRecord?.check_in ? todayRecord.check_in.substring(0, 5) : '--:--',
+                    sub: todayRecord?.check_in ? (todayRecord.status === 'telat' ? 'Terlambat' : 'Tepat Waktu') : 'Belum Absen',
+                    color: todayRecord?.check_in ? '#000000' : '#9CA3AF',
+                    bg: todayRecord?.check_in ? (todayRecord.status === 'telat' ? '#FFFBEB' : '#F0FDF4') : '#F9FAFB',
+                  },
+                  {
+                    label: 'Jam Pulang',
+                    value: todayShift ? shiftEndTime : '--:--',
+                    sub: todayShift ? 'WIB' : '—',
+                    color: todayShift ? '#000000' : '#9CA3AF',
+                    bg: todayShift ? '#F0FDF4' : '#F9FAFB',
+                  },
+                ].map((b, i) => (
+                  <div key={i} className="rounded-xl p-3 text-center" style={{ background: b.bg }}>
+                    <p className="text-[10px] text-gray-400 mb-1">{b.label}</p>
+                    <p className="text-[17px] font-bold font-mono" style={{ color: b.color }}>{b.value}</p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">{b.sub}</p>
+                  </div>
+                ))}
+              </div>
+            )}
 
-            {/* Makan siang note */}
-            <div className="flex items-center gap-2.5 px-3.5 py-2.5 bg-amber-50 border border-amber-100 rounded-xl">
-              <span className="text-base">🍽️</span>
-              <p className="text-[12px] text-amber-700">Makan siang disediakan di kantor · 12:30 – 13:30</p>
-            </div>
+            {/* Check-out info */}
+            {todayRecord?.check_out && (
+              <div className="flex items-center gap-2.5 px-3.5 py-2.5 bg-green-50 border border-green-100 rounded-xl">
+                <span className="text-base">✅</span>
+                <p className="text-[12px] text-green-700">
+                  Check-out tercatat pukul <strong>{todayRecord.check_out.substring(0, 5)} WIB</strong>. Absensi hari ini selesai.
+                </p>
+              </div>
+            )}
+
+            {/* No shift note */}
+            {todayShift === null && (
+              <div className="flex items-center gap-2.5 px-3.5 py-2.5 bg-gray-50 border border-gray-100 rounded-xl">
+                <span className="text-base">📋</span>
+                <p className="text-[12px] text-gray-500">Belum ada shift yang ditugaskan untuk hari ini. Hubungi admin untuk pengaturan jadwal.</p>
+              </div>
+            )}
           </div>
         </div>
 

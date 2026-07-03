@@ -23,6 +23,7 @@ use App\Http\Controllers\SettingController;
 
 // ── Public (tanpa token) ──────────────────────────────────────────────
 Route::post('/login', [AuthController::class, 'login']);
+Route::get('/settings', [SettingController::class, 'index']);
 
 // ── Protected (perlu token) ───────────────────────────────────────────
 Route::middleware('auth:sanctum')->group(function () {
@@ -47,8 +48,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/leave-requests',  [LeaveRequestController::class, 'index']);
     Route::post('/leave-requests', [LeaveRequestController::class, 'store']);
 
-    // Pengaturan (GET bisa diakses karyawan untuk sync radius/shift, PUT hanya admin)
-    Route::get('/settings',  [SettingController::class, 'index']);
+
+
+    // Jadwal shift karyawan yang sedang login (hari ini)
+    Route::get('/my-schedule', [ScheduleController::class, 'mySchedule']);
 
     // ── Admin only ────────────────────────────────────────────────────
     Route::middleware(\App\Http\Middleware\EnsureIsAdmin::class)->group(function () {

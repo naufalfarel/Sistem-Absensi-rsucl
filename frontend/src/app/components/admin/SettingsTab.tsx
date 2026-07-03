@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   User, Mail, Lock, Eye, EyeOff, CheckCircle2, Save, Shield, MapPin, Clock,
-  Bell, ToggleLeft, ToggleRight, Power, Upload, RotateCcw, AlertTriangle, ImageIcon,
+  Bell, ToggleLeft, ToggleRight, Power, Upload, RotateCcw, AlertTriangle, ImageIcon, Trash2,
 } from 'lucide-react';
 import logoImg from '../../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
-import { settingApi } from '../../../services/api';
+import { settingApi, profileApi } from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
 
 // ── System Status Modal ────────────────────────────────────────────────
@@ -62,7 +62,7 @@ const Toggle = ({ value, onChange }: { value: boolean; onChange: () => void }) =
 
 // ── Main SettingsTab ───────────────────────────────────────────────────
 export function SettingsTab() {
-  const { user } = useAuth();
+  const { user, logoUrl, refreshLogo, refreshUser } = useAuth();
   // ── Account ──
   const [name, setName]               = useState('Super Admin');
   const [email, setEmail]             = useState('admin@rsucl.id');
@@ -84,7 +84,6 @@ export function SettingsTab() {
 
   // ── System Config ──
   const [radius, setRadius]   = useState('100');
-  const [maxLate, setMaxLate] = useState('09:00');
   const [hospLat, setHospLat] = useState('5.552740480177099');
   const [hospLng, setHospLng] = useState('95.33486560781716');
   const [configSaved, setConfigSaved] = useState(false);
@@ -99,6 +98,14 @@ export function SettingsTab() {
   const [logoSaved, setLogoSaved]     = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    if (logoUrl) {
+      setLogoPreview(logoUrl);
+    } else {
+      setLogoPreview(logoImg);
+    }
+  }, [logoUrl]);
+
   // ── Load Settings from API ──
   const loadSettings = async () => {
     try {
@@ -106,7 +113,6 @@ export function SettingsTab() {
       if (res.success) {
         setSystemActive(res.data.system_active === '1');
         setRadius(res.data.gps_radius);
-        setMaxLate(res.data.close_checkin);
         if (res.data.hospital_lat) setHospLat(res.data.hospital_lat);
         if (res.data.hospital_lng) setHospLng(res.data.hospital_lng);
       }
@@ -124,15 +130,41 @@ export function SettingsTab() {
   }, [user]);
 
   // ── Handlers ──
-  const saveProfile = () => { setProfileSaved(true); setTimeout(() => setProfileSaved(false), 3000); };
+  const saveProfile = async () => {
+    setProfileSaved(false);
+    try {
+      const res = await profileApi.update({ name, email });
+      if (res.success) {
+        setProfileSaved(true);
+        await refreshUser();
+        setTimeout(() => setProfileSaved(false), 3000);
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert(err?.message ?? 'Gagal memperbarui profil.');
+    }
+  };
 
-  const savePassword = () => {
+  const savePassword = async () => {
     setPassError('');
+    setPassSaved(false);
     if (!oldPass || !newPass || !confirmPass) { setPassError('Semua field wajib diisi.'); return; }
     if (newPass !== confirmPass) { setPassError('Password baru tidak cocok.'); return; }
     if (newPass.length < 6) { setPassError('Password minimal 6 karakter.'); return; }
-    setOldPass(''); setNewPass(''); setConfirmPass('');
-    setPassSaved(true); setTimeout(() => setPassSaved(false), 3000);
+    
+    try {
+      const res = await profileApi.update({ password: newPass, old_password: oldPass });
+      if (res.success) {
+        setOldPass('');
+        setNewPass('');
+        setConfirmPass('');
+        setPassSaved(true);
+        setTimeout(() => setPassSaved(false), 3000);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setPassError(err?.message ?? 'Gagal memperbarui password.');
+    }
   };
 
   const handleLogoFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -146,13 +178,57 @@ export function SettingsTab() {
     reader.readAsDataURL(file);
   };
 
-  const saveLogo = () => {
-    setLogoSaved(true); setTimeout(() => setLogoSaved(false), 3000);
+  const saveLogo = async () => {
+    if (!logoFile) return;
+    try {
+      const reader = new FileReader();
+      reader.onload = async ev => {
+        const base64 = ev.target?.result as string;
+        const res = await settingApi.update({ logo_url: base64 });
+        if (res.success) {
+          setLogoSaved(true);
+          setLogoFile(null);
+          await refreshLogo();
+          setTimeout(() => setLogoSaved(false), 3000);
+        }
+      };
+      reader.readAsDataURL(logoFile);
+    } catch (err) {
+      console.error(err);
+      alert('Gagal menyimpan logo.');
+    }
   };
 
-  const resetLogo = () => {
-    setLogoPreview(logoImg); setLogoFile(null); setLogoSaved(false);
-    if (fileRef.current) fileRef.current.value = '';
+  const deleteLogo = async () => {
+    try {
+      const res = await settingApi.update({ logo_url: 'none' });
+      if (res.success) {
+        setLogoPreview('none');
+        setLogoFile(null);
+        setLogoSaved(false);
+        if (fileRef.current) fileRef.current.value = '';
+        await refreshLogo();
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Gagal menghapus logo.');
+    }
+  };
+
+  const restoreDefaultLogo = async () => {
+    try {
+      const res = await settingApi.update({ logo_url: '' });
+      if (res.success) {
+        setLogoPreview(logoImg);
+        setLogoFile(null);
+        setLogoSaved(false);
+        if (fileRef.current) fileRef.current.value = '';
+        await refreshLogo();
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Gagal mengembalikan logo bawaan.');
+    }
   };
 
   const confirmStatusToggle = async () => {
@@ -174,7 +250,6 @@ export function SettingsTab() {
     try {
       const res = await settingApi.update({
         gps_radius: radius,
-        close_checkin: maxLate,
         hospital_lat: hospLat,
         hospital_lng: hospLng,
       });
@@ -224,7 +299,14 @@ export function SettingsTab() {
           <div className="flex items-center gap-5">
             {/* Preview */}
             <div className="relative w-24 h-24 rounded-2xl border-2 border-dashed border-gray-200 flex items-center justify-center bg-gray-50 flex-shrink-0 overflow-hidden">
-              <img src={logoPreview} alt="Logo RS" className="w-20 h-20 object-contain rounded-xl" />
+              {logoPreview === 'none' ? (
+                <div className="flex flex-col items-center justify-center text-gray-300">
+                  <ImageIcon size={24} />
+                  <span className="text-[10px] text-gray-400 mt-1">Tanpa Logo</span>
+                </div>
+              ) : (
+                <img src={logoPreview} alt="Logo RS" className="w-20 h-20 object-contain rounded-xl" />
+              )}
               {logoFile && (
                 <div className="absolute top-1 right-1 w-5 h-5 bg-[#16A34A] rounded-full flex items-center justify-center">
                   <CheckCircle2 size={11} className="text-white" />
@@ -236,7 +318,13 @@ export function SettingsTab() {
               <div>
                 <p className="text-[12px] font-medium text-gray-700 mb-0.5">Logo saat ini</p>
                 <p className="text-[11px] text-gray-400">
-                  {logoFile ? logoFile.name : 'Logo bawaan RSUCL'}
+                  {logoFile
+                    ? logoFile.name
+                    : logoUrl === 'none'
+                    ? 'Tanpa Logo (Kosong)'
+                    : logoUrl
+                    ? 'Logo Kustom'
+                    : 'Logo bawaan RSUCL'}
                 </p>
                 <p className="text-[10px] text-gray-300 mt-0.5">Format: PNG, JPG, WebP · Maks 2MB</p>
               </div>
@@ -255,26 +343,51 @@ export function SettingsTab() {
                   onChange={handleLogoFile}
                 />
               </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={saveLogo}
-                  disabled={!logoFile && !logoSaved}
-                  className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[12px] font-semibold transition-all ${
-                    logoSaved
-                      ? 'bg-green-50 text-[#16A34A] border border-green-200'
-                      : logoFile
-                      ? 'bg-[#16A34A] text-white hover:bg-[#0d9240] shadow-sm shadow-green-200'
-                      : 'bg-gray-100 text-gray-300 cursor-not-allowed'
-                  }`}
-                >
-                  {logoSaved ? <><CheckCircle2 size={13} /> Tersimpan!</> : <><Save size={13} /> Simpan Logo</>}
-                </button>
-                <button
-                  onClick={resetLogo}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[12px] font-medium text-gray-500 hover:bg-gray-100 border border-gray-200 transition-all"
-                >
-                  <RotateCcw size={13} /> Reset
-                </button>
+               <div className="flex gap-2">
+                {logoFile ? (
+                  <>
+                    <button
+                      onClick={saveLogo}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[12px] font-semibold bg-[#16A34A] text-white hover:bg-[#0d9240] transition-all shadow-sm shadow-green-200"
+                    >
+                      <Save size={13} /> Simpan Logo
+                    </button>
+                    <button
+                      onClick={() => {
+                        setLogoFile(null);
+                        setLogoPreview(logoUrl || logoImg);
+                        if (fileRef.current) fileRef.current.value = '';
+                      }}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[12px] font-medium text-gray-500 hover:bg-gray-100 border border-gray-200 transition-all"
+                    >
+                      Batal Pilihan
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      disabled
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[12px] font-semibold bg-gray-100 text-gray-300 cursor-not-allowed"
+                    >
+                      <Save size={13} /> Simpan Logo
+                    </button>
+                    {logoUrl === 'none' ? (
+                      <button
+                        onClick={restoreDefaultLogo}
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[12px] font-medium text-gray-600 hover:bg-gray-50 border border-gray-200 transition-all"
+                      >
+                        <RotateCcw size={13} /> Kembalikan Bawaan
+                      </button>
+                    ) : (
+                      <button
+                        onClick={deleteLogo}
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[12px] font-medium text-red-600 hover:bg-red-50 border border-red-200 transition-all"
+                      >
+                        <Trash2 size={13} /> Hapus Logo
+                      </button>
+                    )}
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -404,15 +517,6 @@ export function SettingsTab() {
                 className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all" />
             </div>
             <p className="text-[11px] text-gray-400 mt-1">Karyawan hanya dapat absen dalam radius {radius}m dari RSUCL</p>
-          </div>
-          <div>
-            <label className="block text-[12px] font-medium text-gray-600 mb-1.5">Batas Maksimal Check-In</label>
-            <div className="relative">
-              <Clock size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input type="time" value={maxLate} onChange={e => setMaxLate(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all" />
-            </div>
-            <p className="text-[11px] text-gray-400 mt-1">Setelah pukul {maxLate} karyawan tidak dapat melakukan check-in</p>
           </div>
 
           {/* Koordinat RS */}

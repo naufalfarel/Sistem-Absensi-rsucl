@@ -118,11 +118,29 @@ class AuthController extends Controller
         $user = $request->user();
 
         $request->validate([
-            'password'        => 'nullable|string|min:6',
+            'name'            => 'sometimes|string|max:255',
+            'email'           => 'sometimes|email|unique:users,email,' . $user->id,
+            'password'        => 'sometimes|string|min:6',
+            'old_password'    => 'sometimes|string',
             'profile_picture' => 'nullable|string', // base64
         ]);
 
+        if ($request->has('name')) {
+            $user->name = $request->name;
+        }
+
+        if ($request->has('email')) {
+            $user->email = $request->email;
+        }
+
         if ($request->filled('password')) {
+            // Wajib verifikasi password lama untuk keamanan
+            if (!$request->has('old_password') || !Hash::check($request->old_password, $user->password)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Password lama tidak sesuai.'
+                ], 422);
+            }
             $user->password = Hash::make($request->password);
         }
 

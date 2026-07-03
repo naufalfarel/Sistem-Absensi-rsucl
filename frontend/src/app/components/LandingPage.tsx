@@ -3,6 +3,7 @@ import {
   MapPin, Clock, Shield, Smartphone, ChevronRight,
   CheckCircle2, BarChart3, Bell, ArrowRight, Navigation
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 import logoImg from '../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
 import rsPhoto from '../../imports/2328bb14-b47f-4ac6-a2be-6db33f64fce3_980x381.png';
 
@@ -57,6 +58,7 @@ const features = [
 
 
 export function LandingPage({ onEnter }: LandingPageProps) {
+  const { logoUrl } = useAuth();
   const [time, setTime] = useState(new Date());
   const [visible, setVisible] = useState(false);
 
@@ -79,7 +81,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
         <div className="max-w-6xl mx-auto px-5 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-white border border-gray-100 shadow-sm flex items-center justify-center overflow-hidden">
-              <img src={logoImg} alt="Logo RSUCL" className="w-8 h-8 object-contain" />
+              <img src={logoUrl || logoImg} alt="Logo RSUCL" className="w-8 h-8 object-contain" />
             </div>
             <div>
               <p className="text-[13px] font-semibold text-gray-900 leading-tight">RSUCL</p>
@@ -121,7 +123,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
           {/* Logo badge */}
           <div className="flex justify-center mb-6">
             <div className="w-24 h-24 rounded-3xl bg-white/15 backdrop-blur-sm border-2 border-white/30 flex items-center justify-center shadow-2xl">
-              <img src={logoImg} alt="Logo RSUCL" className="w-18 h-18 object-contain drop-shadow-lg" style={{ width: '72px', height: '72px' }} />
+              <img src={logoUrl || logoImg} alt="Logo RSUCL" className="w-18 h-18 object-contain drop-shadow-lg" style={{ width: '72px', height: '72px' }} />
             </div>
           </div>
 
@@ -221,7 +223,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
                 {/* Top badge */}
                 <div className="absolute top-3 left-3 flex items-center gap-2 bg-white/90 backdrop-blur-sm rounded-full px-3 py-1 shadow-sm">
-                  <img src={logoImg} alt="logo" className="w-5 h-5 object-contain" />
+                  <img src={logoUrl || logoImg} alt="logo" className="w-5 h-5 object-contain" />
                   <span className="text-[11px] font-bold text-gray-800">RSU Cempaka Lima</span>
                 </div>
                 {/* Bottom label */}
@@ -254,7 +256,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
                 <div className="absolute" style={{ top: '50%', left: '50%', transform: 'translate(-50%, -90%)' }}>
                   <div className="flex flex-col items-center">
                     <div className="w-8 h-8 rounded-full bg-[#16A34A] flex items-center justify-center shadow-lg border-2 border-white overflow-hidden">
-                      <img src={logoImg} alt="RS" className="w-7 h-7 object-contain" />
+                      <img src={logoUrl || logoImg} alt="RS" className="w-7 h-7 object-contain" />
                     </div>
                     <div className="w-0 h-0 border-l-[5px] border-r-[5px] border-t-[7px] border-l-transparent border-r-transparent border-t-[#16A34A] -mt-px" />
                   </div>
@@ -280,7 +282,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
               <div className="bg-[#F5F7FA] rounded-2xl p-5 border border-gray-100">
                 <div className="flex items-start gap-3 mb-4">
                   <div className="w-10 h-10 rounded-xl bg-[#16A34A] flex items-center justify-center flex-shrink-0 overflow-hidden">
-                    <img src={logoImg} alt="RSUCL" className="w-9 h-9 object-contain" />
+                    <img src={logoUrl || logoImg} alt="RSUCL" className="w-9 h-9 object-contain" />
                   </div>
                   <div>
                     <p className="text-[14px] font-bold text-gray-900">RSU Cempaka Lima</p>
@@ -378,7 +380,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
           <div className="max-w-lg">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-8 h-8 rounded-xl bg-white/20 border border-white/30 flex items-center justify-center overflow-hidden">
-                <img src={logoImg} alt="logo" className="w-7 h-7 object-contain" />
+                <img src={logoUrl || logoImg} alt="logo" className="w-7 h-7 object-contain" />
               </div>
               <span className="text-white/80 text-[12px] font-medium uppercase tracking-wider">RSU Cempaka Lima</span>
             </div>
@@ -474,7 +476,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
             <div>
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-xl bg-white/15 border border-white/25 flex items-center justify-center overflow-hidden">
-                  <img src={logoImg} alt="RSUCL" className="w-9 h-9 object-contain" />
+                  <img src={logoUrl || logoImg} alt="RSUCL" className="w-9 h-9 object-contain" />
                 </div>
                 <div>
                   <p className="text-[14px] font-bold">RSU Cempaka Lima</p>

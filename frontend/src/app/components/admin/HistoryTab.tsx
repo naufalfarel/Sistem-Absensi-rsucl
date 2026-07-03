@@ -85,7 +85,7 @@ export function HistoryTab() {
           { label: 'Cuti/Izin/Sakit', value: summary.cuti, color: '#7C3AED', bg: '#F5F3FF' },
         ].map((s, i) => (
           <div key={i} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-center">
-            <p className="text-[22px] font-bold" style={{ color: s.color }}>{s.value}</p>
+            <p className="text-[22px] font-bold text-black">{s.value}</p>
             <p className="text-[11px] text-gray-400 mt-0.5">{s.label}</p>
           </div>
         ))}

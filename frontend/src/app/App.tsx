@@ -7,7 +7,7 @@ import { AdminApp } from './components/AdminApp';
 import logoImg from '../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
 
 export default function App() {
-  const { user, loading, login, logout } = useAuth();
+  const { user, loading, login, logout, logoUrl } = useAuth();
   const [view, setView] = useState<'landing' | 'login'>('landing');
 
   // Loading state (sleek, high-end design)
@@ -19,9 +19,11 @@ export default function App() {
           <div className="absolute w-24 h-24 rounded-3xl bg-[#16A34A] opacity-10 animate-ping" style={{ animationDuration: '3s' }} />
           <div className="absolute w-20 h-20 rounded-3xl bg-[#16A34A] opacity-20 animate-pulse" />
           {/* Logo container */}
-          <div className="relative w-16 h-16 rounded-2xl bg-white border border-gray-100 shadow-lg flex items-center justify-center overflow-hidden mb-4">
-            <img src={logoImg} alt="Logo RSUCL" className="w-13 h-13 object-contain" />
-          </div>
+          {logoUrl !== 'none' && (
+            <div className="relative w-16 h-16 rounded-2xl bg-white border border-gray-100 shadow-lg flex items-center justify-center overflow-hidden mb-4">
+              <img src={logoUrl || logoImg} alt="Logo RSUCL" className="w-13 h-13 object-contain" />
+            </div>
+          )}
           <p className="text-[14px] font-semibold text-gray-800 tracking-wide">RSUCL Absensi</p>
           <p className="text-[11px] text-gray-400 mt-1">Menghubungkan ke server...</p>
         </div>

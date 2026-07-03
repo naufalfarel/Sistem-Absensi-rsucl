@@ -1,13 +1,15 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { authApi, AuthUser, getToken, setToken, clearToken } from '../services/api';
+import { authApi, AuthUser, getToken, setToken, clearToken, settingApi } from '../services/api';
 
 interface AuthContextType {
   user: AuthUser | null;
   token: string | null;
   loading: boolean;
+  logoUrl: string | null;
   login: (nip: string, username: string, pass: string) => Promise<boolean>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  refreshLogo: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -16,6 +18,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setTokenState] = useState<string | null>(getToken());
   const [loading, setLoading] = useState(true);
+  const [logoUrl, setLogoUrl] = useState<string | null>(localStorage.getItem('hospital_logo'));
+
+  const refreshLogo = async () => {
+    try {
+      const res = await settingApi.get();
+      if (res.success && res.data.logo_url) {
+        setLogoUrl(res.data.logo_url);
+        localStorage.setItem('hospital_logo', res.data.logo_url);
+      } else {
+        setLogoUrl(null);
+        localStorage.removeItem('hospital_logo');
+      }
+    } catch {
+      // Keep cached logo in localStorage on error
+    }
+  };
 
   const fetchProfile = async () => {
     try {
@@ -32,6 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const initAuth = async () => {
+      await refreshLogo();
       const storedToken = getToken();
       if (storedToken) {
         setTokenState(storedToken);
@@ -82,7 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, token, loading, logoUrl, login, logout, refreshUser, refreshLogo }}>
       {children}
     </AuthContext.Provider>
   );

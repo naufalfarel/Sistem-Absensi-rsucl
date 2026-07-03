@@ -105,7 +105,7 @@ export function HistoryPage() {
               <TrendingUp size={15} style={{ color: s.color }} />
             </div>
             <div className="flex items-baseline gap-0.5">
-              <span className="text-[22px] font-bold" style={{ color: s.color }}>{s.value}</span>
+              <span className="text-[22px] font-bold text-black">{s.value}</span>
               <span className="text-[12px] text-gray-400">{s.total}</span>
             </div>
             <p className="text-[11px] text-gray-500 mt-0.5">{s.label}</p>
@@ -196,7 +196,7 @@ export function HistoryPage() {
                 ].map(({ icon: Icon, label, value, color }, j) => (
                   <div key={j} className="px-4 py-3">
                     <p className="text-[10px] text-gray-400 mb-1">{label}</p>
-                    <p className="text-[13px] font-medium text-gray-800 truncate" style={{ color: label.includes('Jam') && value !== '--' ? color : undefined }}>{value}</p>
+                    <p className="text-[13px] font-medium text-black truncate">{value}</p>
                   </div>
                 ))}
               </div>

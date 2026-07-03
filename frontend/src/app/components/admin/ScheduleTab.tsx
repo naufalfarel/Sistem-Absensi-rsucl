@@ -85,12 +85,12 @@ function AddShiftModal({ onClose, onAdd }: { onClose: () => void; onAdd: (s: Shi
           <div className="flex gap-3">
             <div className="flex-1 text-center py-2 bg-white/70 rounded-xl border" style={{ borderColor: preset.border }}>
               <p className="text-[9px] text-gray-400">Masuk</p>
-              <p className="text-[16px] font-bold font-mono" style={{ color: preset.color }}>{start}</p>
+              <p className="text-[16px] font-bold font-mono text-black">{start}</p>
             </div>
             <span className="self-center text-gray-300 font-bold">–</span>
             <div className="flex-1 text-center py-2 bg-white/70 rounded-xl border" style={{ borderColor: preset.border }}>
               <p className="text-[9px] text-gray-400">Pulang</p>
-              <p className="text-[16px] font-bold font-mono" style={{ color: preset.color }}>{end}</p>
+              <p className="text-[16px] font-bold font-mono text-black">{end}</p>
             </div>
           </div>
         </div>
@@ -542,12 +542,12 @@ export function ScheduleTab() {
                   <div className="flex items-center gap-3">
                     <div className="flex-1 text-center py-2 rounded-xl" style={{ background: pr.bg }}>
                       <p className="text-[11px] text-gray-400">Masuk</p>
-                      <p className="text-[18px] font-bold font-mono" style={{ color: shift.color }}>{shift.start_time.substring(0,5)}</p>
+                      <p className="text-[18px] font-bold font-mono text-black">{shift.start_time.substring(0,5)}</p>
                     </div>
                     <span className="text-gray-300">–</span>
                     <div className="flex-1 text-center py-2 rounded-xl" style={{ background: pr.bg }}>
                       <p className="text-[11px] text-gray-400">Pulang</p>
-                      <p className="text-[18px] font-bold font-mono" style={{ color: shift.color }}>{shift.end_time.substring(0,5)}</p>
+                      <p className="text-[18px] font-bold font-mono text-black">{shift.end_time.substring(0,5)}</p>
                     </div>
                   </div>
                 )}
@@ -635,7 +635,7 @@ export function ScheduleTab() {
           <p className="text-[14px] font-semibold text-gray-800">Jadwal Mingguan Karyawan</p>
           <p className="text-[11px] text-gray-400 mt-0.5">Klik pada sel hari kerja karyawan untuk menugaskan/mengubah shift secara mandiri.</p>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto pb-4">
           <table className="w-full">
             <thead>
               <tr className="bg-gray-50/70 border-b border-gray-100">
@@ -668,7 +668,11 @@ export function ScheduleTab() {
 
                         {/* Popover choice selection */}
                         {active && (
-                          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1.5 z-30 bg-white rounded-xl border border-gray-200 shadow-xl py-1.5 min-w-[130px] text-left">
+                          <div className={`absolute left-1/2 -translate-x-1/2 z-30 bg-white rounded-xl border border-gray-200 shadow-xl py-1.5 min-w-[130px] text-left ${
+                            employeeSchedules.length > 2 && i >= employeeSchedules.length - 2
+                              ? 'bottom-full mb-1.5'
+                              : 'top-full mt-1.5'
+                          }`}>
                             <p className="text-[9px] font-bold text-gray-400 px-3 py-1 uppercase border-b border-gray-50 mb-1">Set Shift ({d})</p>
                             {shifts.map(sh => (
                               <button

@@ -134,7 +134,7 @@ export function AttendanceTab() {
             }`}
             style={{ background: s.bg, borderColor: filterStatus === s.key ? s.color : undefined }}
           >
-            <p className="text-[22px] font-bold" style={{ color: s.color }}>{counts[s.key] || 0}</p>
+            <p className="text-[22px] font-bold text-black">{counts[s.key] || 0}</p>
             <p className="text-[10px] text-gray-500 mt-0.5 leading-tight">{s.label}</p>
           </button>
         ))}

@@ -7,7 +7,7 @@ import { MapContainer, TileLayer, Circle, Marker, Popup, useMap } from 'react-le
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useAuth } from '../../context/AuthContext';
-import { attendanceApi, settingApi } from '../../services/api';
+import { attendanceApi, settingApi, scheduleApi, MyShiftSchedule } from '../../services/api';
 
 // Fix Leaflet default marker icon broken by bundlers
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -50,6 +50,10 @@ type AttendanceWindow = 'sunday' | 'too_early' | 'checkin' | 'late_locked' | 'br
 
 function toMins(h: number, m: number) { return h * 60 + m; }
 function parseMins(t: string) { const [h, m] = t.split(':').map(Number); return toMins(h, m); }
+function addMins(hhmm: string, mins: number): string {
+  const total = parseMins(hhmm) + mins;
+  return `${String(Math.floor(total / 60) % 24).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
 
 interface ShiftSettings {
   checkin_open:   string; // '08:00'
@@ -64,6 +68,7 @@ interface ShiftSettings {
   hospital_lat:   number;
   hospital_lng:   number;
   gps_radius:     number;
+  isOvernight:    boolean; // shift lintas tengah malam (mis. Malam 21:00-07:00)
 }
 
 const DEFAULT_SHIFT: ShiftSettings = {
@@ -79,26 +84,61 @@ const DEFAULT_SHIFT: ShiftSettings = {
   hospital_lat:   5.552740480177099,
   hospital_lng:   95.33486560781716,
   gps_radius:     40,
+  isOvernight:    false,
 };
 
 function getWindow(now: Date, s: ShiftSettings = DEFAULT_SHIFT): AttendanceWindow {
   const day  = now.getDay();
   const mins = toMins(now.getHours(), now.getMinutes());
   if (day === 0) return 'sunday';
+
+  const openMins     = parseMins(s.checkin_open);
+  const closeMins    = parseMins(s.close_checkin);
+  const breakSt      = parseMins(s.break_start);
+  const breakEn      = parseMins(s.break_end);
+  const checkoutOpen = parseMins(s.checkout_open);
+  const checkoutCls  = parseMins(s.checkout_close);
+
+  if (s.isOvernight) {
+    // Shift lintas tengah malam (mis. Malam 21:00–07:00)
+    // Sebelum jam mulai: too_early
+    // Jam mulai hingga tutup check-in: checkin
+    // Tutup check-in hingga tengah malam: late_locked
+    // Tengah malam hingga jam selesai shift: late_locked atau checkout
+    // Jam selesai shift hingga close_checkout: checkout
+    if (mins >= openMins) {
+      // Sisi malam: sebelum tengah malam
+      if (mins < openMins)  return 'too_early';
+      if (mins <= closeMins) return 'checkin';
+      return 'late_locked'; // menunggu tengah malam untuk checkout
+    } else {
+      // Sisi pagi: setelah tengah malam (mis. 00:00–08:00)
+      if (mins <= checkoutCls) return 'checkout';
+      return 'ended';
+    }
+  }
+
+  // Shift normal (tidak lintas tengah malam)
   if (day >= 1 && day <= 5) {
-    if (mins <  parseMins(s.checkin_open))  return 'too_early';
-    if (mins <= parseMins(s.close_checkin)) return 'checkin';
-    if (mins <  parseMins(s.break_start))  return 'late_locked';
-    if (mins <  parseMins(s.break_end))    return 'break';
-    if (mins <  parseMins(s.checkout_open)) return 'working';
-    if (mins <= parseMins(s.checkout_close)) return 'checkout';
+    if (mins <  openMins)    return 'too_early';
+    if (mins <= closeMins)   return 'checkin';
+    // Break hanya aktif jika waktunya berada di dalam rentang shift
+    if (breakSt > closeMins && breakEn <= checkoutOpen) {
+      if (mins < breakSt)   return 'late_locked';
+      if (mins < breakEn)   return 'break';
+      if (mins < checkoutOpen) return 'working';
+    } else {
+      // Break tidak relevan untuk shift ini → langsung ke working/checkout
+      if (mins < checkoutOpen) return 'late_locked';
+    }
+    if (mins <= checkoutCls) return 'checkout';
     return 'ended';
   }
   if (day === 6) {
-    if (mins < parseMins(s.checkin_open))     return 'too_early';
-    if (mins <= parseMins(s.close_checkin))   return 'checkin';
-    if (mins < parseMins(s.sat_checkout_open)) return 'late_locked';
-    if (mins <= parseMins(s.sat_checkout_close)) return 'checkout';
+    if (mins < openMins)                          return 'too_early';
+    if (mins <= closeMins)                        return 'checkin';
+    if (mins < parseMins(s.sat_checkout_open))    return 'late_locked';
+    if (mins <= parseMins(s.sat_checkout_close))  return 'checkout';
     return 'ended';
   }
   return 'ended';
@@ -132,7 +172,7 @@ const windowConfig: Record<AttendanceWindow, { icon: typeof Lock; iconColor: str
   too_early:   { icon: Sun,          iconColor: '#D97706', bg: '#FFFBEB', border: '#FDE68A', title: 'Belum Waktunya Absen',   desc: 'Absen dibuka mulai pukul 08:00 WIB.',           sub: 'Silakan kembali setelah pukul 08:00.' },
   checkin:     { icon: CheckCircle2, iconColor: '#16A34A', bg: '#F0FDF4', border: '#BBF7D0', title: 'Waktu Check-In',         desc: '08:00 – 08:29 Tepat Waktu · 08:30 – 09:00 Terlambat (tetap Hadir)', sub: '' },
   late_locked: { icon: Lock,         iconColor: '#DC2626', bg: '#FEF2F2', border: '#FECACA', title: 'Batas Check-In Terlewat', desc: 'Check-in sudah ditutup pukul 09:00 WIB.',       sub: 'Silakan hubungi admin jika ada kendala.' },
-  break:       { icon: Coffee,       iconColor: '#7C3AED', bg: '#F5F3FF', border: '#DDD6FE', title: 'Jam Istirahat',          desc: 'Absen dikunci 12:30 – 13:30 WIB.',              sub: '🍽️ Makan siang disediakan di kantor' },
+  break:       { icon: Coffee,       iconColor: '#7C3AED', bg: '#F5F3FF', border: '#DDD6FE', title: 'Jam Istirahat',          desc: 'Absen dikunci 12:30 – 13:30 WIB.',              sub: 'Silakan beristirahat sejenak.' },
   working:     { icon: Clock,        iconColor: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE', title: 'Sedang Jam Kerja',       desc: 'Check-out dibuka pukul 17:00 WIB.',             sub: 'Tetap semangat bekerja!' },
   ended:       { icon: Lock,         iconColor: '#DC2626', bg: '#FEF2F2', border: '#FECACA', title: 'Waktu Absen Berakhir',   desc: 'Batas akhir check-out pukul 18:00 WIB.',        sub: 'Absensi hari ini sudah ditutup.' },
   checkout:    { icon: Sunset,       iconColor: '#EA580C', bg: '#FFF7ED', border: '#FED7AA', title: 'Waktu Check-Out',        desc: 'Silakan lakukan check-out sekarang.',           sub: 'Teria kasih atas dedikasi Anda hari ini!' },
@@ -142,8 +182,16 @@ const windowConfig: Record<AttendanceWindow, { icon: typeof Lock; iconColor: str
 type FaceStep = 'idle' | 'scanning' | 'captured' | 'confirmed';
 
 function FaceVerificationCard({
-  faceStep, onCapture, onRetake, employeeName, employeeNip, capturedImage
-}: { faceStep: FaceStep; onCapture: (image: string) => void; onRetake: () => void; employeeName: string; employeeNip: string; capturedImage: string | null }) {
+  faceStep, onCapture, onRetake, employeeName, employeeNip, capturedImage, activeLeave
+}: { 
+  faceStep: FaceStep; 
+  onCapture: (image: string) => void; 
+  onRetake: () => void; 
+  employeeName: string; 
+  employeeNip: string; 
+  capturedImage: string | null;
+  activeLeave: { type: string; reason: string } | null;
+}) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
@@ -188,6 +236,35 @@ function FaceVerificationCard({
     onCapture(capturedDataUrl);
   };
 
+  if (activeLeave) {
+    const leaveLabel = activeLeave.type === 'cuti' ? 'Cuti Tahunan' : activeLeave.type === 'izin' ? 'Izin' : 'Sakit';
+    return (
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-4">
+        <div className="px-5 py-3.5 border-b border-gray-50 flex items-center gap-2">
+          <AlertCircle size={15} className="text-[#EA580C]" />
+          <span className="text-[13px] font-semibold text-gray-800">Absensi Dikunci</span>
+        </div>
+        <div className="p-5 flex flex-col items-center gap-4 text-center">
+          <div className="w-16 h-16 bg-[#FFF7ED] border border-[#FFEDD5] rounded-full flex items-center justify-center">
+            <AlertCircle size={28} className="text-[#EA580C]" />
+          </div>
+          <div>
+            <p className="text-[14px] font-bold text-gray-800">Sedang dalam Masa {leaveLabel}</p>
+            <p className="text-[11px] text-gray-400 mt-1 max-w-[280px]">
+              Hari ini Anda terdaftar sedang {leaveLabel} ("{activeLeave.reason}"). Absensi dinonaktifkan sementara.
+            </p>
+          </div>
+          <button
+            disabled
+            className="w-full py-3 bg-gray-100 text-gray-400 rounded-xl text-[13px] font-semibold cursor-not-allowed"
+          >
+            Absen Dinonaktifkan
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (faceStep === 'idle') {
     return (
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-4">
@@ -197,8 +274,27 @@ function FaceVerificationCard({
           <span className="ml-auto text-[11px] bg-amber-50 text-amber-600 border border-amber-200 px-2 py-0.5 rounded-full font-medium">Diperlukan</span>
         </div>
         <div className="p-5 flex flex-col items-center gap-4">
-          <div className="relative w-32 h-32 rounded-full bg-gray-50 border-2 border-dashed border-gray-200 flex items-center justify-center">
-            <Camera size={36} className="text-gray-300" />
+          <div className="relative w-32 h-32 flex items-center justify-center">
+            {/* Custom SVG User Profile Scan Icon */}
+            <svg viewBox="0 0 100 100" className="w-15 h-15 drop-shadow-sm">
+              <defs>
+                <linearGradient id="userScanGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stop-color="#15A34A" />
+                  <stop offset="100%" stop-color="#4ADE80" />
+                </linearGradient>
+              </defs>
+              <circle cx="50" cy="38" r="16" fill="url(#userScanGradient)" />
+              <path
+                d="M 22,82 
+                   C 22,66 32,58 50,58 
+                   C 68,58 78,66 78,82 
+                   C 78,85 75,88 72,88 
+                   L 28,88 
+                   C 25,88 22,85 22,82 
+                   Z"
+                fill="url(#userScanGradient)"
+              />
+            </svg>
             {[['top-2 left-2', 'rounded-tl-lg border-t-2 border-l-2'], ['top-2 right-2', 'rounded-tr-lg border-t-2 border-r-2'], ['bottom-2 left-2', 'rounded-bl-lg border-b-2 border-l-2'], ['bottom-2 right-2', 'rounded-br-lg border-b-2 border-r-2']].map(([pos, cls], i) => (
               <div key={i} className={`absolute ${pos} w-5 h-5 border-[#16A34A] ${cls}`} />
             ))}
@@ -508,6 +604,9 @@ export function AttendancePage() {
   // Face verification state machine
   const [faceStep, setFaceStep] = useState<FaceStep>('idle');
 
+  // Active leave state (cuti/izin/sakit)
+  const [activeLeave, setActiveLeave] = useState<{ type: string; reason: string } | null>(null);
+
   // Success animation
   const [successAction, setSuccessAction] = useState('');
   const [successTime, setSuccessTime]     = useState('');
@@ -515,6 +614,8 @@ export function AttendancePage() {
 
   // Dynamic shift settings from backend
   const [shiftSettings, setShiftSettings] = useState<ShiftSettings>(DEFAULT_SHIFT);
+  // Shift karyawan hari ini dari admin
+  const [todayShift, setTodayShift] = useState<MyShiftSchedule | null | undefined>(undefined);
 
   // GPS state
   const HOSP_LAT    = shiftSettings.hospital_lat;
@@ -523,27 +624,76 @@ export function AttendancePage() {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
   const [gpsActive, setGpsActive]       = useState<boolean>(false);
 
-  // Load shift settings from API
+  // Load shift settings + jadwal shift karyawan dari API
   useEffect(() => {
-    settingApi.get().then((res) => {
-      if (res.success && res.data) {
-        const d = res.data as Record<string, string>;
-        setShiftSettings({
+    Promise.allSettled([
+      settingApi.get(),
+      scheduleApi.mySchedule(),
+    ]).then(([settingRes, shiftRes]) => {
+      let base: ShiftSettings = { ...DEFAULT_SHIFT };
+      if (settingRes.status === 'fulfilled' && settingRes.value.success) {
+        const d = settingRes.value.data as unknown as Record<string, string>;
+        base = {
+          ...base,
           checkin_open:       d.checkin_open      ?? '08:00',
           late_limit:         d.late_limit        ?? '08:30',
           close_checkin:      d.close_checkin     ?? '09:00',
           break_start:        d.break_start       ?? '12:30',
           break_end:          d.break_end         ?? '13:30',
           checkout_open:      d.checkout_open     ?? '17:00',
-          checkout_close:     d.checkout_close    ?? '18:00',
+          checkout_close:     d.checkout_open ? addMins(d.checkout_open, 60) : '18:00',
           sat_checkout_open:  d.sat_checkout_open  ?? '13:00',
-          sat_checkout_close: d.sat_checkout_close ?? '13:00',
+          sat_checkout_close: d.sat_checkout_open ? addMins(d.sat_checkout_open, 60) : '14:00',
           hospital_lat:       d.hospital_lat ? Number(d.hospital_lat) : 5.552740480177099,
           hospital_lng:       d.hospital_lng ? Number(d.hospital_lng) : 95.33486560781716,
           gps_radius:         d.gps_radius ? Number(d.gps_radius) : 40,
-        });
+        };
       }
-    }).catch(() => {/* keep defaults */});
+      if (shiftRes.status === 'fulfilled' && shiftRes.value.success) {
+        const shift = shiftRes.value.data;
+        setTodayShift(shift);
+        if (shift) {
+          const startHHmm  = shift.start_time.substring(0, 5); // "HH:mm"
+          const endHHmm    = shift.end_time.substring(0, 5);   // "HH:mm"
+          const startMins  = parseMins(startHHmm);
+          const endMins    = parseMins(endHHmm);
+          const overnight  = endMins < startMins; // shift lintas tengah malam
+
+          // Jam buka check-in = jam mulai shift
+          // Batas telat       = mulai + 30 menit
+          // Tutup check-in    = mulai + 60 menit
+          const lateHHmm  = addMins(startHHmm, 30);
+          const closeHHmm = addMins(startHHmm, 60);
+
+          // Checkout = jam selesai shift; batas = selesai + 60 menit
+          const checkoutCloseHHmm = addMins(endHHmm, 60);
+
+          // Break hanya relevan jika jatuh di dalam rentang shift
+          // Untuk shift non-reguler, nonaktifkan break (set = checkout_open)
+          const globalBreakStart = parseMins(base.break_start);
+          const globalBreakEnd   = parseMins(base.break_end);
+          const breakInShift = !overnight
+            && globalBreakStart > parseMins(closeHHmm)
+            && globalBreakEnd   <= endMins;
+
+          base.checkin_open   = startHHmm;
+          base.late_limit     = lateHHmm;
+          base.close_checkin  = closeHHmm;
+          base.checkout_open  = endHHmm;
+          base.checkout_close = checkoutCloseHHmm;
+          base.isOvernight    = overnight;
+
+          if (!breakInShift) {
+            // Nonaktifkan break (set ke waktu yang tidak pernah tercapai dalam alur)
+            base.break_start = endHHmm;
+            base.break_end   = endHHmm;
+          }
+        }
+      } else {
+        setTodayShift(null);
+      }
+      setShiftSettings(base);
+    }).catch(() => { setTodayShift(null); });
   }, []);
 
   // Load today's record on mount
@@ -551,14 +701,19 @@ export function AttendancePage() {
     const loadTodayRecord = async () => {
       try {
         const res = await attendanceApi.today();
-        if (res.success && res.data) {
-          if (res.data.check_in) {
-            setCheckInTime(res.data.check_in.substring(0, 5));
-            setCheckedIn(true);
+        if (res.success) {
+          if (res.data) {
+            if (res.data.check_in) {
+              setCheckInTime(res.data.check_in.substring(0, 5));
+              setCheckedIn(true);
+            }
+            if (res.data.check_out) {
+              setCheckOutTime(res.data.check_out.substring(0, 5));
+              setCheckedOut(true);
+            }
           }
-          if (res.data.check_out) {
-            setCheckOutTime(res.data.check_out.substring(0, 5));
-            setCheckedOut(true);
+          if (res.active_leave) {
+            setActiveLeave(res.active_leave);
           }
         }
       } catch (err) {
@@ -772,10 +927,38 @@ export function AttendancePage() {
           <p className="text-[13px] text-gray-500 mt-0.5">{dateStr}</p>
         </div>
         <div className="text-right">
-          <p className="text-[22px] font-mono font-semibold text-gray-800 tracking-tight">{timeStr}</p>
+          <p className="text-[22px] font-mono font-semibold text-black tracking-tight">{timeStr}</p>
           <p className="text-[10px] text-gray-400">WIB</p>
         </div>
       </div>
+
+      {/* Info Shift Hari Ini */}
+      {todayShift !== undefined && (
+        <div className={`mb-4 flex items-center gap-3 px-4 py-3 rounded-xl border text-[12px] font-medium ${
+          todayShift
+            ? 'border-green-200 bg-green-50 text-green-800'
+            : 'border-gray-200 bg-gray-50 text-gray-500'
+        }`}>
+          <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: todayShift?.color ?? '#E5E7EB' }}>
+            <Clock size={13} className="text-white" />
+          </div>
+          <div className="flex-1">
+            {todayShift ? (
+              <>
+                <span className="font-semibold">Shift {todayShift.name}</span>
+                <span className="text-green-600 ml-2">{todayShift.start_time.substring(0,5)} – {todayShift.end_time.substring(0,5)} WIB</span>
+              </>
+            ) : (
+              <span>Tidak ada jadwal shift hari ini</span>
+            )}
+          </div>
+          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+            todayShift ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-600'
+          }`}>
+            {todayShift ? 'Aktif' : 'Libur'}
+          </span>
+        </div>
+      )}
 
       {/* Demo / Simulation Mode Panel — Jam only */}
       <div className="mb-4 space-y-2">
@@ -818,7 +1001,7 @@ export function AttendancePage() {
           {timelineItems.map((item, i) => {
             const phaseIdx = phaseOrder.indexOf(item.phase as AttendanceWindow);
             const isDone   = phaseIdx < currentPhaseIdx;
-            const isActive = item.phase === window || (window === 'checkin' && item.phase === 'checkin') || (window === 'checkout' && item.phase === 'checkout');
+            const isActive = item.phase === attendanceWindow || (attendanceWindow === 'checkin' && item.phase === 'checkin') || (attendanceWindow === 'checkout' && item.phase === 'checkout');
             return (
               <div key={i} className="flex items-center flex-1 min-w-0">
                 <div className="flex flex-col items-center flex-shrink-0">
@@ -843,6 +1026,7 @@ export function AttendancePage() {
         employeeName={user?.name ?? 'Dr. Rina Kusumawati'}
         employeeNip={user?.nip ?? '198501012010012001'}
         capturedImage={capturedImage}
+        activeLeave={activeLeave}
       />
 
       {/* GPS Map Geofence Card */}
@@ -862,10 +1046,10 @@ export function AttendancePage() {
           <p className="text-[12px] font-medium text-gray-500 mb-3">Rekap Absensi Hari Ini</p>
           <div className="grid grid-cols-4 gap-2">
             {[
-              { label: 'Jam Masuk', value: checkInTime || '--:--', color: '#2563EB' },
-              { label: 'Jam Keluar', value: checkOutTime || '--:--', color: '#DC2626' },
-              { label: 'Durasi', value: checkedOut ? getDuration() : '--', color: '#7C3AED' },
-              { label: 'Status', value: attendStatus?.label || '--', color: attendStatus?.color || '#6B7280' },
+              { label: 'Jam Masuk', value: checkInTime || '--:--', color: '#000000' },
+              { label: 'Jam Keluar', value: checkOutTime || '--:--', color: '#000000' },
+              { label: 'Durasi', value: checkedOut ? getDuration() : '--', color: '#000000' },
+              { label: 'Status', value: attendStatus?.label || '--', color: '#000000' },
             ].map((item, i) => (
               <div key={i} className="text-center">
                 <p className="text-[10px] text-gray-400 mb-1">{item.label}</p>
@@ -876,7 +1060,7 @@ export function AttendancePage() {
           {!isSaturday && (
             <div className="mt-3 flex items-center gap-2 px-3 py-2 bg-purple-50 rounded-xl border border-purple-100">
               <Coffee size={12} className="text-purple-500 flex-shrink-0" />
-              <p className="text-[11px] text-purple-700">Istirahat 12:30–13:30 · Makan siang disediakan di kantor</p>
+              <p className="text-[11px] text-purple-700">Istirahat 12:30–13:30</p>
             </div>
           )}
         </div>
@@ -909,9 +1093,9 @@ export function AttendancePage() {
           <p className="text-[15px] font-semibold text-gray-800">Absensi Selesai</p>
           <p className="text-[13px] text-gray-500 mt-1">Terima kasih · Sampai jumpa besok!</p>
           <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-            <div><p className="text-[10px] text-gray-400">Masuk</p><p className="text-[13px] font-bold text-blue-600">{checkInTime}</p></div>
-            <div><p className="text-[10px] text-gray-400">Keluar</p><p className="text-[13px] font-bold text-red-500">{checkOutTime}</p></div>
-            <div><p className="text-[10px] text-gray-400">Durasi</p><p className="text-[13px] font-bold text-purple-600">{getDuration()}</p></div>
+            <div><p className="text-[10px] text-gray-400">Masuk</p><p className="text-[13px] font-bold text-black">{checkInTime}</p></div>
+            <div><p className="text-[10px] text-gray-400">Keluar</p><p className="text-[13px] font-bold text-black">{checkOutTime}</p></div>
+            <div><p className="text-[10px] text-gray-400">Durasi</p><p className="text-[13px] font-bold text-black">{getDuration()}</p></div>
           </div>
         </div>
       ) : canCheckIn ? (
@@ -977,13 +1161,13 @@ export function AttendancePage() {
         <p className="text-[11px] font-semibold text-gray-500 mb-2">Ketentuan Absensi RSUCL</p>
         <div className="space-y-1.5">
           {[
-            ['Buka absen (Sen–Jum & Sab)', `${shiftSettings.checkin_open} WIB`, 'text-[#16A34A]'],
-            ['Tepat waktu', `${shiftSettings.checkin_open} – ${shiftSettings.late_limit} WIB`, 'text-[#16A34A]'],
-            ['Terlambat (tetap Hadir)', `${shiftSettings.late_limit} – ${shiftSettings.close_checkin} WIB`, 'text-amber-600'],
-            ['Tutup check-in', `${shiftSettings.close_checkin} WIB → Alpha`, 'text-red-500'],
-            ['Istirahat (Sen–Jum)', `${shiftSettings.break_start} – ${shiftSettings.break_end} WIB`, 'text-purple-600'],
-            ['Check-out / Jam pulang', `${shiftSettings.checkout_open} WIB (Sab: ${shiftSettings.sat_checkout_open})`, 'text-gray-700'],
-            ['Batas akhir check-out', `${shiftSettings.checkout_close} WIB`, 'text-red-500'],
+            ['Buka absen (Sen–Jum & Sab)', `${shiftSettings.checkin_open} WIB`, 'text-black'],
+            ['Tepat waktu', `${shiftSettings.checkin_open} – ${shiftSettings.late_limit} WIB`, 'text-black'],
+            ['Terlambat (tetap Hadir)', `${shiftSettings.late_limit} – ${shiftSettings.close_checkin} WIB`, 'text-black'],
+            ['Tutup check-in', `${shiftSettings.close_checkin} WIB → Alpha`, 'text-black'],
+            ['Istirahat (Sen–Jum)', `${shiftSettings.break_start} – ${shiftSettings.break_end} WIB`, 'text-black'],
+            ['Check-out / Jam pulang', `${shiftSettings.checkout_open} WIB (Sab: ${shiftSettings.sat_checkout_open})`, 'text-black'],
+            ['Batas akhir check-out', `${shiftSettings.checkout_close} WIB`, 'text-black'],
           ].map(([label, value, cls], i) => (
             <div key={i} className="flex justify-between text-[11px]">
               <span className="text-gray-500">{label}</span>

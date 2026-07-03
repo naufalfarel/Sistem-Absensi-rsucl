@@ -106,7 +106,7 @@ export function LeaveTab() {
             <button key={t} onClick={() => setTypeFilter(typeFilter === t ? 'all' : t)}
               className={`rounded-2xl p-4 border-2 text-left transition-all ${typeFilter === t ? 'shadow-md' : 'border-transparent hover:border-gray-200'}`}
               style={{ background: tc.bg, borderColor: typeFilter === t ? tc.color : undefined }}>
-              <p className="text-[22px] font-bold" style={{ color: tc.color }}>{count}</p>
+              <p className="text-[22px] font-bold text-black">{count}</p>
               <p className="text-[12px] font-medium text-gray-700 mt-0.5">{tc.label}</p>
               <p className="text-[10px] text-gray-400">{requests.filter(r => r.type === t && r.status === 'pending').length} menunggu</p>
             </button>
