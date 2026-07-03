@@ -9,6 +9,7 @@ const statusConfig: Record<string, { label: string; color: string; bg: string }>
   alpha: { label: 'Alpha', color: '#DC2626', bg: '#FEE2E2' },
   izin: { label: 'Izin', color: '#2563EB', bg: '#DBEAFE' },
   sakit: { label: 'Sakit', color: '#EA580C', bg: '#FFF7ED' },
+  cuti: { label: 'Cuti', color: '#7C3AED', bg: '#F5F3FF' },
 };
 
 const filters = ['Semua', 'Hadir', 'Terlambat', 'Izin/Sakit'];
@@ -67,7 +68,7 @@ export function HistoryPage() {
     if (activeFilter === 'Semua') return matchesSearch;
     if (activeFilter === 'Hadir') return matchesSearch && r.status === 'hadir';
     if (activeFilter === 'Terlambat') return matchesSearch && r.status === 'telat';
-    if (activeFilter === 'Izin/Sakit') return matchesSearch && (r.status === 'izin' || r.status === 'sakit');
+    if (activeFilter === 'Izin/Sakit') return matchesSearch && (r.status === 'izin' || r.status === 'sakit' || r.status === 'cuti');
     return matchesSearch;
   });
 

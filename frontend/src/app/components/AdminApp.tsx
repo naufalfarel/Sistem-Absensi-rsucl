@@ -17,7 +17,7 @@ import { LeaveTab } from './admin/LeaveTab';
 import { ReportsTab } from './admin/ReportsTab';
 import { NotificationsTab } from './admin/NotificationsTab';
 import { SettingsTab } from './admin/SettingsTab';
-import { employeeApi, Employee, reportApi, ReportSummary } from '../../services/api';
+import { employeeApi, Employee, reportApi, ReportSummary, notificationApi } from '../../services/api';
 
 const sidebarItems = [
   { id: 'dashboard',     icon: LayoutDashboard, label: 'Dashboard' },
@@ -50,7 +50,7 @@ interface AdminAppProps {
 }
 
 export function AdminApp({ onLogout }: AdminAppProps) {
-  const { logoUrl } = useAuth();
+  const { user, logoUrl } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -69,6 +69,18 @@ export function AdminApp({ onLogout }: AdminAppProps) {
   const [form, setForm] = useState({ ...emptyForm });
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
   const [formError, setFormError] = useState('');
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+
+  const fetchUnreadNotificationsCount = async () => {
+    try {
+      const res = await notificationApi.list();
+      if (res.success) {
+        setUnreadNotifications(res.data.unread_count);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -95,6 +107,9 @@ export function AdminApp({ onLogout }: AdminAppProps) {
 
   useEffect(() => {
     loadData();
+    fetchUnreadNotificationsCount();
+    const interval = setInterval(fetchUnreadNotificationsCount, 20000);
+    return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -262,52 +277,71 @@ export function AdminApp({ onLogout }: AdminAppProps) {
     terlambat: 0 // Simplification since backend reports total checkins count
   })) ?? [];
 
-  const SidebarContent = ({ mobile }: { mobile?: boolean }) => (
-    <div className="flex flex-col h-full bg-white">
-      <div className="px-5 py-5 border-b border-gray-100">
-        <div className="flex items-center gap-3">
-          {logoUrl !== 'none' && (
-            <div className="w-9 h-9 rounded-xl bg-white border border-gray-100 shadow-sm flex items-center justify-center flex-shrink-0 overflow-hidden">
-              <img src={logoUrl || logoImg} alt="Logo RSUCL" className="w-8 h-8 object-contain" />
+  const SidebarContent = ({ mobile }: { mobile?: boolean }) => {
+    const sidebarItemsWithBadges = sidebarItems.map(item => {
+      if (item.id === 'leave') {
+        return { ...item, badge: reportSummary?.pending_leave ?? 0 };
+      }
+      if (item.id === 'notifications') {
+        return { ...item, badge: unreadNotifications };
+      }
+      return item;
+    });
+
+    return (
+      <div className="flex flex-col h-full bg-white">
+        <div className="px-5 py-5 border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            {logoUrl !== 'none' && (
+              <div className="w-9 h-9 rounded-xl bg-white border border-gray-100 shadow-sm flex items-center justify-center flex-shrink-0 overflow-hidden">
+                <img src={logoUrl || logoImg} alt="Logo RSUCL" className="w-8 h-8 object-contain" />
+              </div>
+            )}
+            <div>
+              <p className="text-[13px] font-semibold text-gray-900 leading-tight">RSUCL Admin</p>
+              <p className="text-[10px] text-gray-400">Sistem Absensi</p>
             </div>
-          )}
-          <div>
-            <p className="text-[13px] font-semibold text-gray-900 leading-tight">RSUCL Admin</p>
-            <p className="text-[10px] text-gray-400">Sistem Absensi</p>
+          </div>
+        </div>
+        <nav className="flex-1 p-3 overflow-y-auto">
+          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-3 mb-2 mt-1">Menu Utama</p>
+          {sidebarItemsWithBadges.slice(0, 5).map(item => (
+            <button key={item.id} onClick={() => { setActiveTab(item.id); if (mobile) setSidebarOpen(false); }}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-[13px] transition-all mb-0.5 ${activeTab === item.id ? 'bg-[#16A34A] text-white font-medium shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}>
+              <div className="flex items-center gap-2.5"><item.icon size={16} />{item.label}</div>
+              {item.badge && item.badge > 0 ? <span className={`text-[10px] font-bold min-w-[18px] min-h-[18px] rounded-full flex items-center justify-center px-1 bg-red-100 text-red-600`}>{item.badge}</span> : null}
+            </button>
+          ))}
+          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-3 mb-2 mt-4">Manajemen</p>
+          {sidebarItemsWithBadges.slice(5).map(item => (
+            <button key={item.id} onClick={() => { setActiveTab(item.id); if (mobile) setSidebarOpen(false); }}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-[13px] transition-all mb-0.5 ${activeTab === item.id ? 'bg-[#16A34A] text-white font-medium shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}>
+              <div className="flex items-center gap-2.5"><item.icon size={16} />{item.label}</div>
+              {item.badge && item.badge > 0 ? <span className={`text-[10px] font-bold min-w-[18px] min-h-[18px] rounded-full flex items-center justify-center px-1 bg-red-100 text-red-600`}>{item.badge}</span> : null}
+            </button>
+          ))}
+        </nav>
+        <div className="p-3 border-t border-gray-100">
+          <div className="flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-gray-50 transition-colors">
+            <div className="w-8 h-8 rounded-xl bg-[#16A34A]/15 flex items-center justify-center flex-shrink-0 overflow-hidden">
+              {user?.profile_picture ? (
+                <img src={user.profile_picture} alt={user.name} className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-[#16A34A] text-[11px] font-bold">
+                  {user?.name?.split(' ').slice(0, 2).map(w => w.charAt(0)).join('').toUpperCase() || 'AD'}
+                </span>
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[12px] font-semibold text-gray-800 truncate">{user?.name || 'Super Admin'}</p>
+              <p className="text-[10px] text-gray-400">Administrator</p>
+            </div>
+            <button onClick={onLogout} className="text-gray-400 hover:text-red-500 transition-colors"><LogOut size={15} /></button>
           </div>
         </div>
       </div>
-      <nav className="flex-1 p-3 overflow-y-auto">
-        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-3 mb-2 mt-1">Menu Utama</p>
-        {sidebarItems.slice(0, 5).map(item => (
-          <button key={item.id} onClick={() => { setActiveTab(item.id); if (mobile) setSidebarOpen(false); }}
-            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-[13px] transition-all mb-0.5 ${activeTab === item.id ? 'bg-[#16A34A] text-white font-medium shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}>
-            <div className="flex items-center gap-2.5"><item.icon size={16} />{item.label}</div>
-          </button>
-        ))}
-        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-3 mb-2 mt-4">Manajemen</p>
-        {sidebarItems.slice(5).map(item => (
-          <button key={item.id} onClick={() => { setActiveTab(item.id); if (mobile) setSidebarOpen(false); }}
-            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-[13px] transition-all mb-0.5 ${activeTab === item.id ? 'bg-[#16A34A] text-white font-medium shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}>
-            <div className="flex items-center gap-2.5"><item.icon size={16} />{item.label}</div>
-            {item.badge && item.badge > 0 ? <span className={`text-[10px] font-bold min-w-[18px] min-h-[18px] rounded-full flex items-center justify-center px-1 bg-red-100 text-red-600`}>{item.badge}</span> : null}
-          </button>
-        ))}
-      </nav>
-      <div className="p-3 border-t border-gray-100">
-        <div className="flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-gray-50 transition-colors">
-          <div className="w-8 h-8 rounded-xl bg-[#16A34A]/15 flex items-center justify-center flex-shrink-0">
-            <span className="text-[#16A34A] text-[11px] font-bold">SA</span>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[12px] font-semibold text-gray-800 truncate">Super Admin</p>
-            <p className="text-[10px] text-gray-400">Administrator</p>
-          </div>
-          <button onClick={onLogout} className="text-gray-400 hover:text-red-500 transition-colors"><LogOut size={15} /></button>
-        </div>
-      </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="flex h-screen bg-[#F5F7FA] overflow-hidden" style={{ fontFamily: "'Inter', sans-serif" }}
@@ -334,12 +368,19 @@ export function AdminApp({ onLogout }: AdminAppProps) {
             <button onClick={() => setSidebarOpen(true)} className="md:hidden w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center"><Menu size={16} className="text-gray-600" /></button>
             <div>
               <h2 className="text-[14px] font-semibold text-gray-900">{sidebarItems.find(s => s.id === activeTab)?.label || 'Dashboard'}</h2>
-              <p className="text-[11px] text-gray-400">Rabu, 1 Juli 2026</p>
+              <p className="text-[11px] text-gray-400">{new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-[#16A34A]/15 flex items-center justify-center">
-              <span className="text-[#16A34A] text-[10px] font-bold">SA</span>
+            <span className="text-[12px] font-semibold text-gray-700 hidden sm:inline-block mr-1">{user?.name || 'Super Admin'}</span>
+            <div className="w-8 h-8 rounded-xl bg-[#16A34A]/15 flex items-center justify-center overflow-hidden">
+              {user?.profile_picture ? (
+                <img src={user.profile_picture} alt={user.name} className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-[#16A34A] text-[10px] font-bold">
+                  {user?.name?.split(' ').slice(0, 2).map(w => w.charAt(0)).join('').toUpperCase() || 'AD'}
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -392,14 +433,22 @@ export function AdminApp({ onLogout }: AdminAppProps) {
                 </div>
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col justify-between">
                   <div className="mb-4"><p className="text-[14px] font-semibold text-gray-800">Status Kehadiran Bulan Ini</p><p className="text-[11px] text-gray-400">Statistik berjalan</p></div>
-                  <div className="space-y-4">
+                  <div className="space-y-3.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-[13px] text-gray-500">Total Check-In</span>
-                      <span className="text-[14px] font-bold text-[#16A34A]">{reportSummary?.this_month.hadir ?? 0} kali</span>
+                      <span className="text-[12px] text-gray-500 font-medium">Total Check-In</span>
+                      <span className="text-[13px] font-bold text-[#16A34A]">{(reportSummary?.this_month.hadir ?? 0) + (reportSummary?.this_month.telat ?? 0)} kali</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-[13px] text-gray-500">Total Alpha</span>
-                      <span className="text-[14px] font-bold text-red-500">{reportSummary?.this_month.alpha ?? 0} kali</span>
+                      <span className="text-[12px] text-gray-500 font-medium">Terlambat</span>
+                      <span className="text-[13px] font-bold text-amber-500">{reportSummary?.this_month.telat ?? 0} kali</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[12px] text-gray-500 font-medium">Cuti & Izin</span>
+                      <span className="text-[13px] font-bold text-indigo-500">{reportSummary?.this_month.cuti ?? 0} kali</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[12px] text-gray-500 font-medium">Alpha</span>
+                      <span className="text-[13px] font-bold text-red-500">{reportSummary?.this_month.alpha ?? 0} kali</span>
                     </div>
                   </div>
                   <div className="mt-4 text-[10px] text-gray-400 border-t border-gray-50 pt-3">Diperbarui otomatis dari database absensi.</div>
@@ -431,7 +480,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
                   { label: 'Hadir', value: employees.filter(e => e.today_attendance?.status === 'hadir' || e.today_attendance?.status === 'telat').length, color: '#16A34A' },
                   { label: 'Terlambat', value: employees.filter(e => e.today_attendance?.status === 'telat').length, color: '#D97706' },
                   { label: 'Alpha', value: employees.filter(e => !e.today_attendance || e.today_attendance.status === 'alpha').length, color: '#DC2626' },
-                  { label: 'Cuti', value: employees.filter(e => e.today_attendance?.status === 'izin' || e.today_attendance?.status === 'sakit').length, color: '#2563EB' },
+                  { label: 'Cuti', value: employees.filter(e => e.today_attendance?.status === 'izin' || e.today_attendance?.status === 'sakit' || e.today_attendance?.status === 'cuti').length, color: '#2563EB' },
                 ].map((s, i) => (
                   <div key={i} className="bg-white rounded-xl border border-gray-100 px-3 py-2.5 text-center shadow-sm">
                     <p className="text-[18px] font-bold text-black">{s.value}</p>
@@ -524,7 +573,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
           {activeTab === 'schedule' && <ScheduleTab />}
           {activeTab === 'leave' && <LeaveTab />}
           {activeTab === 'reports' && <ReportsTab />}
-          {activeTab === 'notifications' && <NotificationsTab />}
+          {activeTab === 'notifications' && <NotificationsTab onUpdateCount={fetchUnreadNotificationsCount} />}
           {activeTab === 'settings' && <SettingsTab />}
         </div>
       </div>

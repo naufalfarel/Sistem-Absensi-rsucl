@@ -66,6 +66,7 @@ export function SettingsTab() {
   // ── Account ──
   const [name, setName]               = useState('Super Admin');
   const [email, setEmail]             = useState('admin@rsucl.id');
+  const [username, setUsername]       = useState('admin');
   const [oldPass, setOldPass]         = useState('');
   const [newPass, setNewPass]         = useState('');
   const [confirmPass, setConfirmPass] = useState('');
@@ -115,6 +116,10 @@ export function SettingsTab() {
         setRadius(res.data.gps_radius);
         if (res.data.hospital_lat) setHospLat(res.data.hospital_lat);
         if (res.data.hospital_lng) setHospLng(res.data.hospital_lng);
+        if (res.data.notif_email !== undefined) setNotifEmail(res.data.notif_email === '1');
+        if (res.data.notif_late !== undefined) setNotifLate(res.data.notif_late === '1');
+        if (res.data.notif_leave !== undefined) setNotifLeave(res.data.notif_leave === '1');
+        if (res.data.notif_system !== undefined) setNotifSystem(res.data.notif_system === '1');
       }
     } catch (err) {
       console.error(err);
@@ -126,6 +131,7 @@ export function SettingsTab() {
     if (user) {
       setName(user.name);
       setEmail(user.email);
+      setUsername(user.username);
     }
   }, [user]);
 
@@ -133,7 +139,7 @@ export function SettingsTab() {
   const saveProfile = async () => {
     setProfileSaved(false);
     try {
-      const res = await profileApi.update({ name, email });
+      const res = await profileApi.update({ name, email, username });
       if (res.success) {
         setProfileSaved(true);
         await refreshUser();
@@ -256,6 +262,26 @@ export function SettingsTab() {
       if (res.success) {
         setConfigSaved(true);
         setTimeout(() => setConfigSaved(false), 3000);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const [notifSaved, setNotifSaved] = useState(false);
+
+  const handleSaveNotifs = async () => {
+    setNotifSaved(false);
+    try {
+      const res = await settingApi.update({
+        notif_email: notifEmail ? '1' : '0',
+        notif_late: notifLate ? '1' : '0',
+        notif_leave: notifLeave ? '1' : '0',
+        notif_system: notifSystem ? '1' : '0',
+      });
+      if (res.success) {
+        setNotifSaved(true);
+        setTimeout(() => setNotifSaved(false), 3000);
       }
     } catch (err) {
       console.error(err);
@@ -424,6 +450,14 @@ export function SettingsTab() {
               </div>
             </div>
             <div>
+              <label className="block text-[12px] font-medium text-gray-600 mb-1.5">Username Admin</label>
+              <div className="relative">
+                <User size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input type="text" value={username} onChange={e => setUsername(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all" />
+              </div>
+            </div>
+            <div>
               <label className="block text-[12px] font-medium text-gray-600 mb-1.5">Email</label>
               <div className="relative">
                 <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -499,6 +533,12 @@ export function SettingsTab() {
               <Toggle value={val} onChange={toggle} />
             </div>
           ))}
+          <div className="pt-4 mt-2">
+            <button onClick={handleSaveNotifs}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold transition-all shadow-sm ${notifSaved ? 'bg-green-50 text-[#16A34A] border border-green-200' : 'bg-[#16A34A] text-white hover:bg-[#0d9240] shadow-green-200'}`}>
+              {notifSaved ? <><CheckCircle2 size={14} /> Tersimpan!</> : <><Save size={14} /> Simpan Pengaturan</>}
+            </button>
+          </div>
         </div>
       </div>
 

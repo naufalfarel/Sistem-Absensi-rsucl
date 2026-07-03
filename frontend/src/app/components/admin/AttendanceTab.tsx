@@ -52,7 +52,7 @@ export function AttendanceTab() {
             statusKey = r.check_out ? 'done' : 'working';
           } else if (r.status === 'telat') {
             statusKey = r.check_out ? 'done' : 'late';
-          } else if (r.status === 'izin' || r.status === 'sakit') {
+          } else if (r.status === 'izin' || r.status === 'sakit' || r.status === 'cuti') {
             statusKey = 'leave';
           } else if (r.status === 'alpha') {
             statusKey = 'absent';

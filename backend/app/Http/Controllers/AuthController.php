@@ -11,25 +11,22 @@ class AuthController extends Controller
 {
     /**
      * POST /api/login
-     * Body: { nip, username, password }
+     * Body: { username, password }
      */
     public function login(Request $request)
     {
         $request->validate([
-            'nip'      => 'required|string',
             'username' => 'required|string',
             'password' => 'required|string',
         ]);
 
-        // Cari user berdasarkan NIP atau username
-        $user = User::where('nip', $request->nip)
-                    ->where('username', $request->username)
-                    ->first();
+        // Cari user berdasarkan username
+        $user = User::where('username', $request->username)->first();
 
         if (!$user || !Hash::check($request->password, $user->password)) {
             return response()->json([
                 'success' => false,
-                'message' => 'NIP, Username, atau Password tidak sesuai.',
+                'message' => 'Username atau Password tidak sesuai.',
             ], 401);
         }
 
@@ -120,9 +117,12 @@ class AuthController extends Controller
         $request->validate([
             'name'            => 'sometimes|string|max:255',
             'email'           => 'sometimes|email|unique:users,email,' . $user->id,
+            'username'        => 'sometimes|string|max:255|unique:users,username,' . $user->id,
             'password'        => 'sometimes|string|min:6',
             'old_password'    => 'sometimes|string',
             'profile_picture' => 'nullable|string', // base64
+            'phone'           => 'sometimes|nullable|string|max:20',
+            'gender'          => 'sometimes|nullable|string|max:20',
         ]);
 
         if ($request->has('name')) {
@@ -131,6 +131,10 @@ class AuthController extends Controller
 
         if ($request->has('email')) {
             $user->email = $request->email;
+        }
+
+        if ($request->has('username')) {
+            $user->username = $request->username;
         }
 
         if ($request->filled('password')) {
@@ -159,10 +163,23 @@ class AuthController extends Controller
                         $user->profile_picture = '/storage/profiles/' . $fileName;
                     }
                 }
-            }
+              }
         }
 
         $user->save();
+
+        if (!$user->isAdmin()) {
+            $emp = $user->employee;
+            if ($emp) {
+                if ($request->has('phone')) {
+                    $emp->phone = $request->phone;
+                }
+                if ($request->has('gender')) {
+                    $emp->gender = $request->gender;
+                }
+                $emp->save();
+            }
+        }
 
         $data = [
             'id'              => $user->id,

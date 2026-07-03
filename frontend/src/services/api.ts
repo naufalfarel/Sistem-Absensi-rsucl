@@ -90,9 +90,9 @@ export interface AuthUser {
 }
 
 export const authApi = {
-  login: (nip: string, username: string, password: string) =>
+  login: (username: string, password: string) =>
     api.post<{ success: boolean; data: { token: string; user: AuthUser } }>(
-      '/login', { nip, username, password }
+      '/login', { username, password }
     ),
   me: () => api.get<{ success: boolean; data: AuthUser }>('/me'),
   logout: () => api.post<{ success: boolean; message: string }>('/logout', {}),
@@ -102,6 +102,9 @@ export const profileApi = {
   update: (data: {
     name?: string;
     email?: string;
+    username?: string;
+    phone?: string;
+    gender?: string;
     password?: string;
     old_password?: string;
     profile_picture?: string | null;
@@ -149,7 +152,7 @@ export interface AttendanceRecord {
   date: string;
   check_in: string | null;
   check_out: string | null;
-  status: 'hadir' | 'telat' | 'izin' | 'sakit' | 'alpha';
+  status: 'hadir' | 'telat' | 'izin' | 'sakit' | 'cuti' | 'alpha';
   duration_min: number | null;
   latitude: number | null;
   longitude: number | null;
@@ -168,7 +171,9 @@ export const attendanceApi = {
     active_leave?: { type: 'cuti' | 'izin' | 'sakit'; reason: string } | null;
   }>('/attendance/today'),
   allToday: () => api.get<{ success: boolean; data: AttendanceRecord[] }>('/attendance/all-today'),
-  history:  () => api.get<{ success: boolean; data: AttendanceRecord[] }>('/attendance/history'),
+  history:  (month?: number, year?: number) => api.get<{ success: boolean; data: AttendanceRecord[] }>(
+    '/attendance/history' + (month && year ? `?month=${month}&year=${year}` : '')
+  ),
   checkIn:  (lat?: number, lng?: number, accuracy?: number, image?: string, simulatedTime?: string) =>
     api.post<{ success: boolean; message: string; data: AttendanceRecord }>(
       '/attendance/check-in', { latitude: lat, longitude: lng, accuracy, image, simulated_time: simulatedTime }
@@ -243,8 +248,23 @@ export interface ReportSummary {
   dept_attendance: { dept: string; persen: number }[];
 }
 
+export interface MonthlyRekapRecord {
+  nip: string;
+  name: string;
+  department: string;
+  hadir: number;
+  telat: number;
+  izin: number;
+  sakit: number;
+  cuti: number;
+  alpha: number;
+  duration_min: number;
+}
+
 export const reportApi = {
   summary: () => api.get<{ success: boolean; data: ReportSummary }>('/reports/summary'),
+  monthlyRekap: (month: number, year: number) =>
+    api.get<{ success: boolean; data: MonthlyRekapRecord[] }>(`/reports/monthly-rekap?month=${month}&year=${year}`),
 };
 
 // ─────────────────────────────────────────────────────────────────────
@@ -265,6 +285,10 @@ export interface AppSettings {
   hospital_lat: string;
   hospital_lng: string;
   logo_url?: string;
+  notif_email?: '0' | '1';
+  notif_late?: '0' | '1';
+  notif_leave?: '0' | '1';
+  notif_system?: '0' | '1';
 }
 
 export const settingApi = {

@@ -1,12 +1,20 @@
 import { useState, useEffect } from 'react';
-import { FileText, Download, Users, Calendar, Clock, AlertTriangle } from 'lucide-react';
+import { FileText, Download, Users, Calendar, Clock, AlertTriangle, ChevronDown } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { reportApi, ReportSummary, attendanceApi } from '../../../services/api';
+import logoImg from '../../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
+import { useAuth } from '../../../context/AuthContext';
 
 export function ReportsTab() {
+  const { logoUrl } = useAuth();
   const [summary, setSummary] = useState<ReportSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [reportType, setReportType] = useState<'harian' | 'bulanan'>('harian');
+
+  const currentDate = new Date();
+  const [selectedMonth, setSelectedMonth] = useState<number>(currentDate.getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState<number>(currentDate.getFullYear());
 
   const loadSummary = async () => {
     setLoading(true);
@@ -25,48 +33,95 @@ export function ReportsTab() {
   const handleExportExcel = async () => {
     setExporting(true);
     try {
-      const res = await attendanceApi.history();
-      if (!res.success || !res.data) {
-        alert("Gagal memuat data absensi.");
-        return;
+      if (reportType === 'harian') {
+        const res = await attendanceApi.history(selectedMonth, selectedYear);
+        if (!res.success || !res.data) {
+          alert("Gagal memuat data absensi.");
+          return;
+        }
+
+        const headers = [
+          "Tanggal",
+          "NIP",
+          "Nama Karyawan",
+          "Departemen",
+          "Jam Masuk",
+          "Jam Keluar",
+          "Durasi Kerja",
+          "Status Kehadiran",
+          "Lokasi GPS"
+        ];
+
+        const csvRows = [
+          headers.join(","),
+          ...res.data.map(r => [
+            r.date,
+            r.employee?.nip ?? '--',
+            `"${(r.employee?.name ?? 'Karyawan').replace(/"/g, '""')}"`,
+            `"${(r.employee?.department ?? 'Umum').replace(/"/g, '""')}"`,
+            r.check_in ?? '--',
+            r.check_out ?? '--',
+            r.duration_min ? `${Math.floor(r.duration_min / 60)}j ${r.duration_min % 60}m` : '--',
+            r.status.toUpperCase(),
+            r.is_within_geofence ? "Terverifikasi" : "Tidak Terverifikasi"
+          ].join(","))
+        ];
+
+        const csvContent = "\uFEFF" + csvRows.join("\n");
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `Laporan_Detail_Kehadiran_Rumah_Sakit_Umum_Cempaka_Lima_${selectedYear}_${selectedMonth}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } else {
+        const res = await reportApi.monthlyRekap(selectedMonth, selectedYear);
+        if (!res.success || !res.data) {
+          alert("Gagal memuat data rekap bulanan.");
+          return;
+        }
+
+        const headers = [
+          "NIP",
+          "Nama Karyawan",
+          "Departemen",
+          "Hadir (Hari)",
+          "Terlambat (Hari)",
+          "Izin (Hari)",
+          "Sakit (Hari)",
+          "Cuti (Hari)",
+          "Alpha (Hari)",
+          "Total Durasi Kerja"
+        ];
+
+        const csvRows = [
+          headers.join(","),
+          ...res.data.map(r => [
+            r.nip,
+            `"${r.name.replace(/"/g, '""')}"`,
+            `"${r.department.replace(/"/g, '""')}"`,
+            r.hadir,
+            r.telat,
+            r.izin,
+            r.sakit,
+            r.cuti,
+            r.alpha,
+            r.duration_min ? `${Math.floor(r.duration_min / 60)}j ${r.duration_min % 60}m` : '0j 0m'
+          ].join(","))
+        ];
+
+        const csvContent = "\uFEFF" + csvRows.join("\n");
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `Laporan_Rekap_Bulanan_Rumah_Sakit_Umum_Cempaka_Lima_${selectedYear}_${selectedMonth}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
       }
-
-      const headers = [
-        "Tanggal",
-        "NIP",
-        "Nama Karyawan",
-        "Departemen",
-        "Jam Masuk",
-        "Jam Keluar",
-        "Durasi Kerja",
-        "Status Kehadiran",
-        "Geofence Terverifikasi"
-      ];
-
-      const csvRows = [
-        headers.join(","),
-        ...res.data.map(r => [
-          r.date,
-          r.employee?.nip ?? '--',
-          `"${(r.employee?.name ?? 'Karyawan').replace(/"/g, '""')}"`,
-          `"${(r.employee?.department ?? 'Umum').replace(/"/g, '""')}"`,
-          r.check_in ?? '--',
-          r.check_out ?? '--',
-          r.duration_min ? `${Math.floor(r.duration_min / 60)}j ${r.duration_min % 60}m` : '--',
-          r.status.toUpperCase(),
-          r.is_within_geofence ? "YA" : "TIDAK"
-        ].join(","))
-      ];
-
-      const csvContent = "\uFEFF" + csvRows.join("\n");
-      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.setAttribute("href", url);
-      link.setAttribute("download", `Laporan_Absensi_RSUCL_${new Date().toISOString().split('T')[0]}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
     } catch (err) {
       console.error(err);
       alert("Terjadi kesalahan saat mengekspor Excel.");
@@ -78,87 +133,152 @@ export function ReportsTab() {
   const handleExportPDF = async () => {
     setExporting(true);
     try {
-      const res = await attendanceApi.history();
-      if (!res.success || !res.data) {
-        alert("Gagal memuat data absensi.");
-        return;
-      }
-
       const printWindow = window.open("", "_blank");
       if (!printWindow) {
         alert("Mohon izinkan popup blocker untuk mencetak laporan.");
         return;
       }
 
-      const recordsHtml = res.data.map((r, i) => `
-        <tr style="border-bottom: 1px solid #E5E7EB; font-size: 11px;">
-          <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${i + 1}</td>
-          <td style="padding: 8px; border-right: 1px solid #E5E7EB;">${r.date}</td>
-          <td style="padding: 8px; border-right: 1px solid #E5E7EB;">${r.employee?.nip ?? '--'}</td>
-          <td style="padding: 8px; font-weight: bold; border-right: 1px solid #E5E7EB;">${r.employee?.name ?? 'Karyawan'}</td>
-          <td style="padding: 8px; border-right: 1px solid #E5E7EB;">${r.employee?.department ?? 'Umum'}</td>
-          <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB; font-family: monospace;">${r.check_in ?? '--'}</td>
-          <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB; font-family: monospace;">${r.check_out ?? '--'}</td>
-          <td style="padding: 8px; text-align: center; font-weight: bold; color: ${
-            r.status === 'hadir' ? '#16A34A' : r.status === 'telat' ? '#D97706' : '#DC2626'
-          };">${r.status.toUpperCase()}</td>
-        </tr>
-      `).join("");
+      let tableHeaders = "";
+      let tableRowsHtml = "";
+      let reportTitle = "";
+
+      if (reportType === 'harian') {
+        const res = await attendanceApi.history(selectedMonth, selectedYear);
+        if (!res.success || !res.data) {
+          alert("Gagal memuat data absensi.");
+          return;
+        }
+
+        reportTitle = "Laporan Detail Kehadiran Harian";
+        tableHeaders = `
+          <tr>
+            <th style="text-align: center; width: 40px;">No</th>
+            <th>Tanggal</th>
+            <th>NIP</th>
+            <th>Nama Karyawan</th>
+            <th>Departemen</th>
+            <th style="text-align: center; width: 80px;">Jam Masuk</th>
+            <th style="text-align: center; width: 80px;">Jam Keluar</th>
+            <th style="text-align: center; width: 90px;">Durasi Kerja</th>
+            <th style="text-align: center; width: 120px;">Lokasi GPS</th>
+            <th style="text-align: center; width: 80px;">Status</th>
+          </tr>
+        `;
+
+        tableRowsHtml = res.data.map((r, i) => `
+          <tr style="border-bottom: 1px solid #E5E7EB; font-size: 11px;">
+            <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${i + 1}</td>
+            <td style="padding: 8px; border-right: 1px solid #E5E7EB;">${r.date}</td>
+            <td style="padding: 8px; border-right: 1px solid #E5E7EB;">${r.employee?.nip ?? '--'}</td>
+            <td style="padding: 8px; font-weight: bold; border-right: 1px solid #E5E7EB;">${r.employee?.name ?? 'Karyawan'}</td>
+            <td style="padding: 8px; border-right: 1px solid #E5E7EB;">${r.employee?.department ?? 'Umum'}</td>
+            <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB; font-family: monospace;">${r.check_in ?? '--'}</td>
+            <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB; font-family: monospace;">${r.check_out ?? '--'}</td>
+            <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${r.duration_min ? `${Math.floor(r.duration_min / 60)}j ${r.duration_min % 60}m` : '--'}</td>
+            <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB; font-size: 10px;">${r.is_within_geofence ? 'Terverifikasi' : 'Tidak Terverifikasi'}</td>
+            <td style="padding: 8px; text-align: center; font-weight: bold; color: ${
+              r.status === 'hadir' ? '#16A34A' : r.status === 'telat' ? '#D97706' : r.status === 'alpha' ? '#DC2626' : '#7C3AED'
+            };">${r.status.toUpperCase()}</td>
+          </tr>
+        `).join("");
+      } else {
+        const res = await reportApi.monthlyRekap(selectedMonth, selectedYear);
+        if (!res.success || !res.data) {
+          alert("Gagal memuat data rekap bulanan.");
+          return;
+        }
+
+        reportTitle = "Laporan Rekap Bulanan Kehadiran";
+        tableHeaders = `
+          <tr>
+            <th style="text-align: center; width: 40px;">No</th>
+            <th>NIP</th>
+            <th>Nama Karyawan</th>
+            <th>Departemen</th>
+            <th style="text-align: center; width: 60px;">Hadir</th>
+            <th style="text-align: center; width: 60px;">Telat</th>
+            <th style="text-align: center; width: 60px;">Izin</th>
+            <th style="text-align: center; width: 60px;">Sakit</th>
+            <th style="text-align: center; width: 60px;">Cuti</th>
+            <th style="text-align: center; width: 60px;">Alpha</th>
+            <th style="text-align: center; width: 100px;">Total Jam</th>
+          </tr>
+        `;
+
+        tableRowsHtml = res.data.map((r, i) => `
+          <tr style="border-bottom: 1px solid #E5E7EB; font-size: 11px;">
+            <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${i + 1}</td>
+            <td style="padding: 8px; border-right: 1px solid #E5E7EB;">${r.nip}</td>
+            <td style="padding: 8px; font-weight: bold; border-right: 1px solid #E5E7EB;">${r.name}</td>
+            <td style="padding: 8px; border-right: 1px solid #E5E7EB;">${r.department}</td>
+            <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${r.hadir} d</td>
+            <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${r.telat} d</td>
+            <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${r.izin} d</td>
+            <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${r.sakit} d</td>
+            <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${r.cuti} d</td>
+            <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${r.alpha} d</td>
+            <td style="padding: 8px; text-align: center; font-weight: bold;">${r.duration_min ? `${Math.floor(r.duration_min / 60)}j ${r.duration_min % 60}m` : '0j'}</td>
+          </tr>
+        `).join("");
+      }
+
+      const months = [
+        'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+        'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+      ];
+      const periodStr = `${months[selectedMonth - 1]} ${selectedYear}`;
 
       const content = `
         <html>
         <head>
-          <title>Laporan Kehadiran Absensi Karyawan RSUCL</title>
+          <title>${reportTitle} - Rumah Sakit Umum Cempaka Lima</title>
           <style>
             body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #1F2937; padding: 30px; margin: 0; }
             .header-table { width: 100%; border-bottom: 3px double #16A34A; padding-bottom: 12px; margin-bottom: 15px; }
-            .logo-cell { width: 60px; text-align: left; }
-            .logo-circle { width: 45px; height: 45px; border-radius: 50%; background: #16A34A; color: white; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 18px; }
-            .hospital-name { font-size: 22px; font-weight: 800; color: #16A34A; margin: 0; }
-            .hospital-sub { font-size: 11px; color: #6B7280; margin: 2px 0 0 0; }
-            .title { font-size: 15px; font-weight: 700; text-transform: uppercase; margin: 20px 0 5px 0; text-align: center; letter-spacing: 0.5px; }
-            .date-print { font-size: 10px; text-align: right; color: #6B7280; margin-bottom: 15px; }
+            .logo-cell { width: 65px; text-align: left; vertical-align: middle; }
+            .company-name { font-size: 15px; font-weight: 800; color: #16A34A; margin: 0 0 2px 0; text-transform: uppercase; letter-spacing: 0.5px; }
+            .hospital-name { font-size: 22px; font-weight: 800; color: #DC2626; margin: 0; text-transform: uppercase; }
+            .hospital-sub { font-size: 13px; color: #000000; margin: 3px 0 0 0; font-weight: 500; }
+            .title { font-size: 14px; font-weight: 700; text-transform: uppercase; margin: 20px 0 5px 0; text-align: center; letter-spacing: 0.5px; }
+            .period { font-size: 12px; font-weight: 600; text-align: center; margin-bottom: 15px; color: #374151; }
+            .date-print { font-size: 9px; text-align: right; color: #6B7280; margin-bottom: 10px; }
             .data-table { width: 100%; border-collapse: collapse; border: 1px solid #E5E7EB; }
-            .data-table th { background-color: #F9FAFB; color: #374151; font-weight: 600; text-align: left; padding: 10px 8px; border-bottom: 2px solid #E5E7EB; border-right: 1px solid #E5E7EB; font-size: 11px; }
+            .data-table th { background-color: #F9FAFB; color: #374151; font-weight: 600; text-align: left; padding: 10px 8px; border-bottom: 2px solid #E5E7EB; border-right: 1px solid #E5E7EB; font-size: 10px; text-transform: uppercase; }
             .footer-section { margin-top: 40px; display: flex; justify-content: flex-end; }
             .signature-block { width: 220px; text-align: center; font-size: 11px; }
             .signature-space { height: 60px; }
             @media print {
-              body { padding: 0; }
+              @page { margin: 0; }
+              body { padding: 2cm; margin: 0; }
             }
           </style>
         </head>
         <body>
-          <table class="header-table">
+          <table class="header-table" style="width: 100%; border-collapse: collapse;">
             <tr>
-              <td class="logo-cell">
-                <div class="logo-circle">CL</div>
+              <td style="width: 80px; text-align: left; vertical-align: middle; padding: 0;">
+                <img src="${logoUrl && logoUrl !== 'none' ? logoUrl : logoImg}" style="width: 60px; height: 60px; object-fit: contain; display: block;" />
               </td>
-              <td>
-                <h1 class="hospital-name">RSU CEMPAKA LIMA</h1>
+              <td style="text-align: center; vertical-align: middle; padding: 0;">
+                <p class="company-name">PT. CEMPAKA LIMA UTAMA</p>
+                <h1 class="hospital-name">RUMAH SAKIT UMUM CEMPAKA LIMA</h1>
                 <p class="hospital-sub">Jl. Politeknik Aceh No.23, Beurawe, Kec. Kuta Alam, Banda Aceh</p>
               </td>
+              <td style="width: 80px; padding: 0;"></td>
             </tr>
           </table>
           
-          <h2 class="title">Laporan Kehadiran Absensi Karyawan</h2>
-          <div class="date-print">Dicetak pada: ${new Date().toLocaleString('id-ID')}</div>
+          <h2 class="title">${reportTitle}</h2>
+          <div class="period">Periode: ${periodStr}</div>
+          <div class="date-print">Dicetak pada: ${new Date().toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'medium' })}</div>
 
           <table class="data-table">
             <thead>
-              <tr>
-                <th style="text-align: center; width: 40px;">No</th>
-                <th>Tanggal</th>
-                <th>NIP</th>
-                <th>Nama Karyawan</th>
-                <th>Departemen</th>
-                <th style="text-align: center; width: 80px;">Jam Masuk</th>
-                <th style="text-align: center; width: 80px;">Jam Keluar</th>
-                <th style="text-align: center; width: 80px;">Status</th>
-              </tr>
+              ${tableHeaders}
             </thead>
             <tbody>
-              ${recordsHtml}
+              ${tableRowsHtml}
             </tbody>
           </table>
 
@@ -197,12 +317,6 @@ export function ReportsTab() {
   }, []);
 
   const totalEmp = summary?.total_employees ?? 0;
-  const todayHadir = summary?.today.hadir ?? 0;
-  const todayTelat = summary?.today.telat ?? 0;
-  const todayAlpha = summary?.today.alpha ?? 0;
-  const todayCuti = summary?.today.cuti ?? 0;
-
-  // Real database rate
   const getMonthlyAttendanceRate = () => {
     const monthH = summary?.this_month.hadir ?? 0;
     const monthT = summary?.this_month.telat ?? 0;
@@ -225,7 +339,6 @@ export function ReportsTab() {
     return 'bg-gray-50 text-gray-500';
   };
 
-  // Strictly use API data or empty defaults while loading
   const pieData = summary?.composition ?? [];
   const monthlyTrendData = summary?.monthly_trend ?? [];
   const weeklyLateData = summary?.weekly_late ?? [];
@@ -237,7 +350,7 @@ export function ReportsTab() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-[16px] font-bold text-gray-900">Laporan Kehadiran</h2>
-          <p className="text-[12px] text-gray-400 mt-0.5">Analitik dan statistik absensi RSUCL · Real-time</p>
+          <p className="text-[12px] text-gray-400 mt-0.5">Analitik dan statistik absensi Rumah Sakit Umum Cempaka Lima · Real-time</p>
         </div>
         <div className="flex gap-2">
           <button 
@@ -254,6 +367,48 @@ export function ReportsTab() {
           >
             <Download size={13} /> {exporting ? 'Memproses...' : 'Export Excel'}
           </button>
+        </div>
+      </div>
+
+      {/* Filters bar */}
+      <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm flex flex-wrap gap-4 items-center">
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Tipe Laporan</label>
+          <div className="relative">
+            <select value={reportType} onChange={e => setReportType(e.target.value as any)}
+              className="appearance-none pl-3.5 pr-9 py-2 border border-gray-200 rounded-xl text-[12px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all text-gray-700 font-semibold cursor-pointer">
+              <option value="harian">Harian (Detail Kehadiran)</option>
+              <option value="bulanan">Rekap Bulanan (Ringkasan)</option>
+            </select>
+            <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bulan</label>
+          <div className="relative">
+            <select value={selectedMonth} onChange={e => setSelectedMonth(Number(e.target.value))}
+              className="appearance-none pl-3.5 pr-9 py-2 border border-gray-200 rounded-xl text-[12px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all text-gray-700 font-semibold cursor-pointer">
+              {[
+                { v: 1, l: 'Januari' }, { v: 2, l: 'Februari' }, { v: 3, l: 'Maret' },
+                { v: 4, l: 'April' }, { v: 5, l: 'Mei' }, { v: 6, l: 'Juni' },
+                { v: 7, l: 'Juli' }, { v: 8, l: 'Agustus' }, { v: 9, l: 'September' },
+                { v: 10, l: 'Oktober' }, { v: 11, l: 'November' }, { v: 12, l: 'Desember' }
+              ].map(m => <option key={m.v} value={m.v}>{m.l}</option>)}
+            </select>
+            <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Tahun</label>
+          <div className="relative">
+            <select value={selectedYear} onChange={e => setSelectedYear(Number(e.target.value))}
+              className="appearance-none pl-3.5 pr-9 py-2 border border-gray-200 rounded-xl text-[12px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all text-gray-700 font-semibold cursor-pointer">
+              {[2025, 2026, 2027, 2028].map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+            <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          </div>
         </div>
       </div>
 
@@ -365,7 +520,7 @@ export function ReportsTab() {
                       <Cell key={`rep-pie-${idx}`} fill={entry.color} />
                     ))}
                   </Pie>
-                  <Tooltip contentStyle={{ borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '12px' }} />
+                  <Tooltip formatter={(value) => `${value}%`} contentStyle={{ borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '12px' }} />
                 </PieChart>
               </ResponsiveContainer>
               <div className="space-y-1.5 mt-2">

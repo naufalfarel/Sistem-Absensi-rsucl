@@ -74,6 +74,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Laporan
         Route::get('/reports/summary', [ReportController::class, 'summary']);
+        Route::get('/reports/monthly-rekap', [ReportController::class, 'monthlyRekap']);
 
         // Pengaturan (PUT hanya admin)
         Route::put('/settings',  [SettingController::class, 'update']);

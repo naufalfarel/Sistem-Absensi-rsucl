@@ -23,6 +23,10 @@ class SettingController extends Controller
         'hospital_lat',         // koordinat RS
         'hospital_lng',
         'logo_url',             // URL logo RS
+        'notif_email',          // pengaturan notifikasi admin
+        'notif_late',
+        'notif_leave',
+        'notif_system',
     ];
 
     /**
@@ -61,6 +65,10 @@ class SettingController extends Controller
             'hospital_lat'       => 'sometimes|numeric',
             'hospital_lng'       => 'sometimes|numeric',
             'logo_url'           => 'sometimes|string|nullable',
+            'notif_email'        => 'sometimes|in:0,1',
+            'notif_late'         => 'sometimes|in:0,1',
+            'notif_leave'        => 'sometimes|in:0,1',
+            'notif_system'       => 'sometimes|in:0,1',
         ]);
 
         if ($request->has('logo_url')) {
@@ -144,6 +152,10 @@ class SettingController extends Controller
             'gps_radius'         => '40',
             'hospital_lat'       => '5.552740480177099',
             'hospital_lng'       => '95.33486560781716',
+            'notif_email'        => '1',
+            'notif_late'         => '1',
+            'notif_leave'        => '1',
+            'notif_system'       => '0',
             default              => '',
         };
     }

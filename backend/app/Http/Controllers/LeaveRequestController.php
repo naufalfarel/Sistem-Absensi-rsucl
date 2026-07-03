@@ -113,6 +113,32 @@ class LeaveRequestController extends Controller
             'admin_note'  => $data['admin_note'] ?? null,
         ]);
 
+        if ($newStatus === 'approved') {
+            $start = \Carbon\Carbon::parse($lr->start_date);
+            $end = \Carbon\Carbon::parse($lr->end_date);
+            for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
+                $dateStr = $date->toDateString();
+                \App\Models\Attendance::updateOrCreate(
+                    [
+                        'employee_id' => $lr->employee_id,
+                        'date'        => $dateStr,
+                    ],
+                    [
+                        'status'             => $lr->type,
+                        'check_in'           => null,
+                        'check_out'          => null,
+                        'note'               => "Masa " . ucfirst($lr->type) . ": " . $lr->reason,
+                        'latitude'           => null,
+                        'longitude'          => null,
+                        'accuracy'           => null,
+                        'is_within_geofence' => false,
+                        'image_check_in'     => null,
+                        'image_check_out'    => null,
+                    ]
+                );
+            }
+        }
+
         // Notifikasi ke karyawan
         $statusLabel = $newStatus === 'approved' ? 'Disetujui ✅' : 'Ditolak ❌';
         Notification::create([

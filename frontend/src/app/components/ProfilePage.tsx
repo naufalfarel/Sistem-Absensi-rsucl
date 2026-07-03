@@ -59,6 +59,17 @@ export function ProfilePage({ onLogout }: ProfilePageProps) {
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const [passwordLoading, setPasswordLoading] = useState(false);
 
+  // Edit Profile states
+  const [showEditProfileModal, setShowEditProfileModal] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editUsername, setEditUsername] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editGender, setEditGender] = useState('Laki-laki');
+  const [editProfileError, setEditProfileError] = useState('');
+  const [editProfileSuccess, setEditProfileSuccess] = useState('');
+  const [editProfileLoading, setEditProfileLoading] = useState(false);
+
   // Notification toggle state
   const [notifEnabled, setNotifEnabled] = useState(() => {
     const saved = localStorage.getItem('notifications_enabled');
@@ -134,6 +145,37 @@ export function ProfilePage({ onLogout }: ProfilePageProps) {
     }
   };
 
+  const handleEditProfileSubmit = async () => {
+    if (!editName || !editUsername || !editEmail) {
+      setEditProfileError('Nama, Username, dan Email wajib diisi.');
+      return;
+    }
+    setEditProfileError('');
+    setEditProfileSuccess('');
+    setEditProfileLoading(true);
+    try {
+      const res = await profileApi.update({
+        name: editName,
+        username: editUsername,
+        email: editEmail,
+        phone: editPhone,
+        gender: editGender
+      });
+      if (res.success) {
+        setEditProfileSuccess('Profil berhasil diperbarui.');
+        await refreshUser();
+        setTimeout(() => {
+          setShowEditProfileModal(false);
+          setEditProfileSuccess('');
+        }, 1500);
+      }
+    } catch (err: any) {
+      setEditProfileError(err?.message ?? 'Gagal memperbarui profil.');
+    } finally {
+      setEditProfileLoading(false);
+    }
+  };
+
   // Form state
   const [leaveType, setLeaveType] = useState<LeaveType>('cuti');
   const [startDate, setStartDate] = useState('');
@@ -198,6 +240,9 @@ export function ProfilePage({ onLogout }: ProfilePageProps) {
   };
 
   const pending = requests.filter(r => r.status === 'pending').length;
+  const usedCuti = requests.filter(r => r.status === 'approved').reduce((acc, r) => acc + (r.days || 0), 0);
+  const remainingCuti = Math.max(0, 12 - usedCuti);
+  const cutiPercentage = Math.round((remainingCuti / 12) * 100);
 
   const infoPersonal = [
     { icon: User,          label: 'Nama Lengkap',   value: user?.name ?? '' },
@@ -269,6 +314,10 @@ export function ProfilePage({ onLogout }: ProfilePageProps) {
                 <div className="absolute inset-0 bg-black/40 rounded-2xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                   <Camera size={16} className="text-white" />
                 </div>
+                {/* Visible Camera badge overlay */}
+                <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-[#16A34A] border-2 border-white rounded-lg flex items-center justify-center shadow-md">
+                  <Camera size={11} className="text-white" />
+                </div>
                 <input 
                   type="file" 
                   ref={fileInputRef} 
@@ -290,7 +339,7 @@ export function ProfilePage({ onLogout }: ProfilePageProps) {
               {[
                 { label: 'Kehadiran', value: '100%' },
                 { label: 'Status Role', value: user?.role === 'admin' ? 'Admin' : 'Karyawan' },
-                { label: 'Sisa Cuti', value: '8 hari' },
+                { label: 'Sisa Cuti', value: `${remainingCuti} hari` },
               ].map((s, i) => (
                 <div key={i} className="bg-white/15 rounded-xl p-2.5 text-center border border-white/10">
                   <p className="text-[15px] font-bold text-white">{s.value}</p>
@@ -309,16 +358,30 @@ export function ProfilePage({ onLogout }: ProfilePageProps) {
               </div>
               <div className="text-left">
                 <p className="text-[14px] font-semibold text-gray-800">Ajukan Cuti / Izin / Sakit</p>
-                <p className="text-[12px] text-gray-400 mt-0.5">Sisa cuti: 8 hari · {pending} pengajuan menunggu</p>
+                <p className="text-[12px] text-gray-400 mt-0.5">Sisa cuti: {remainingCuti} hari · {pending} pengajuan menunggu</p>
               </div>
             </div>
             <ChevronRight size={16} className="text-gray-300 group-hover:text-[#16A34A] transition-colors" />
           </button>
 
-          {/* Personal info */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-4">
-            <div className="px-5 py-3.5 border-b border-gray-50">
+            <div className="px-5 py-3.5 border-b border-gray-50 flex items-center justify-between">
               <p className="text-[13px] font-semibold text-gray-800">Informasi Pribadi</p>
+              <button 
+                onClick={() => {
+                  setEditName(user?.name ?? '');
+                  setEditUsername(user?.username ?? '');
+                  setEditEmail(user?.email ?? '');
+                  setEditPhone(user?.phone ?? '');
+                  setEditGender(user?.gender ?? 'Laki-laki');
+                  setEditProfileError('');
+                  setEditProfileSuccess('');
+                  setShowEditProfileModal(true);
+                }}
+                className="text-[#16A34A] hover:text-[#0d9240] text-[12px] font-semibold flex items-center gap-1 transition-all"
+              >
+                <Edit3 size={13} /> Edit
+              </button>
             </div>
             <div className="p-4 space-y-3.5">
               {infoPersonal.map(({ icon: Icon, label, value }, i) => (
@@ -418,14 +481,14 @@ export function ProfilePage({ onLogout }: ProfilePageProps) {
             <p className="text-[12px] text-white/70 mb-3 relative">Kuota Cuti Tahunan 2026</p>
             <div className="flex items-end gap-3 relative">
               <div>
-                <span className="text-4xl font-bold text-white">8</span>
+                <span className="text-4xl font-bold text-white">{remainingCuti}</span>
                 <span className="text-white/70 text-[14px] ml-1">/ 12 hari</span>
               </div>
               <div className="flex-1 mb-1.5">
                 <div className="bg-white/20 rounded-full h-2 overflow-hidden">
-                  <div className="h-2 rounded-full bg-white" style={{ width: '66%' }} />
+                  <div className="h-2 rounded-full bg-white" style={{ width: `${cutiPercentage}%` }} />
                 </div>
-                <p className="text-[10px] text-white/60 mt-1">4 hari telah digunakan</p>
+                <p className="text-[10px] text-white/60 mt-1">{usedCuti} hari telah digunakan</p>
               </div>
             </div>
             <div className="relative mt-4 flex gap-2">
@@ -701,6 +764,127 @@ export function ProfilePage({ onLogout }: ProfilePageProps) {
                 disabled={passwordLoading}
               >
                 {passwordLoading && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                Simpan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL EDIT PROFIL ── */}
+      {showEditProfileModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => { setShowEditProfileModal(false); setEditProfileError(''); setEditProfileSuccess(''); }} />
+          <div className="relative bg-white rounded-2xl p-6 shadow-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto">
+            <button onClick={() => { setShowEditProfileModal(false); setEditProfileError(''); setEditProfileSuccess(''); }} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+              <X size={16} className="text-gray-500" />
+            </button>
+            <h3 className="text-[16px] font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <User size={18} className="text-[#16A34A]" /> Edit Profil
+            </h3>
+            
+            {/* Avatar edit section in modal */}
+            <div className="flex flex-col items-center mb-5 pb-3 border-b border-gray-50">
+              <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()} title="Ubah Foto Profil">
+                {user?.profile_picture ? (
+                  <img 
+                    src={user.profile_picture} 
+                    alt="Foto Profil" 
+                    className="w-20 h-20 rounded-2xl object-cover border-2 border-green-100 flex-shrink-0 shadow-md"
+                  />
+                ) : (
+                  <div className="w-20 h-20 rounded-2xl bg-green-50 border-2 border-green-100 flex items-center justify-center flex-shrink-0 shadow-md">
+                    <span className="text-[#16A34A] text-2xl font-bold">{(user?.name || 'U').charAt(0)}</span>
+                  </div>
+                )}
+                {/* Visible Camera badge overlay */}
+                <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-[#16A34A] border-2 border-white rounded-lg flex items-center justify-center shadow-md">
+                  <Camera size={11} className="text-white" />
+                </div>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => fileInputRef.current?.click()}
+                className="mt-2 text-[11px] font-bold text-[#16A34A] hover:text-[#0d9240] transition-colors"
+              >
+                Ganti Foto Profil
+              </button>
+            </div>
+
+            {editProfileError && (
+              <div className="bg-red-50 border border-red-100 text-red-600 text-[12px] px-3.5 py-2.5 rounded-xl mb-3">{editProfileError}</div>
+            )}
+            {editProfileSuccess && (
+              <div className="bg-green-50 border border-green-100 text-[#16A34A] text-[12px] px-3.5 py-2.5 rounded-xl mb-3">{editProfileSuccess}</div>
+            )}
+            <div className="space-y-3 mb-5">
+              <div>
+                <label className="block text-[12px] font-medium text-gray-600 mb-1">Nama Lengkap</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={e => setEditName(e.target.value)}
+                  className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all"
+                />
+              </div>
+              <div>
+                <label className="block text-[12px] font-medium text-gray-600 mb-1">Username</label>
+                <input
+                  type="text"
+                  value={editUsername}
+                  onChange={e => setEditUsername(e.target.value)}
+                  className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all"
+                />
+              </div>
+              <div>
+                <label className="block text-[12px] font-medium text-gray-600 mb-1">Email</label>
+                <input
+                  type="email"
+                  value={editEmail}
+                  onChange={e => setEditEmail(e.target.value)}
+                  className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all"
+                />
+              </div>
+              <div>
+                <label className="block text-[12px] font-medium text-gray-600 mb-1">Nomor HP</label>
+                <input
+                  type="text"
+                  value={editPhone}
+                  onChange={e => setEditPhone(e.target.value)}
+                  className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all"
+                />
+              </div>
+              <div>
+                <label className="block text-[12px] font-medium text-gray-600 mb-1">Jenis Kelamin</label>
+                <div className="relative">
+                  <select
+                    value={editGender}
+                    onChange={e => setEditGender(e.target.value)}
+                    className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all appearance-none cursor-pointer"
+                  >
+                    <option value="Laki-laki">Laki-laki</option>
+                    <option value="Perempuan">Perempuan</option>
+                    <option value="L">Laki-laki (L)</option>
+                    <option value="P">Perempuan (P)</option>
+                  </select>
+                  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => { setShowEditProfileModal(false); setEditProfileError(''); setEditProfileSuccess(''); }} 
+                className="flex-1 py-2.5 border border-gray-200 rounded-xl text-[13px] font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                disabled={editProfileLoading}
+              >
+                Batal
+              </button>
+              <button 
+                onClick={handleEditProfileSubmit} 
+                className="flex-1 py-2.5 bg-[#16A34A] hover:bg-[#0d9240] rounded-xl text-[13px] font-semibold text-white transition-colors flex items-center justify-center gap-1.5"
+                disabled={editProfileLoading}
+              >
+                {editProfileLoading && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                 Simpan
               </button>
             </div>

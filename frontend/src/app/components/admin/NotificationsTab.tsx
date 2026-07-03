@@ -9,7 +9,11 @@ const catFilters = [
   { key: 'system', label: '⚙ Sistem' },
 ];
 
-export function NotificationsTab() {
+interface NotificationsTabProps {
+  onUpdateCount?: () => void;
+}
+
+export function NotificationsTab({ onUpdateCount }: NotificationsTabProps) {
   const [filter, setFilter] = useState('all');
   const [notifs, setNotifs] = useState<AppNotification[]>([]);
   const [unread, setUnread] = useState(0);
@@ -22,6 +26,7 @@ export function NotificationsTab() {
       if (res.success) {
         setNotifs(res.data.notifications);
         setUnread(res.data.unread_count);
+        onUpdateCount?.();
       }
     } catch (err) {
       console.error(err);
@@ -40,6 +45,7 @@ export function NotificationsTab() {
       if (res.success) {
         setNotifs(prev => prev.map(n => ({ ...n, is_read: true })));
         setUnread(0);
+        onUpdateCount?.();
       }
     } catch (err) {
       console.error(err);
@@ -54,6 +60,7 @@ export function NotificationsTab() {
         if (res.success) {
           setNotifs(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
           setUnread(c => Math.max(0, c - 1));
+          onUpdateCount?.();
         }
       }
     } catch (err) {

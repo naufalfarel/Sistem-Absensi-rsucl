@@ -108,15 +108,25 @@ class AttendanceController extends Controller
                               ->where('date', today()->toDateString())
                               ->first();
 
-        if ($existing && $existing->check_in) {
-            // Mode simulasi: hapus record lama agar bisa check-in ulang untuk testing
-            if ($request->has('simulated_time')) {
-                $existing->delete();
-            } else {
+        if ($existing) {
+            if (in_array($existing->status, ['sakit', 'izin', 'cuti'])) {
+                $typeName = $existing->status === 'sakit' ? 'Sakit' : ($existing->status === 'izin' ? 'Izin' : 'Cuti');
                 return response()->json([
                     'success' => false,
-                    'message' => 'Anda sudah melakukan check-in hari ini pada pukul ' . $existing->check_in . '.',
+                    'message' => "Check-in ditolak: Anda sedang dalam masa {$typeName} untuk hari ini.",
                 ], 422);
+            }
+
+            if ($existing->check_in) {
+                // Mode simulasi: hapus record lama agar bisa check-in ulang untuk testing
+                if ($request->has('simulated_time')) {
+                    $existing->delete();
+                } else {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Anda sudah melakukan check-in hari ini pada pukul ' . $existing->check_in . '.',
+                    ], 422);
+                }
             }
         }
 
@@ -369,8 +379,14 @@ class AttendanceController extends Controller
     {
         $user = $request->user();
         $query = Attendance::with(['employee.user', 'employee.department'])
-                           ->orderBy('date', 'desc')
-                           ->limit(100);
+                           ->orderBy('date', 'desc');
+
+        if ($request->has('month') && $request->has('year')) {
+            $query->whereYear('date', $request->query('year'))
+                  ->whereMonth('date', $request->query('month'));
+        } else {
+            $query->limit(100);
+        }
 
         if (!$user->isAdmin()) {
             $employee = $user->employee;

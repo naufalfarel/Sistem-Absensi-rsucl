@@ -191,4 +191,57 @@ class ReportController extends Controller
             ],
         ]);
     }
+
+    public function monthlyRekap(Request $request)
+    {
+        $month = $request->query('month', now('Asia/Jakarta')->month);
+        $year  = $request->query('year', now('Asia/Jakarta')->year);
+
+        $employees = Employee::with(['user', 'department', 'position'])
+            ->where('status', 'active')
+            ->get();
+
+        $rekap = [];
+        foreach ($employees as $emp) {
+            $attendances = Attendance::where('employee_id', $emp->id)
+                ->whereYear('date', $year)
+                ->whereMonth('date', $month)
+                ->get();
+
+            $hadir     = $attendances->where('status', 'hadir')->count();
+            $telat     = $attendances->where('status', 'telat')->count();
+            $izin      = $attendances->where('status', 'izin')->count();
+            $sakit     = $attendances->where('status', 'sakit')->count();
+            $cuti      = $attendances->where('status', 'cuti')->count();
+            $alpha     = $attendances->where('status', 'alpha')->count();
+
+            // Durasi kerja (total menit)
+            $totalDurationMin = 0;
+            foreach ($attendances as $att) {
+                if ($att->check_in && $att->check_out) {
+                    $in  = strtotime($att->check_in);
+                    $out = strtotime($att->check_out);
+                    $totalDurationMin += (int) round(($out - $in) / 60);
+                }
+            }
+
+            $rekap[] = [
+                'nip'          => $emp->nip,
+                'name'         => $emp->user?->name ?? 'Karyawan',
+                'department'   => $emp->department?->name ?? 'Umum',
+                'hadir'        => $hadir,
+                'telat'        => $telat,
+                'izin'         => $izin,
+                'sakit'        => $sakit,
+                'cuti'         => $cuti,
+                'alpha'        => $alpha,
+                'duration_min' => $totalDurationMin,
+            ];
+        }
+
+        return response()->json([
+            'success' => true,
+            'data'    => $rekap,
+        ]);
+    }
 }

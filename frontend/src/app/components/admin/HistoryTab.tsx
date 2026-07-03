@@ -8,6 +8,7 @@ const statusConfig: Record<string, { label: string; color: string; bg: string }>
   alpha:    { label: 'Alpha',    color: '#DC2626', bg: '#FEE2E2' },
   izin:     { label: 'Izin',     color: '#2563EB', bg: '#DBEAFE' },
   sakit:    { label: 'Sakit',    color: '#EA580C', bg: '#FFF7ED' },
+  cuti:     { label: 'Cuti',     color: '#7C3AED', bg: '#F5F3FF' },
 };
 
 const filterOptions = ['Semua Data'];
@@ -57,7 +58,7 @@ export function HistoryTab() {
     hadir: filtered.filter(r => r.status === 'hadir').length,
     terlambat: filtered.filter(r => r.status === 'telat').length,
     alpha: filtered.filter(r => r.status === 'alpha').length,
-    cuti: filtered.filter(r => r.status === 'izin' || r.status === 'sakit').length,
+    cuti: filtered.filter(r => r.status === 'izin' || r.status === 'sakit' || r.status === 'cuti').length,
   };
 
   const formatDate = (dateStr: string) => {

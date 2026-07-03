@@ -57,8 +57,8 @@ export default function App() {
   }
 
   // Auth pages
-  const handleLogin = async (password: string, nip: string, username: string): Promise<'ok' | 'wrong'> => {
-    const success = await login(nip, username, password);
+  const handleLogin = async (password: string, username: string): Promise<'ok' | 'wrong'> => {
+    const success = await login(username, password);
     return success ? 'ok' : 'wrong';
   };
 

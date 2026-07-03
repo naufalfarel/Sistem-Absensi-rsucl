@@ -6,7 +6,7 @@ interface AuthContextType {
   token: string | null;
   loading: boolean;
   logoUrl: string | null;
-  login: (nip: string, username: string, pass: string) => Promise<boolean>;
+  login: (username: string, pass: string) => Promise<boolean>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   refreshLogo: () => Promise<void>;
@@ -68,9 +68,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearToken();
   };
 
-  const login = async (nip: string, username: string, pass: string): Promise<boolean> => {
+  const login = async (username: string, pass: string): Promise<boolean> => {
     try {
-      const res = await authApi.login(nip, username, pass);
+      const res = await authApi.login(username, pass);
       if (res.success && res.data.token) {
         setToken(res.data.token);
         setTokenState(res.data.token);

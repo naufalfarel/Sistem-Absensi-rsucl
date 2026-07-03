@@ -1,17 +1,16 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { Eye, EyeOff, Lock, User, CreditCard, MapPin, Clock, BarChart3, Shield, AlertCircle, ArrowLeft } from 'lucide-react';
+import { Eye, EyeOff, Lock, User, MapPin, Clock, BarChart3, Shield, AlertCircle, ArrowLeft } from 'lucide-react';
 import logoImg from '../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
 
 interface LoginPageProps {
-  onLogin: (password: string, nip: string, username: string) => Promise<'ok' | 'wrong'>;
+  onLogin: (password: string, username: string) => Promise<'ok' | 'wrong'>;
   onBack?: () => void;
 }
 
 export function LoginPage({ onLogin, onBack }: LoginPageProps) {
   const { logoUrl } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
-  const [nip, setNip] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
@@ -19,16 +18,16 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
   const [error, setError] = useState('');
 
   const handleLogin = async () => {
-    if (!nip.trim() || !username.trim() || !password) {
-      setError('NIP, Username, dan Password wajib diisi.');
+    if (!username.trim() || !password) {
+      setError('Username dan Password wajib diisi.');
       return;
     }
     setError('');
     setIsLoading(true);
     try {
-      const result = await onLogin(password, nip, username);
+      const result = await onLogin(password, username);
       if (result === 'wrong') {
-        setError('NIP, Username, atau Password tidak sesuai. Hubungi administrator jika lupa akun.');
+        setError('Username atau Password tidak sesuai. Hubungi administrator jika lupa akun.');
       }
     } catch (err: any) {
       setError(err?.message ?? 'Terjadi kesalahan sistem.');
@@ -87,21 +86,7 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
               </div>
             )}
 
-            {/* NIP */}
-            <div className="mb-4">
-              <label className="block text-[13px] font-medium text-gray-700 mb-1.5">NIP / ID Pegawai</label>
-              <div className="relative">
-                <CreditCard size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Masukkan NIP Anda"
-                  value={nip}
-                  onChange={e => { setNip(e.target.value); setError(''); }}
-                  onKeyDown={handleKey}
-                  className={`w-full pl-10 pr-4 py-2.5 border rounded-xl text-[14px] bg-gray-50 focus:outline-none focus:ring-2 transition-all placeholder:text-gray-300 ${error ? 'border-red-200 focus:border-red-400 focus:ring-red-100' : 'border-gray-200 focus:border-[#16A34A] focus:ring-[#16A34A]/15'}`}
-                />
-              </div>
-            </div>
+
 
             {/* Username */}
             <div className="mb-4">
