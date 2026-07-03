@@ -121,7 +121,7 @@ class DatabaseSeeder extends Seeder
             'close_checkin' => '09:00',
             'checkout_open' => '17:00',
             'checkout_close'=> '18:00',
-            'gps_radius'    => '100',
+            'gps_radius'    => '40',
             'hospital_lat'  => '5.552740480177099',
             'hospital_lng'  => '95.33486560781716',
         ];

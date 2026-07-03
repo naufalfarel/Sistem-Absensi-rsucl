@@ -30,6 +30,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Auth
     Route::get('/me',     [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::put('/profile', [AuthController::class, 'updateProfile']);
 
     // Notifikasi (semua role)
     Route::get('/notifications',              [NotificationController::class, 'index']);
@@ -45,6 +46,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Pengajuan Cuti/Izin (karyawan bisa buat & lihat miliknya; admin lihat semua)
     Route::get('/leave-requests',  [LeaveRequestController::class, 'index']);
     Route::post('/leave-requests', [LeaveRequestController::class, 'store']);
+
+    // Pengaturan (GET bisa diakses karyawan untuk sync radius/shift, PUT hanya admin)
+    Route::get('/settings',  [SettingController::class, 'index']);
 
     // ── Admin only ────────────────────────────────────────────────────
     Route::middleware(\App\Http\Middleware\EnsureIsAdmin::class)->group(function () {
@@ -68,8 +72,7 @@ Route::middleware('auth:sanctum')->group(function () {
         // Laporan
         Route::get('/reports/summary', [ReportController::class, 'summary']);
 
-        // Pengaturan
-        Route::get('/settings',  [SettingController::class, 'index']);
+        // Pengaturan (PUT hanya admin)
         Route::put('/settings',  [SettingController::class, 'update']);
     });
 });

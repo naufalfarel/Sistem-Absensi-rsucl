@@ -1,35 +1,104 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   MapPin, Wifi, Navigation, Clock, CheckCircle2, AlertCircle, X,
-  Target, Lock, Coffee, Moon, Sun, Sunset, Camera, RefreshCw,
-  Signal, Crosshair,
+  Target, Lock, Coffee, Moon, Sun, Sunset, Camera, Signal,
 } from 'lucide-react';
+import { MapContainer, TileLayer, Circle, Marker, Popup, useMap } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { useAuth } from '../../context/AuthContext';
-import { attendanceApi } from '../../services/api';
+import { attendanceApi, settingApi } from '../../services/api';
+
+// Fix Leaflet default marker icon broken by bundlers
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+  iconUrl:       'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+  shadowUrl:     'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+});
+
+// Custom hospital icon (green)
+const hospIcon = L.divIcon({
+  html: `<div style="background:#16A34A;border:2px solid #0d9240;border-radius:50% 50% 50% 0;width:28px;height:28px;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(22,163,74,0.5)">
+           <span style="transform:rotate(45deg);color:white;font-size:11px;font-weight:bold">RS</span>
+         </div>`,
+  className: '',
+  iconSize:   [28, 28],
+  iconAnchor: [14, 28],
+  popupAnchor:[0, -30],
+});
+
+// Custom user icon (blue pulsing)
+const userIcon = L.divIcon({
+  html: `<div style="position:relative;width:20px;height:20px">
+           <div style="position:absolute;inset:0;background:#3B82F6;border:2px solid white;border-radius:50%;box-shadow:0 2px 6px rgba(59,130,246,0.6)"></div>
+         </div>`,
+  className: '',
+  iconSize:   [20, 20],
+  iconAnchor: [10, 10],
+});
+
+// Helper component: re-center map when user location changes
+function RecenterMap({ lat, lng }: { lat: number; lng: number }) {
+  const map = useMap();
+  useEffect(() => { map.setView([lat, lng], map.getZoom()); }, [lat, lng, map]);
+  return null;
+}
 
 // ── Time logic ─────────────────────────────────────────────────────────
 type AttendanceWindow = 'sunday' | 'too_early' | 'checkin' | 'late_locked' | 'break' | 'working' | 'checkout' | 'ended';
 
 function toMins(h: number, m: number) { return h * 60 + m; }
+function parseMins(t: string) { const [h, m] = t.split(':').map(Number); return toMins(h, m); }
 
-function getWindow(now: Date): AttendanceWindow {
+interface ShiftSettings {
+  checkin_open:   string; // '08:00'
+  late_limit:     string; // '08:30'
+  close_checkin:  string; // '09:00'
+  break_start:    string; // '12:30'
+  break_end:      string; // '13:30'
+  checkout_open:  string; // '17:00'
+  checkout_close: string; // '18:00'
+  sat_checkout_open:  string; // '13:00'
+  sat_checkout_close: string; // '13:00'
+  hospital_lat:   number;
+  hospital_lng:   number;
+  gps_radius:     number;
+}
+
+const DEFAULT_SHIFT: ShiftSettings = {
+  checkin_open:   '08:00',
+  late_limit:     '08:30',
+  close_checkin:  '09:00',
+  break_start:    '12:30',
+  break_end:      '13:30',
+  checkout_open:  '17:00',
+  checkout_close: '18:00',
+  sat_checkout_open:  '13:00',
+  sat_checkout_close: '13:00',
+  hospital_lat:   5.552740480177099,
+  hospital_lng:   95.33486560781716,
+  gps_radius:     40,
+};
+
+function getWindow(now: Date, s: ShiftSettings = DEFAULT_SHIFT): AttendanceWindow {
   const day  = now.getDay();
   const mins = toMins(now.getHours(), now.getMinutes());
   if (day === 0) return 'sunday';
   if (day >= 1 && day <= 5) {
-    if (mins < toMins(8, 0))  return 'too_early';
-    if (mins < toMins(9, 1))  return 'checkin';
-    if (mins < toMins(12,30)) return 'late_locked';
-    if (mins < toMins(13,30)) return 'break';
-    if (mins < toMins(17, 0)) return 'working';
-    if (mins <= toMins(18,0)) return 'checkout';
+    if (mins <  parseMins(s.checkin_open))  return 'too_early';
+    if (mins <= parseMins(s.close_checkin)) return 'checkin';
+    if (mins <  parseMins(s.break_start))  return 'late_locked';
+    if (mins <  parseMins(s.break_end))    return 'break';
+    if (mins <  parseMins(s.checkout_open)) return 'working';
+    if (mins <= parseMins(s.checkout_close)) return 'checkout';
     return 'ended';
   }
   if (day === 6) {
-    if (mins < toMins(8, 0))  return 'too_early';
-    if (mins < toMins(9, 1))  return 'checkin';
-    if (mins < toMins(13, 0)) return 'late_locked';
-    if (mins <= toMins(13,0)) return 'checkout';
+    if (mins < parseMins(s.checkin_open))     return 'too_early';
+    if (mins <= parseMins(s.close_checkin))   return 'checkin';
+    if (mins < parseMins(s.sat_checkout_open)) return 'late_locked';
+    if (mins <= parseMins(s.sat_checkout_close)) return 'checkout';
     return 'ended';
   }
   return 'ended';
@@ -45,6 +114,7 @@ const SIM_TIMES = [
   { label: 'Istirahat (12:30)',           h: 12, m: 30, day: 3 },
   { label: 'Habis Istirahat (13:30)',     h: 13, m: 30, day: 3 },
   { label: 'Jam Pulang (17:00)',          h: 17, m: 0,  day: 3 },
+  { label: 'Absen Sore (17:01)',          h: 17, m: 1,  day: 3 },
   { label: 'Lewat Batas (18:01)',         h: 18, m: 1,  day: 3 },
   { label: 'Sabtu – Buka (08:00)',        h: 8,  m: 0,  day: 6 },
   { label: 'Sabtu Pulang (13:00)',        h: 13, m: 0,  day: 6 },
@@ -71,42 +141,9 @@ const windowConfig: Record<AttendanceWindow, { icon: typeof Lock; iconColor: str
 // ── Face Verification ─────────────────────────────────────────────────
 type FaceStep = 'idle' | 'scanning' | 'captured' | 'confirmed';
 
-function CapturedStep({ onConfirmed }: { onConfirmed: () => void }) {
-  const [countdown, setCountdown] = useState(3);
-  useEffect(() => {
-    const interval = setInterval(() => setCountdown(c => c - 1), 1000);
-    const timeout  = setTimeout(onConfirmed, 3000);
-    return () => { clearInterval(interval); clearTimeout(timeout); };
-  }, [onConfirmed]);
-  return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-4">
-      <div className="px-5 py-3.5 border-b border-gray-50 flex items-center gap-2">
-        <Camera size={15} className="text-amber-500" />
-        <span className="text-[13px] font-semibold text-gray-800">Memverifikasi Wajah…</span>
-      </div>
-      <div className="p-5 flex flex-col items-center gap-4">
-        <div className="relative w-28 h-28 rounded-full bg-gray-200 overflow-hidden border-4 border-white shadow-md flex items-center justify-center">
-          <div className="absolute inset-0 bg-gradient-to-b from-gray-300 to-gray-400" />
-          <Camera size={32} className="text-white/70 relative z-10" />
-          <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-[#16A34A] animate-spin" />
-        </div>
-        <div className="text-center">
-          <p className="text-[13px] font-semibold text-gray-700">Mencocokkan wajah...</p>
-          <p className="text-[11px] text-gray-400 mt-0.5">Mohon tunggu sebentar ({countdown}s)</p>
-        </div>
-        <div className="flex gap-1">
-          {[0,1,2].map(i => (
-            <div key={i} className={`w-2 h-2 rounded-full transition-all ${i < (3 - countdown) ? 'bg-[#16A34A]' : 'bg-gray-200'}`} />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function FaceVerificationCard({
-  faceStep, onCapture, onRetake, employeeName, employeeNip
-}: { faceStep: FaceStep; onCapture: () => void; onRetake: () => void; employeeName: string; employeeNip: string }) {
+  faceStep, onCapture, onRetake, employeeName, employeeNip, capturedImage
+}: { faceStep: FaceStep; onCapture: (image: string) => void; onRetake: () => void; employeeName: string; employeeNip: string; capturedImage: string | null }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
@@ -131,6 +168,26 @@ function FaceVerificationCard({
     return () => stopCamera();
   }, [faceStep, startCamera, stopCamera]);
 
+  const handleCaptureClick = () => {
+    let capturedDataUrl = '';
+    if (videoRef.current) {
+      const canvas = document.createElement('canvas');
+      canvas.width = videoRef.current.videoWidth || 320;
+      canvas.height = videoRef.current.videoHeight || 240;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+        capturedDataUrl = canvas.toDataURL('image/jpeg');
+      }
+    }
+    // Fallback if video tag is empty or fails
+    if (!capturedDataUrl) {
+      capturedDataUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    }
+    stopCamera();
+    onCapture(capturedDataUrl);
+  };
+
   if (faceStep === 'idle') {
     return (
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-4">
@@ -151,7 +208,7 @@ function FaceVerificationCard({
             <p className="text-[11px] text-gray-400 mt-0.5">Ambil foto wajah Anda untuk memverifikasi identitas sebelum absen</p>
           </div>
           <button
-            onClick={onCapture}
+            onClick={() => onCapture('')}
             className="w-full flex items-center justify-center gap-2 py-3 bg-[#16A34A] hover:bg-[#0d9240] text-white rounded-xl text-[13px] font-semibold transition-all shadow-sm shadow-green-200 active:scale-[0.98]"
           >
             <Camera size={15} /> Buka Kamera
@@ -185,14 +242,13 @@ function FaceVerificationCard({
             {[['top-3 left-3', 'border-t-2 border-l-2 rounded-tl-lg'], ['top-3 right-3', 'border-t-2 border-r-2 rounded-tr-lg'], ['bottom-3 left-3', 'border-b-2 border-l-2 rounded-bl-lg'], ['bottom-3 right-3', 'border-b-2 border-r-2 rounded-br-lg']].map(([pos, cls], i) => (
               <div key={i} className={`absolute ${pos} w-8 h-8 border-[#16A34A] ${cls}`} />
             ))}
-            <div className="absolute left-0 right-0 h-0.5 bg-[#16A34A]/60 animate-[scan_2s_ease-in-out_infinite]" style={{ top: '50%' }} />
           </div>
           <div className="flex gap-2">
             <button onClick={onRetake} className="flex-1 flex items-center justify-center gap-2 py-2.5 border border-gray-200 rounded-xl text-[13px] font-medium text-gray-600 hover:bg-gray-50 transition-colors">
               <X size={14} /> Tutup
             </button>
             <button
-              onClick={() => { stopCamera(); onCapture(); }}
+              onClick={handleCaptureClick}
               className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-[#16A34A] hover:bg-[#0d9240] text-white rounded-xl text-[13px] font-semibold transition-all active:scale-95 shadow-sm shadow-green-200"
             >
               <Camera size={14} /> Ambil Foto
@@ -203,10 +259,6 @@ function FaceVerificationCard({
     );
   }
 
-  if (faceStep === 'captured') {
-    return <CapturedStep onConfirmed={onCapture} />;
-  }
-
   return (
     <div className="bg-white rounded-2xl border border-green-200 shadow-sm overflow-hidden mb-4 bg-green-50/30">
       <div className="px-5 py-3.5 border-b border-green-100 flex items-center gap-2">
@@ -214,10 +266,14 @@ function FaceVerificationCard({
         <span className="text-[13px] font-semibold text-green-800">Wajah Terverifikasi ✅</span>
       </div>
       <div className="p-4 flex items-center gap-4">
-        <div className="relative w-16 h-16 rounded-full bg-gradient-to-b from-gray-300 to-gray-400 border-4 border-white shadow-md flex items-center justify-center flex-shrink-0">
-          <Camera size={22} className="text-white/70" />
-          <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-[#16A34A] rounded-full border-2 border-white flex items-center justify-center">
-            <CheckCircle2 size={12} className="text-white" />
+        <div className="relative w-16 h-16 rounded-full bg-gray-200 border-4 border-white shadow-md flex items-center justify-center flex-shrink-0 overflow-hidden">
+          {capturedImage ? (
+            <img src={capturedImage} alt="Selfie" className="w-full h-full object-cover" />
+          ) : (
+            <Camera size={22} className="text-gray-400" />
+          )}
+          <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-[#16A34A] rounded-full border border-white flex items-center justify-center">
+            <CheckCircle2 size={10} className="text-white" />
           </div>
         </div>
         <div>
@@ -228,15 +284,12 @@ function FaceVerificationCard({
             <span className="text-[11px] text-[#16A34A] font-medium">Identitas dikonfirmasi</span>
           </div>
         </div>
-        <button onClick={onRetake} className="ml-auto text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-colors" title="Ulangi">
-          <RefreshCw size={14} />
-        </button>
       </div>
     </div>
   );
 }
 
-// ── GPS Card ──────────────────────────────────────────────────────────
+// ── GPS Card (Leaflet Real Map) ───────────────────────────────────────────
 function GPSCard({
   userLocation,
   gpsActive,
@@ -256,13 +309,17 @@ function GPSCard({
 }) {
   const signalBars = gpsActive ? (userLocation && userLocation.accuracy <= 15 ? 4 : 3) : 0;
 
+  const mapCenter: [number, number] = userLocation
+    ? [userLocation.lat, userLocation.lng]
+    : [hospLat, hospLng];
+
   const gpsData = [
     { label: 'Latitude',       value: userLocation ? `${userLocation.lat.toFixed(7)}°` : 'Mencari...' },
     { label: 'Longitude',      value: userLocation ? `${userLocation.lng.toFixed(7)}°` : 'Mencari...' },
     { label: 'Akurasi',        value: userLocation ? `±${userLocation.accuracy} meter` : '—' },
     { label: 'Radius RS',      value: `${hospRadius} meter` },
     { label: 'Status GPS',     value: gpsActive ? 'Aktif' : 'Mencari...' },
-    { label: 'Status Geofence',value: inGeofence ? 'Dalam Area' : 'Luar Area' },
+    { label: 'Status',         value: inGeofence ? 'Dalam Area' : 'Luar Area' },
   ];
 
   return (
@@ -287,79 +344,45 @@ function GPSCard({
         </div>
       </div>
 
-      {/* Map area — Google Maps style */}
-      <div className="relative h-52 bg-[#e8f4e8] overflow-hidden">
-        {/* Road grid */}
-        <div className="absolute inset-0" style={{
-          backgroundImage: `linear-gradient(rgba(0,0,0,0.04) 1px, transparent 1px),linear-gradient(90deg, rgba(0,0,0,0.04) 1px, transparent 1px)`,
-          backgroundSize: '36px 36px',
-        }} />
-        {/* Roads */}
-        <div className="absolute top-[40%] left-0 right-0 h-5 bg-white/80 shadow-sm" />
-        <div className="absolute top-[70%] left-0 right-0 h-3 bg-white/60" />
-        <div className="absolute left-[28%] top-0 bottom-0 w-4 bg-white/80 shadow-sm" />
-        <div className="absolute left-[66%] top-0 bottom-0 w-2.5 bg-white/60" />
+      {/* Leaflet Map */}
+      <div className="h-52 w-full relative">
+        <MapContainer
+          center={mapCenter}
+          zoom={17}
+          style={{ height: '100%', width: '100%' }}
+          zoomControl={false}
+          attributionControl={false}
+        >
+          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
 
-        {/* Geofence radius circle */}
-        <div className="absolute" style={{
-          top:'50%', left:'50%', transform:'translate(-50%,-50%)',
-          width: '120px', height: '120px', borderRadius: '50%',
-          border: inGeofence ? '2px dashed rgba(22,163,74,0.5)' : '2px dashed rgba(220,38,38,0.5)',
-          background: inGeofence ? 'rgba(22,163,74,0.07)' : 'rgba(220,38,38,0.07)',
-        }} />
-        {/* Outer ring pulse */}
-        <div className="absolute animate-ping" style={{
-          top:'50%', left:'50%', transform:'translate(-50%,-50%)',
-          width:'130px', height:'130px', borderRadius:'50%',
-          border: inGeofence ? '1px solid rgba(22,163,74,0.2)' : '1px solid rgba(220,38,38,0.2)',
-          animationDuration: '3s',
-        }} />
+          {/* Geofence radius circle */}
+          <Circle
+            center={[hospLat, hospLng]}
+            radius={hospRadius}
+            pathOptions={{
+              color:       inGeofence ? '#16A34A' : '#DC2626',
+              fillColor:   inGeofence ? '#16A34A' : '#DC2626',
+              fillOpacity: 0.08,
+              weight:      2,
+              dashArray:   '6 4',
+            }}
+          />
 
-        {/* RS Marker */}
-        <div className="absolute" style={{ top:'50%', left:'50%', transform:'translate(-50%,-100%)' }}>
-          <div className="flex flex-col items-center">
-            <div className="px-2.5 py-1 bg-[#16A34A] rounded-lg shadow-lg shadow-green-400/50 border border-green-600 flex items-center gap-1.5">
-              <span className="text-white text-[10px] font-bold">RS</span>
-              <span className="text-green-100 text-[9px]">RSUCL</span>
-            </div>
-            <div className="w-0 h-0 border-l-[6px] border-r-[6px] border-t-[8px] border-l-transparent border-r-transparent border-t-[#16A34A] -mt-px" />
-          </div>
-        </div>
+          {/* Hospital marker */}
+          <Marker position={[hospLat, hospLng]} icon={hospIcon}>
+            <Popup><span className="text-[12px] font-semibold">RSUCL<br /><span className="font-normal text-gray-500">Jl. Politeknik Aceh No.23</span></span></Popup>
+          </Marker>
 
-        {/* User location — pulsing dot */}
-        <div className="absolute" style={{
-          top: inGeofence ? '54%' : '20%',
-          left: inGeofence ? '55%' : '80%',
-          transform: 'translate(-50%,-50%)'
-        }}>
-          <div className="relative w-5 h-5">
-            <div className={`absolute inset-0 rounded-full border-2 border-white shadow-lg z-10 ${inGeofence ? 'bg-blue-500 shadow-blue-400/60' : 'bg-red-500 shadow-red-400/60'}`} />
-            <div className={`absolute inset-0 rounded-full animate-ping opacity-70 ${inGeofence ? 'bg-blue-400' : 'bg-red-400'}`} style={{ animationDuration:'1.5s' }} />
-            <div className={`absolute -inset-2 rounded-full animate-ping opacity-30 ${inGeofence ? 'bg-blue-300' : 'bg-red-300'}`} style={{ animationDuration:'2s' }} />
-          </div>
-        </div>
-
-        {/* Corner brackets */}
-        {[['top-2 left-2','border-t-2 border-l-2 rounded-tl'], ['top-2 right-2','border-t-2 border-r-2 rounded-tr'], ['bottom-2 left-2','border-b-2 border-l-2 rounded-bl'], ['bottom-2 right-2','border-b-2 border-r-2 rounded-br']].map(([pos, cls], i) => (
-          <div key={i} className={`absolute ${pos} w-5 h-5 border-gray-500/40 ${cls}`} />
-        ))}
-
-        {/* Scale bar */}
-        <div className="absolute bottom-2 left-3 bg-white/85 rounded-md px-2 py-1 flex items-center gap-1 shadow-sm">
-          <div className="w-8 h-0.5 bg-gray-700 relative">
-            <div className="absolute left-0 -top-0.5 w-0.5 h-1.5 bg-gray-700" />
-            <div className="absolute right-0 -top-0.5 w-0.5 h-1.5 bg-gray-700" />
-          </div>
-          <span className="text-[9px] text-gray-600 font-medium">{hospRadius}m</span>
-        </div>
-        {/* Accuracy badge */}
-        <div className="absolute bottom-2 right-3 bg-white/85 rounded-md px-2 py-1 shadow-sm">
-          <span className="text-[9px] text-gray-600 font-medium">Akurasi {userLocation ? `±${userLocation.accuracy}m` : '—'}</span>
-        </div>
-        {/* Map watermark */}
-        <div className="absolute top-2 right-2 bg-white/70 rounded px-1.5 py-0.5">
-          <span className="text-[8px] text-gray-400">Peta RSUCL</span>
-        </div>
+          {/* User location marker */}
+          {userLocation && (
+            <>
+              <Marker position={[userLocation.lat, userLocation.lng]} icon={userIcon}>
+                <Popup><span className="text-[12px]">Lokasi Anda saat ini<br />±{userLocation.accuracy}m akurasi</span></Popup>
+              </Marker>
+              <RecenterMap lat={userLocation.lat} lng={userLocation.lng} />
+            </>
+          )}
+        </MapContainer>
       </div>
 
       {/* GPS Data grid */}
@@ -374,7 +397,7 @@ function GPSCard({
         </div>
         <div className="grid grid-cols-3 gap-3">
           {gpsData.slice(3).map(({ label, value }) => {
-            const isOk = (label === 'Status Geofence' && inGeofence) || (label === 'Status GPS' && gpsActive);
+            const isOk = (label === 'Status' && inGeofence) || (label === 'Status GPS' && gpsActive);
             return (
               <div key={label} className={`rounded-xl p-2.5 ${isOk ? 'bg-green-50 border border-green-100' : 'bg-red-50 border border-red-100'}`}>
                 <p className="text-[9px] text-gray-400 uppercase tracking-wide mb-0.5">{label}</p>
@@ -385,17 +408,17 @@ function GPSCard({
         </div>
         {/* In-range indicator */}
         <div className={`mt-3 flex items-center gap-2 px-3 py-2 rounded-xl border ${inGeofence ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'}`}>
-          <Crosshair size={13} className={inGeofence ? 'text-[#16A34A] flex-shrink-0' : 'text-red-500 flex-shrink-0'} />
+          <Target size={13} className={inGeofence ? 'text-[#16A34A] flex-shrink-0' : 'text-red-500 flex-shrink-0'} />
           <div className="flex-1">
             <p className={`text-[11px] font-semibold ${inGeofence ? 'text-green-800' : 'text-red-800'}`}>
-              {inGeofence 
+              {inGeofence
                 ? `Di dalam area RS (~${Math.round(distance ?? 0)} meter)`
-                : distance !== null 
+                : distance !== null
                   ? `Di luar area RS (~${Math.round(distance)} meter)`
                   : 'Menunggu lokasi GPS...'}
             </p>
             <p className={`text-[10px] ${inGeofence ? 'text-green-600' : 'text-red-600'} truncate`}>
-              Jl. Politeknik Aceh No.23, Beurawe, Kec. Kuta Alam, Kota Banda Aceh, Aceh
+              {userLocation ? `${userLocation.lat.toFixed(6)}, ${userLocation.lng.toFixed(6)}` : 'Memuat lokasi...'}
             </p>
           </div>
           <div className={`w-2 h-2 rounded-full ${inGeofence ? 'bg-[#16A34A] animate-pulse' : 'bg-red-500'}`} />
@@ -416,9 +439,9 @@ function SuccessAnimation({ action, time, onDone }: { action: string; time: stri
   }, [onDone]);
 
   return (
-    <div className={`fixed inset-0 z-50 flex items-center justify-center transition-opacity duration-500 ${visible ? 'opacity-100' : 'opacity-0'}`}>
+    <div onClick={onDone} className={`fixed inset-0 z-[9999] flex items-center justify-center transition-opacity duration-500 cursor-pointer ${visible ? 'opacity-100' : 'opacity-0'}`}>
       <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" />
-      <div className="relative flex flex-col items-center gap-4">
+      <div className="relative flex flex-col items-center gap-4" onClick={(e) => e.stopPropagation()}>
         <div className="relative w-32 h-32 flex items-center justify-center">
           {[0,1,2].map(i => (
             <div key={i} className="absolute rounded-full bg-[#16A34A] opacity-0"
@@ -459,6 +482,20 @@ const RIPPLE_STYLE = `
 // ── Main AttendancePage ───────────────────────────────────────────────
 export function AttendancePage() {
   const { user } = useAuth();
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
   const [now, setNow]               = useState(new Date());
   const [simIdx, setSimIdx]         = useState<number | null>(null);
   const [showSim, setShowSim]       = useState(false);
@@ -468,15 +505,6 @@ export function AttendancePage() {
   const [checkInTime, setCheckInTime]   = useState('');
   const [checkOutTime, setCheckOutTime] = useState('');
 
-  // GPS and Geofence logic states
-  const HOSP_LAT = 5.552740480177099;
-  const HOSP_LNG = 95.33486560781716;
-  const HOSP_RADIUS = 100;
-
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
-  const [gpsActive, setGpsActive]       = useState<boolean>(true);
-  const [gpsSimMode, setGpsSimMode]     = useState<'inside' | 'outside' | 'real'>('inside');
-
   // Face verification state machine
   const [faceStep, setFaceStep] = useState<FaceStep>('idle');
 
@@ -484,6 +512,39 @@ export function AttendancePage() {
   const [successAction, setSuccessAction] = useState('');
   const [successTime, setSuccessTime]     = useState('');
   const [showSuccess, setShowSuccess]     = useState(false);
+
+  // Dynamic shift settings from backend
+  const [shiftSettings, setShiftSettings] = useState<ShiftSettings>(DEFAULT_SHIFT);
+
+  // GPS state
+  const HOSP_LAT    = shiftSettings.hospital_lat;
+  const HOSP_LNG    = shiftSettings.hospital_lng;
+  const HOSP_RADIUS = shiftSettings.gps_radius;
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
+  const [gpsActive, setGpsActive]       = useState<boolean>(false);
+
+  // Load shift settings from API
+  useEffect(() => {
+    settingApi.get().then((res) => {
+      if (res.success && res.data) {
+        const d = res.data as Record<string, string>;
+        setShiftSettings({
+          checkin_open:       d.checkin_open      ?? '08:00',
+          late_limit:         d.late_limit        ?? '08:30',
+          close_checkin:      d.close_checkin     ?? '09:00',
+          break_start:        d.break_start       ?? '12:30',
+          break_end:          d.break_end         ?? '13:30',
+          checkout_open:      d.checkout_open     ?? '17:00',
+          checkout_close:     d.checkout_close    ?? '18:00',
+          sat_checkout_open:  d.sat_checkout_open  ?? '13:00',
+          sat_checkout_close: d.sat_checkout_close ?? '13:00',
+          hospital_lat:       d.hospital_lat ? Number(d.hospital_lat) : 5.552740480177099,
+          hospital_lng:       d.hospital_lng ? Number(d.hospital_lng) : 95.33486560781716,
+          gps_radius:         d.gps_radius ? Number(d.gps_radius) : 40,
+        });
+      }
+    }).catch(() => {/* keep defaults */});
+  }, []);
 
   // Load today's record on mount
   useEffect(() => {
@@ -509,20 +570,9 @@ export function AttendancePage() {
 
   // Browser watch geolocation effect
   useEffect(() => {
-    if (gpsSimMode === 'inside') {
-      setUserLocation({ lat: 5.552820, lng: 95.334920, accuracy: 6 });
-      setGpsActive(true);
-      return;
-    }
-    if (gpsSimMode === 'outside') {
-      setUserLocation({ lat: 5.452740, lng: 95.234865, accuracy: 12 });
-      setGpsActive(true);
-      return;
-    }
-
     if (!navigator.geolocation) {
-      alert('Browser Anda tidak mendukung Geolocation GPS.');
-      setGpsSimMode('inside');
+      console.warn('Browser Anda tidak mendukung Geolocation GPS.');
+      setGpsActive(false);
       return;
     }
 
@@ -541,8 +591,8 @@ export function AttendancePage() {
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
-    return () => navigator.geolocation.clearWatch(id);
-  }, [gpsSimMode]);
+  }, []);
+
 
   const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371e3; // metres
@@ -575,25 +625,27 @@ export function AttendancePage() {
     ? buildSimDate(SIM_TIMES[simIdx].h, SIM_TIMES[simIdx].m, SIM_TIMES[simIdx].day)
     : now;
 
-  const window   = getWindow(current);
-  const wc       = windowConfig[window];
+  const attendanceWindow = getWindow(current, shiftSettings);
+  const wc               = windowConfig[attendanceWindow];
   const dayId    = DAYS_ID[current.getDay()];
   const isSaturday = current.getDay() === 6;
   const timeStr  = current.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
   const dateStr  = `${dayId}, ${current.getDate()} ${['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][current.getMonth()]} ${current.getFullYear()}`;
 
-  const canCheckIn  = window === 'checkin'  && !checkedIn;
-  const canCheckOut = window === 'checkout' && checkedIn && !checkedOut;
+  // canCheckIn: waktu check-in DAN belum check-in
+  // canCheckOut: waktu check-out DAN (sudah check-in ATAU mode simulasi, karena backend sudah hapus+buat ulang)
+  const canCheckIn  = attendanceWindow === 'checkin' && !checkedIn;
+  const canCheckOut = attendanceWindow === 'checkout' && !checkedOut;
 
   const faceVerified = faceStep === 'confirmed';
 
   const lockedLabel = () => {
-    if (window === 'too_early')  return 'Absen Dibuka Pukul 08:00';
-    if (window === 'late_locked') return checkedIn ? 'Menunggu Jam Pulang (17:00)' : 'Batas Check-In Terlewat (09:00)';
-    if (window === 'break')      return 'Dikunci – Jam Istirahat';
-    if (window === 'working')    return checkedIn ? 'Check-Out Dibuka Pukul 17:00' : 'Waktu Absen Masuk Telah Lewat';
-    if (window === 'ended')      return 'Waktu Absen Telah Berakhir';
-    if (window === 'sunday')     return 'Hari Libur';
+    if (attendanceWindow === 'too_early')   return `Absen Dibuka Pukul ${shiftSettings.checkin_open}`;
+    if (attendanceWindow === 'late_locked') return checkedIn ? `Menunggu Jam Pulang (${shiftSettings.checkout_open})` : `Batas Check-In Terlewat (${shiftSettings.close_checkin})`;
+    if (attendanceWindow === 'break')       return 'Dikunci – Jam Istirahat';
+    if (attendanceWindow === 'working')     return checkedIn ? `Check-Out Dibuka Pukul ${shiftSettings.checkout_open}` : 'Waktu Absen Masuk Telah Lewat';
+    if (attendanceWindow === 'ended')       return 'Waktu Absen Telah Berakhir';
+    if (attendanceWindow === 'sunday')      return 'Hari Libur';
     return 'Absen Dikunci';
   };
 
@@ -605,8 +657,18 @@ export function AttendancePage() {
     try {
       const latVal = userLocation?.lat ?? HOSP_LAT;
       const lngVal = userLocation?.lng ?? HOSP_LNG;
+      const accVal = userLocation?.accuracy ?? undefined;
+      
+      let simulatedTime: string | undefined = undefined;
+      if (simIdx !== null) {
+        // Gunakan jam dari pilihan simulasi, BUKAN jam real
+        const simH = String(SIM_TIMES[simIdx].h).padStart(2, '0');
+        const simM = String(SIM_TIMES[simIdx].m).padStart(2, '0');
+        simulatedTime = `${simH}:${simM}:00`;
+      }
+
       if (canCheckIn) {
-        const res = await attendanceApi.checkIn(latVal, lngVal);
+        const res = await attendanceApi.checkIn(latVal, lngVal, accVal, capturedImage || undefined, simulatedTime);
         if (res.success && res.data.check_in) {
           const t = res.data.check_in.substring(0, 5);
           setCheckInTime(t);
@@ -615,9 +677,10 @@ export function AttendancePage() {
           setSuccessAction('Check-In');
           setSuccessTime(t);
           setShowSuccess(true);
+          // Jangan reset faceStep agar checkout tetap terverifikasi
         }
       } else if (canCheckOut) {
-        const res = await attendanceApi.checkOut(latVal, lngVal);
+        const res = await attendanceApi.checkOut(latVal, lngVal, accVal, capturedImage || undefined, simulatedTime);
         if (res.success && res.data.check_out) {
           const t = res.data.check_out.substring(0, 5);
           setCheckOutTime(t);
@@ -665,22 +728,37 @@ export function AttendancePage() {
   ];
 
   const phaseOrder: AttendanceWindow[] = ['too_early','checkin','late_locked','break','working','checkout','ended'];
-  const currentPhaseIdx = phaseOrder.indexOf(window);
+  const currentPhaseIdx = phaseOrder.indexOf(attendanceWindow);
 
-  const handleFaceCapture = () => {
-    if (faceStep === 'idle')     { setFaceStep('scanning'); return; }
-    if (faceStep === 'scanning') { setFaceStep('captured'); return; }
-    if (faceStep === 'captured') { setFaceStep('confirmed'); }
+  const handleFaceCapture = (image: string) => {
+    if (faceStep === 'idle') {
+      setFaceStep('scanning');
+    } else if (faceStep === 'scanning') {
+      setCapturedImage(image);
+      setFaceStep('confirmed');
+    }
   };
   const handleFaceRetake = () => {
+    setCapturedImage(null);
     setFaceStep('idle');
   };
 
   const resetSim = (idx: number | null) => {
-    setSimIdx(idx); setShowSim(false);
-    setCheckedIn(false); setCheckedOut(false);
-    setCheckInTime(''); setCheckOutTime('');
-    setFaceStep('idle');
+    setSimIdx(idx);
+    setShowSim(false);
+    // Reset absensi state saat kembali ke waktu nyata
+    // tapi saat ganti jam simulasi, tetap pertahankan status check-in/face
+    if (idx === null) {
+      setCheckedIn(false); setCheckedOut(false);
+      setCheckInTime(''); setCheckOutTime('');
+      setFaceStep('idle');
+      setCapturedImage(null);
+    } else {
+      // Saat ganti jam simulasi: reset checkedOut agar checkout bisa dicoba,
+      // tapi pertahankan faceStep agar tidak perlu verifikasi wajah berulang
+      setCheckedOut(false);
+      setCheckOutTime('');
+    }
   };
 
   return (
@@ -699,48 +777,27 @@ export function AttendancePage() {
         </div>
       </div>
 
-      {/* Demo / Simulation Mode Panel */}
+      {/* Demo / Simulation Mode Panel — Jam only */}
       <div className="mb-4 space-y-2">
         <button onClick={() => setShowSim(!showSim)}
           className="w-full flex items-center justify-between px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-[12px] text-amber-700 font-medium hover:bg-amber-100 transition-colors">
-          <span>🧪 Mode Simulasi Absensi – Jam & Lokasi GPS</span>
+          <span>🧪 Mode Simulasi Jam Absen</span>
           <span className={`transition-transform ${showSim ? 'rotate-180' : ''}`}>▾</span>
         </button>
         {showSim && (
-          <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl space-y-3">
-            <div>
-              <p className="text-[11px] font-semibold text-amber-800 mb-1.5">1. Simulasikan Jam Absen</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                <button onClick={() => resetSim(null)}
-                  className={`px-2.5 py-2 rounded-lg text-[11px] font-medium text-left transition-colors ${simIdx === null ? 'bg-amber-500 text-white' : 'bg-white border border-amber-200 text-amber-700 hover:bg-amber-50'}`}>
-                  ⏱ Waktu Nyata
+          <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl">
+            <p className="text-[11px] font-semibold text-amber-800 mb-1.5">Simulasikan Jam Absen</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+              <button onClick={() => resetSim(null)}
+                className={`px-2.5 py-2 rounded-lg text-[11px] font-medium text-left transition-colors ${simIdx === null ? 'bg-amber-500 text-white' : 'bg-white border border-amber-200 text-amber-700 hover:bg-amber-50'}`}>
+                ⏱ Waktu Nyata
+              </button>
+              {SIM_TIMES.map((s, i) => (
+                <button key={i} onClick={() => resetSim(i)}
+                  className={`px-2.5 py-2 rounded-lg text-[11px] font-medium text-left transition-colors ${simIdx === i ? 'bg-amber-500 text-white' : 'bg-white border border-amber-200 text-amber-700 hover:bg-amber-50'}`}>
+                  {s.label}
                 </button>
-                {SIM_TIMES.map((s, i) => (
-                  <button key={i} onClick={() => resetSim(i)}
-                    className={`px-2.5 py-2 rounded-lg text-[11px] font-medium text-left transition-colors ${simIdx === i ? 'bg-amber-500 text-white' : 'bg-white border border-amber-200 text-amber-700 hover:bg-amber-50'}`}>
-                    {s.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="border-t border-amber-200 pt-2.5">
-              <p className="text-[11px] font-semibold text-amber-800 mb-1.5">2. Simulasikan Lokasi GPS & Geofence</p>
-              <div className="grid grid-cols-3 gap-1.5">
-                {[
-                  { mode: 'inside', label: '📍 Di Dalam RS (In-Range)' },
-                  { mode: 'outside', label: '🚗 Di Luar RS (Out-Range)' },
-                  { mode: 'real', label: '🌐 GPS Nyata (HP/Laptop)' },
-                ].map(opt => (
-                  <button
-                    key={opt.mode}
-                    onClick={() => setGpsSimMode(opt.mode as any)}
-                    className={`px-2 py-2 rounded-lg text-[10px] font-medium text-center transition-colors ${gpsSimMode === opt.mode ? 'bg-amber-500 text-white' : 'bg-white border border-amber-200 text-amber-700 hover:bg-amber-50'}`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
+              ))}
             </div>
           </div>
         )}
@@ -785,6 +842,7 @@ export function AttendancePage() {
         onRetake={handleFaceRetake}
         employeeName={user?.name ?? 'Dr. Rina Kusumawati'}
         employeeNip={user?.nip ?? '198501012010012001'}
+        capturedImage={capturedImage}
       />
 
       {/* GPS Map Geofence Card */}
@@ -827,10 +885,10 @@ export function AttendancePage() {
       {/* Connection badges */}
       <div className="flex gap-2.5 mb-4">
         {[
-          { icon: Wifi,       label: 'WiFi RS',  st: inGeofence ? 'Terhubung' : 'Terputus',    ok: inGeofence },
-          { icon: Navigation, label: 'GPS',       st: gpsActive ? 'Aktif' : 'Nonaktif',        ok: gpsActive },
-          { icon: Signal,     label: 'Sinyal',    st: userLocation ? (userLocation.accuracy <= 15 ? 'Kuat (4/4)' : 'Sedang (3/4)') : 'Mencari...',   ok: gpsActive },
-          { icon: Target,     label: 'Geofence',  st: inGeofence ? 'Terverifikasi' : 'Di Luar Area',ok: inGeofence },
+          { icon: Wifi,       label: 'WiFi/Jaringan', st: isOnline ? 'Terhubung' : 'Terputus', ok: isOnline },
+          { icon: Navigation, label: 'GPS',           st: gpsActive ? 'Aktif' : 'Nonaktif',    ok: gpsActive },
+          { icon: Signal,     label: 'Sinyal',        st: gpsActive && userLocation ? (userLocation.accuracy <= 15 ? 'Kuat (4/4)' : 'Sedang (3/4)') : 'Mencari...', ok: gpsActive },
+          { icon: Target,     label: 'Geofence',      st: inGeofence ? 'Terverifikasi' : 'Di Luar Area', ok: inGeofence },
         ].map(({ icon: Icon, label, st, ok }, i) => (
           <div key={i} className="flex-1 bg-white rounded-xl border border-gray-100 p-2 flex items-center gap-1.5 shadow-sm">
             <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${ok ? 'bg-green-50' : 'bg-red-50'}`}>
@@ -904,10 +962,10 @@ export function AttendancePage() {
         </div>
       ) : (
         <div className={`w-full py-4 rounded-2xl flex items-center justify-center gap-3 border-2 cursor-not-allowed
-          ${window === 'break' ? 'bg-purple-50 border-purple-200 text-purple-400' :
-            window === 'sunday' || window === 'ended' ? 'bg-gray-100 border-gray-200 text-gray-400' :
-            window === 'too_early' ? 'bg-amber-50 border-amber-200 text-amber-400' :
-            window === 'late_locked' ? 'bg-red-50 border-red-200 text-red-400' :
+          ${attendanceWindow === 'break' ? 'bg-purple-50 border-purple-200 text-purple-400' :
+            attendanceWindow === 'sunday' || attendanceWindow === 'ended' ? 'bg-gray-100 border-gray-200 text-gray-400' :
+            attendanceWindow === 'too_early' ? 'bg-amber-50 border-amber-200 text-amber-400' :
+            attendanceWindow === 'late_locked' ? 'bg-red-50 border-red-200 text-red-400' :
             'bg-blue-50 border-blue-200 text-blue-400'}`}>
           <Lock size={18} />
           <span className="text-[15px] font-semibold">{lockedLabel()}</span>
@@ -919,13 +977,13 @@ export function AttendancePage() {
         <p className="text-[11px] font-semibold text-gray-500 mb-2">Ketentuan Absensi RSUCL</p>
         <div className="space-y-1.5">
           {[
-            ['Buka absen (Sen–Jum & Sab)', '08:00 WIB', 'text-[#16A34A]'],
-            ['Tepat waktu', '08:00 – 08:29 WIB', 'text-[#16A34A]'],
-            ['Terlambat (tetap Hadir)', '08:30 – 09:00 WIB', 'text-amber-600'],
-            ['Tutup check-in', '09:01 WIB → Alpha', 'text-red-500'],
-            ['Istirahat (Sen–Jum)', '12:30 – 13:30 WIB', 'text-purple-600'],
-            ['Check-out / Jam pulang', '17:00 WIB (Sab: 13:00)', 'text-gray-700'],
-            ['Batas akhir check-out', '18:00 WIB', 'text-red-500'],
+            ['Buka absen (Sen–Jum & Sab)', `${shiftSettings.checkin_open} WIB`, 'text-[#16A34A]'],
+            ['Tepat waktu', `${shiftSettings.checkin_open} – ${shiftSettings.late_limit} WIB`, 'text-[#16A34A]'],
+            ['Terlambat (tetap Hadir)', `${shiftSettings.late_limit} – ${shiftSettings.close_checkin} WIB`, 'text-amber-600'],
+            ['Tutup check-in', `${shiftSettings.close_checkin} WIB → Alpha`, 'text-red-500'],
+            ['Istirahat (Sen–Jum)', `${shiftSettings.break_start} – ${shiftSettings.break_end} WIB`, 'text-purple-600'],
+            ['Check-out / Jam pulang', `${shiftSettings.checkout_open} WIB (Sab: ${shiftSettings.sat_checkout_open})`, 'text-gray-700'],
+            ['Batas akhir check-out', `${shiftSettings.checkout_close} WIB`, 'text-red-500'],
           ].map(([label, value, cls], i) => (
             <div key={i} className="flex justify-between text-[11px]">
               <span className="text-gray-500">{label}</span>
@@ -937,7 +995,7 @@ export function AttendancePage() {
 
       {/* Confirmation Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+        <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center">
           <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setShowModal(false)} />
           <div className="relative bg-white rounded-t-3xl sm:rounded-2xl w-full sm:max-w-sm p-6 shadow-2xl mx-0 sm:mx-4">
             <button onClick={() => setShowModal(false)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">

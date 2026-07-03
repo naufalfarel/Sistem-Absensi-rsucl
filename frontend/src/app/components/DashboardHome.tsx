@@ -178,8 +178,8 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
             <div className="grid grid-cols-3 gap-2.5">
               {[
                 { label: 'Jam Masuk',    value: '08:00', sub: 'WIB', color: '#16A34A', bg: '#F0FDF4' },
-                { label: 'Istirahat',    value: '12:30', sub: '– 13:30', color: '#7C3AED', bg: '#F5F3FF' },
-                { label: 'Jam Pulang',   value: '17:00', sub: 'WIB', color: '#EA580C', bg: '#FFF7ED' },
+                { label: 'Istirahat',    value: '12:30', sub: '– 13:30', color: '#16A34A', bg: '#F0FDF4' },
+                { label: 'Jam Pulang',   value: '17:00', sub: 'WIB', color: '#16A34A', bg: '#F0FDF4' },
               ].map((b, i) => (
                 <div key={i} className="rounded-xl p-3 text-center" style={{ background: b.bg }}>
                   <p className="text-[10px] text-gray-400 mb-1">{b.label}</p>
@@ -231,12 +231,14 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
 
           {/* Notifications preview */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
+             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
               <div className="flex items-center gap-2">
                 <Bell size={16} className="text-[#16A34A]" />
                 <span className="text-[14px] font-semibold text-gray-800">Notifikasi</span>
               </div>
-              <span className="w-5 h-5 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center font-bold">{unreadNotifsCount}</span>
+              {unreadNotifsCount > 0 && (
+                <span className="w-5 h-5 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center font-bold">{unreadNotifsCount}</span>
+              )}
             </div>
             <div className="p-3 space-y-1">
               {notifications.map((n, i) => (

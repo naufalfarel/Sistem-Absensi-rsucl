@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Search, Calendar, MapPin, Clock, TrendingUp } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { attendanceApi, AttendanceRecord } from '../../services/api';
 
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {

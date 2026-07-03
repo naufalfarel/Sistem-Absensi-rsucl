@@ -4,7 +4,11 @@ import { notificationApi, AppNotification } from '../../services/api';
 
 const filterOptions = ['Semua', 'Belum Dibaca'];
 
-export function NotificationsPage() {
+interface NotificationsPageProps {
+  onUpdateCount?: () => void;
+}
+
+export function NotificationsPage({ onUpdateCount }: NotificationsPageProps) {
   const [activeFilter, setActiveFilter] = useState('Semua');
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -17,6 +21,7 @@ export function NotificationsPage() {
       if (res.success) {
         setNotifications(res.data.notifications);
         setUnreadCount(res.data.unread_count);
+        onUpdateCount?.();
       }
     } catch (err) {
       console.error('Error fetching notifications:', err);
@@ -35,6 +40,7 @@ export function NotificationsPage() {
       if (res.success) {
         setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
         setUnreadCount(0);
+        onUpdateCount?.();
       }
     } catch (err) {
       console.error(err);
@@ -49,6 +55,7 @@ export function NotificationsPage() {
         if (res.success) {
           setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
           setUnreadCount(c => Math.max(0, c - 1));
+          onUpdateCount?.();
         }
       }
     } catch (err) {

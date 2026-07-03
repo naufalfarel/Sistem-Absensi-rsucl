@@ -13,12 +13,15 @@ class Attendance extends Model
 
     protected $fillable = [
         'employee_id', 'date', 'check_in', 'check_out',
-        'status', 'latitude', 'longitude', 'note',
+        'status', 'latitude', 'longitude', 'accuracy',
+        'is_within_geofence', 'note',
         'image_check_in', 'image_check_out',
     ];
 
     protected $casts = [
-        'date' => 'date',
+        'date'             => 'date',
+        'is_within_geofence' => 'boolean',
+        'accuracy'         => 'float',
     ];
 
     public function employee()

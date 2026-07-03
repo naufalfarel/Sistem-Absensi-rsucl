@@ -128,7 +128,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
           {/* Pill badge */}
           <div className="inline-flex items-center gap-2 bg-white/15 border border-white/25 rounded-full px-4 py-1.5 mb-6">
             <div className="w-1.5 h-1.5 rounded-full bg-green-300 animate-pulse" />
-            <span className="text-white/90 text-[12px] font-medium">Sistem Absensi Digital · Versi 2.0</span>
+            <span className="text-white/90 text-[12px] font-medium">Sistem Absensi Digital · Versi 1.0</span>
           </div>
 
           {/* Headline */}
@@ -508,8 +508,8 @@ export function LandingPage({ onEnter }: LandingPageProps) {
           </div>
 
           <div className="border-t border-white/15 pt-6 flex flex-col sm:flex-row items-center justify-between gap-2">
-            <p className="text-[12px] text-white/50">© 2025 Rumah Sakit Umum Cempaka Lima. Hak cipta dilindungi.</p>
-            <p className="text-[12px] text-white/50">Sistem Absensi Digital v2.0.1</p>
+            <p className="text-[12px] text-white/50">© 2026 Rumah Sakit Umum Cempaka Lima. Hak cipta dilindungi.</p>
+            <p className="text-[12px] text-white/50">Sistem Absensi Digital v1.0.0</p>
           </div>
         </div>
       </footer>

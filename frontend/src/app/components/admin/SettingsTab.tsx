@@ -85,6 +85,8 @@ export function SettingsTab() {
   // ── System Config ──
   const [radius, setRadius]   = useState('100');
   const [maxLate, setMaxLate] = useState('09:00');
+  const [hospLat, setHospLat] = useState('5.552740480177099');
+  const [hospLng, setHospLng] = useState('95.33486560781716');
   const [configSaved, setConfigSaved] = useState(false);
 
   // ── System Status ──
@@ -105,6 +107,8 @@ export function SettingsTab() {
         setSystemActive(res.data.system_active === '1');
         setRadius(res.data.gps_radius);
         setMaxLate(res.data.close_checkin);
+        if (res.data.hospital_lat) setHospLat(res.data.hospital_lat);
+        if (res.data.hospital_lng) setHospLng(res.data.hospital_lng);
       }
     } catch (err) {
       console.error(err);
@@ -171,6 +175,8 @@ export function SettingsTab() {
       const res = await settingApi.update({
         gps_radius: radius,
         close_checkin: maxLate,
+        hospital_lat: hospLat,
+        hospital_lng: hospLng,
       });
       if (res.success) {
         setConfigSaved(true);
@@ -394,7 +400,7 @@ export function SettingsTab() {
             <label className="block text-[12px] font-medium text-gray-600 mb-1.5">Radius Geofence GPS (meter)</label>
             <div className="relative">
               <MapPin size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input type="number" value={radius} onChange={e => setRadius(e.target.value)} min="50" max="500"
+              <input type="number" value={radius} onChange={e => setRadius(e.target.value)} min="10" max="1000"
                 className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all" />
             </div>
             <p className="text-[11px] text-gray-400 mt-1">Karyawan hanya dapat absen dalam radius {radius}m dari RSUCL</p>
@@ -408,6 +414,43 @@ export function SettingsTab() {
             </div>
             <p className="text-[11px] text-gray-400 mt-1">Setelah pukul {maxLate} karyawan tidak dapat melakukan check-in</p>
           </div>
+
+          {/* Koordinat RS */}
+          <div className="pt-2 border-t border-gray-100">
+            <p className="text-[12px] font-semibold text-gray-600 mb-3 flex items-center gap-1.5">
+              <MapPin size={13} className="text-[#16A34A]" /> Koordinat Lokasi Rumah Sakit
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-medium text-gray-500 mb-1.5">Latitude (Garis Lintang)</label>
+                <div className="relative">
+                  <MapPin size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    value={hospLat}
+                    onChange={e => setHospLat(e.target.value)}
+                    placeholder="5.552740..."
+                    className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-[12px] font-mono bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-gray-500 mb-1.5">Longitude (Garis Bujur)</label>
+                <div className="relative">
+                  <MapPin size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    value={hospLng}
+                    onChange={e => setHospLng(e.target.value)}
+                    placeholder="95.334865..."
+                    className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-[12px] font-mono bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all"
+                  />
+                </div>
+              </div>
+            </div>
+            <p className="text-[11px] text-gray-400 mt-1.5">Koordinat akan digunakan sebagai pusat lingkaran geofence oleh server</p>
+          </div>
+
           <button onClick={handleSaveConfig} className="flex items-center gap-2 px-5 py-2.5 bg-[#16A34A] text-white rounded-xl text-[13px] font-semibold hover:bg-[#0d9240] transition-all shadow-sm shadow-green-200">
             {configSaved ? <><CheckCircle2 size={14} /> Tersimpan!</> : <><Save size={14} /> Simpan Konfigurasi</>}
           </button>

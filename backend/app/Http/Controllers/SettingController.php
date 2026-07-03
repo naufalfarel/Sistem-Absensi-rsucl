@@ -9,15 +9,20 @@ class SettingController extends Controller
 {
     // Kunci yang diizinkan untuk di-set via API
     private const ALLOWED_KEYS = [
-        'system_active',    // 1 | 0
-        'late_limit',       // jam terlambat, default "08:30"
-        'close_checkin',    // tutup absen masuk, default "09:00"
-        'checkout_open',    // buka absen pulang, default "17:00"
-        'checkout_close',   // tutup absen pulang, default "18:00"
-        'gps_radius',       // radius geofence meter, default "100"
-        'hospital_lat',     // koordinat RS
+        'system_active',        // 1 | 0
+        'checkin_open',         // buka absen masuk, default "08:00"
+        'late_limit',           // jam terlambat, default "08:30"
+        'close_checkin',        // tutup absen masuk, default "09:00"
+        'break_start',          // mulai istirahat, default "12:30"
+        'break_end',            // selesai istirahat, default "13:30"
+        'checkout_open',        // buka absen pulang, default "17:00"
+        'checkout_close',       // tutup absen pulang, default "18:00"
+        'sat_checkout_open',    // buka absen pulang sabtu, default "13:00"
+        'sat_checkout_close',   // tutup absen pulang sabtu, default "13:00"
+        'gps_radius',           // radius geofence meter, default "40"
+        'hospital_lat',         // koordinat RS
         'hospital_lng',
-        'logo_url',         // URL logo RS
+        'logo_url',             // URL logo RS
     ];
 
     /**
@@ -42,14 +47,19 @@ class SettingController extends Controller
     public function update(Request $request)
     {
         $request->validate([
-            'system_active' => 'sometimes|in:0,1',
-            'late_limit'    => 'sometimes|date_format:H:i',
-            'close_checkin' => 'sometimes|date_format:H:i',
-            'checkout_open' => 'sometimes|date_format:H:i',
-            'checkout_close'=> 'sometimes|date_format:H:i',
-            'gps_radius'    => 'sometimes|integer|min:50|max:1000',
-            'hospital_lat'  => 'sometimes|numeric',
-            'hospital_lng'  => 'sometimes|numeric',
+            'system_active'      => 'sometimes|in:0,1',
+            'checkin_open'       => 'sometimes|date_format:H:i',
+            'late_limit'         => 'sometimes|date_format:H:i',
+            'close_checkin'      => 'sometimes|date_format:H:i',
+            'break_start'        => 'sometimes|date_format:H:i',
+            'break_end'          => 'sometimes|date_format:H:i',
+            'checkout_open'      => 'sometimes|date_format:H:i',
+            'checkout_close'     => 'sometimes|date_format:H:i',
+            'sat_checkout_open'  => 'sometimes|date_format:H:i',
+            'sat_checkout_close' => 'sometimes|date_format:H:i',
+            'gps_radius'         => 'sometimes|integer|min:10|max:1000',
+            'hospital_lat'       => 'sometimes|numeric',
+            'hospital_lng'       => 'sometimes|numeric',
         ]);
 
         foreach (self::ALLOWED_KEYS as $key) {
@@ -64,15 +74,20 @@ class SettingController extends Controller
     private function defaults(string $key): string
     {
         return match ($key) {
-            'system_active' => '1',
-            'late_limit'    => '08:30',
-            'close_checkin' => '09:00',
-            'checkout_open' => '17:00',
-            'checkout_close'=> '18:00',
-            'gps_radius'    => '100',
-            'hospital_lat'  => '-5.553',
-            'hospital_lng'  => '95.318',
-            default         => '',
+            'system_active'      => '1',
+            'checkin_open'       => '08:00',
+            'late_limit'         => '08:30',
+            'close_checkin'      => '09:00',
+            'break_start'        => '12:30',
+            'break_end'          => '13:30',
+            'checkout_open'      => '17:00',
+            'checkout_close'     => '18:00',
+            'sat_checkout_open'  => '13:00',
+            'sat_checkout_close' => '13:00',
+            'gps_radius'         => '40',
+            'hospital_lat'       => '5.552740480177099',
+            'hospital_lng'       => '95.33486560781716',
+            default              => '',
         };
     }
 }

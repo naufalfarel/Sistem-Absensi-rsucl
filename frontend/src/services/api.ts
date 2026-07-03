@@ -97,6 +97,11 @@ export const authApi = {
   logout: () => api.post<{ success: boolean; message: string }>('/logout', {}),
 };
 
+export const profileApi = {
+  update: (data: { password?: string; profile_picture?: string | null }) =>
+    api.put<{ success: boolean; message: string; data: AuthUser }>('/profile', data),
+};
+
 // ─────────────────────────────────────────────────────────────────────
 // Employees (admin only)
 // ─────────────────────────────────────────────────────────────────────
@@ -141,6 +146,8 @@ export interface AttendanceRecord {
   duration_min: number | null;
   latitude: number | null;
   longitude: number | null;
+  accuracy: number | null;
+  is_within_geofence: boolean;
   note: string | null;
   employee?: { id: number; name: string; nip: string; department: string };
   image_check_in?: string | null;
@@ -151,13 +158,13 @@ export const attendanceApi = {
   today:    () => api.get<{ success: boolean; data: AttendanceRecord | null }>('/attendance/today'),
   allToday: () => api.get<{ success: boolean; data: AttendanceRecord[] }>('/attendance/all-today'),
   history:  () => api.get<{ success: boolean; data: AttendanceRecord[] }>('/attendance/history'),
-  checkIn:  (lat?: number, lng?: number, image?: string) =>
+  checkIn:  (lat?: number, lng?: number, accuracy?: number, image?: string, simulatedTime?: string) =>
     api.post<{ success: boolean; message: string; data: AttendanceRecord }>(
-      '/attendance/check-in', { latitude: lat, longitude: lng, image }
+      '/attendance/check-in', { latitude: lat, longitude: lng, accuracy, image, simulated_time: simulatedTime }
     ),
-  checkOut: (lat?: number, lng?: number, image?: string) =>
+  checkOut: (lat?: number, lng?: number, accuracy?: number, image?: string, simulatedTime?: string) =>
     api.post<{ success: boolean; message: string; data: AttendanceRecord }>(
-      '/attendance/check-out', { latitude: lat, longitude: lng, image }
+      '/attendance/check-out', { latitude: lat, longitude: lng, accuracy, image, simulated_time: simulatedTime }
     ),
 };
 
@@ -234,10 +241,15 @@ export const reportApi = {
 // ─────────────────────────────────────────────────────────────────────
 export interface AppSettings {
   system_active: '0' | '1';
+  checkin_open: string;
   late_limit: string;
   close_checkin: string;
+  break_start: string;
+  break_end: string;
   checkout_open: string;
   checkout_close: string;
+  sat_checkout_open: string;
+  sat_checkout_close: string;
   gps_radius: string;
   hospital_lat: string;
   hospital_lng: string;

@@ -38,12 +38,13 @@ class AuthController extends Controller
         $token = $user->createToken('rsucl-token')->plainTextToken;
 
         $userData = [
-            'id'       => $user->id,
-            'name'     => $user->name,
-            'email'    => $user->email,
-            'role'     => $user->role,
-            'nip'      => $user->nip,
-            'username' => $user->username,
+            'id'              => $user->id,
+            'name'            => $user->name,
+            'email'           => $user->email,
+            'role'            => $user->role,
+            'nip'             => $user->nip,
+            'username'        => $user->username,
+            'profile_picture' => $user->profile_picture ? url($user->profile_picture) : null,
         ];
 
         // Sertakan data employee jika bukan admin
@@ -76,12 +77,13 @@ class AuthController extends Controller
     {
         $user = $request->user();
         $data = [
-            'id'       => $user->id,
-            'name'     => $user->name,
-            'email'    => $user->email,
-            'role'     => $user->role,
-            'nip'      => $user->nip,
-            'username' => $user->username,
+            'id'              => $user->id,
+            'name'            => $user->name,
+            'email'           => $user->email,
+            'role'            => $user->role,
+            'nip'             => $user->nip,
+            'username'        => $user->username,
+            'profile_picture' => $user->profile_picture ? url($user->profile_picture) : null,
         ];
 
         if (!$user->isAdmin()) {
@@ -106,5 +108,70 @@ class AuthController extends Controller
     {
         $request->user()->currentAccessToken()->delete();
         return response()->json(['success' => true, 'message' => 'Logout berhasil.']);
+    }
+
+    /**
+     * PUT /api/profile
+     */
+    public function updateProfile(Request $request)
+    {
+        $user = $request->user();
+
+        $request->validate([
+            'password'        => 'nullable|string|min:6',
+            'profile_picture' => 'nullable|string', // base64
+        ]);
+
+        if ($request->filled('password')) {
+            $user->password = Hash::make($request->password);
+        }
+
+        if ($request->has('profile_picture')) {
+            $imgData = $request->input('profile_picture');
+            if ($imgData === null) {
+                $user->profile_picture = null;
+            } elseif (preg_match('/^data:image\/(\w+);base64,/', $imgData, $type)) {
+                $imgData = substr($imgData, strpos($imgData, ',') + 1);
+                $type = strtolower($type[1]); // png, jpg, jpeg
+                if (in_array($type, ['jpg', 'jpeg', 'png'])) {
+                    $imgData = base64_decode($imgData);
+                    if ($imgData !== false) {
+                        $fileName = 'profile_' . $user->id . '_' . time() . '.' . $type;
+                        \Illuminate\Support\Facades\Storage::disk('public')->put('profiles/' . $fileName, $imgData);
+                        $user->profile_picture = '/storage/profiles/' . $fileName;
+                    }
+                }
+            }
+        }
+
+        $user->save();
+
+        $data = [
+            'id'              => $user->id,
+            'name'            => $user->name,
+            'email'           => $user->email,
+            'role'            => $user->role,
+            'nip'             => $user->nip,
+            'username'        => $user->username,
+            'profile_picture' => $user->profile_picture ? url($user->profile_picture) : null,
+        ];
+
+        if (!$user->isAdmin()) {
+            $emp = $user->employee()->with(['department', 'position'])->first();
+            if ($emp) {
+                $data['employee_id'] = $emp->id;
+                $data['department']  = $emp->department?->name;
+                $data['position']    = $emp->position?->name;
+                $data['phone']       = $emp->phone;
+                $data['gender']      = $emp->gender;
+                $data['join_date']   = $emp->join_date?->toDateString();
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Profil berhasil diperbarui.',
+            'data'    => $data,
+        ]);
     }
 }

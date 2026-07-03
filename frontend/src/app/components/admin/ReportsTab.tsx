@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { FileText, Download, Users, Calendar, Clock, AlertTriangle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { reportApi, ReportSummary } from '../../../services/api';
+import { reportApi, ReportSummary, attendanceApi } from '../../../services/api';
 
 export function ReportsTab() {
   const [summary, setSummary] = useState<ReportSummary | null>(null);
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const loadSummary = async () => {
     setLoading(true);
@@ -18,6 +19,176 @@ export function ReportsTab() {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleExportExcel = async () => {
+    setExporting(true);
+    try {
+      const res = await attendanceApi.history();
+      if (!res.success || !res.data) {
+        alert("Gagal memuat data absensi.");
+        return;
+      }
+
+      const headers = [
+        "Tanggal",
+        "NIP",
+        "Nama Karyawan",
+        "Departemen",
+        "Jam Masuk",
+        "Jam Keluar",
+        "Durasi Kerja",
+        "Status Kehadiran",
+        "Geofence Terverifikasi"
+      ];
+
+      const csvRows = [
+        headers.join(","),
+        ...res.data.map(r => [
+          r.date,
+          r.employee?.nip ?? '--',
+          `"${(r.employee?.name ?? 'Karyawan').replace(/"/g, '""')}"`,
+          `"${(r.employee?.department ?? 'Umum').replace(/"/g, '""')}"`,
+          r.check_in ?? '--',
+          r.check_out ?? '--',
+          r.duration_min ? `${Math.floor(r.duration_min / 60)}j ${r.duration_min % 60}m` : '--',
+          r.status.toUpperCase(),
+          r.is_within_geofence ? "YA" : "TIDAK"
+        ].join(","))
+      ];
+
+      const csvContent = "\uFEFF" + csvRows.join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `Laporan_Absensi_RSUCL_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error(err);
+      alert("Terjadi kesalahan saat mengekspor Excel.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleExportPDF = async () => {
+    setExporting(true);
+    try {
+      const res = await attendanceApi.history();
+      if (!res.success || !res.data) {
+        alert("Gagal memuat data absensi.");
+        return;
+      }
+
+      const printWindow = window.open("", "_blank");
+      if (!printWindow) {
+        alert("Mohon izinkan popup blocker untuk mencetak laporan.");
+        return;
+      }
+
+      const recordsHtml = res.data.map((r, i) => `
+        <tr style="border-bottom: 1px solid #E5E7EB; font-size: 11px;">
+          <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${i + 1}</td>
+          <td style="padding: 8px; border-right: 1px solid #E5E7EB;">${r.date}</td>
+          <td style="padding: 8px; border-right: 1px solid #E5E7EB;">${r.employee?.nip ?? '--'}</td>
+          <td style="padding: 8px; font-weight: bold; border-right: 1px solid #E5E7EB;">${r.employee?.name ?? 'Karyawan'}</td>
+          <td style="padding: 8px; border-right: 1px solid #E5E7EB;">${r.employee?.department ?? 'Umum'}</td>
+          <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB; font-family: monospace;">${r.check_in ?? '--'}</td>
+          <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB; font-family: monospace;">${r.check_out ?? '--'}</td>
+          <td style="padding: 8px; text-align: center; font-weight: bold; color: ${
+            r.status === 'hadir' ? '#16A34A' : r.status === 'telat' ? '#D97706' : '#DC2626'
+          };">${r.status.toUpperCase()}</td>
+        </tr>
+      `).join("");
+
+      const content = `
+        <html>
+        <head>
+          <title>Laporan Kehadiran Absensi Karyawan RSUCL</title>
+          <style>
+            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #1F2937; padding: 30px; margin: 0; }
+            .header-table { width: 100%; border-bottom: 3px double #16A34A; padding-bottom: 12px; margin-bottom: 15px; }
+            .logo-cell { width: 60px; text-align: left; }
+            .logo-circle { width: 45px; height: 45px; border-radius: 50%; background: #16A34A; color: white; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 18px; }
+            .hospital-name { font-size: 22px; font-weight: 800; color: #16A34A; margin: 0; }
+            .hospital-sub { font-size: 11px; color: #6B7280; margin: 2px 0 0 0; }
+            .title { font-size: 15px; font-weight: 700; text-transform: uppercase; margin: 20px 0 5px 0; text-align: center; letter-spacing: 0.5px; }
+            .date-print { font-size: 10px; text-align: right; color: #6B7280; margin-bottom: 15px; }
+            .data-table { width: 100%; border-collapse: collapse; border: 1px solid #E5E7EB; }
+            .data-table th { background-color: #F9FAFB; color: #374151; font-weight: 600; text-align: left; padding: 10px 8px; border-bottom: 2px solid #E5E7EB; border-right: 1px solid #E5E7EB; font-size: 11px; }
+            .footer-section { margin-top: 40px; display: flex; justify-content: flex-end; }
+            .signature-block { width: 220px; text-align: center; font-size: 11px; }
+            .signature-space { height: 60px; }
+            @media print {
+              body { padding: 0; }
+            }
+          </style>
+        </head>
+        <body>
+          <table class="header-table">
+            <tr>
+              <td class="logo-cell">
+                <div class="logo-circle">CL</div>
+              </td>
+              <td>
+                <h1 class="hospital-name">RSU CEMPAKA LIMA</h1>
+                <p class="hospital-sub">Jl. Politeknik Aceh No.23, Beurawe, Kec. Kuta Alam, Banda Aceh</p>
+              </td>
+            </tr>
+          </table>
+          
+          <h2 class="title">Laporan Kehadiran Absensi Karyawan</h2>
+          <div class="date-print">Dicetak pada: ${new Date().toLocaleString('id-ID')}</div>
+
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="text-align: center; width: 40px;">No</th>
+                <th>Tanggal</th>
+                <th>NIP</th>
+                <th>Nama Karyawan</th>
+                <th>Departemen</th>
+                <th style="text-align: center; width: 80px;">Jam Masuk</th>
+                <th style="text-align: center; width: 80px;">Jam Keluar</th>
+                <th style="text-align: center; width: 80px;">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${recordsHtml}
+            </tbody>
+          </table>
+
+          <div class="footer-section">
+            <div class="signature-block">
+              <p>Banda Aceh, ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+              <p>Kepala Kepegawaian & Administrasi</p>
+              <div class="signature-space"></div>
+              <p style="text-decoration: underline; font-weight: bold;">( ________________________ )</p>
+              <p style="color: #6B7280; font-size: 9px; margin-top: 3px;">NIP. RSUCL.2025.019</p>
+            </div>
+          </div>
+
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(function() { window.close(); }, 500);
+            }
+          </script>
+        </body>
+        </html>
+      `;
+
+      printWindow.document.write(content);
+      printWindow.document.close();
+    } catch (err) {
+      console.error(err);
+      alert("Terjadi kesalahan saat mencetak PDF.");
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -69,11 +240,19 @@ export function ReportsTab() {
           <p className="text-[12px] text-gray-400 mt-0.5">Analitik dan statistik absensi RSUCL · Real-time</p>
         </div>
         <div className="flex gap-2">
-          <button className="flex items-center gap-2 px-3.5 py-2 bg-red-50 border border-red-100 rounded-xl text-[12px] font-medium text-red-600 hover:bg-red-100 transition-colors shadow-sm">
-            <FileText size={13} /> Export PDF
+          <button 
+            onClick={handleExportPDF} 
+            disabled={exporting}
+            className="flex items-center gap-2 px-3.5 py-2 bg-red-50 border border-red-100 rounded-xl text-[12px] font-medium text-red-600 hover:bg-red-100 transition-colors shadow-sm disabled:opacity-50"
+          >
+            <FileText size={13} /> {exporting ? 'Memproses...' : 'Export PDF'}
           </button>
-          <button className="flex items-center gap-2 px-3.5 py-2 bg-green-50 border border-green-100 rounded-xl text-[12px] font-medium text-[#16A34A] hover:bg-green-100 transition-colors shadow-sm">
-            <Download size={13} /> Export Excel
+          <button 
+            onClick={handleExportExcel} 
+            disabled={exporting}
+            className="flex items-center gap-2 px-3.5 py-2 bg-green-50 border border-green-100 rounded-xl text-[12px] font-medium text-[#16A34A] hover:bg-green-100 transition-colors shadow-sm disabled:opacity-50"
+          >
+            <Download size={13} /> {exporting ? 'Memproses...' : 'Export Excel'}
           </button>
         </div>
       </div>

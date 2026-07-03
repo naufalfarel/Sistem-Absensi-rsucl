@@ -50,6 +50,7 @@ class AttendanceController extends Controller
      */
     public function checkIn(Request $request)
     {
+        \Illuminate\Support\Facades\Log::info('Check-in request inputs: ' . json_encode($request->all()));
         // Cek apakah sistem aktif
         $systemActive = Setting::get('system_active', '1');
         if ($systemActive === '0') {
@@ -70,14 +71,60 @@ class AttendanceController extends Controller
                               ->first();
 
         if ($existing && $existing->check_in) {
+            // Mode simulasi: hapus record lama agar bisa check-in ulang untuk testing
+            if ($request->has('simulated_time')) {
+                $existing->delete();
+            } else {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Anda sudah melakukan check-in hari ini pada pukul ' . $existing->check_in . '.',
+                ], 422);
+            }
+        }
+
+        // ── Validasi Geofence (server-side Haversine) ─────────────────
+        $hospLat    = (float) Setting::get('hospital_lat',  '5.552740480177099');
+        $hospLng    = (float) Setting::get('hospital_lng',  '95.33486560781716');
+        $hospRadius = (float) Setting::get('gps_radius',    '40');
+
+        $clientLat  = $request->input('latitude');
+        $clientLng  = $request->input('longitude');
+        $clientAcc  = $request->input('accuracy');
+
+        $isWithinGeofence = false;
+        if ($clientLat !== null && $clientLng !== null) {
+            $distance = $this->haversine((float)$clientLat, (float)$clientLng, $hospLat, $hospLng);
+            $isWithinGeofence = ($distance <= $hospRadius);
+
+            if (!$isWithinGeofence) {
+                return response()->json([
+                    'success' => false,
+                    'message' => sprintf(
+                        'Check-in ditolak: Anda berada %.0f meter dari RSUCL. Maksimal radius adalah %.0f meter. Pastikan Anda berada di dalam area rumah sakit.',
+                        $distance,
+                        $hospRadius
+                    ),
+                ], 422);
+            }
+        } else {
+            // Koordinat tidak dikirim — tolak untuk keamanan
             return response()->json([
                 'success' => false,
-                'message' => 'Anda sudah melakukan check-in hari ini pada pukul ' . $existing->check_in . '.',
+                'message' => 'Koordinat GPS diperlukan untuk melakukan check-in. Aktifkan GPS pada perangkat Anda.',
             ], 422);
         }
 
         // Tentukan status: hadir vs telat
         $now        = Carbon::now('Asia/Jakarta');
+        if ($request->has('simulated_time')) {
+            $simTime = $request->input('simulated_time');
+            try {
+                $parts = explode(':', $simTime);
+                if (count($parts) >= 2) {
+                    $now->setTime((int)$parts[0], (int)$parts[1], (int)($parts[2] ?? 0));
+                }
+            } catch (\Exception $e) {}
+        }
         $lateLimit  = Setting::get('late_limit', '08:30');   // batas tepat waktu
         $closeLimit = Setting::get('close_checkin', '09:00'); // batas tutup absen
 
@@ -96,29 +143,19 @@ class AttendanceController extends Controller
 
         $imageUrl = null;
         if ($request->has('image')) {
-            $imgData = $request->input('image');
-            if (preg_match('/^data:image\/(\w+);base64,/', $imgData, $type)) {
-                $imgData = substr($imgData, strpos($imgData, ',') + 1);
-                $type = strtolower($type[1]); // png, jpg, jpeg
-                if (in_array($type, ['jpg', 'jpeg', 'png'])) {
-                    $imgData = base64_decode($imgData);
-                    if ($imgData !== false) {
-                        $fileName = 'selfie_in_' . $employee->id . '_' . time() . '.' . $type;
-                        \Illuminate\Support\Facades\Storage::disk('public')->put('selfies/' . $fileName, $imgData);
-                        $imageUrl = '/storage/selfies/' . $fileName;
-                    }
-                }
-            }
+            $imageUrl = $this->storeBase64Image($request->input('image'), 'selfie_in_' . $employee->id . '_' . time());
         }
 
         $record = Attendance::create([
-            'employee_id' => $employee->id,
-            'date'        => today()->toDateString(),
-            'check_in'    => $now->format('H:i:s'),
-            'status'      => $status,
-            'latitude'    => $request->latitude,
-            'longitude'   => $request->longitude,
-            'image_check_in' => $imageUrl,
+            'employee_id'       => $employee->id,
+            'date'              => today()->toDateString(),
+            'check_in'          => $now->format('H:i:s'),
+            'status'            => $status,
+            'latitude'          => $clientLat,
+            'longitude'         => $clientLng,
+            'accuracy'          => $clientAcc,
+            'is_within_geofence'=> $isWithinGeofence,
+            'image_check_in'    => $imageUrl,
         ]);
 
         return response()->json([
@@ -133,6 +170,7 @@ class AttendanceController extends Controller
      */
     public function checkOut(Request $request)
     {
+        \Illuminate\Support\Facades\Log::info('Check-out request inputs: ' . json_encode($request->all()));
         $employee = $request->user()->employee;
         if (!$employee) {
             return response()->json(['success' => false, 'message' => 'Data karyawan tidak ditemukan.'], 404);
@@ -156,29 +194,83 @@ class AttendanceController extends Controller
             ], 422);
         }
 
+        // ── Validasi Geofence (server-side Haversine) ─────────────────
+        $hospLat    = (float) Setting::get('hospital_lat',  '5.552740480177099');
+        $hospLng    = (float) Setting::get('hospital_lng',  '95.33486560781716');
+        $hospRadius = (float) Setting::get('gps_radius',    '40');
+
+        $clientLat  = $request->input('latitude');
+        $clientLng  = $request->input('longitude');
+        $clientAcc  = $request->input('accuracy');
+
+        $isWithinGeofence = false;
+        if ($clientLat !== null && $clientLng !== null) {
+            $distance = $this->haversine((float)$clientLat, (float)$clientLng, $hospLat, $hospLng);
+            $isWithinGeofence = ($distance <= $hospRadius);
+
+            if (!$isWithinGeofence) {
+                return response()->json([
+                    'success' => false,
+                    'message' => sprintf(
+                        'Check-out ditolak: Anda berada %.0f meter dari RSUCL. Maksimal radius adalah %.0f meter. Pastikan Anda berada di dalam area rumah sakit.',
+                        $distance,
+                        $hospRadius
+                    ),
+                ], 422);
+            }
+        } else {
+            return response()->json([
+                'success' => false,
+                'message' => 'Koordinat GPS diperlukan untuk melakukan check-out. Aktifkan GPS pada perangkat Anda.',
+            ], 422);
+        }
+
         $imageUrl = null;
         if ($request->has('image')) {
-            $imgData = $request->input('image');
-            if (preg_match('/^data:image\/(\w+);base64,/', $imgData, $type)) {
-                $imgData = substr($imgData, strpos($imgData, ',') + 1);
-                $type = strtolower($type[1]); // png, jpg, jpeg
-                if (in_array($type, ['jpg', 'jpeg', 'png'])) {
-                    $imgData = base64_decode($imgData);
-                    if ($imgData !== false) {
-                        $fileName = 'selfie_out_' . $employee->id . '_' . time() . '.' . $type;
-                        \Illuminate\Support\Facades\Storage::disk('public')->put('selfies/' . $fileName, $imgData);
-                        $imageUrl = '/storage/selfies/' . $fileName;
-                    }
-                }
-            }
+            $imageUrl = $this->storeBase64Image($request->input('image'), 'selfie_out_' . $employee->id . '_' . time());
         }
 
         $now = Carbon::now('Asia/Jakarta');
+        if ($request->has('simulated_time')) {
+            $simTime = $request->input('simulated_time');
+            try {
+                $parts = explode(':', $simTime);
+                if (count($parts) >= 2) {
+                    $now->setTime((int)$parts[0], (int)$parts[1], (int)($parts[2] ?? 0));
+                }
+            } catch (\Exception $e) {}
+        }
+
+        // Validasi jam minimum checkout
+        $checkoutOpen  = Setting::get('checkout_open',  '17:00');
+        $checkoutClose = Setting::get('checkout_close', '18:00');
+        [$coH, $coM]  = explode(':', $checkoutOpen);
+        [$ccH, $ccM]  = explode(':', $checkoutClose);
+
+        $nowMins   = $now->hour * 60 + $now->minute;
+        $openMins  = (int)$coH * 60 + (int)$coM;
+        $closeMins = (int)$ccH * 60 + (int)$ccM;
+
+        if ($nowMins < $openMins) {
+            return response()->json([
+                'success' => false,
+                'message' => "Check-out belum dibuka. Waktu check-out dibuka mulai pukul {$checkoutOpen} WIB.",
+            ], 422);
+        }
+        if ($nowMins > $closeMins) {
+            return response()->json([
+                'success' => false,
+                'message' => "Batas akhir check-out sudah lewat pukul {$checkoutClose} WIB.",
+            ], 422);
+        }
+
         $record->update([
-            'check_out' => $now->format('H:i:s'),
-            'latitude'  => $request->latitude ?? $record->latitude,
-            'longitude' => $request->longitude ?? $record->longitude,
-            'image_check_out' => $imageUrl,
+            'check_out'          => $now->format('H:i:s'),
+            'latitude'           => $clientLat,
+            'longitude'          => $clientLng,
+            'accuracy'           => $clientAcc,
+            'is_within_geofence' => $isWithinGeofence,
+            'image_check_out'    => $imageUrl,
         ]);
 
         return response()->json([
@@ -212,21 +304,66 @@ class AttendanceController extends Controller
         return response()->json(['success' => true, 'data' => $records]);
     }
 
-    // ── Helper ────────────────────────────────────────────────────────
+    // ── Private Helpers ───────────────────────────────────────────────
+
+    /**
+     * Rumus Haversine — mengembalikan jarak dalam meter.
+     */
+    private function haversine(float $lat1, float $lon1, float $lat2, float $lon2): float
+    {
+        $R    = 6371000; // radius bumi dalam meter
+        $φ1   = deg2rad($lat1);
+        $φ2   = deg2rad($lat2);
+        $Δφ   = deg2rad($lat2 - $lat1);
+        $Δλ   = deg2rad($lon2 - $lon1);
+
+        $a = sin($Δφ / 2) ** 2 + cos($φ1) * cos($φ2) * sin($Δλ / 2) ** 2;
+        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+
+        return $R * $c;
+    }
+
+    /**
+     * Simpan gambar base64 ke storage, kembalikan path relatif.
+     */
+    private function storeBase64Image(string $imgData, string $baseName): ?string
+    {
+        if (!preg_match('/^data:image\/(\w+);base64,/', $imgData, $type)) {
+            return null;
+        }
+        $imgData = substr($imgData, strpos($imgData, ',') + 1);
+        $type    = strtolower($type[1]); // png, jpg, jpeg
+
+        if (!in_array($type, ['jpg', 'jpeg', 'png'])) {
+            return null;
+        }
+        $decoded = base64_decode($imgData);
+        if ($decoded === false) {
+            return null;
+        }
+
+        $fileName = $baseName . '.' . $type;
+        \Illuminate\Support\Facades\Storage::disk('public')->put('selfies/' . $fileName, $decoded);
+
+        return '/storage/selfies/' . $fileName;
+    }
+
     private function formatRecord(Attendance $r, bool $withEmployee = false): array
     {
         $data = [
-            'id'           => $r->id,
-            'date'         => $r->date?->toDateString(),
-            'check_in'     => $r->check_in,
-            'check_out'    => $r->check_out,
-            'status'       => $r->status,
-            'duration_min' => $r->duration_minutes_attribute ?? null,
-            'latitude'     => $r->latitude,
-            'longitude'    => $r->longitude,
-            'note'         => $r->note,
-            'image_check_in' => $r->image_check_in ? url($r->image_check_in) : null,
-            'image_check_out' => $r->image_check_out ? url($r->image_check_out) : null,
+            'id'                 => $r->id,
+            'date'               => $r->date?->toDateString(),
+            'check_in'           => $r->check_in,
+            'check_out'          => $r->check_out,
+            'status'             => $r->status,
+            'duration_min'       => $r->duration_minutes_attribute ?? null,
+            'latitude'           => $r->latitude,
+            'longitude'          => $r->longitude,
+            'accuracy'           => $r->accuracy,
+            'is_within_geofence' => $r->is_within_geofence,
+            'note'               => $r->note,
+            'image_check_in'     => $r->image_check_in  ? url($r->image_check_in)  : null,
+            'image_check_out'    => $r->image_check_out ? url($r->image_check_out) : null,
         ];
 
         if ($withEmployee && $r->employee) {

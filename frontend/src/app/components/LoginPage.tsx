@@ -179,7 +179,7 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
           </div>
 
           <p className="text-center text-[11px] text-gray-400 mt-6">
-            © 2025 RSUCL · Sistem Absensi Digital v2.0.1
+            © 2026 RSUCL · Sistem Absensi Digital v1.0.0
           </p>
         </div>
       </div>

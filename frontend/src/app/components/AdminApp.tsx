@@ -330,7 +330,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
             <button onClick={() => setSidebarOpen(true)} className="md:hidden w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center"><Menu size={16} className="text-gray-600" /></button>
             <div>
               <h2 className="text-[14px] font-semibold text-gray-900">{sidebarItems.find(s => s.id === activeTab)?.label || 'Dashboard'}</h2>
-              <p className="text-[11px] text-gray-400">Rabu, 1 Juli 2025</p>
+              <p className="text-[11px] text-gray-400">Rabu, 1 Juli 2026</p>
             </div>
           </div>
           <div className="flex items-center gap-2">

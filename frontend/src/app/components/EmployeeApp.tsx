@@ -6,6 +6,7 @@ import { AttendancePage } from './AttendancePage';
 import { HistoryPage } from './HistoryPage';
 import { NotificationsPage } from './NotificationsPage';
 import { ProfilePage } from './ProfilePage';
+import { notificationApi } from '../../services/api';
 
 type Tab = 'dashboard' | 'attendance' | 'history' | 'notifications' | 'profile';
 
@@ -14,23 +15,42 @@ interface EmployeeAppProps {
   employee?: { name: string; pos: string; dept: string; nip: string; username: string } | null;
 }
 
-const navItems: { id: Tab; icon: typeof Home; label: string; badge?: number }[] = [
-  { id: 'dashboard', icon: Home, label: 'Beranda' },
-  { id: 'attendance', icon: MapPin, label: 'Absensi' },
-  { id: 'history', icon: History, label: 'Riwayat' },
-  { id: 'notifications', icon: Bell, label: 'Notifikasi', badge: 2 },
-  { id: 'profile', icon: User, label: 'Profil' },
-];
-
 export function EmployeeApp({ onLogout, employee }: EmployeeAppProps) {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [time, setTime] = useState(new Date());
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+
+  const fetchUnreadCount = async () => {
+    try {
+      const res = await notificationApi.list();
+      if (res.success) {
+        setUnreadNotifications(res.data.unread_count);
+      }
+    } catch (err) {
+      console.error('Error fetching unread count:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchUnreadCount();
+    // Poll every 20 seconds
+    const interval = setInterval(fetchUnreadCount, 20000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
+
+  const navItems: { id: Tab; icon: typeof Home; label: string; badge?: number }[] = [
+    { id: 'dashboard', icon: Home, label: 'Beranda' },
+    { id: 'attendance', icon: MapPin, label: 'Absensi' },
+    { id: 'history', icon: History, label: 'Riwayat' },
+    { id: 'notifications', icon: Bell, label: 'Notifikasi', badge: unreadNotifications },
+    { id: 'profile', icon: User, label: 'Profil' },
+  ];
 
   const timeStr = time.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
 
@@ -39,7 +59,7 @@ export function EmployeeApp({ onLogout, employee }: EmployeeAppProps) {
       case 'dashboard': return <DashboardHome onNavigate={(tab) => setActiveTab(tab as Tab)} />;
       case 'attendance': return <AttendancePage />;
       case 'history': return <HistoryPage />;
-      case 'notifications': return <NotificationsPage />;
+      case 'notifications': return <NotificationsPage onUpdateCount={fetchUnreadCount} />;
       case 'profile': return <ProfilePage onLogout={onLogout} />;
     }
   };
@@ -179,7 +199,11 @@ export function EmployeeApp({ onLogout, employee }: EmployeeAppProps) {
               >
                 <Bell size={14} className="text-gray-500" />
               </button>
-              <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center">2</span>
+              {unreadNotifications > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center">
+                  {unreadNotifications}
+                </span>
+              )}
             </div>
           </div>
         </div>
