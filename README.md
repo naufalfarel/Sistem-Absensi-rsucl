@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🏥 Sistem Absensi RS Umum Cempaka Lima
+# Sistem Absensi RS Umum Cempaka Lima
 
 **Aplikasi manajemen kehadiran pegawai rumah sakit berbasis web — full-stack, real-time, dan siap produksi.**
 
@@ -15,54 +15,53 @@
 
 ---
 
-## 📋 Daftar Isi
+## Daftar Isi
 
-- [Tentang Proyek](#-tentang-proyek)
-- [Fitur Utama](#-fitur-utama)
-- [Arsitektur Sistem](#-arsitektur-sistem)
-- [Tech Stack](#-tech-stack)
-- [Struktur Proyek](#-struktur-proyek)
-- [Persyaratan Sistem](#-persyaratan-sistem)
-- [Instalasi & Menjalankan Lokal](#-instalasi--menjalankan-lokal)
+- [Tentang Proyek](#tentang-proyek)
+- [Fitur Utama](#fitur-utama)
+- [Arsitektur Sistem](#arsitektur-sistem)
+- [Tech Stack](#tech-stack)
+- [Struktur Proyek](#struktur-proyek)
+- [Persyaratan Sistem](#persyaratan-sistem)
+- [Instalasi & Menjalankan Lokal](#instalasi--menjalankan-lokal)
   - [Backend (Laravel)](#1-backend-laravel)
   - [Frontend (React)](#2-frontend-react)
-- [Konfigurasi Environment](#-konfigurasi-environment)
-- [API Endpoints](#-api-endpoints)
-- [Default Akun](#-default-akun)
-- [Paket & Dependensi](#-paket--dependensi)
-- [Kontribusi](#-kontribusi)
+- [Konfigurasi Environment](#konfigurasi-environment)
+- [API Endpoints](#api-endpoints)
+- [Paket & Dependensi](#paket--dependensi)
+- [Kontribusi](#kontribusi)
 
 ---
 
-## 🔍 Tentang Proyek
+## Tentang Proyek
 
 **Sistem Absensi RSUCL** adalah aplikasi web manajemen kehadiran pegawai yang dirancang khusus untuk RS Umum Cempaka Lima. Sistem ini menggantikan proses absensi manual dengan solusi digital yang efisien, akurat, dan mudah digunakan oleh seluruh staf rumah sakit.
 
 Sistem ini mendukung dua peran utama:
 
-- **👔 Admin** — Mengelola data karyawan, menyetujui pengajuan cuti/izin, memantau kehadiran seluruh pegawai, dan mengakses laporan rekap.
-- **👤 Karyawan** — Melakukan check-in/check-out harian, mengajukan cuti/izin/sakit, melihat riwayat kehadiran, dan menerima notifikasi.
+- **Admin** — Mengelola data karyawan, menyetujui pengajuan cuti/izin, memantau kehadiran seluruh pegawai, dan mengakses laporan rekap.
+- **Karyawan** — Melakukan check-in/check-out harian, mengajukan cuti/izin/sakit, melihat riwayat kehadiran, dan menerima notifikasi.
 
 ---
 
-## ✨ Fitur Utama
+## Fitur Utama
 
 | Fitur | Deskripsi |
 |-------|-----------|
-| 🔐 **Autentikasi** | Login aman dengan Laravel Sanctum (Bearer Token) |
-| 📍 **Check-in / Check-out** | Presensi harian dengan dukungan GPS opsional |
-| 📝 **Pengajuan Cuti & Izin** | Pengajuan cuti, izin, dan sakit dengan alur persetujuan admin |
-| 📅 **Manajemen Jadwal Shift** | CRUD jadwal shift per pegawai |
-| 🔔 **Notifikasi Real-time** | Notifikasi sistem untuk pegawai dan admin |
-| 📊 **Laporan Rekap** | Rekap kehadiran dengan visualisasi grafik (Recharts) |
-| 👥 **Manajemen Karyawan** | CRUD data karyawan, departemen, dan jabatan |
-| ⚙️ **Pengaturan Sistem** | Konfigurasi jam kerja, radius GPS, dan parameter sistem |
-| 📤 **Export Data** | Export laporan ke format Excel (ExcelJS / XLSX) |
-| 🗺️ **Peta Lokasi** | Visualisasi lokasi check-in dengan Leaflet Maps |
+| Autentikasi | Login aman dengan Laravel Sanctum (Bearer Token) |
+| Check-in / Check-out | Presensi harian dengan dukungan GPS opsional |
+| Pengajuan Cuti & Izin | Pengajuan cuti, izin, dan sakit dengan alur persetujuan admin |
+| Manajemen Jadwal Shift | CRUD jadwal shift per pegawai |
+| Notifikasi | Notifikasi sistem untuk pegawai dan admin |
+| Laporan Rekap | Rekap kehadiran dengan visualisasi grafik (Recharts) |
+| Manajemen Karyawan | CRUD data karyawan, departemen, dan jabatan |
+| Pengaturan Sistem | Konfigurasi jam kerja, radius GPS, dan parameter sistem |
+| Export Data | Export laporan ke format Excel (ExcelJS / XLSX) |
+| Peta Lokasi | Visualisasi lokasi check-in dengan Leaflet Maps |
 
 ---
 
-## 🏗️ Arsitektur Sistem
+## Arsitektur Sistem
 
 Sistem menggunakan arsitektur **Decoupled / Headless** — backend dan frontend adalah dua aplikasi independen yang berkomunikasi melalui REST API.
 
@@ -104,13 +103,13 @@ Sistem menggunakan arsitektur **Decoupled / Headless** — backend dan frontend 
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 ### Backend
 
 | Teknologi | Versi | Kegunaan |
 |-----------|-------|----------|
-| PHP | ≥ 8.3 | Runtime bahasa |
+| PHP | >= 8.3 | Runtime bahasa |
 | Laravel | 13.x | Framework utama (MVC, routing, ORM) |
 | Laravel Sanctum | 4.x | Autentikasi API via Bearer Token |
 | MySQL / SQLite | — | Database relasional |
@@ -142,17 +141,17 @@ Sistem menggunakan arsitektur **Decoupled / Headless** — backend dan frontend 
 
 ---
 
-## 📁 Struktur Proyek
+## Struktur Proyek
 
 ```
 sistem-absensi-rsucl/
 │
-├── 📄 README.md                    # Dokumen ini
+├── README.md                       # Dokumen ini
 │
-├── 📂 docs/
+├── docs/
 │   └── ARCHITECTURE.md             # Dokumentasi arsitektur & skema database
 │
-├── 📂 backend/                     # Laravel REST API
+├── backend/                        # Laravel REST API
 │   ├── app/
 │   │   ├── Http/
 │   │   │   ├── Controllers/        # AuthController, EmployeeController, dll.
@@ -166,7 +165,7 @@ sistem-absensi-rsucl/
 │   ├── .env.example                # Template konfigurasi environment
 │   └── README.md                   # Panduan instalasi backend
 │
-└── 📂 frontend/                    # React + Vite SPA
+└── frontend/                       # React + Vite SPA
     ├── src/
     │   ├── app/
     │   │   ├── App.tsx             # Root component & routing
@@ -182,7 +181,7 @@ sistem-absensi-rsucl/
 
 ---
 
-## ⚙️ Persyaratan Sistem
+## Persyaratan Sistem
 
 Pastikan perangkat Anda telah menginstal:
 
@@ -195,11 +194,11 @@ Pastikan perangkat Anda telah menginstal:
 | MySQL | 8.0+ | `mysql --version` |
 | Git | — | `git --version` |
 
-> **SQLite** (default untuk development) sudah bundled dengan PHP — tidak perlu instalasi terpisah.
+> SQLite (default untuk development) sudah bundled dengan PHP — tidak perlu instalasi terpisah.
 
 ---
 
-## 🚀 Instalasi & Menjalankan Lokal
+## Instalasi & Menjalankan Lokal
 
 Clone repository terlebih dahulu:
 
@@ -233,10 +232,10 @@ php artisan migrate:fresh --seed
 
 # Jalankan server lokal
 php artisan serve
-# ✅ Backend berjalan di → http://localhost:8000
+# Server berjalan di -> http://localhost:8000
 ```
 
-> **💡 Tip:** Secara default, database menggunakan **SQLite** (file lokal, tidak perlu setup MySQL). Untuk menggunakan MySQL, ubah konfigurasi `DB_*` di file `.env` — lihat bagian [Konfigurasi Environment](#-konfigurasi-environment).
+> **Tip:** Secara default, database menggunakan **SQLite** (file lokal, tidak perlu setup MySQL). Untuk menggunakan MySQL, ubah konfigurasi `DB_*` di file `.env` — lihat bagian [Konfigurasi Environment](#konfigurasi-environment).
 
 ---
 
@@ -253,12 +252,12 @@ npm install
 
 # Jalankan dev server
 npm run dev
-# ✅ Frontend berjalan di → http://localhost:5173
+# Server berjalan di -> http://localhost:5173
 ```
 
 ---
 
-### ✅ Verifikasi
+### Verifikasi
 
 Setelah keduanya berjalan, buka browser dan akses:
 
@@ -266,16 +265,11 @@ Setelah keduanya berjalan, buka browser dan akses:
 http://localhost:5173
 ```
 
-Gunakan akun default berikut untuk masuk:
-
-| Role | Email | Password |
-|------|-------|----------|
-| Admin | `admin@rsucl.com` | `password` |
-| Karyawan | `karyawan@rsucl.com` | `password` |
+Kredensial akun awal tersedia setelah seeder berjalan. Lihat file `backend/database/seeders/DatabaseSeeder.php` untuk detail akun yang dibuat.
 
 ---
 
-## 🔧 Konfigurasi Environment
+## Konfigurasi Environment
 
 ### Backend — `backend/.env`
 
@@ -309,7 +303,7 @@ VITE_API_URL=http://localhost:8000/api
 
 ---
 
-## 📡 API Endpoints
+## API Endpoints
 
 **Base URL:** `http://localhost:8000/api`
 
@@ -318,13 +312,13 @@ VITE_API_URL=http://localhost:8000/api
 { "success": true, "message": "...", "data": { ... } }
 ```
 
-### 🔓 Public (Tanpa Token)
+### Public (Tanpa Token)
 
 | Method | Endpoint | Deskripsi |
 |--------|----------|-----------|
 | `POST` | `/login` | Login & mendapatkan Bearer Token |
 
-### 🔐 Authenticated (Semua Role)
+### Authenticated (Semua Role)
 
 | Method | Endpoint | Deskripsi |
 |--------|----------|-----------|
@@ -340,7 +334,7 @@ VITE_API_URL=http://localhost:8000/api
 | `PUT` | `/notifications/{id}/read` | Tandai 1 notifikasi sebagai dibaca |
 | `PUT` | `/notifications/read-all` | Tandai semua notifikasi sebagai dibaca |
 
-### 🛡️ Admin Only
+### Admin Only
 
 | Method | Endpoint | Deskripsi |
 |--------|----------|-----------|
@@ -359,20 +353,7 @@ VITE_API_URL=http://localhost:8000/api
 
 ---
 
-## 👤 Default Akun
-
-Setelah menjalankan `php artisan migrate:fresh --seed`, akun berikut tersedia:
-
-| Role | Email | Password | Keterangan |
-|------|-------|----------|------------|
-| **Admin** | `admin@rsucl.com` | `password` | Akses penuh ke semua fitur |
-| **Karyawan** | `karyawan@rsucl.com` | `password` | Akses terbatas (self-service) |
-
-> ⚠️ **Penting:** Ganti password default sebelum deploy ke production!
-
----
-
-## 📦 Paket & Dependensi
+## Paket & Dependensi
 
 ### Backend (`composer.json`)
 
@@ -493,11 +474,11 @@ Setelah menjalankan `php artisan migrate:fresh --seed`, akun berikut tersedia:
 
 | Package | Versi | Fungsi |
 |---------|-------|--------|
-| `sonner` | 2.0.3 | Toast notification yang elegan |
+| `sonner` | 2.0.3 | Toast notification |
 
 ---
 
-## 🤝 Kontribusi
+## Kontribusi
 
 Proyek ini dikembangkan sebagai bagian dari program magang di RS Umum Cempaka Lima.
 
@@ -509,7 +490,7 @@ Proyek ini dikembangkan sebagai bagian dari program magang di RS Umum Cempaka Li
 
 ---
 
-## 📄 Dokumentasi Lanjutan
+## Dokumentasi Lanjutan
 
 | Dokumen | Deskripsi |
 |---------|-----------|
@@ -521,8 +502,8 @@ Proyek ini dikembangkan sebagai bagian dari program magang di RS Umum Cempaka Li
 
 <div align="center">
 
-**Dibuat dengan ❤️ untuk RS Umum Cempaka Lima**
+Dibuat untuk RS Umum Cempaka Lima
 
-*Sistem Absensi RSUCL © 2025 — MIT License*
+*Sistem Absensi RSUCL &copy; 2025 &mdash; MIT License*
 
 </div>
