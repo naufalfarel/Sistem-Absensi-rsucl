@@ -209,4 +209,38 @@ class AuthController extends Controller
             'data'    => $data,
         ]);
     }
+
+    /**
+     * POST /api/forgot-password
+     * Body: { username, nip, email, password }
+     */
+    public function resetPassword(Request $request)
+    {
+        $request->validate([
+            'username' => 'required|string',
+            'nip'      => 'required|string',
+            'email'    => 'required|email',
+            'password' => 'required|string|min:6',
+        ]);
+
+        $user = User::where('username', $request->username)
+                    ->where('nip', $request->nip)
+                    ->where('email', $request->email)
+                    ->first();
+
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Data tidak cocok. Silakan periksa kembali Username, NIP, dan Email Anda.',
+            ], 422);
+        }
+
+        $user->password = Hash::make($request->password);
+        $user->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Password berhasil diubah. Silakan masuk dengan password baru Anda.',
+        ]);
+    }
 }

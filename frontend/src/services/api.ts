@@ -6,7 +6,12 @@
  * Token disimpan di localStorage dengan key "rsucl_token"
  */
 
-const BASE_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:8000') + '/api';
+const getApiUrl = () => {
+  const envVal = import.meta.env.VITE_API_URL;
+  if (envVal === '') return ''; // Relative path for proxy support
+  return envVal ?? 'http://localhost:8000';
+};
+const BASE_URL = getApiUrl() + '/api';
 const TOKEN_KEY = 'rsucl_token';
 
 // ── Token helpers ─────────────────────────────────────────────────────
@@ -96,6 +101,8 @@ export const authApi = {
     ),
   me: () => api.get<{ success: boolean; data: AuthUser }>('/me'),
   logout: () => api.post<{ success: boolean; message: string }>('/logout', {}),
+  forgotPassword: (data: { username: string; nip: string; email: string; password?: string }) =>
+    api.post<{ success: boolean; message: string }>('/forgot-password', data),
 };
 
 export const profileApi = {
@@ -183,6 +190,7 @@ export interface AttendanceRecord {
   employee?: { id: number; name: string; nip: string; department: string };
   image_check_in?: string | null;
   image_check_out?: string | null;
+  shift_name?: string | null;
 }
 
 export const attendanceApi = {

@@ -61,7 +61,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
       </nav>
 
       {/* ── HERO ── */}
-      <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-16">
+      <section className="relative min-h-screen flex flex-col items-center justify-start overflow-hidden pt-28 pb-16">
         {/* Background gradient */}
         <div className="absolute inset-0 bg-gradient-to-br from-[#0B7A36] via-[#16A34A] to-[#15803d]" />
 

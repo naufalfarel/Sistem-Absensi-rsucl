@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { Eye, EyeOff, Lock, User, MapPin, Clock, BarChart3, Shield, AlertCircle, ArrowLeft } from 'lucide-react';
+import { Eye, EyeOff, Lock, User, MapPin, Clock, BarChart3, Shield, AlertCircle, ArrowLeft, CheckCircle2, X } from 'lucide-react';
 import logoImg from '../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
+import { authApi } from '../../services/api';
 
 interface LoginPageProps {
-  onLogin: (password: string, username: string) => Promise<'ok' | 'wrong'>;
+  onLogin: (password: string, username: string) => Promise<'ok' | string>;
   onBack?: () => void;
 }
 
@@ -17,6 +18,13 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Forgot password state
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotForm, setForgotForm] = useState({ username: '', nip: '', email: '', newPassword: '', confirmPassword: '' });
+  const [forgotError, setForgotError] = useState('');
+  const [forgotSuccess, setForgotSuccess] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+
   const handleLogin = async () => {
     if (!username.trim() || !password) {
       setError('Username dan Password wajib diisi.');
@@ -26,13 +34,52 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
     setIsLoading(true);
     try {
       const result = await onLogin(password, username);
-      if (result === 'wrong') {
-        setError('Username atau Password tidak sesuai. Hubungi administrator jika lupa akun.');
+      if (result !== 'ok') {
+        if (result === 'wrong') {
+          setError('Username atau Password tidak sesuai. Hubungi administrator jika lupa akun.');
+        } else {
+          setError(result);
+        }
       }
     } catch (err: any) {
       setError(err?.message ?? 'Terjadi kesalahan sistem.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotForm.username.trim() || !forgotForm.nip.trim() || !forgotForm.email.trim() || !forgotForm.newPassword) {
+      setForgotError('Semua kolom wajib diisi.');
+      return;
+    }
+    if (forgotForm.newPassword.length < 6) {
+      setForgotError('Password baru minimal 6 karakter.');
+      return;
+    }
+    if (forgotForm.newPassword !== forgotForm.confirmPassword) {
+      setForgotError('Konfirmasi password tidak cocok.');
+      return;
+    }
+    setForgotError('');
+    setForgotSuccess('');
+    setForgotLoading(true);
+    try {
+      const res = await authApi.forgotPassword({
+        username: forgotForm.username.trim(),
+        nip: forgotForm.nip.trim(),
+        email: forgotForm.email.trim(),
+        password: forgotForm.newPassword,
+      });
+      if (res.success) {
+        setForgotSuccess(res.message);
+        setForgotForm({ username: '', nip: '', email: '', newPassword: '', confirmPassword: '' });
+      }
+    } catch (err: any) {
+      setForgotError(err?.response?.data?.message ?? err?.message ?? 'Data tidak cocok atau terjadi kesalahan.');
+    } finally {
+      setForgotLoading(false);
     }
   };
 
@@ -99,7 +146,7 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
                   value={username}
                   onChange={e => { setUsername(e.target.value); setError(''); }}
                   onKeyDown={handleKey}
-                  className={`w-full pl-10 pr-4 py-2.5 border rounded-xl text-[14px] bg-gray-50 focus:outline-none focus:ring-2 transition-all placeholder:text-gray-300 ${error ? 'border-red-200 focus:border-red-400 focus:ring-red-100' : 'border-gray-200 focus:border-[#16A34A] focus:ring-[#16A34A]/15'}`}
+                  className={`w-full pl-10 pr-4 py-2.5 border rounded-xl text-[16px] bg-gray-50 focus:outline-none focus:ring-2 transition-all placeholder:text-gray-300 ${error ? 'border-red-200 focus:border-red-400 focus:ring-red-100' : 'border-gray-200 focus:border-[#16A34A] focus:ring-[#16A34A]/15'}`}
                 />
               </div>
             </div>
@@ -115,7 +162,7 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
                   value={password}
                   onChange={e => { setPassword(e.target.value); setError(''); }}
                   onKeyDown={handleKey}
-                  className={`w-full pl-10 pr-10 py-2.5 border rounded-xl text-[14px] bg-gray-50 focus:outline-none focus:ring-2 transition-all placeholder:text-gray-300 ${error ? 'border-red-200 focus:border-red-400 focus:ring-red-100' : 'border-gray-200 focus:border-[#16A34A] focus:ring-[#16A34A]/15'}`}
+                  className={`w-full pl-10 pr-10 py-2.5 border rounded-xl text-[16px] bg-gray-50 focus:outline-none focus:ring-2 transition-all placeholder:text-gray-300 ${error ? 'border-red-200 focus:border-red-400 focus:ring-red-100' : 'border-gray-200 focus:border-[#16A34A] focus:ring-[#16A34A]/15'}`}
                 />
                 <button
                   type="button"
@@ -139,7 +186,10 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
                 </div>
                 <span className="text-[13px] text-gray-600">Ingat saya</span>
               </label>
-              <button className="text-[13px] text-[#16A34A] font-medium hover:text-[#0B7A36] transition-colors">
+              <button 
+                onClick={() => setShowForgotModal(true)}
+                className="text-[13px] text-[#16A34A] font-medium hover:text-[#0B7A36] transition-colors"
+              >
                 Lupa Password?
               </button>
             </div>
@@ -189,24 +239,140 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
           <p className="text-[13px] text-white/75 text-center leading-relaxed max-w-[280px] mb-8">
             Sistem absensi resmi Rumah Sakit Umum Cempaka Lima, Banda Aceh.
           </p>
-          <div className="grid grid-cols-2 gap-3 w-full max-w-[300px]">
+          <div className="w-full max-w-[340px] space-y-3.5">
+            <h3 className="text-[13px] font-bold uppercase tracking-wider text-white/90 text-center mb-4">
+              Panduan Langkah Absensi
+            </h3>
             {[
-              { icon: MapPin,    label: 'GPS & Geofencing', desc: 'Area RS terverifikasi' },
-              { icon: Clock,     label: 'Real-time',         desc: 'Pemantauan langsung' },
-              { icon: BarChart3, label: 'Laporan Otomatis',  desc: 'PDF & Excel export' },
-              { icon: Shield,    label: 'Data Aman',         desc: 'Terenkripsi penuh' },
-            ].map(({ icon: Icon, label, desc }, i) => (
-              <div key={i} className="bg-white/12 rounded-xl p-3.5 backdrop-blur-sm border border-white/10">
-                <div className="w-7 h-7 bg-white/20 rounded-lg flex items-center justify-center mb-2">
-                  <Icon size={15} className="text-white" />
+              { step: '1', title: 'Masuk Akun', desc: 'Login dengan username & password Anda' },
+              { step: '2', title: 'Izinkan Lokasi (GPS)', desc: 'Pastikan GPS perangkat aktif & izinkan akses lokasi saat diminta' },
+              { step: '3', title: 'Ambil Foto Selfie', desc: 'Ambil foto selfie verifikasi wajah di area rumah sakit' },
+              { step: '4', title: 'Kirim Presensi', desc: 'Tekan tombol absen masuk/pulang sesuai jadwal dinas Anda' },
+            ].map(({ step, title, desc }) => (
+              <div key={step} className="bg-white/10 rounded-2xl p-4 border border-white/15 flex items-start gap-4 backdrop-blur-sm">
+                <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center font-bold text-white text-[14px] flex-shrink-0">
+                  {step}
                 </div>
-                <div className="text-[13px] font-semibold leading-tight">{label}</div>
-                <div className="text-[11px] text-white/65 mt-0.5">{desc}</div>
+                <div>
+                  <h4 className="text-[14px] font-bold leading-none">{title}</h4>
+                  <p className="text-[11px] text-white/70 mt-1.5 leading-relaxed">{desc}</p>
+                </div>
               </div>
             ))}
           </div>
         </div>
       </div>
+
+      {/* ── FORGOT PASSWORD MODAL ── */}
+      {showForgotModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => { setShowForgotModal(false); setForgotError(''); setForgotSuccess(''); }} />
+          <div className="relative bg-white rounded-2xl p-6 shadow-2xl w-full max-w-sm border border-gray-100">
+            <button 
+              onClick={() => { setShowForgotModal(false); setForgotError(''); setForgotSuccess(''); }}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+            >
+              <X size={18} />
+            </button>
+            <div className="text-center mb-5">
+              <div className="w-12 h-12 rounded-2xl bg-green-50 flex items-center justify-center mx-auto mb-3 text-[#16A34A]">
+                <Lock size={22} />
+              </div>
+              <h3 className="text-[16px] font-bold text-gray-900">Ubah Kata Sandi Karyawan</h3>
+              <p className="text-[11px] text-gray-500 mt-1">Verifikasi identitas Anda untuk mengubah kata sandi secara mandiri</p>
+            </div>
+
+            {forgotError && (
+              <div className="flex items-start gap-2 bg-red-50 border border-red-100 rounded-xl px-3 py-2.5 mb-4 text-red-600 text-[11px] leading-snug">
+                <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+                <span>{forgotError}</span>
+              </div>
+            )}
+
+            {forgotSuccess && (
+              <div className="flex items-start gap-2 bg-green-50 border border-green-100 rounded-xl px-3 py-2.5 mb-4 text-green-700 text-[11px] leading-snug">
+                <CheckCircle2 size={14} className="flex-shrink-0 mt-0.5" />
+                <span>{forgotSuccess}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleForgotPassword} className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-medium text-gray-600 mb-1">Username Login</label>
+                <input 
+                  type="text" 
+                  placeholder="Masukkan username" 
+                  value={forgotForm.username} 
+                  onChange={e => setForgotForm({ ...forgotForm, username: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[16px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-gray-600 mb-1">Nomor Induk Pegawai (NIP)</label>
+                <input 
+                  type="text" 
+                  placeholder="Masukkan NIP Anda" 
+                  value={forgotForm.nip} 
+                  onChange={e => setForgotForm({ ...forgotForm, nip: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[16px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-gray-600 mb-1">Alamat Email Terdaftar</label>
+                <input 
+                  type="email" 
+                  placeholder="Masukkan email Anda" 
+                  value={forgotForm.email} 
+                  onChange={e => setForgotForm({ ...forgotForm, email: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[16px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-gray-600 mb-1">Password Baru</label>
+                <input 
+                  type="password" 
+                  placeholder="Minimal 6 karakter" 
+                  value={forgotForm.newPassword} 
+                  onChange={e => setForgotForm({ ...forgotForm, newPassword: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[16px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-gray-600 mb-1">Konfirmasi Password Baru</label>
+                <input 
+                  type="password" 
+                  placeholder="Ulangi password baru" 
+                  value={forgotForm.confirmPassword} 
+                  onChange={e => setForgotForm({ ...forgotForm, confirmPassword: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[16px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all"
+                  required
+                />
+              </div>
+
+              <div className="pt-2 flex gap-2">
+                <button 
+                  type="button" 
+                  onClick={() => { setShowForgotModal(false); setForgotError(''); setForgotSuccess(''); }}
+                  className="flex-1 py-2.5 border border-gray-200 rounded-xl text-[12px] font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  Batal
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={forgotLoading}
+                  className="flex-1 py-2.5 bg-[#16A34A] hover:bg-[#0d9240] text-white rounded-xl text-[12px] font-bold shadow-md shadow-green-200/60 disabled:opacity-75"
+                >
+                  {forgotLoading ? 'Memproses...' : 'Ubah Password'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

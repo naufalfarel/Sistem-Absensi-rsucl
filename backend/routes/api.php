@@ -23,6 +23,7 @@ use App\Http\Controllers\SettingController;
 
 // ── Public (tanpa token) ──────────────────────────────────────────────
 Route::post('/login', [AuthController::class, 'login']);
+Route::post('/forgot-password', [AuthController::class, 'resetPassword']);
 Route::get('/settings', [SettingController::class, 'index']);
 
 // ── Protected (perlu token) ───────────────────────────────────────────

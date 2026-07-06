@@ -57,9 +57,9 @@ export default function App() {
   }
 
   // Auth pages
-  const handleLogin = async (password: string, username: string): Promise<'ok' | 'wrong'> => {
-    const success = await login(username, password);
-    return success ? 'ok' : 'wrong';
+  const handleLogin = async (password: string, username: string): Promise<'ok' | string> => {
+    const res = await login(username, password);
+    return res.success ? 'ok' : (res.message || 'wrong');
   };
 
   if (view === 'landing') {

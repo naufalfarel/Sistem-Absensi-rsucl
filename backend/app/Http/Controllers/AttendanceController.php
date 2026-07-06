@@ -54,7 +54,7 @@ class AttendanceController extends Controller
      */
     public function allToday()
     {
-        $records = Attendance::with(['employee.user', 'employee.department', 'employee.position'])
+        $records = Attendance::with(['employee.user', 'employee.department', 'employee.position', 'employee.schedules'])
                              ->where('date', today()->toDateString())
                              ->get()
                              ->map(fn($r) => $this->formatRecord($r, withEmployee: true));
@@ -483,7 +483,7 @@ class AttendanceController extends Controller
             return response()->json(['success' => true, 'data' => $records]);
         }
 
-        $query = Attendance::with(['employee.user', 'employee.department'])
+        $query = Attendance::with(['employee.user', 'employee.department', 'employee.schedules'])
                            ->orderBy('date', 'desc')
                            ->limit(100);
 
@@ -590,6 +590,30 @@ class AttendanceController extends Controller
 
     private function formatRecord(Attendance $r, bool $withEmployee = false): array
     {
+        $shiftName = 'Reguler';
+        if ($r->employee && $r->date) {
+            $dayMap = [
+                0 => 'Minggu', 1 => 'Senin', 2 => 'Selasa',
+                3 => 'Rabu',   4 => 'Kamis', 5 => 'Jumat', 6 => 'Sabtu',
+            ];
+            $carbonDate = \Carbon\Carbon::parse($r->date);
+            $dayName = $dayMap[$carbonDate->dayOfWeek];
+            
+            if ($r->employee->relationLoaded('schedules')) {
+                $sched = $r->employee->schedules->first(function ($s) use ($dayName) {
+                    return $s->pivot->day_of_week === $dayName;
+                });
+                if ($sched) {
+                    $shiftName = $sched->name;
+                }
+            } else {
+                $sched = $r->employee->schedules()->wherePivot('day_of_week', $dayName)->first();
+                if ($sched) {
+                    $shiftName = $sched->name;
+                }
+            }
+        }
+
         $data = [
             'id'                 => $r->id,
             'date'               => $r->date?->toDateString(),
@@ -604,6 +628,7 @@ class AttendanceController extends Controller
             'note'               => $r->note,
             'image_check_in'     => $r->image_check_in  ? url($r->image_check_in)  : null,
             'image_check_out'    => $r->image_check_out ? url($r->image_check_out) : null,
+            'shift_name'         => $shiftName,
         ];
 
         if ($withEmployee && $r->employee) {

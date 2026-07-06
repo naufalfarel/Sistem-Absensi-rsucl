@@ -6,7 +6,7 @@ interface AuthContextType {
   token: string | null;
   loading: boolean;
   logoUrl: string | null;
-  login: (username: string, pass: string) => Promise<boolean>;
+  login: (username: string, pass: string) => Promise<{ success: boolean; message?: string }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   refreshLogo: () => Promise<void>;
@@ -43,8 +43,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         handleLogoutLocal();
       }
-    } catch {
-      handleLogoutLocal();
+    } catch (err: any) {
+      console.error('Profile fetch failed:', err);
+      // Only clear session if backend explicitly rejects the token (401/403)
+      if (err?.status === 401 || err?.status === 403) {
+        handleLogoutLocal();
+      }
     }
   };
 
@@ -68,19 +72,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearToken();
   };
 
-  const login = async (username: string, pass: string): Promise<boolean> => {
+  const login = async (username: string, pass: string): Promise<{ success: boolean; message?: string }> => {
     try {
       const res = await authApi.login(username, pass);
       if (res.success && res.data.token) {
         setToken(res.data.token);
         setTokenState(res.data.token);
         setUser(res.data.user);
-        return true;
+        return { success: true };
       }
-      return false;
-    } catch (err) {
+      return { success: false, message: 'Username atau Password tidak sesuai.' };
+    } catch (err: any) {
       console.error('Login error:', err);
-      return false;
+      const msg = err?.response?.data?.message ?? err?.message ?? 'Gagal menghubungi server. Periksa koneksi internet Anda.';
+      return { success: false, message: msg };
     }
   };
 

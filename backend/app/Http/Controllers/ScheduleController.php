@@ -9,7 +9,13 @@ class ScheduleController extends Controller
 {
     public function index()
     {
-        $schedules = Schedule::with(['employees.user', 'employees.department'])->withCount('employees')->get();
+        $schedules = Schedule::with(['employees.user', 'employees.department'])->get();
+        
+        $schedules->each(function ($schedule) {
+            $uniqueCount = $schedule->employees->unique('id')->count();
+            $schedule->setAttribute('employees_count', $uniqueCount);
+        });
+
         return response()->json(['success' => true, 'data' => $schedules]);
     }
 
@@ -24,6 +30,8 @@ class ScheduleController extends Controller
         ]);
 
         $schedule = Schedule::create($data);
+        $schedule->setAttribute('employees_count', 0);
+        $schedule->setAttribute('employees', []);
 
         return response()->json([
             'success' => true,
@@ -43,6 +51,10 @@ class ScheduleController extends Controller
         ]);
 
         $schedule->update($data);
+
+        $schedule->load(['employees.user', 'employees.department']);
+        $uniqueCount = $schedule->employees->unique('id')->count();
+        $schedule->setAttribute('employees_count', $uniqueCount);
 
         return response()->json(['success' => true, 'message' => 'Jadwal shift berhasil diperbarui.', 'data' => $schedule]);
     }

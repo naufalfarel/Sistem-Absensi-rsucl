@@ -62,7 +62,7 @@ export function AttendanceTab() {
             id: r.id,
             name: r.employee?.name ?? 'Karyawan',
             dept: r.employee?.department ?? 'Umum',
-            shift: 'Reguler',
+            shift: r.shift_name || 'Reguler',
             checkIn: r.check_in ? r.check_in.substring(0, 5) : '--',
             checkOut: r.check_out ? r.check_out.substring(0, 5) : null,
             status: statusKey,
@@ -266,13 +266,13 @@ export function AttendanceTab() {
                   {selected.imageCheckIn && (
                     <div className="flex-1 text-center bg-gray-50 rounded-xl p-2 border border-gray-100 shadow-sm">
                       <p className="text-[9px] font-bold text-gray-400 mb-1.5 uppercase">Selfie Masuk</p>
-                      <img src={selected.imageCheckIn} alt="Check In Selfie" className="w-full h-24 object-cover rounded-lg border" />
+                      <img src={selected.imageCheckIn} alt="Check In Selfie" className="w-full aspect-square object-cover rounded-lg border" />
                     </div>
                   )}
                   {selected.imageCheckOut && (
                     <div className="flex-1 text-center bg-gray-50 rounded-xl p-2 border border-gray-100 shadow-sm">
                       <p className="text-[9px] font-bold text-gray-400 mb-1.5 uppercase">Selfie Pulang</p>
-                      <img src={selected.imageCheckOut} alt="Check Out Selfie" className="w-full h-24 object-cover rounded-lg border" />
+                      <img src={selected.imageCheckOut} alt="Check Out Selfie" className="w-full aspect-square object-cover rounded-lg border" />
                     </div>
                   )}
                 </div>

@@ -153,7 +153,7 @@ export function HistoryTab() {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-green-50 text-green-700">Reguler</span>
+                      <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-green-50 text-green-700">{r.shift_name || 'Reguler'}</span>
                     </td>
                     <td className="px-4 py-3 font-mono text-[12px] text-gray-700">{r.check_in ? r.check_in.substring(0, 5) : '--'}</td>
                     <td className="px-4 py-3 font-mono text-[12px] text-gray-700">{r.check_out ? r.check_out.substring(0, 5) : '--'}</td>
@@ -202,7 +202,7 @@ export function HistoryTab() {
             <div className="space-y-2.5 bg-gray-50 rounded-xl p-4 mb-5">
               {[
                 { l: 'Tanggal', v: formatDate(selected.date) },
-                { l: 'Shift', v: 'Reguler' },
+                { l: 'Shift', v: selected.shift_name || 'Reguler' },
                 { l: 'Jam Masuk', v: selected.check_in ? selected.check_in.substring(0, 5) : '--' },
                 { l: 'Jam Keluar', v: selected.check_out ? selected.check_out.substring(0, 5) : '--' },
                 { l: 'Status', v: (statusConfig[selected.status] || { label: selected.status }).label },
@@ -222,13 +222,13 @@ export function HistoryTab() {
                   {selected.image_check_in && (
                     <div className="flex-1 text-center bg-gray-50 rounded-xl p-2 border border-gray-100 shadow-sm">
                       <p className="text-[9px] font-bold text-gray-400 mb-1.5 uppercase">Selfie Masuk</p>
-                      <img src={selected.image_check_in} alt="Check In Selfie" className="w-full h-24 object-cover rounded-lg border" />
+                      <img src={selected.image_check_in} alt="Check In Selfie" className="w-full aspect-square object-cover rounded-lg border" />
                     </div>
                   )}
                   {selected.image_check_out && (
                     <div className="flex-1 text-center bg-gray-50 rounded-xl p-2 border border-gray-100 shadow-sm">
                       <p className="text-[9px] font-bold text-gray-400 mb-1.5 uppercase">Selfie Pulang</p>
-                      <img src={selected.image_check_out} alt="Check Out Selfie" className="w-full h-24 object-cover rounded-lg border" />
+                      <img src={selected.image_check_out} alt="Check Out Selfie" className="w-full aspect-square object-cover rounded-lg border" />
                     </div>
                   )}
                 </div>

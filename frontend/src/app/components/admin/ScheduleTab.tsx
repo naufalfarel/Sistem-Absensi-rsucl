@@ -335,6 +335,7 @@ export function ScheduleTab() {
   const [shifts, setShifts]           = useState<ShiftSchedule[]>([]);
   const [employeeSchedules, setEmployeeSchedules] = useState<EmployeeWeeklySchedule[]>([]);
   const [editingId, setEditingId]     = useState<number | null>(null);
+  const [editName, setEditName]       = useState('');
   const [editStart, setEditStart]     = useState('');
   const [editEnd, setEditEnd]         = useState('');
   const [expandedShift, setExpandedShift] = useState<number | null>(null);
@@ -381,13 +382,14 @@ export function ScheduleTab() {
 
   const startEdit = (shift: ShiftSchedule) => {
     setEditingId(shift.id);
+    setEditName(shift.name);
     setEditStart(shift.start_time.substring(0, 5));
     setEditEnd(shift.end_time.substring(0, 5));
   };
 
   const saveEdit  = async (id: number)   => {
     try {
-      const res = await scheduleApi.update(id, { start_time: editStart, end_time: editEnd });
+      const res = await scheduleApi.update(id, { name: editName, start_time: editStart, end_time: editEnd });
       if (res.success) {
         setShifts(prev => prev.map(s => s.id === id ? res.data : s));
         setEditingId(null);
@@ -525,17 +527,24 @@ export function ScheduleTab() {
                 </div>
 
                 {editingId === shift.id ? (
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1">
-                      <label className="block text-[10px] text-gray-400 mb-1">Masuk</label>
-                      <input type="time" value={editStart} onChange={e => setEditStart(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[13px] font-mono bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all" />
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-[10px] text-gray-400 mb-1">Nama Shift</label>
+                      <input type="text" value={editName} onChange={e => setEditName(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all" />
                     </div>
-                    <span className="text-gray-400 mt-4">–</span>
-                    <div className="flex-1">
-                      <label className="block text-[10px] text-gray-400 mb-1">Pulang</label>
-                      <input type="time" value={editEnd} onChange={e => setEditEnd(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[13px] font-mono bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all" />
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1">
+                        <label className="block text-[10px] text-gray-400 mb-1">Masuk</label>
+                        <input type="time" value={editStart} onChange={e => setEditStart(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[13px] font-mono bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all" />
+                      </div>
+                      <span className="text-gray-400 mt-4">–</span>
+                      <div className="flex-1">
+                        <label className="block text-[10px] text-gray-400 mb-1">Pulang</label>
+                        <input type="time" value={editEnd} onChange={e => setEditEnd(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[13px] font-mono bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all" />
+                      </div>
                     </div>
                   </div>
                 ) : (
