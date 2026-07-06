@@ -79,10 +79,6 @@ class ScheduleController extends Controller
         return response()->json(['success' => true, 'data' => $data]);
     }
 
-    /**
-     * GET /api/my-schedule
-     * Jadwal shift karyawan yang login untuk hari ini berdasarkan hari dalam seminggu.
-     */
     public function mySchedule(\Illuminate\Http\Request $request)
     {
         $employee = $request->user()->employee;
@@ -102,30 +98,46 @@ class ScheduleController extends Controller
         ];
         $todayName = $dayMap[now('Asia/Jakarta')->dayOfWeek];
 
-        // Cari jadwal berdasarkan hari ini
-        $schedule = $employee->schedules()
-            ->wherePivot('day_of_week', $todayName)
-            ->first();
+        // Fetch all schedules to locate today's and Saturday's shifts
+        $schedules = $employee->schedules()->get();
 
-        if (!$schedule) {
-            return response()->json([
-                'success' => true,
-                'data'    => null,
-                'day'     => $todayName,
-            ]);
+        $todaySchedule = $schedules->first(function ($s) use ($todayName) {
+            return $s->pivot->day_of_week === $todayName;
+        });
+
+        $saturdaySchedule = $schedules->first(function ($s) {
+            return $s->pivot->day_of_week === 'Sabtu';
+        });
+
+        $todayData = null;
+        if ($todaySchedule) {
+            $todayData = [
+                'id'         => $todaySchedule->id,
+                'name'       => $todaySchedule->name,
+                'start_time' => $todaySchedule->start_time,
+                'end_time'   => $todaySchedule->end_time,
+                'color'      => $todaySchedule->color,
+                'icon'       => $todaySchedule->icon,
+            ];
+        }
+
+        $saturdayData = null;
+        if ($saturdaySchedule) {
+            $saturdayData = [
+                'id'         => $saturdaySchedule->id,
+                'name'       => $saturdaySchedule->name,
+                'start_time' => $saturdaySchedule->start_time,
+                'end_time'   => $saturdaySchedule->end_time,
+                'color'      => $saturdaySchedule->color,
+                'icon'       => $saturdaySchedule->icon,
+            ];
         }
 
         return response()->json([
             'success' => true,
             'day'     => $todayName,
-            'data'    => [
-                'id'         => $schedule->id,
-                'name'       => $schedule->name,
-                'start_time' => $schedule->start_time,
-                'end_time'   => $schedule->end_time,
-                'color'      => $schedule->color,
-                'icon'       => $schedule->icon,
-            ],
+            'data'    => $todayData,
+            'saturday_shift' => $saturdayData,
         ]);
     }
 

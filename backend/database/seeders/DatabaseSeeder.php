@@ -116,14 +116,17 @@ class DatabaseSeeder extends Seeder
 
         // ── 6. Pengaturan Default ──────────────────────────────────────
         $defaults = [
-            'system_active' => '1',
-            'late_limit'    => '08:30',
-            'close_checkin' => '09:00',
-            'checkout_open' => '17:00',
-            'checkout_close'=> '18:00',
-            'gps_radius'    => '40',
-            'hospital_lat'  => '5.552740480177099',
-            'hospital_lng'  => '95.33486560781716',
+            'system_active'      => '1',
+            'checkin_open'       => '0',
+            'late_limit'         => '30',
+            'close_checkin'      => '60',
+            'checkout_open'      => '0',
+            'checkout_close'     => '60',
+            'sat_checkout_open'  => '0',
+            'sat_checkout_close' => '60',
+            'gps_radius'         => '40',
+            'hospital_lat'       => '5.552740480177099',
+            'hospital_lng'       => '95.33486560781716',
         ];
         foreach ($defaults as $key => $value) {
             Setting::create(['key' => $key, 'value' => $value]);

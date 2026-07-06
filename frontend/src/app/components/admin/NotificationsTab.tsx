@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { AlertTriangle, Shield, LogIn, CheckCircle2, RefreshCw, Bell, Check, Calendar } from 'lucide-react';
+import { AlertTriangle, Shield, LogIn, CheckCircle2, RefreshCw, Bell, Check, Calendar, Trash2 } from 'lucide-react';
 import { notificationApi, AppNotification } from '../../../services/api';
 
 const catFilters = [
@@ -68,6 +68,34 @@ export function NotificationsTab({ onUpdateCount }: NotificationsTabProps) {
     }
   };
 
+  const handleDelete = async (id: number) => {
+    if (!window.confirm('Apakah Anda yakin ingin menghapus notifikasi ini?')) return;
+    try {
+      const res = await notificationApi.delete(id);
+      if (res.success) {
+        setNotifs(prev => prev.filter(n => n.id !== id));
+        onUpdateCount?.();
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert(err?.message ?? 'Gagal menghapus notifikasi.');
+    }
+  };
+
+  const handleDeleteAllRead = async () => {
+    if (!window.confirm('Apakah Anda yakin ingin menghapus semua notifikasi yang telah dibaca?')) return;
+    try {
+      const res = await notificationApi.deleteAllRead();
+      if (res.success) {
+        setNotifs(prev => prev.filter(n => !n.is_read));
+        onUpdateCount?.();
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert(err?.message ?? 'Gagal menghapus semua notifikasi.');
+    }
+  };
+
   const filtered = notifs.filter(n => filter === 'all' || n.type === filter);
 
   const getIconProps = (type: string) => {
@@ -96,11 +124,18 @@ export function NotificationsTab({ onUpdateCount }: NotificationsTabProps) {
             {unread > 0 ? `${unread} notifikasi belum dibaca` : 'Semua sudah dibaca'}
           </p>
         </div>
-        {unread > 0 && (
-          <button onClick={markAll} className="flex items-center gap-1.5 text-[12px] text-[#16A34A] font-medium hover:underline mt-1">
-            <Check size={13} /> Tandai semua dibaca
-          </button>
-        )}
+        <div className="flex items-center gap-3 mt-1 flex-wrap">
+          {unread > 0 && (
+            <button onClick={markAll} className="flex items-center gap-1.5 text-[12px] text-[#16A34A] font-medium hover:underline">
+              <Check size={13} /> Tandai semua dibaca
+            </button>
+          )}
+          {notifs.some(n => n.is_read) && (
+            <button onClick={handleDeleteAllRead} className="flex items-center gap-1.5 text-[12px] text-red-500 font-medium hover:underline">
+              <Trash2 size={13} /> Hapus semua dibaca
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Category filter */}
@@ -142,7 +177,20 @@ export function NotificationsTab({ onUpdateCount }: NotificationsTabProps) {
                     <p className={`text-[13px] leading-tight ${!n.is_read ? 'font-semibold text-gray-900' : 'font-medium text-gray-700'}`}>{n.title}</p>
                     <div className="flex items-center gap-1.5 flex-shrink-0">
                       <span className="text-[10px] text-gray-400 whitespace-nowrap">{formatTime(n.created_at)}</span>
-                      {!n.is_read && <div className="w-2 h-2 rounded-full bg-[#16A34A]" />}
+                      {!n.is_read ? (
+                        <div className="w-2 h-2 rounded-full bg-[#16A34A]" />
+                      ) : (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation(); // Stop click from triggering markOne again
+                            handleDelete(n.id);
+                          }}
+                          className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                          title="Hapus notifikasi"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      )}
                     </div>
                   </div>
                   <p className="text-[12px] text-gray-500 leading-relaxed">{n.body}</p>

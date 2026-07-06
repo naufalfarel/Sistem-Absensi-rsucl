@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CheckCircle2, XCircle, Clock, FileText } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, FileText, Trash2 } from 'lucide-react';
 import { leaveApi, LeaveRequest } from '../../../services/api';
 
 type LeaveType = 'cuti' | 'izin' | 'sakit';
@@ -82,6 +82,32 @@ export function LeaveTab() {
     return `${date.getDate()} ${months[date.getMonth()]}`;
   };
 
+  const hasProcessed = requests.some(r => r.status === 'approved' || r.status === 'rejected');
+
+  const handleDeleteIndividual = async (id: number) => {
+    if (!window.confirm('Apakah Anda yakin ingin menghapus pengajuan cuti ini?')) return;
+    try {
+      const res = await leaveApi.delete(id);
+      if (res.success) {
+        setRequests(prev => prev.filter(r => r.id !== id));
+      }
+    } catch (err: any) {
+      alert(err?.message ?? 'Gagal menghapus pengajuan.');
+    }
+  };
+
+  const handleDeleteAllProcessed = async () => {
+    if (!window.confirm('Apakah Anda yakin ingin menghapus SEMUA pengajuan cuti lama (yang sudah Disetujui/Ditolak)? Tindakan ini tidak dapat dibatalkan.')) return;
+    try {
+      const res = await leaveApi.deleteAllProcessed();
+      if (res.success) {
+        setRequests(prev => prev.filter(r => r.status === 'pending'));
+      }
+    } catch (err: any) {
+      alert(err?.message ?? 'Gagal menghapus pengajuan lama.');
+    }
+  };
+
   return (
     <div className="max-w-5xl mx-auto space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -114,17 +140,26 @@ export function LeaveTab() {
         })}
       </div>
 
-      {/* Filter tabs */}
-      <div className="flex gap-1.5 bg-white rounded-xl border border-gray-100 p-1 shadow-sm w-fit">
-        {filterTabs.map(f => (
-          <button key={f} onClick={() => setFilter(f)}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-medium transition-all flex items-center gap-1.5 ${f === filter ? 'bg-[#16A34A] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-            {f}
-            {f === 'Menunggu' && pending > 0 && (
-              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${f === filter ? 'bg-white/25 text-white' : 'bg-amber-100 text-amber-600'}`}>{pending}</span>
-            )}
+      {/* Filter & Bulk Actions */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex gap-1.5 bg-white rounded-xl border border-gray-100 p-1 shadow-sm w-fit">
+          {filterTabs.map(f => (
+            <button key={f} onClick={() => setFilter(f)}
+              className={`px-3.5 py-1.5 rounded-lg text-[12px] font-medium transition-all flex items-center gap-1.5 ${f === filter ? 'bg-[#16A34A] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+              {f}
+              {f === 'Menunggu' && pending > 0 && (
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${f === filter ? 'bg-white/25 text-white' : 'bg-amber-100 text-amber-600'}`}>{pending}</span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {hasProcessed && (
+          <button onClick={handleDeleteAllProcessed}
+            className="flex items-center gap-1.5 px-3.5 py-2.5 bg-red-50 border border-red-100 hover:bg-red-100 text-red-650 rounded-xl text-[12px] font-semibold transition-all shadow-sm active:scale-95">
+            <Trash2 size={13} className="text-red-500" /> Hapus Semua Cuti Lama
           </button>
-        ))}
+        )}
       </div>
 
       {/* Cards */}
@@ -192,13 +227,27 @@ export function LeaveTab() {
                     </div>
                   )}
                   {req.status === 'approved' && (
-                    <div className="flex-shrink-0 w-8 h-8 rounded-xl bg-green-50 flex items-center justify-center">
-                      <CheckCircle2 size={16} className="text-[#16A34A]" />
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <div className="w-8 h-8 rounded-xl bg-green-50 flex items-center justify-center">
+                        <CheckCircle2 size={16} className="text-[#16A34A]" />
+                      </div>
+                      <button onClick={() => handleDeleteIndividual(req.id)}
+                        className="w-8 h-8 rounded-xl bg-gray-50 hover:bg-red-50 hover:text-red-500 text-gray-400 flex items-center justify-center transition-colors"
+                        title="Hapus Pengajuan">
+                        <Trash2 size={14} />
+                      </button>
                     </div>
                   )}
                   {req.status === 'rejected' && (
-                    <div className="flex-shrink-0 w-8 h-8 rounded-xl bg-red-50 flex items-center justify-center">
-                      <XCircle size={16} className="text-red-500" />
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <div className="w-8 h-8 rounded-xl bg-red-50 flex items-center justify-center">
+                        <XCircle size={16} className="text-red-500" />
+                      </div>
+                      <button onClick={() => handleDeleteIndividual(req.id)}
+                        className="w-8 h-8 rounded-xl bg-gray-50 hover:bg-red-50 hover:text-red-500 text-gray-400 flex items-center justify-center transition-colors"
+                        title="Hapus Pengajuan">
+                        <Trash2 size={14} />
+                      </button>
                     </div>
                   )}
                 </div>

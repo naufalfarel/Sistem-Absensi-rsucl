@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Users, ClipboardList, History, CalendarDays, FileText,
   Bell, Settings, LogOut, UserCheck, Clock, AlertCircle,
   Search, Plus, Upload, Download, MoreHorizontal, Lock,
-  Menu, X, CheckCircle2, BarChart3, Edit2, Trash2, ChevronDown
+  Menu, X, CheckCircle2, BarChart3, Edit2, Trash2, ChevronDown, Building2
 } from 'lucide-react';
 import logoImg from '../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
 import {
@@ -17,11 +17,13 @@ import { LeaveTab } from './admin/LeaveTab';
 import { ReportsTab } from './admin/ReportsTab';
 import { NotificationsTab } from './admin/NotificationsTab';
 import { SettingsTab } from './admin/SettingsTab';
+import { DepartmentsTab } from './admin/DepartmentsTab';
 import { employeeApi, Employee, reportApi, ReportSummary, notificationApi } from '../../services/api';
 
 const sidebarItems = [
   { id: 'dashboard',     icon: LayoutDashboard, label: 'Dashboard' },
   { id: 'employees',     icon: Users,            label: 'Data Pegawai' },
+  { id: 'departments',   icon: Building2,        label: 'Departemen/Bagian' },
   { id: 'attendance',    icon: ClipboardList,    label: 'Absensi' },
   { id: 'history',       icon: History,          label: 'Riwayat' },
   { id: 'schedule',      icon: CalendarDays,     label: 'Jadwal Shift' },
@@ -224,7 +226,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
       icon: Users,
       label: 'Total Pegawai',
       value: reportSummary ? String(reportSummary.total_employees) : String(employees.length),
-      sub: `${departments.length} Departemen`,
+      sub: `${departments.length} Departemen/Bagian`,
       color: '#374151',
       bg: '#F9FAFB'
     },
@@ -272,9 +274,8 @@ export function AdminApp({ onLogout }: AdminAppProps) {
   // Map summary chart structure into recharts
   const weeklyData = reportSummary?.daily_chart.map(c => ({
     day: c.label,
-    hadir: c.count,
-    alpha: c.total - c.count,
-    terlambat: 0 // Simplification since backend reports total checkins count
+    hadir: c.hadir ?? 0,
+    alpha: c.alpha ?? 0,
   })) ?? [];
 
   const SidebarContent = ({ mobile }: { mobile?: boolean }) => {
@@ -372,16 +373,18 @@ export function AdminApp({ onLogout }: AdminAppProps) {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-[12px] font-semibold text-gray-700 hidden sm:inline-block mr-1">{user?.name || 'Super Admin'}</span>
-            <div className="w-8 h-8 rounded-xl bg-[#16A34A]/15 flex items-center justify-center overflow-hidden">
-              {user?.profile_picture ? (
-                <img src={user.profile_picture} alt={user.name} className="w-full h-full object-cover" />
-              ) : (
-                <span className="text-[#16A34A] text-[10px] font-bold">
-                  {user?.name?.split(' ').slice(0, 2).map(w => w.charAt(0)).join('').toUpperCase() || 'AD'}
+            <button
+              onClick={() => setActiveTab('notifications')}
+              className="relative w-8 h-8 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors shadow-sm"
+              title="Notifikasi"
+            >
+              <Bell size={15} />
+              {unreadNotifications > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center px-1">
+                  {unreadNotifications}
                 </span>
               )}
-            </div>
+            </button>
           </div>
         </div>
 
@@ -463,7 +466,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
               <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
                 <div className="relative flex-1 max-w-sm">
                   <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input type="text" placeholder="Cari nama, NIP, atau departemen..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                  <input type="text" placeholder="Cari nama, NIP, atau departemen/bagian..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                     className="w-full pl-10 pr-4 py-2.5 border border-gray-100 rounded-xl text-[13px] bg-white shadow-sm focus:outline-none focus:border-[#16A34A] transition-all placeholder:text-gray-300" />
                 </div>
                 <div className="flex gap-2 flex-wrap">
@@ -494,7 +497,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-gray-50 bg-gray-50/50">
-                        {['Nama Pegawai', 'NIP', 'Username', 'Departemen', 'Jabatan', 'Status', 'Check-In', 'Aksi'].map((h, i) => (
+                        {['Nama Pegawai', 'NIP', 'Username', 'Departemen/Bagian', 'Jabatan', 'Status', 'Check-In', 'Aksi'].map((h, i) => (
                           <th key={i} className="text-left px-4 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
@@ -575,6 +578,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
           {activeTab === 'reports' && <ReportsTab />}
           {activeTab === 'notifications' && <NotificationsTab onUpdateCount={fetchUnreadNotificationsCount} />}
           {activeTab === 'settings' && <SettingsTab />}
+          {activeTab === 'departments' && <DepartmentsTab onRefreshDepartments={loadData} />}
         </div>
       </div>
 
@@ -660,7 +664,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
                 </div>
                 {/* Dept */}
                 <div>
-                  <label className="block text-[12px] font-medium text-gray-600 mb-1.5">Departemen</label>
+                  <label className="block text-[12px] font-medium text-gray-600 mb-1.5">Departemen/Bagian</label>
                   <div className="relative">
                     <select value={form.department_id} onChange={e => setForm(f => ({ ...f, department_id: e.target.value }))}
                       className="w-full appearance-none px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all">

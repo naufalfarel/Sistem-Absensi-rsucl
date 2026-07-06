@@ -57,16 +57,38 @@ class LeaveRequestController extends Controller
         ]);
 
         // Beri notifikasi ke semua admin
-        $admins = \App\Models\User::where('role', 'admin')->get();
-        foreach ($admins as $admin) {
-            Notification::create([
-                'user_id' => $admin->id,
-                'title'   => 'Pengajuan ' . ucfirst($data['type']) . ' Baru',
-                'body'    => $employee->user?->name . ' mengajukan ' . $data['type'] .
-                             ' dari ' . $data['start_date'] . ' s/d ' . $data['end_date'] . '.',
-                'type'    => 'leave',
-                'data'    => ['leave_request_id' => $lr->id],
-            ]);
+        $notifLeave = \App\Models\Setting::get('notif_leave', '1');
+        if ($notifLeave !== '0') {
+            $admins = \App\Models\User::where('role', 'admin')->get();
+            foreach ($admins as $admin) {
+                Notification::create([
+                    'user_id' => $admin->id,
+                    'title'   => 'Pengajuan ' . ucfirst($data['type']) . ' Baru',
+                    'body'    => ($employee->user?->name ?? 'Karyawan') . ' mengajukan ' . $data['type'] .
+                                 ' dari ' . $data['start_date'] . ' s/d ' . $data['end_date'] . '.',
+                    'type'    => 'leave',
+                    'data'    => ['leave_request_id' => $lr->id],
+                ]);
+            }
+        }
+
+        // Kirim notifikasi email ke semua admin jika diaktifkan
+        $notifEmail = \App\Models\Setting::get('notif_email', '1');
+        if ($notifEmail !== '0') {
+            $admins = \App\Models\User::where('role', 'admin')->get();
+            foreach ($admins as $admin) {
+                try {
+                    \Illuminate\Support\Facades\Mail::raw(
+                        "Halo {$admin->name},\n\nAda pengajuan " . $data['type'] . " baru dari " . ($employee->user?->name ?? 'Karyawan') . ".\n\nDetail:\n- Jenis: " . ucfirst($data['type']) . "\n- Tanggal: " . $data['start_date'] . " s/d " . $data['end_date'] . "\n- Alasan: " . $data['reason'] . "\n\nSilakan masuk ke panel admin RSUCL untuk memproses pengajuan ini.",
+                        function ($message) use ($admin, $data) {
+                            $message->to($admin->email)
+                                    ->subject('Pengajuan ' . ucfirst($data['type']) . ' Baru - RSUCL');
+                        }
+                    );
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::error('Gagal mengirim email pengajuan cuti: ' . $e->getMessage());
+                }
+            }
         }
 
         $lr->load(['employee.user', 'employee.department', 'reviewer']);
@@ -158,6 +180,42 @@ class LeaveRequestController extends Controller
             'success' => true,
             'message' => 'Pengajuan berhasil ' . ($newStatus === 'approved' ? 'disetujui' : 'ditolak') . '.',
             'data'    => $this->format($lr),
+        ]);
+    }
+
+    /**
+     * DELETE /api/leave-requests/{id}
+     * Admin: Hapus satu pengajuan cuti
+     */
+    public function destroy(Request $request, LeaveRequest $leaveRequest)
+    {
+        if (!$request->user()->isAdmin()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
+        }
+
+        $leaveRequest->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Pengajuan cuti berhasil dihapus.'
+        ]);
+    }
+
+    /**
+     * DELETE /api/leave-requests/all-processed
+     * Admin: Hapus semua pengajuan cuti yang sudah diproses (approved/rejected)
+     */
+    public function destroyAll(Request $request)
+    {
+        if (!$request->user()->isAdmin()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
+        }
+
+        LeaveRequest::whereIn('status', ['approved', 'rejected'])->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Semua pengajuan cuti lama berhasil dihapus.'
         ]);
     }
 

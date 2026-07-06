@@ -146,7 +146,7 @@ export function AttendanceTab() {
           <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
-            placeholder="Cari nama atau departemen..."
+            placeholder="Cari nama atau departemen/bagian..."
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 border border-gray-100 rounded-xl text-[13px] bg-white shadow-sm focus:outline-none focus:border-[#16A34A] transition-all placeholder:text-gray-300"
@@ -165,7 +165,7 @@ export function AttendanceTab() {
           <table className="w-full">
             <thead>
               <tr className="bg-gray-50/70 border-b border-gray-100">
-                {['Nama Karyawan', 'Departemen', 'Shift', 'Jam Masuk', 'Jam Keluar', 'Durasi', 'Status', ''].map((h, i) => (
+                {['Nama Karyawan', 'Departemen/Bagian', 'Shift', 'Jam Masuk', 'Jam Keluar', 'Durasi', 'Status', ''].map((h, i) => (
                   <th key={i} className="text-left px-4 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
                 ))}
               </tr>

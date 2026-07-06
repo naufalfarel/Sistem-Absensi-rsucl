@@ -256,7 +256,7 @@ export function ProfilePage({ onLogout }: ProfilePageProps) {
   const infoKerja = [
     { icon: Calendar,  label: 'Tanggal Bergabung', value: user?.join_date ? formatDate(user.join_date) : '--', badge: false },
     { icon: Briefcase, label: 'Jabatan',            value: user?.position ?? '--', badge: false },
-    { icon: Building2, label: 'Departemen',         value: user?.department ?? '--', badge: false },
+    { icon: Building2, label: 'Departemen/Bagian',  value: user?.department ?? '--', badge: false },
     { icon: User,      label: 'Status Pegawai',     value: 'Aktif', badge: true },
   ];
 

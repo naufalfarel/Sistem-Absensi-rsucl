@@ -1,9 +1,13 @@
 import { useState, useEffect } from 'react';
 import { FileText, Download, Users, Calendar, Clock, AlertTriangle, ChevronDown } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { reportApi, ReportSummary, attendanceApi } from '../../../services/api';
+import { reportApi, ReportSummary, attendanceApi, departmentApi } from '../../../services/api';
 import logoImg from '../../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
+import rsLogoImg from '../../../imports/rsucl_wide_logo.png';
 import { useAuth } from '../../../context/AuthContext';
+import * as XLSX from 'xlsx';
+// @ts-ignore
+import XLSXStyle from 'xlsx-js-style';
 
 export function ReportsTab() {
   const { logoUrl } = useAuth();
@@ -15,6 +19,24 @@ export function ReportsTab() {
   const currentDate = new Date();
   const [selectedMonth, setSelectedMonth] = useState<number>(currentDate.getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState<number>(currentDate.getFullYear());
+  const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
+  const [departments, setDepartments] = useState<{ id: number; name: string }[]>([]);
+
+  const getBase64Image = async (imgUrl: string): Promise<string> => {
+    try {
+      const response = await fetch(imgUrl);
+      const blob = await response.blob();
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (err) {
+      console.error(err);
+      return "";
+    }
+  };
 
   const loadSummary = async () => {
     setLoading(true);
@@ -30,113 +52,286 @@ export function ReportsTab() {
     }
   };
 
+  const getImageArrayBuffer = async (imgUrl: string): Promise<ArrayBuffer | null> => {
+    try {
+      const response = await fetch(imgUrl);
+      const buffer = await response.arrayBuffer();
+      return buffer;
+    } catch {
+      return null;
+    }
+  };
+
+  const downloadXlsx = (wb: unknown, filename: string) => {
+    const wbout = XLSXStyle.write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  };
+
+  const buildHeaderStyle = () => ({
+    font: { name: 'Calibri', sz: 11, bold: true, color: { rgb: 'FFFFFF' } },
+    fill: { fgColor: { rgb: '16A34A' } },
+    alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+    border: {
+      top: { style: 'thin', color: { rgb: 'D1D5DB' } },
+      bottom: { style: 'thin', color: { rgb: 'D1D5DB' } },
+      left: { style: 'thin', color: { rgb: 'D1D5DB' } },
+      right: { style: 'thin', color: { rgb: 'D1D5DB' } },
+    },
+  });
+
+  const buildDeptStyle = () => ({
+    font: { name: 'Calibri', sz: 11, bold: true, color: { rgb: '374151' } },
+    fill: { fgColor: { rgb: 'E5E7EB' } },
+    alignment: { horizontal: 'left', vertical: 'center' },
+    border: {
+      top: { style: 'thin', color: { rgb: 'D1D5DB' } },
+      bottom: { style: 'thin', color: { rgb: 'D1D5DB' } },
+      left: { style: 'thin', color: { rgb: 'D1D5DB' } },
+      right: { style: 'thin', color: { rgb: 'D1D5DB' } },
+    },
+  });
+
+  const buildDataStyle = (bold = false, center = false) => ({
+    font: { name: 'Calibri', sz: 11, bold, color: { rgb: '1F2937' } },
+    alignment: { horizontal: center ? 'center' : 'left', vertical: 'center' },
+    border: {
+      top: { style: 'thin', color: { rgb: 'D1D5DB' } },
+      bottom: { style: 'thin', color: { rgb: 'D1D5DB' } },
+      left: { style: 'thin', color: { rgb: 'D1D5DB' } },
+      right: { style: 'thin', color: { rgb: 'D1D5DB' } },
+    },
+  });
+
+  const buildMetaStyle = (bold = false, sz = 11, rgb = '111827') => ({
+    font: { name: 'Calibri', sz, bold, color: { rgb } },
+    alignment: { horizontal: 'right', vertical: 'center' },
+  });
+
   const handleExportExcel = async () => {
     setExporting(true);
     try {
+      // Load logo as base64 for inline embedding in HTML Excel
+      const logoPath = logoUrl && logoUrl !== 'none' ? logoUrl : rsLogoImg;
+      let base64Logo = '';
+      try {
+        const response = await fetch(logoPath);
+        const blob = await response.blob();
+        base64Logo = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      } catch (e) {
+        console.error('Failed to load logo for Excel', e);
+      }
+
+      const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
+      const startDayStr = `01-${String(selectedMonth).padStart(2, '0')}-${selectedYear}`;
+      const endDayStr = `${String(lastDay).padStart(2, '0')}-${String(selectedMonth).padStart(2, '0')}-${selectedYear}`;
+      const periodStr = `Dari ${startDayStr} s/d ${endDayStr}`;
+
+      const triggerDownload = (html: string, filename: string) => {
+        const blob = new Blob(['\uFEFF' + html], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+      };
+
+      const excelWrapper = (sheetName: string, bodyHtml: string) => `
+        <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+        <head>
+          <meta http-equiv="content-type" content="application/vnd.ms-excel; charset=UTF-8" />
+          <!--[if gte mso 9]><xml>
+           <x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>
+            <x:Name>${sheetName}</x:Name>
+            <x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+           </x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook>
+          </xml><![endif]-->
+          <style>
+            body { font-family: Calibri, Arial, sans-serif; }
+            table { border-collapse: collapse; }
+            .header-title { font-size: 12pt; font-weight: bold; color: #111827; text-align: right; vertical-align: bottom; border: none; padding: 2px 4px; }
+            .header-rs    { font-size: 9pt;  font-weight: bold; color: #374151; text-align: right; vertical-align: middle; border: none; padding: 2px 4px; }
+            .header-period{ font-size: 8pt;  color: #6B7280; text-align: right; vertical-align: top;    border: none; padding: 2px 4px; }
+            .logo-cell    { border: none; vertical-align: middle; padding: 4px; width: 160px; }
+            .separator    { height: 3px; border: none; border-bottom: 2px solid #000000; padding: 0; font-size: 1px; mso-height-source: userset; }
+            th { background-color: #16A34A; color: #FFFFFF; font-weight: bold; font-size: 9pt; text-align: center; vertical-align: middle; border: 1px solid #A7C4A0; padding: 4px 5px; }
+            td { font-size: 9pt; border: 1px solid #D1D5DB; vertical-align: middle; padding: 3px 5px; color: #1F2937; }
+            .dept-row td { background-color: #E5E7EB; font-weight: bold; color: #374151; font-size: 9pt; border: 1px solid #C4C9D4; }
+            .center { text-align: center; }
+            .bold   { font-weight: bold; }
+          </style>
+        </head>
+        <body>${bodyHtml}</body>
+        </html>`;
+
+      // Use HTML width/height attributes (not CSS) so WPS Office/Excel actually respects the size
+      // rsucl_wide_logo.png natural size is 980x381 → at width=140, height=54
+      const logoImg = base64Logo
+        ? `<img src="${base64Logo}" width="140" height="54" style="display:block;" />`
+        : '<span style="font-size:11pt;font-weight:bold;color:#16A34A;">RSUCL</span>';
+
+      const deptSuffix = selectedDepartment !== 'all' ? `_${selectedDepartment.replace(/\s+/g, '_')}` : '';
+      const deptLabelText = selectedDepartment !== 'all' ? ` | Departemen: ${selectedDepartment.toUpperCase()}` : '';
+
       if (reportType === 'harian') {
         const res = await attendanceApi.history(selectedMonth, selectedYear);
-        if (!res.success || !res.data) {
-          alert("Gagal memuat data absensi.");
-          return;
-        }
+        if (!res.success || !res.data) { alert('Gagal memuat data absensi.'); return; }
 
-        const headers = [
-          "Tanggal",
-          "NIP",
-          "Nama Karyawan",
-          "Departemen",
-          "Jam Masuk",
-          "Jam Keluar",
-          "Durasi Kerja",
-          "Status Kehadiran",
-          "Lokasi GPS"
-        ];
+        const filteredData = selectedDepartment !== 'all'
+          ? res.data.filter(r => r.employee?.department === selectedDepartment)
+          : res.data;
 
-        const csvRows = [
-          headers.join(","),
-          ...res.data.map(r => [
-            r.date,
-            r.employee?.nip ?? '--',
-            `"${(r.employee?.name ?? 'Karyawan').replace(/"/g, '""')}"`,
-            `"${(r.employee?.department ?? 'Umum').replace(/"/g, '""')}"`,
-            r.check_in ?? '--',
-            r.check_out ?? '--',
-            r.duration_min ? `${Math.floor(r.duration_min / 60)}j ${r.duration_min % 60}m` : '--',
-            r.status.toUpperCase(),
-            r.is_within_geofence ? "Terverifikasi" : "Tidak Terverifikasi"
-          ].join(","))
-        ];
+        let bodyRows = '';
+        let lastKey = '';
+        let rowNum = 1;
+        filteredData.forEach(r => {
+          const dateStr = r.date || '--';
+          const dept = r.employee?.department ?? 'UMUM';
+          const key = `${dateStr}|${dept}`;
+          if (key !== lastKey) {
+            bodyRows += `<tr class="dept-row"><td colspan="9">${dept.toUpperCase()} (${dateStr})</td></tr>`;
+            lastKey = key;
+          }
+          const dur = r.duration_min ? `${Math.floor(r.duration_min / 60)}j ${r.duration_min % 60}m` : '--';
+          bodyRows += `<tr>
+            <td class="center">${rowNum++}</td>
+            <td>${dateStr}</td>
+            <td x:str>${r.employee?.nip ?? '--'}</td>
+            <td class="bold">${r.employee?.name ?? 'Karyawan'}</td>
+            <td>${dept}</td>
+            <td class="center">${r.check_in ?? '--'}</td>
+            <td class="center">${r.check_out ?? '--'}</td>
+            <td class="center">${dur}</td>
+            <td class="center bold">${r.status?.toUpperCase() ?? '--'}</td>
+          </tr>`;
+        });
 
-        const csvContent = "\uFEFF" + csvRows.join("\n");
-        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.setAttribute("href", url);
-        link.setAttribute("download", `Laporan_Detail_Kehadiran_Rumah_Sakit_Umum_Cempaka_Lima_${selectedYear}_${selectedMonth}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        const body = `
+          <table style="border:none;margin-bottom:8px;border-collapse:collapse;">
+            <tr style="height:22px;">
+              <td rowspan="3" colspan="3" class="logo-cell">${logoImg}</td>
+              <td colspan="6" class="header-title">DATA ABSENSI KARYAWAN</td>
+            </tr>
+            <tr style="height:18px;"><td colspan="6" class="header-rs">RUMAH SAKIT UMUM CEMPAKA LIMA</td></tr>
+            <tr style="height:16px;"><td colspan="6" class="header-period">${periodStr}${deptLabelText}</td></tr>
+            <tr style="height:3px;"><td colspan="9" class="separator">&nbsp;</td></tr>
+          </table>
+          <table>
+            <thead><tr>
+              <th style="width:40px">No</th>
+              <th>Tanggal</th><th>NIP</th><th>Nama Karyawan</th><th>Departemen</th>
+              <th>Jam Masuk</th><th>Jam Keluar</th><th>Durasi Kerja</th><th>Status Kehadiran</th>
+            </tr></thead>
+            <tbody>${bodyRows}</tbody>
+          </table>`;
+
+        triggerDownload(
+          excelWrapper('Laporan Harian', body),
+          `Laporan_Harian_RSUCL_${selectedYear}_${String(selectedMonth).padStart(2, '0')}${deptSuffix}.xls`
+        );
+
       } else {
         const res = await reportApi.monthlyRekap(selectedMonth, selectedYear);
-        if (!res.success || !res.data) {
-          alert("Gagal memuat data rekap bulanan.");
-          return;
-        }
+        if (!res.success || !res.data) { alert('Gagal memuat data rekap bulanan.'); return; }
 
-        const headers = [
-          "NIP",
-          "Nama Karyawan",
-          "Departemen",
-          "Hadir (Hari)",
-          "Terlambat (Hari)",
-          "Izin (Hari)",
-          "Sakit (Hari)",
-          "Cuti (Hari)",
-          "Alpha (Hari)",
-          "Total Durasi Kerja"
-        ];
+        const filteredData = selectedDepartment !== 'all'
+          ? res.data.filter(r => r.department === selectedDepartment)
+          : res.data;
 
-        const csvRows = [
-          headers.join(","),
-          ...res.data.map(r => [
-            r.nip,
-            `"${r.name.replace(/"/g, '""')}"`,
-            `"${r.department.replace(/"/g, '""')}"`,
-            r.hadir,
-            r.telat,
-            r.izin,
-            r.sakit,
-            r.cuti,
-            r.alpha,
-            r.duration_min ? `${Math.floor(r.duration_min / 60)}j ${r.duration_min % 60}m` : '0j 0m'
-          ].join(","))
-        ];
+        let bodyRows = '';
+        let lastDept = '';
+        let rowNum = 1;
+        filteredData.forEach(r => {
+          const dept = r.department ?? 'UMUM';
+          if (dept !== lastDept) {
+            bodyRows += `<tr class="dept-row"><td colspan="10">${dept}</td></tr>`;
+            lastDept = dept;
+          }
+          const dur = r.duration_min ? `${Math.floor(r.duration_min / 60)}j ${r.duration_min % 60}m` : '0j 0m';
+          bodyRows += `<tr>
+            <td class="center">${rowNum++}</td>
+            <td x:str>${r.nip}</td>
+            <td class="bold">${r.name}</td>
+            <td class="center">${r.hadir} d</td>
+            <td class="center">${r.telat} d</td>
+            <td class="center">${r.izin} d</td>
+            <td class="center">${r.sakit} d</td>
+            <td class="center">${r.cuti} d</td>
+            <td class="center">${r.alpha} d</td>
+            <td class="center bold">${dur}</td>
+          </tr>`;
+        });
 
-        const csvContent = "\uFEFF" + csvRows.join("\n");
-        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.setAttribute("href", url);
-        link.setAttribute("download", `Laporan_Rekap_Bulanan_Rumah_Sakit_Umum_Cempaka_Lima_${selectedYear}_${selectedMonth}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        const body = `
+          <table style="border:none;margin-bottom:8px;border-collapse:collapse;">
+            <tr style="height:22px;">
+              <td rowspan="3" colspan="3" class="logo-cell">${logoImg}</td>
+              <td colspan="7" class="header-title">DATA ABSENSI KARYAWAN</td>
+            </tr>
+            <tr style="height:18px;"><td colspan="7" class="header-rs">RUMAH SAKIT UMUM CEMPAKA LIMA</td></tr>
+            <tr style="height:16px;"><td colspan="7" class="header-period">${periodStr}${deptLabelText}</td></tr>
+            <tr style="height:3px;"><td colspan="10" class="separator">&nbsp;</td></tr>
+          </table>
+          <table>
+            <thead><tr>
+              <th style="width:40px">No</th>
+              <th>NIP</th><th>Nama Karyawan</th>
+              <th>Hadir (Hari)</th><th>Terlambat (Hari)</th>
+              <th>Izin (Hari)</th><th>Sakit (Hari)</th><th>Cuti (Hari)</th>
+              <th>Alpha (Hari)</th><th>Total Durasi Kerja</th>
+            </tr></thead>
+            <tbody>${bodyRows}</tbody>
+          </table>`;
+
+        triggerDownload(
+          excelWrapper('Laporan Bulanan', body),
+          `Laporan_Bulanan_RSUCL_${selectedYear}_${String(selectedMonth).padStart(2, '0')}${deptSuffix}.xls`
+        );
       }
     } catch (err) {
       console.error(err);
-      alert("Terjadi kesalahan saat mengekspor Excel.");
+      alert('Terjadi kesalahan saat mengekspor Excel.');
     } finally {
       setExporting(false);
     }
   };
 
+
   const handleExportPDF = async () => {
     setExporting(true);
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      alert("Mohon izinkan popup blocker untuk mencetak laporan.");
+      setExporting(false);
+      return;
+    }
+
     try {
-      const printWindow = window.open("", "_blank");
-      if (!printWindow) {
-        alert("Mohon izinkan popup blocker untuk mencetak laporan.");
-        return;
+      const logoPath = logoUrl && logoUrl !== 'none' ? logoUrl : logoImg;
+      let base64Logo = "";
+      if (logoPath) {
+        try {
+          base64Logo = await getBase64Image(logoPath);
+        } catch (e) {
+          console.error("Failed to load base64 logo", e);
+        }
       }
 
       let tableHeaders = "";
@@ -147,55 +342,77 @@ export function ReportsTab() {
         const res = await attendanceApi.history(selectedMonth, selectedYear);
         if (!res.success || !res.data) {
           alert("Gagal memuat data absensi.");
+          printWindow.close();
           return;
         }
 
-        reportTitle = "Laporan Detail Kehadiran Harian";
+        const deptTitleSuffix = selectedDepartment !== 'all' ? ` - Departemen/Bagian ${selectedDepartment}` : '';
+        reportTitle = `Laporan Detail Kehadiran Harian${deptTitleSuffix}`;
         tableHeaders = `
           <tr>
             <th style="text-align: center; width: 40px;">No</th>
             <th>Tanggal</th>
             <th>NIP</th>
-            <th>Nama Karyawan</th>
-            <th>Departemen</th>
+            <th>Nama</th>
             <th style="text-align: center; width: 80px;">Jam Masuk</th>
             <th style="text-align: center; width: 80px;">Jam Keluar</th>
             <th style="text-align: center; width: 90px;">Durasi Kerja</th>
-            <th style="text-align: center; width: 120px;">Lokasi GPS</th>
             <th style="text-align: center; width: 80px;">Status</th>
           </tr>
         `;
 
-        tableRowsHtml = res.data.map((r, i) => `
-          <tr style="border-bottom: 1px solid #E5E7EB; font-size: 11px;">
-            <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${i + 1}</td>
-            <td style="padding: 8px; border-right: 1px solid #E5E7EB;">${r.date}</td>
-            <td style="padding: 8px; border-right: 1px solid #E5E7EB;">${r.employee?.nip ?? '--'}</td>
-            <td style="padding: 8px; font-weight: bold; border-right: 1px solid #E5E7EB;">${r.employee?.name ?? 'Karyawan'}</td>
-            <td style="padding: 8px; border-right: 1px solid #E5E7EB;">${r.employee?.department ?? 'Umum'}</td>
-            <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB; font-family: monospace;">${r.check_in ?? '--'}</td>
-            <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB; font-family: monospace;">${r.check_out ?? '--'}</td>
-            <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${r.duration_min ? `${Math.floor(r.duration_min / 60)}j ${r.duration_min % 60}m` : '--'}</td>
-            <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB; font-size: 10px;">${r.is_within_geofence ? 'Terverifikasi' : 'Tidak Terverifikasi'}</td>
-            <td style="padding: 8px; text-align: center; font-weight: bold; color: ${
-              r.status === 'hadir' ? '#16A34A' : r.status === 'telat' ? '#D97706' : r.status === 'alpha' ? '#DC2626' : '#7C3AED'
-            };">${r.status.toUpperCase()}</td>
-          </tr>
-        `).join("");
+        let lastDateDept = "";
+        let rowCounter = 1;
+
+        const filteredData = selectedDepartment !== 'all'
+          ? res.data.filter(r => r.employee?.department === selectedDepartment)
+          : res.data;
+
+        tableRowsHtml = filteredData.map((r, i) => {
+          const dateStr = r.date;
+          const deptName = r.employee?.department ?? 'UMUM';
+          const currentDateDept = `${dateStr} - ${deptName}`;
+          let deptRow = "";
+
+          if (currentDateDept !== lastDateDept) {
+            deptRow = `
+              <tr style="background-color: #E5E7EB; font-weight: bold; font-size: 11px;">
+                <td colspan="8" style="padding: 8px; border-bottom: 1px solid #E5E7EB; border-right: 1px solid #E5E7EB; text-transform: uppercase; color: #374151;">
+                  ${deptName} (${dateStr})
+                </td>
+              </tr>
+            `;
+            lastDateDept = currentDateDept;
+          }
+
+          return deptRow + `
+            <tr style="border-bottom: 1px solid #E5E7EB; font-size: 11px;">
+              <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${rowCounter++}</td>
+              <td style="padding: 8px; border-right: 1px solid #E5E7EB;">${r.date}</td>
+              <td style="padding: 8px; border-right: 1px solid #E5E7EB;">${r.employee?.nip ?? '--'}</td>
+              <td style="padding: 8px; font-weight: bold; border-right: 1px solid #E5E7EB;">${r.employee?.name ?? 'Karyawan'}</td>
+              <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB; font-family: monospace;">${r.check_in ?? '--'}</td>
+              <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB; font-family: monospace;">${r.check_out ?? '--'}</td>
+              <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${r.duration_min ? `${Math.floor(r.duration_min / 60)}j ${r.duration_min % 60}m` : '--'}</td>
+              <td style="padding: 8px; text-align: center; font-weight: bold; color: #1F2937;">${r.status.toUpperCase()}</td>
+            </tr>
+          `;
+        }).join("");
       } else {
         const res = await reportApi.monthlyRekap(selectedMonth, selectedYear);
         if (!res.success || !res.data) {
           alert("Gagal memuat data rekap bulanan.");
+          printWindow.close();
           return;
         }
 
-        reportTitle = "Laporan Rekap Bulanan Kehadiran";
+        const deptTitleSuffix = selectedDepartment !== 'all' ? ` - Departemen/Bagian ${selectedDepartment}` : '';
+        reportTitle = `Laporan Rekap Bulanan Kehadiran${deptTitleSuffix}`;
         tableHeaders = `
           <tr>
             <th style="text-align: center; width: 40px;">No</th>
             <th>NIP</th>
-            <th>Nama Karyawan</th>
-            <th>Departemen</th>
+            <th>Nama</th>
             <th style="text-align: center; width: 60px;">Hadir</th>
             <th style="text-align: center; width: 60px;">Telat</th>
             <th style="text-align: center; width: 60px;">Izin</th>
@@ -206,21 +423,43 @@ export function ReportsTab() {
           </tr>
         `;
 
-        tableRowsHtml = res.data.map((r, i) => `
-          <tr style="border-bottom: 1px solid #E5E7EB; font-size: 11px;">
-            <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${i + 1}</td>
-            <td style="padding: 8px; border-right: 1px solid #E5E7EB;">${r.nip}</td>
-            <td style="padding: 8px; font-weight: bold; border-right: 1px solid #E5E7EB;">${r.name}</td>
-            <td style="padding: 8px; border-right: 1px solid #E5E7EB;">${r.department}</td>
-            <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${r.hadir} d</td>
-            <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${r.telat} d</td>
-            <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${r.izin} d</td>
-            <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${r.sakit} d</td>
-            <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${r.cuti} d</td>
-            <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${r.alpha} d</td>
-            <td style="padding: 8px; text-align: center; font-weight: bold;">${r.duration_min ? `${Math.floor(r.duration_min / 60)}j ${r.duration_min % 60}m` : '0j'}</td>
-          </tr>
-        `).join("");
+        let lastDept = "";
+        let rowCounter = 1;
+
+        const filteredData = selectedDepartment !== 'all'
+          ? res.data.filter(r => r.department === selectedDepartment)
+          : res.data;
+
+        tableRowsHtml = filteredData.map((r, i) => {
+          const deptName = r.department ?? 'UMUM';
+          let deptRow = "";
+
+          if (deptName !== lastDept) {
+            deptRow = `
+              <tr style="background-color: #E5E7EB; font-weight: bold; font-size: 11px;">
+                <td colspan="10" style="padding: 8px; border-bottom: 1px solid #E5E7EB; border-right: 1px solid #E5E7EB; text-transform: uppercase; color: #374151;">
+                  ${deptName}
+                </td>
+              </tr>
+            `;
+            lastDept = deptName;
+          }
+
+          return deptRow + `
+            <tr style="border-bottom: 1px solid #E5E7EB; font-size: 11px;">
+              <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${rowCounter++}</td>
+              <td style="padding: 8px; border-right: 1px solid #E5E7EB;">${r.nip}</td>
+              <td style="padding: 8px; font-weight: bold; border-right: 1px solid #E5E7EB;">${r.name}</td>
+              <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${r.hadir} d</td>
+              <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${r.telat} d</td>
+              <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${r.izin} d</td>
+              <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${r.sakit} d</td>
+              <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${r.cuti} d</td>
+              <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${r.alpha} d</td>
+              <td style="padding: 8px; text-align: center; font-weight: bold;">${r.duration_min ? `${Math.floor(r.duration_min / 60)}j ${r.duration_min % 60}m` : '0j'}</td>
+            </tr>
+          `;
+        }).join("");
       }
 
       const months = [
@@ -233,6 +472,7 @@ export function ReportsTab() {
         <html>
         <head>
           <title>${reportTitle} - Rumah Sakit Umum Cempaka Lima</title>
+          <base href="${window.location.origin}/" />
           <style>
             body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #1F2937; padding: 30px; margin: 0; }
             .header-table { width: 100%; border-bottom: 3px double #16A34A; padding-bottom: 12px; margin-bottom: 15px; }
@@ -258,7 +498,7 @@ export function ReportsTab() {
           <table class="header-table" style="width: 100%; border-collapse: collapse;">
             <tr>
               <td style="width: 80px; text-align: left; vertical-align: middle; padding: 0;">
-                <img src="${logoUrl && logoUrl !== 'none' ? logoUrl : logoImg}" style="width: 60px; height: 60px; object-fit: contain; display: block;" />
+                <img src="${base64Logo || logoPath}" style="width: 60px; height: 60px; object-fit: contain; display: block;" />
               </td>
               <td style="text-align: center; vertical-align: middle; padding: 0;">
                 <p class="company-name">PT. CEMPAKA LIMA UTAMA</p>
@@ -307,6 +547,7 @@ export function ReportsTab() {
     } catch (err) {
       console.error(err);
       alert("Terjadi kesalahan saat mencetak PDF.");
+      printWindow.close();
     } finally {
       setExporting(false);
     }
@@ -314,6 +555,17 @@ export function ReportsTab() {
 
   useEffect(() => {
     loadSummary();
+    const fetchDepts = async () => {
+      try {
+        const res = await departmentApi.list();
+        if (res.success) {
+          setDepartments(res.data);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    fetchDepts();
   }, []);
 
   const totalEmp = summary?.total_employees ?? 0;
@@ -406,6 +658,18 @@ export function ReportsTab() {
             <select value={selectedYear} onChange={e => setSelectedYear(Number(e.target.value))}
               className="appearance-none pl-3.5 pr-9 py-2 border border-gray-200 rounded-xl text-[12px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all text-gray-700 font-semibold cursor-pointer">
               {[2025, 2026, 2027, 2028].map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+            <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Departemen/Bagian</label>
+          <div className="relative">
+            <select value={selectedDepartment} onChange={e => setSelectedDepartment(e.target.value)}
+              className="appearance-none pl-3.5 pr-9 py-2 border border-gray-200 rounded-xl text-[12px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all text-gray-700 font-semibold cursor-pointer">
+              <option value="all">Semua Departemen/Bagian</option>
+              {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
             </select>
             <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           </div>
@@ -563,7 +827,7 @@ export function ReportsTab() {
 
         {/* Dept breakdown */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <p className="text-[14px] font-semibold text-gray-800 mb-4">Kehadiran per Departemen</p>
+          <p className="text-[14px] font-semibold text-gray-800 mb-4">Kehadiran per Departemen/Bagian</p>
           {deptData.length > 0 ? (
             <div className="space-y-2.5">
               {deptData.map((d, i) => (
@@ -580,7 +844,7 @@ export function ReportsTab() {
               ))}
             </div>
           ) : (
-            <div className="text-center py-10 text-[12px] text-gray-400">Tidak ada data departemen</div>
+            <div className="text-center py-10 text-[12px] text-gray-400">Tidak ada data departemen/bagian</div>
           )}
         </div>
       </div>

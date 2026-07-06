@@ -54,6 +54,36 @@ class NotificationController extends Controller
         return response()->json(['success' => true, 'message' => 'Semua notifikasi ditandai telah dibaca.']);
     }
 
+    /**
+     * DELETE /api/notifications/delete-read
+     */
+    public function deleteAllRead(Request $request)
+    {
+        Notification::where('user_id', $request->user()->id)
+                    ->whereNotNull('read_at')
+                    ->delete();
+
+        return response()->json(['success' => true, 'message' => 'Semua notifikasi yang telah dibaca berhasil dihapus.']);
+    }
+
+    /**
+     * DELETE /api/notifications/{id}
+     */
+    public function delete(Request $request, Notification $notification)
+    {
+        if ($notification->user_id !== $request->user()->id) {
+            return response()->json(['success' => false, 'message' => 'Akses ditolak.'], 403);
+        }
+
+        if ($notification->read_at === null) {
+            return response()->json(['success' => false, 'message' => 'Hanya notifikasi yang telah dibaca yang dapat dihapus.'], 422);
+        }
+
+        $notification->delete();
+
+        return response()->json(['success' => true, 'message' => 'Notifikasi berhasil dihapus.']);
+    }
+
     private function format(Notification $n): array
     {
         return [

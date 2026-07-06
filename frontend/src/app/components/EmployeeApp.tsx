@@ -123,13 +123,13 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
               <item.icon size={16} />
               <span>{item.label}</span>
             </div>
-            {item.badge && item.badge > 0 && (
+            {item.badge !== undefined && item.badge > 0 ? (
               <span className={`text-[10px] font-bold w-4.5 h-4.5 min-w-[18px] min-h-[18px] rounded-full flex items-center justify-center ${
                 activeTab === item.id ? 'bg-white/30 text-white' : 'bg-red-100 text-red-600'
               }`}>
                 {item.badge}
               </span>
-            )}
+            ) : null}
           </button>
         ))}
       </nav>
@@ -234,11 +234,11 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
                   activeTab === item.id ? 'text-[#16A34A]' : 'text-gray-400'
                 }`}
               >
-                {item.badge && item.badge > 0 && (
+                {item.badge !== undefined && item.badge > 0 ? (
                   <span className="absolute top-0.5 right-1.5 w-3.5 h-3.5 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center">
                     {item.badge}
                   </span>
-                )}
+                ) : null}
                 <div className={`p-1.5 rounded-xl transition-all ${activeTab === item.id ? 'bg-green-50' : ''}`}>
                   <item.icon size={18} strokeWidth={activeTab === item.id ? 2.5 : 1.8} />
                 </div>

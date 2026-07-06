@@ -145,6 +145,27 @@ export const employeeApi = {
 };
 
 // ─────────────────────────────────────────────────────────────────────
+// Departments (admin only)
+// ─────────────────────────────────────────────────────────────────────
+export interface DepartmentModel {
+  id: number;
+  name: string;
+  employees_count?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export const departmentApi = {
+  list:   ()                    => api.get<{ success: boolean; data: DepartmentModel[] }>('/departments'),
+  show:   (id: number)          => api.get<{ success: boolean; data: DepartmentModel }>(`/departments/${id}`),
+  create: (data: { name: string }) =>
+    api.post<{ success: boolean; data: DepartmentModel }>('/departments', data),
+  update: (id: number, data: { name: string }) =>
+    api.put<{ success: boolean; data: DepartmentModel }>(`/departments/${id}`, data),
+  delete: (id: number)          => api.delete<{ success: boolean; message: string }>(`/departments/${id}`),
+};
+
+// ─────────────────────────────────────────────────────────────────────
 // Attendance
 // ─────────────────────────────────────────────────────────────────────
 export interface AttendanceRecord {
@@ -210,6 +231,8 @@ export const leaveApi = {
     api.put<{ success: boolean; data: LeaveRequest }>(`/leave-requests/${id}/approve`, { admin_note }),
   reject:  (id: number, admin_note?: string) =>
     api.put<{ success: boolean; data: LeaveRequest }>(`/leave-requests/${id}/reject`, { admin_note }),
+  delete:  (id: number) => api.delete<{ success: boolean }>(`/leave-requests/${id}`),
+  deleteAllProcessed: () => api.delete<{ success: boolean }>('/leave-requests/all-processed'),
 };
 
 // ─────────────────────────────────────────────────────────────────────
@@ -230,6 +253,8 @@ export const notificationApi = {
   list:       () => api.get<{ success: boolean; data: { notifications: AppNotification[]; unread_count: number } }>('/notifications'),
   markRead:   (id: number)  => api.put<{ success: boolean }>(`/notifications/${id}/read`, {}),
   markAllRead: ()           => api.put<{ success: boolean }>('/notifications/read-all', {}),
+  delete:     (id: number)  => api.delete<{ success: boolean }>(`/notifications/${id}`),
+  deleteAllRead: ()         => api.delete<{ success: boolean }>('/notifications/delete-read'),
 };
 
 // ─────────────────────────────────────────────────────────────────────
@@ -348,7 +373,6 @@ export const scheduleApi = {
   getEmployeeSchedules: () => api.get<{ success: boolean; data: EmployeeWeeklySchedule[] }>('/employee-schedules'),
   assignEmployeeSchedule: (employee_id: number, day_of_week: string, schedule_id: number | null) =>
     api.post<{ success: boolean; message: string }>('/employee-schedules/assign', { employee_id, day_of_week, schedule_id }),
-  /** Jadwal shift milik karyawan yang sedang login untuk hari ini */
-  mySchedule: () => api.get<{ success: boolean; data: MyShiftSchedule | null; day: string }>('/my-schedule'),
+  mySchedule: () => api.get<{ success: boolean; data: MyShiftSchedule | null; saturday_shift?: MyShiftSchedule | null; day: string }>('/my-schedule'),
 };
 

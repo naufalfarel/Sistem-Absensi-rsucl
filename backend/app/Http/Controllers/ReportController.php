@@ -17,55 +17,44 @@ class ReportController extends Controller
         $year      = now()->year;
         $totalEmp  = Employee::where('status', 'active')->count();
 
-        // ── Today stats ──
-        $todayAttendances = Attendance::where('date', $today)->get();
-        $todayHadir       = $todayAttendances->where('status', 'hadir')->count();
-        $todayTelat       = $todayAttendances->where('status', 'telat')->count();
-        $todayAlpha       = $totalEmp - ($todayHadir + $todayTelat) -
-                            LeaveRequest::where('status', 'approved')
-                                ->where('start_date', '<=', $today)
-                                ->where('end_date', '>=', $today)
-                                ->count();
-        $todayCuti        = LeaveRequest::where('status', 'approved')
-                                ->where('start_date', '<=', $today)
-                                ->where('end_date', '>=', $today)
-                                ->count();
-
+        // ── Today stats (derived from our dynamic monthly report data) ──
+        $monthReport = Attendance::getMonthlyReportData($month, $year);
+        $monthReportColl = collect($monthReport);
+        
+        $todayReport = $monthReportColl->where('date', $today);
+        $todayHadir  = $todayReport->where('status', 'hadir')->count();
+        $todayTelat  = $todayReport->where('status', 'telat')->count();
+        $todayAlpha  = $todayReport->where('status', 'alpha')->count();
+        $todayCuti   = $todayReport->whereIn('status', ['cuti', 'izin', 'sakit'])->count();
+        
         // ── This month stats ──
-        $monthAttendances = Attendance::whereYear('date', $year)
-                                      ->whereMonth('date', $month)
-                                      ->get();
-
-        $monthHadir = $monthAttendances->where('status', 'hadir')->count();
-        $monthTelat = $monthAttendances->where('status', 'telat')->count();
-        $monthAlpha = $monthAttendances->where('status', 'alpha')->count();
-        $monthCuti  = LeaveRequest::where('status', 'approved')
-                                  ->whereMonth('start_date', $month)
-                                  ->count();
+        $monthHadir = $monthReportColl->where('status', 'hadir')->count();
+        $monthTelat = $monthReportColl->where('status', 'telat')->count();
+        $monthAlpha = $monthReportColl->where('status', 'alpha')->count();
+        $monthCuti  = $monthReportColl->whereIn('status', ['cuti', 'izin', 'sakit'])->count();
 
         // ── Previous month stats (for trends) ──
         $prevMonthDate = now()->subMonth();
         $prevMonth     = $prevMonthDate->month;
         $prevYear      = $prevMonthDate->year;
 
-        $prevMonthAttendances = Attendance::whereYear('date', $prevYear)
-                                          ->whereMonth('date', $prevMonth)
-                                          ->get();
-        $prevMonthHadir = $prevMonthAttendances->where('status', 'hadir')->count();
-        $prevMonthTelat = $prevMonthAttendances->where('status', 'telat')->count();
-        $prevMonthAlpha = $prevMonthAttendances->where('status', 'alpha')->count();
-        $prevMonthCuti  = LeaveRequest::where('status', 'approved')
-                                      ->whereMonth('start_date', $prevMonth)
-                                      ->count();
+        $prevMonthReport = Attendance::getMonthlyReportData($prevMonth, $prevYear);
+        $prevMonthColl = collect($prevMonthReport);
+        
+        $prevMonthHadir = $prevMonthColl->where('status', 'hadir')->count();
+        $prevMonthTelat = $prevMonthColl->where('status', 'telat')->count();
+        $prevMonthAlpha = $prevMonthColl->where('status', 'alpha')->count();
+        $prevMonthCuti  = $prevMonthColl->whereIn('status', ['cuti', 'izin', 'sakit'])->count();
 
         // Calculate trends
         $elapsedDaysThisMonth = now()->day;
-        $expectedThisMonth    = $totalEmp * $elapsedDaysThisMonth;
-        $rateThisMonth        = $expectedThisMonth > 0 ? (($monthHadir + $monthTelat) / $expectedThisMonth) * 100 : 0;
+        // Total expected shifts this month (sum of shifts for all active employees up to today)
+        $expectedThisMonth = $monthReportColl->where('date', '<=', $today)->count();
+        $rateThisMonth     = $expectedThisMonth > 0 ? (($monthHadir + $monthTelat) / $expectedThisMonth) * 100 : 0;
 
-        $daysInPrevMonth      = $prevMonthDate->daysInMonth;
-        $expectedPrevMonth    = $totalEmp * $daysInPrevMonth;
-        $ratePrevMonth        = $expectedPrevMonth > 0 ? (($prevMonthHadir + $prevMonthTelat) / $expectedPrevMonth) * 100 : 0;
+        // Total expected shifts last month
+        $expectedPrevMonth = $prevMonthColl->count();
+        $ratePrevMonth     = $expectedPrevMonth > 0 ? (($prevMonthHadir + $prevMonthTelat) / $expectedPrevMonth) * 100 : 0;
 
         $presenceTrend = round($rateThisMonth - $ratePrevMonth);
         $lateTrend     = $monthTelat - $prevMonthTelat;
@@ -75,19 +64,36 @@ class ReportController extends Controller
         $pendingLeave = LeaveRequest::where('status', 'pending')->count();
 
         // ── 7-day chart ──
+        // Find earliest attendance date to avoid showing fake Alpha before system started
+        $firstAttDate = \App\Models\Attendance::orderBy('date', 'asc')->value('date');
+        $systemStart  = $firstAttDate ? \Carbon\Carbon::parse($firstAttDate)->startOfDay() : now();
+
+        $combinedReport = $monthReportColl->merge($prevMonthColl);
         $dailyData = [];
         for ($i = 6; $i >= 0; $i--) {
-            $date  = now()->subDays($i)->toDateString();
-            $count = Attendance::where('date', $date)->whereIn('status', ['hadir', 'telat'])->count();
+            $dateCarbon = now('Asia/Jakarta')->subDays($i)->startOfDay();
+            $date       = $dateCarbon->toDateString();
+            $dayReport  = $combinedReport->where('date', $date);
+
+            $hadirCount = $dayReport->whereIn('status', ['hadir', 'telat'])->count();
+            $alphaCount = $dayReport->where('status', 'alpha')->count();
+
+            // If the date is before the system's first attendance, show 0/0 (system wasn't running)
+            $beforeSystem = $dateCarbon->lt($systemStart);
+            if ($beforeSystem) {
+                $hadirCount = 0;
+                $alphaCount = 0;
+            }
+
             $dailyData[] = [
                 'date'  => $date,
-                'label' => now()->subDays($i)->locale('id')->isoFormat('ddd D/M'),
-                'count' => $count,
-                'total' => $totalEmp,
+                'label' => $dateCarbon->locale('id')->isoFormat('ddd D/M'),
+                'hadir' => $hadirCount,
+                'alpha' => $alphaCount,
             ];
         }
 
-        // ── 1. Monthly trend (strictly database) ──
+        // ── 1. Monthly trend ──
         $monthlyTrend = [];
         for ($i = 6; $i >= 0; $i--) {
             $monthDate = now()->subMonths($i);
@@ -95,15 +101,11 @@ class ReportController extends Controller
             $yNum = $monthDate->year;
             $mLabel = $monthDate->locale('id')->isoFormat('MMM');
 
-            $mAtt = Attendance::whereYear('date', $yNum)->whereMonth('date', $mNum)->get();
-            $mH = $mAtt->where('status', 'hadir')->count();
-            $mT = $mAtt->where('status', 'telat')->count();
-            $mA = $mAtt->where('status', 'alpha')->count();
-            $mC = LeaveRequest::where('status', 'approved')
-                ->where(function($query) use ($yNum, $mNum) {
-                    $query->whereYear('start_date', $yNum)->whereMonth('start_date', $mNum)
-                          ->orWhereYear('end_date', $yNum)->whereMonth('end_date', $mNum);
-                })->count();
+            $mRep = collect(Attendance::getMonthlyReportData($mNum, $yNum));
+            $mH = $mRep->where('status', 'hadir')->count();
+            $mT = $mRep->where('status', 'telat')->count();
+            $mA = $mRep->where('status', 'alpha')->count();
+            $mC = $mRep->whereIn('status', ['cuti', 'izin', 'sakit'])->count();
 
             $monthlyTrend[] = [
                 'bulan' => $mLabel,
@@ -136,7 +138,7 @@ class ReportController extends Controller
             $date = $startOfWeek->copy()->addDays($index)->toDateString();
             $weeklyLate[] = [
                 'hari' => $label,
-                'count' => Attendance::where('date', $date)->where('status', 'telat')->count()
+                'count' => $combinedReport->where('date', $date)->where('status', 'telat')->count()
             ];
         }
 
@@ -145,12 +147,9 @@ class ReportController extends Controller
         $deptData = [];
         foreach ($deptList as $dept) {
             $empIds = $dept->employees->pluck('id');
-            $actual = Attendance::whereIn('employee_id', $empIds)
-                ->whereIn('status', ['hadir', 'telat'])
-                ->whereYear('date', $year)
-                ->whereMonth('date', $month)
-                ->count();
-            $expected = $empIds->count() * now()->day;
+            $deptReport = $monthReportColl->whereIn('employee_id', $empIds);
+            $actual = $deptReport->whereIn('status', ['hadir', 'telat'])->count();
+            $expected = $deptReport->count(); // only count shifts assigned to this department
             $percent = $expected > 0 ? round(($actual / $expected) * 100) : 0;
 
             $deptData[] = [
@@ -166,9 +165,9 @@ class ReportController extends Controller
                 'today' => [
                     'hadir'  => $todayHadir,
                     'telat'  => $todayTelat,
-                    'alpha'  => max(0, $todayAlpha),
+                    'alpha'  => $todayAlpha,
                     'cuti'   => $todayCuti,
-                    'belum'  => max(0, $totalEmp - ($todayHadir + $todayTelat) - $todayCuti),
+                    'belum'  => max(0, $todayReport->count() - ($todayHadir + $todayTelat) - $todayCuti),
                 ],
                 'this_month' => [
                     'hadir'  => $monthHadir,
@@ -194,33 +193,34 @@ class ReportController extends Controller
 
     public function monthlyRekap(Request $request)
     {
-        $month = $request->query('month', now('Asia/Jakarta')->month);
-        $year  = $request->query('year', now('Asia/Jakarta')->year);
+        $month = (int)$request->query('month', now('Asia/Jakarta')->month);
+        $year  = (int)$request->query('year', now('Asia/Jakarta')->year);
 
         $employees = Employee::with(['user', 'department', 'position'])
             ->where('status', 'active')
-            ->get();
+            ->get()
+            ->sortBy(fn($emp) => ($emp->department?->name ?? 'Umum') . '_' . ($emp->user?->name ?? 'Karyawan'));
+
+        $records = Attendance::getMonthlyReportData($month, $year);
+        $recordsByEmployee = collect($records)->groupBy('employee_id');
 
         $rekap = [];
         foreach ($employees as $emp) {
-            $attendances = Attendance::where('employee_id', $emp->id)
-                ->whereYear('date', $year)
-                ->whereMonth('date', $month)
-                ->get();
+            $empRecords = $recordsByEmployee->get($emp->id, collect());
 
-            $hadir     = $attendances->where('status', 'hadir')->count();
-            $telat     = $attendances->where('status', 'telat')->count();
-            $izin      = $attendances->where('status', 'izin')->count();
-            $sakit     = $attendances->where('status', 'sakit')->count();
-            $cuti      = $attendances->where('status', 'cuti')->count();
-            $alpha     = $attendances->where('status', 'alpha')->count();
+            $hadir = $empRecords->where('status', 'hadir')->count();
+            $telat = $empRecords->where('status', 'telat')->count();
+            $izin  = $empRecords->where('status', 'izin')->count();
+            $sakit = $empRecords->where('status', 'sakit')->count();
+            $cuti  = $empRecords->where('status', 'cuti')->count();
+            $alpha = $empRecords->where('status', 'alpha')->count();
 
             // Durasi kerja (total menit)
             $totalDurationMin = 0;
-            foreach ($attendances as $att) {
-                if ($att->check_in && $att->check_out) {
-                    $in  = strtotime($att->check_in);
-                    $out = strtotime($att->check_out);
+            foreach ($empRecords as $r) {
+                if ($r['check_in'] && $r['check_out']) {
+                    $in  = strtotime($r['check_in']);
+                    $out = strtotime($r['check_out']);
                     $totalDurationMin += (int) round(($out - $in) / 60);
                 }
             }

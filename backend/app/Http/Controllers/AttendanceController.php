@@ -173,20 +173,40 @@ class AttendanceController extends Controller
                 }
             } catch (\Exception $e) {}
         }
-        // ── Tentukan batas check-in berdasarkan shift karyawan ──────────────
-        $todayShift = $this->getEmployeeTodayShift($employee);
-        if ($todayShift) {
-            $shiftStart = substr($todayShift->start_time, 0, 5); // "HH:mm"
-            $lateLimit  = $this->addMins($shiftStart, 30);       // mulai + 30 menit
-            $closeLimit = $this->addMins($shiftStart, 60);       // mulai + 60 menit
-        } else {
-            $lateLimit  = Setting::get('late_limit',    '08:30');
-            $closeLimit = Setting::get('close_checkin', '09:00');
+
+        // Cek apakah hari ini adalah hari libur (tidak ada jadwal shift)
+        $todayShift = $this->getEmployeeTodayShift($employee, $now);
+        if (!$todayShift) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Check-in ditolak: Hari ini adalah hari libur Anda (tidak ada jadwal shift).',
+            ], 422);
         }
 
-        $nowMins   = $now->hour * 60 + $now->minute;
-        $closeMins = $this->timeToMins($closeLimit);
+        // ── Tentukan batas check-in berdasarkan shift karyawan & pengaturan dinamis ──────────────
+        $shiftStart = substr($todayShift->start_time, 0, 5); // "HH:mm"
 
+        // Ambil pengaturan dinamis (dalam satuan menit)
+        $checkinOpenOffset  = (int) Setting::get('checkin_open', '0');
+        $lateLimitOffset    = (int) Setting::get('late_limit', '30');
+        $closeCheckinOffset = (int) Setting::get('close_checkin', '60');
+
+        $openLimit  = ($checkinOpenOffset > 0) ? $this->subMins($shiftStart, $checkinOpenOffset) : $shiftStart;
+        $lateLimit  = $this->addMins($shiftStart, $lateLimitOffset);
+        $closeLimit = $this->addMins($shiftStart, $closeCheckinOffset);
+
+        $nowMins   = $now->hour * 60 + $now->minute;
+
+        // Cek jika absen masuk belum dibuka
+        if ($nowMins < $this->timeToMins($openLimit)) {
+            return response()->json([
+                'success' => false,
+                'message' => "Check-in belum dibuka. Waktu check-in dibuka mulai pukul {$openLimit} WIB.",
+            ], 422);
+        }
+
+        // Cek jika batas check-in sudah tutup
+        $closeMins = $this->timeToMins($closeLimit);
         if ($nowMins > $closeMins) {
             return response()->json([
                 'success' => false,
@@ -214,6 +234,48 @@ class AttendanceController extends Controller
             'image_check_in'    => $imageUrl,
         ]);
 
+        if ($status === 'telat') {
+            $notifLate = \App\Models\Setting::get('notif_late', '1');
+            if ($notifLate !== '0') {
+                $admins = \App\Models\User::where('role', 'admin')->get();
+                foreach ($admins as $admin) {
+                    $exists = \App\Models\Notification::where('user_id', $admin->id)
+                        ->where('type', 'attendance')
+                        ->where('data->employee_id', $employee->id)
+                        ->whereDate('created_at', today())
+                        ->exists();
+
+                    if (!$exists) {
+                        \App\Models\Notification::create([
+                            'user_id' => $admin->id,
+                            'title'   => 'Karyawan Terlambat',
+                            'body'    => ($employee->user?->name ?? 'Karyawan') . ' terlambat check-in pada pukul ' . substr($record->check_in, 0, 5) . ' WIB.',
+                            'type'    => 'attendance',
+                            'data'    => ['attendance_id' => $record->id, 'employee_id' => $employee->id],
+                        ]);
+                    }
+                }
+            }
+
+            $notifEmail = \App\Models\Setting::get('notif_email', '1');
+            if ($notifEmail !== '0') {
+                $admins = \App\Models\User::where('role', 'admin')->get();
+                foreach ($admins as $admin) {
+                    try {
+                        \Illuminate\Support\Facades\Mail::raw(
+                            "Halo {$admin->name},\n\nKaryawan " . ($employee->user?->name ?? 'Karyawan') . " terlambat melakukan check-in hari ini.\n\nDetail:\n- Jam Absen: " . substr($record->check_in, 0, 5) . " WIB\n- Status: Terlambat\n\nSilakan cek detail absensi di sistem RSUCL.",
+                            function ($message) use ($admin) {
+                                $message->to($admin->email)
+                                        ->subject('Peringatan Keterlambatan Karyawan - RSUCL');
+                            }
+                        );
+                    } catch (\Exception $e) {
+                        \Illuminate\Support\Facades\Log::error('Gagal mengirim email keterlambatan: ' . $e->getMessage());
+                    }
+                }
+            }
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Check-in berhasil.',
@@ -232,14 +294,33 @@ class AttendanceController extends Controller
             return response()->json(['success' => false, 'message' => 'Data karyawan tidak ditemukan.'], 404);
         }
 
+        // 1. Cek record absensi hari ini yang belum checkout
         $record = Attendance::where('employee_id', $employee->id)
                             ->where('date', today()->toDateString())
                             ->first();
 
+        // 2. Jika tidak ada record hari ini, cek apakah ada record kemarin yang belum checkout (untuk shift overnight)
+        if (!$record) {
+            $yesterdayRecord = Attendance::where('employee_id', $employee->id)
+                                         ->where('date', today()->subDay()->toDateString())
+                                         ->first();
+            if ($yesterdayRecord && !$yesterdayRecord->check_out) {
+                // Cek apakah shift kemarin memang shift overnight
+                $yesterdayShift = $this->getEmployeeTodayShift($employee, Carbon::now('Asia/Jakarta')->subDay());
+                if ($yesterdayShift) {
+                    $shiftStart = $this->timeToMins(substr($yesterdayShift->start_time, 0, 5));
+                    $shiftEnd   = $this->timeToMins(substr($yesterdayShift->end_time, 0, 5));
+                    if ($shiftEnd < $shiftStart) { // overnight
+                        $record = $yesterdayRecord;
+                    }
+                }
+            }
+        }
+
         if (!$record || !$record->check_in) {
             return response()->json([
                 'success' => false,
-                'message' => 'Anda belum melakukan check-in hari ini.',
+                'message' => 'Anda belum melakukan check-in.',
             ], 422);
         }
 
@@ -297,24 +378,34 @@ class AttendanceController extends Controller
             } catch (\Exception $e) {}
         }
 
-        // ── Tentukan jam checkout berdasarkan shift karyawan ────────────────
-        $todayShift = $this->getEmployeeTodayShift($employee);
-        if ($todayShift) {
-            $shiftStart    = substr($todayShift->start_time, 0, 5); // "HH:mm"
-            $shiftEnd      = substr($todayShift->end_time,   0, 5); // "HH:mm"
-            $checkoutOpen  = $shiftEnd;
-            $checkoutClose = $this->addMins($shiftEnd, 60); // end + 60 menit toleransi
-            $isOvernight   = $this->timeToMins($shiftEnd) < $this->timeToMins($shiftStart);
-        } else {
-            $isSaturday = $now->isSaturday();
-            if ($isSaturday) {
-                $checkoutOpen  = Setting::get('sat_checkout_open', '13:00');
-            } else {
-                $checkoutOpen  = Setting::get('checkout_open', '17:00');
-            }
-            $checkoutClose = $this->addMins($checkoutOpen, 60); // Selalu tutup 1 jam setelah buka
-            $isOvernight   = false;
+        // Gunakan tanggal dari record check-in untuk validasi shift
+        $shiftDate = Carbon::parse($record->date);
+        $todayShift = $this->getEmployeeTodayShift($employee, $shiftDate);
+
+        if (!$todayShift) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Check-out ditolak: Tidak ada jadwal shift yang terasosiasi dengan absensi ini.',
+            ], 422);
         }
+
+        $shiftStart    = substr($todayShift->start_time, 0, 5); // "HH:mm"
+        $shiftEnd      = substr($todayShift->end_time,   0, 5); // "HH:mm"
+
+        // Ambil pengaturan dinamis check-out (dalam satuan menit)
+        $isSaturday = \Carbon\Carbon::parse($record->date)->dayOfWeek === \Carbon\Carbon::SATURDAY;
+        if ($isSaturday) {
+            $satOpenOffset  = (int) Setting::get('sat_checkout_open', '0');
+            $satCloseOffset = (int) Setting::get('sat_checkout_close', '60');
+            $checkoutOpen   = ($satOpenOffset > 0) ? $this->subMins($shiftEnd, $satOpenOffset) : $shiftEnd;
+            $checkoutClose  = $this->addMins($shiftEnd, $satCloseOffset);
+        } else {
+            $wkOpenOffset   = (int) Setting::get('checkout_open', '0');
+            $wkCloseOffset  = (int) Setting::get('checkout_close', '60');
+            $checkoutOpen   = ($wkOpenOffset > 0) ? $this->subMins($shiftEnd, $wkOpenOffset) : $shiftEnd;
+            $checkoutClose  = $this->addMins($shiftEnd, $wkCloseOffset);
+        }
+        $isOvernight   = $this->timeToMins($shiftEnd) < $this->timeToMins($shiftStart);
 
         $nowMins   = $now->hour * 60 + $now->minute;
         $openMins  = $this->timeToMins($checkoutOpen);
@@ -378,15 +469,23 @@ class AttendanceController extends Controller
     public function history(Request $request)
     {
         $user = $request->user();
-        $query = Attendance::with(['employee.user', 'employee.department'])
-                           ->orderBy('date', 'desc');
 
         if ($request->has('month') && $request->has('year')) {
-            $query->whereYear('date', $request->query('year'))
-                  ->whereMonth('date', $request->query('month'));
-        } else {
-            $query->limit(100);
+            $month = (int)$request->query('month');
+            $year  = (int)$request->query('year');
+            $employeeId = !$user->isAdmin() ? ($user->employee?->id) : null;
+
+            if (!$user->isAdmin() && !$employeeId) {
+                return response()->json(['success' => false, 'message' => 'Data karyawan tidak ditemukan.'], 404);
+            }
+
+            $records = Attendance::getMonthlyReportData($month, $year, $employeeId);
+            return response()->json(['success' => true, 'data' => $records]);
         }
+
+        $query = Attendance::with(['employee.user', 'employee.department'])
+                           ->orderBy('date', 'desc')
+                           ->limit(100);
 
         if (!$user->isAdmin()) {
             $employee = $user->employee;
@@ -422,16 +521,28 @@ class AttendanceController extends Controller
     }
 
     /**
+     * Kurangi sejumlah menit dari string "HH:mm", kembalikan "HH:mm" baru.
+     */
+    private function subMins(string $hhmm, int $mins): string
+    {
+        $total = $this->timeToMins($hhmm) - $mins;
+        if ($total < 0) {
+            $total += 24 * 60;
+        }
+        return sprintf('%02d:%02d', intdiv($total, 60) % 24, $total % 60);
+    }
+
+    /**
      * Ambil shift karyawan yang berlaku hari ini berdasarkan hari dalam seminggu.
      * Mengembalikan Schedule model atau null jika tidak ada assignment.
      */
-    private function getEmployeeTodayShift(\App\Models\Employee $employee): ?\App\Models\Schedule
+    private function getEmployeeTodayShift(\App\Models\Employee $employee, Carbon $now): ?\App\Models\Schedule
     {
         $dayMap = [
             0 => 'Minggu', 1 => 'Senin', 2 => 'Selasa',
             3 => 'Rabu',   4 => 'Kamis', 5 => 'Jumat', 6 => 'Sabtu',
         ];
-        $todayName = $dayMap[now('Asia/Jakarta')->dayOfWeek];
+        $todayName = $dayMap[$now->dayOfWeek];
         return $employee->schedules()->wherePivot('day_of_week', $todayName)->first();
     }
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Bell, CheckCircle2, MapPin, Clock, Calendar, AlertTriangle, RefreshCw, XCircle, Megaphone, Check } from 'lucide-react';
+import { Bell, CheckCircle2, MapPin, Clock, Calendar, AlertTriangle, RefreshCw, XCircle, Megaphone, Check, Trash2 } from 'lucide-react';
 import { notificationApi, AppNotification } from '../../services/api';
 
 const filterOptions = ['Semua', 'Belum Dibaca'];
@@ -63,6 +63,34 @@ export function NotificationsPage({ onUpdateCount }: NotificationsPageProps) {
     }
   };
 
+  const handleDelete = async (id: number) => {
+    if (!window.confirm('Apakah Anda yakin ingin menghapus notifikasi ini?')) return;
+    try {
+      const res = await notificationApi.delete(id);
+      if (res.success) {
+        setNotifications(prev => prev.filter(n => n.id !== id));
+        onUpdateCount?.();
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert(err?.message ?? 'Gagal menghapus notifikasi.');
+    }
+  };
+
+  const handleDeleteAllRead = async () => {
+    if (!window.confirm('Apakah Anda yakin ingin menghapus semua notifikasi yang telah dibaca?')) return;
+    try {
+      const res = await notificationApi.deleteAllRead();
+      if (res.success) {
+        setNotifications(prev => prev.filter(n => !n.is_read));
+        onUpdateCount?.();
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert(err?.message ?? 'Gagal menghapus semua notifikasi.');
+    }
+  };
+
   const filtered = notifications.filter(n => {
     if (activeFilter === 'Belum Dibaca') return !n.is_read;
     return true;
@@ -96,15 +124,26 @@ export function NotificationsPage({ onUpdateCount }: NotificationsPageProps) {
             {unreadCount > 0 ? `${unreadCount} pesan belum dibaca` : 'Semua pesan telah dibaca'}
           </p>
         </div>
-        {unreadCount > 0 && (
-          <button
-            onClick={markAllRead}
-            className="flex items-center gap-1.5 text-[12px] text-[#16A34A] font-medium hover:underline mt-1"
-          >
-            <Check size={13} />
-            Tandai semua dibaca
-          </button>
-        )}
+        <div className="flex items-center gap-3 flex-wrap mt-1">
+          {unreadCount > 0 && (
+            <button
+              onClick={markAllRead}
+              className="flex items-center gap-1.5 text-[12px] text-[#16A34A] font-medium hover:underline"
+            >
+              <Check size={13} />
+              Tandai semua dibaca
+            </button>
+          )}
+          {notifications.some(n => n.is_read) && (
+            <button
+              onClick={handleDeleteAllRead}
+              className="flex items-center gap-1.5 text-[12px] text-red-500 font-medium hover:underline"
+            >
+              <Trash2 size={13} />
+              Hapus semua dibaca
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Filter */}
@@ -162,7 +201,20 @@ export function NotificationsPage({ onUpdateCount }: NotificationsPageProps) {
                     </div>
                     <div className="flex items-center gap-1.5 flex-shrink-0">
                       <span className="text-[11px] text-gray-400 whitespace-nowrap">{formatTime(n.created_at)}</span>
-                      {!n.is_read && <div className="w-2 h-2 rounded-full bg-[#16A34A] flex-shrink-0" />}
+                      {!n.is_read ? (
+                        <div className="w-2 h-2 rounded-full bg-[#16A34A] flex-shrink-0" />
+                      ) : (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation(); // Stop click from triggering markRead again
+                            handleDelete(n.id);
+                          }}
+                          className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                          title="Hapus notifikasi"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
                     </div>
                   </div>
                   <p className="text-[12px] text-gray-500 leading-relaxed">{n.body}</p>

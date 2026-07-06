@@ -116,7 +116,7 @@ export function HistoryTab() {
         </div>
         <div className="relative flex-1 min-w-[200px]">
           <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input type="text" placeholder="Cari nama atau departemen..." value={search} onChange={e => setSearch(e.target.value)}
+          <input type="text" placeholder="Cari nama atau departemen/bagian..." value={search} onChange={e => setSearch(e.target.value)}
             className="w-full pl-10 pr-4 py-2 border border-gray-100 rounded-xl text-[13px] bg-white shadow-sm focus:outline-none focus:border-[#16A34A] transition-all placeholder:text-gray-300" />
         </div>
       </div>
@@ -127,7 +127,7 @@ export function HistoryTab() {
           <table className="w-full">
             <thead>
               <tr className="bg-gray-50/70 border-b border-gray-100">
-                {['Nama', 'Departemen', 'Tanggal', 'Shift', 'Jam Masuk', 'Jam Keluar', 'Durasi', 'Status', ''].map((h, i) => (
+                {['Nama', 'Departemen/Bagian', 'Tanggal', 'Shift', 'Jam Masuk', 'Jam Keluar', 'Durasi', 'Status', ''].map((h, i) => (
                   <th key={i} className="text-left px-4 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
                 ))}
               </tr>

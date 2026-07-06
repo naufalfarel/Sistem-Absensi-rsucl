@@ -37,6 +37,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/notifications',              [NotificationController::class, 'index']);
     Route::put('/notifications/read-all',     [NotificationController::class, 'markAllRead']);
     Route::put('/notifications/{notification}/read', [NotificationController::class, 'markRead']);
+    Route::delete('/notifications/delete-read', [NotificationController::class, 'deleteAllRead']);
+    Route::delete('/notifications/{notification}', [NotificationController::class, 'delete']);
 
     // Absensi (karyawan + admin)
     Route::get('/attendance/today',   [AttendanceController::class, 'today']);
@@ -63,9 +65,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/employees/meta',   [EmployeeController::class, 'meta']);
         Route::apiResource('/employees', EmployeeController::class);
 
-        // Approve / Reject pengajuan cuti
+        // Departemen/Bagian CRUD
+        Route::apiResource('/departments', \App\Http\Controllers\DepartmentController::class);
+
+        // Approve / Reject / Hapus pengajuan cuti
         Route::put('/leave-requests/{leaveRequest}/approve', [LeaveRequestController::class, 'approve']);
         Route::put('/leave-requests/{leaveRequest}/reject',  [LeaveRequestController::class, 'reject']);
+        Route::delete('/leave-requests/all-processed',       [LeaveRequestController::class, 'destroyAll']);
+        Route::delete('/leave-requests/{leaveRequest}',       [LeaveRequestController::class, 'destroy']);
 
         // Jadwal Shift
         Route::get('/employee-schedules', [ScheduleController::class, 'getEmployeeSchedules']);

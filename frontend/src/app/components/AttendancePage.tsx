@@ -46,12 +46,17 @@ function RecenterMap({ lat, lng }: { lat: number; lng: number }) {
 }
 
 // ── Time logic ─────────────────────────────────────────────────────────
-type AttendanceWindow = 'sunday' | 'too_early' | 'checkin' | 'late_locked' | 'break' | 'working' | 'checkout' | 'ended';
+type AttendanceWindow = 'sunday' | 'too_early' | 'checkin' | 'late_locked' | 'break' | 'working' | 'checkout' | 'ended' | 'no_shift';
 
 function toMins(h: number, m: number) { return h * 60 + m; }
 function parseMins(t: string) { const [h, m] = t.split(':').map(Number); return toMins(h, m); }
 function addMins(hhmm: string, mins: number): string {
   const total = parseMins(hhmm) + mins;
+  return `${String(Math.floor(total / 60) % 24).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+function subMins(hhmm: string, mins: number): string {
+  let total = parseMins(hhmm) - mins;
+  if (total < 0) total += 24 * 60;
   return `${String(Math.floor(total / 60) % 24).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
 }
 
@@ -144,28 +149,7 @@ function getWindow(now: Date, s: ShiftSettings = DEFAULT_SHIFT): AttendanceWindo
   return 'ended';
 }
 
-const SIM_TIMES = [
-  { label: 'Terlalu Pagi (07:00)',       h: 7,  m: 0,  day: 3 },
-  { label: 'Buka Absen – Tepat (08:00)', h: 8,  m: 0,  day: 3 },
-  { label: 'Tepat Waktu (08:20)',         h: 8,  m: 20, day: 3 },
-  { label: 'Terlambat – Hadir (08:45)',  h: 8,  m: 45, day: 3 },
-  { label: 'Tutup Check-In (09:05)',      h: 9,  m: 5,  day: 3 },
-  { label: 'Jam Kerja (10:00)',           h: 10, m: 0,  day: 3 },
-  { label: 'Istirahat (12:30)',           h: 12, m: 30, day: 3 },
-  { label: 'Habis Istirahat (13:30)',     h: 13, m: 30, day: 3 },
-  { label: 'Jam Pulang (17:00)',          h: 17, m: 0,  day: 3 },
-  { label: 'Absen Sore (17:01)',          h: 17, m: 1,  day: 3 },
-  { label: 'Lewat Batas (18:01)',         h: 18, m: 1,  day: 3 },
-  { label: 'Sabtu – Buka (08:00)',        h: 8,  m: 0,  day: 6 },
-  { label: 'Sabtu Pulang (13:00)',        h: 13, m: 0,  day: 6 },
-  { label: 'Minggu Libur',               h: 10, m: 0,  day: 0 },
-];
-
 const DAYS_ID = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-function buildSimDate(h: number, m: number, day: number): Date {
-  const d = new Date(); const diff = day - d.getDay();
-  d.setDate(d.getDate() + diff); d.setHours(h, m, 0, 0); return d;
-}
 
 const windowConfig: Record<AttendanceWindow, { icon: typeof Lock; iconColor: string; bg: string; border: string; title: string; desc: string; sub?: string }> = {
   sunday:      { icon: Moon,         iconColor: '#6B7280', bg: '#F9FAFB', border: '#E5E7EB', title: 'Hari Minggu – Libur',    desc: 'Tidak ada jadwal kerja hari ini.',               sub: 'Sampai jumpa Senin!' },
@@ -175,7 +159,8 @@ const windowConfig: Record<AttendanceWindow, { icon: typeof Lock; iconColor: str
   break:       { icon: Coffee,       iconColor: '#7C3AED', bg: '#F5F3FF', border: '#DDD6FE', title: 'Jam Istirahat',          desc: 'Absen dikunci 12:30 – 13:30 WIB.',              sub: 'Silakan beristirahat sejenak.' },
   working:     { icon: Clock,        iconColor: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE', title: 'Sedang Jam Kerja',       desc: 'Check-out dibuka pukul 17:00 WIB.',             sub: 'Tetap semangat bekerja!' },
   ended:       { icon: Lock,         iconColor: '#DC2626', bg: '#FEF2F2', border: '#FECACA', title: 'Waktu Absen Berakhir',   desc: 'Batas akhir check-out pukul 18:00 WIB.',        sub: 'Absensi hari ini sudah ditutup.' },
-  checkout:    { icon: Sunset,       iconColor: '#EA580C', bg: '#FFF7ED', border: '#FED7AA', title: 'Waktu Check-Out',        desc: 'Silakan lakukan check-out sekarang.',           sub: 'Teria kasih atas dedikasi Anda hari ini!' },
+  checkout:    { icon: Sunset,       iconColor: '#EA580C', bg: '#FFF7ED', border: '#FED7AA', title: 'Waktu Check-Out',        desc: 'Silakan lakukan check-out sekarang.',           sub: 'Terima kasih atas dedikasi Anda hari ini!' },
+  no_shift:    { icon: Moon,         iconColor: '#6B7280', bg: '#F9FAFB', border: '#E5E7EB', title: 'Hari Libur / Tidak ada Shift', desc: 'Anda tidak memiliki jadwal shift hari ini.', sub: 'Selamat beristirahat!' },
 };
 
 // ── Face Verification ─────────────────────────────────────────────────
@@ -413,7 +398,6 @@ function GPSCard({
     { label: 'Latitude',       value: userLocation ? `${userLocation.lat.toFixed(7)}°` : 'Mencari...' },
     { label: 'Longitude',      value: userLocation ? `${userLocation.lng.toFixed(7)}°` : 'Mencari...' },
     { label: 'Akurasi',        value: userLocation ? `±${userLocation.accuracy} meter` : '—' },
-    { label: 'Radius RS',      value: `${hospRadius} meter` },
     { label: 'Status GPS',     value: gpsActive ? 'Aktif' : 'Mencari...' },
     { label: 'Status',         value: inGeofence ? 'Dalam Area' : 'Luar Area' },
   ];
@@ -491,7 +475,7 @@ function GPSCard({
             </div>
           ))}
         </div>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3">
           {gpsData.slice(3).map(({ label, value }) => {
             const isOk = (label === 'Status' && inGeofence) || (label === 'Status GPS' && gpsActive);
             return (
@@ -593,13 +577,12 @@ export function AttendancePage() {
   }, []);
 
   const [now, setNow]               = useState(new Date());
-  const [simIdx, setSimIdx]         = useState<number | null>(null);
-  const [showSim, setShowSim]       = useState(false);
   const [checkedIn, setCheckedIn]   = useState(false);
   const [checkedOut, setCheckedOut] = useState(false);
   const [showModal, setShowModal]   = useState(false);
   const [checkInTime, setCheckInTime]   = useState('');
   const [checkOutTime, setCheckOutTime] = useState('');
+  const [submitting, setSubmitting]     = useState(false);
 
   // Face verification state machine
   const [faceStep, setFaceStep] = useState<FaceStep>('idle');
@@ -616,6 +599,7 @@ export function AttendancePage() {
   const [shiftSettings, setShiftSettings] = useState<ShiftSettings>(DEFAULT_SHIFT);
   // Shift karyawan hari ini dari admin
   const [todayShift, setTodayShift] = useState<MyShiftSchedule | null | undefined>(undefined);
+  const [saturdayShift, setSaturdayShift] = useState<MyShiftSchedule | null>(null);
 
   // GPS state
   const HOSP_LAT    = shiftSettings.hospital_lat;
@@ -635,65 +619,91 @@ export function AttendancePage() {
         const d = settingRes.value.data as unknown as Record<string, string>;
         base = {
           ...base,
-          checkin_open:       d.checkin_open      ?? '08:00',
-          late_limit:         d.late_limit        ?? '08:30',
-          close_checkin:      d.close_checkin     ?? '09:00',
+          checkin_open:       d.checkin_open      ?? '0',
+          late_limit:         d.late_limit        ?? '30',
+          close_checkin:      d.close_checkin     ?? '60',
           break_start:        d.break_start       ?? '12:30',
           break_end:          d.break_end         ?? '13:30',
-          checkout_open:      d.checkout_open     ?? '17:00',
-          checkout_close:     d.checkout_open ? addMins(d.checkout_open, 60) : '18:00',
-          sat_checkout_open:  d.sat_checkout_open  ?? '13:00',
-          sat_checkout_close: d.sat_checkout_open ? addMins(d.sat_checkout_open, 60) : '14:00',
+          checkout_open:      d.checkout_open     ?? '0',
+          checkout_close:     d.checkout_close    ?? '60',
+          sat_checkout_open:  d.sat_checkout_open  ?? '0',
+          sat_checkout_close: d.sat_checkout_close ?? '60',
           hospital_lat:       d.hospital_lat ? Number(d.hospital_lat) : 5.552740480177099,
           hospital_lng:       d.hospital_lng ? Number(d.hospital_lng) : 95.33486560781716,
           gps_radius:         d.gps_radius ? Number(d.gps_radius) : 40,
         };
       }
-      if (shiftRes.status === 'fulfilled' && shiftRes.value.success) {
-        const shift = shiftRes.value.data;
-        setTodayShift(shift);
-        if (shift) {
-          const startHHmm  = shift.start_time.substring(0, 5); // "HH:mm"
-          const endHHmm    = shift.end_time.substring(0, 5);   // "HH:mm"
-          const startMins  = parseMins(startHHmm);
-          const endMins    = parseMins(endHHmm);
-          const overnight  = endMins < startMins; // shift lintas tengah malam
+      
+      const shift = shiftRes.status === 'fulfilled' && shiftRes.value.success ? shiftRes.value.data : null;
+      setTodayShift(shift);
+      const satShift = shiftRes.status === 'fulfilled' && shiftRes.value.success ? (shiftRes.value.saturday_shift ?? null) : null;
+      setSaturdayShift(satShift);
 
-          // Jam buka check-in = jam mulai shift
-          // Batas telat       = mulai + 30 menit
-          // Tutup check-in    = mulai + 60 menit
-          const lateHHmm  = addMins(startHHmm, 30);
-          const closeHHmm = addMins(startHHmm, 60);
+      // Gunakan shift kustom jika ada, jika tidak, gunakan default "08:00" - "17:00"
+      const startTime = shift ? shift.start_time : '08:00:00';
+      const endTime = shift ? shift.end_time : '17:00:00';
 
-          // Checkout = jam selesai shift; batas = selesai + 60 menit
-          const checkoutCloseHHmm = addMins(endHHmm, 60);
+      const startHHmm  = startTime.substring(0, 5); // "HH:mm"
+      const endHHmm    = endTime.substring(0, 5);   // "HH:mm"
+      const startMins  = parseMins(startHHmm);
+      const endMins    = parseMins(endHHmm);
+      const overnight  = endMins < startMins; // shift lintas tengah malam
 
-          // Break hanya relevan jika jatuh di dalam rentang shift
-          // Untuk shift non-reguler, nonaktifkan break (set = checkout_open)
-          const globalBreakStart = parseMins(base.break_start);
-          const globalBreakEnd   = parseMins(base.break_end);
-          const breakInShift = !overnight
-            && globalBreakStart > parseMins(closeHHmm)
-            && globalBreakEnd   <= endMins;
+      // Sabtu Checkout menggunakan end_time dari shift Sabtu (default ke 13:00 jika tidak ada)
+      const satEndTime = satShift ? satShift.end_time : '13:00:00';
+      const satEndHHmm = satEndTime.substring(0, 5);
 
-          base.checkin_open   = startHHmm;
-          base.late_limit     = lateHHmm;
-          base.close_checkin  = closeHHmm;
-          base.checkout_open  = endHHmm;
-          base.checkout_close = checkoutCloseHHmm;
-          base.isOvernight    = overnight;
+      const checkinOpenOffset  = parseInt(base.checkin_open) || 0;
+      const lateLimitOffset    = parseInt(base.late_limit) || 0;
+      const closeCheckinOffset = parseInt(base.close_checkin) || 0;
+      const checkoutOpenOffset  = parseInt(base.checkout_open) || 0;
+      const checkoutCloseOffset = parseInt(base.checkout_close) || 0;
+      const satCheckoutOpenOffset  = parseInt(base.sat_checkout_open) || 0;
+      const satCheckoutCloseOffset = parseInt(base.sat_checkout_close) || 0;
 
-          if (!breakInShift) {
-            // Nonaktifkan break (set ke waktu yang tidak pernah tercapai dalam alur)
-            base.break_start = endHHmm;
-            base.break_end   = endHHmm;
-          }
-        }
-      } else {
-        setTodayShift(null);
+      // Jam buka check-in = jam mulai shift - checkinOpenOffset menit
+      const openHHmm  = subMins(startHHmm, checkinOpenOffset);
+      // Batas telat       = mulai + lateLimitOffset menit
+      const lateHHmm  = addMins(startHHmm, lateLimitOffset);
+      // Tutup check-in    = mulai + closeCheckinOffset menit
+      const closeHHmm = addMins(startHHmm, closeCheckinOffset);
+
+      // Checkout = jam selesai shift - checkoutOpenOffset; batas = selesai + checkoutCloseOffset
+      const checkoutOpenHHmm  = subMins(endHHmm, checkoutOpenOffset);
+      const checkoutCloseHHmm = addMins(endHHmm, checkoutCloseOffset);
+
+      // Sabtu Checkout = Sabtu selesai - satCheckoutOpenOffset; batas = Sabtu selesai + satCheckoutCloseOffset
+      const satCheckoutOpenHHmm  = subMins(satEndHHmm, satCheckoutOpenOffset);
+      const satCheckoutCloseHHmm = addMins(satEndHHmm, satCheckoutCloseOffset);
+
+      // Break hanya relevan jika jatuh di dalam rentang shift
+      // Untuk shift non-reguler, nonaktifkan break (set = checkout_open)
+      const globalBreakStart = parseMins(base.break_start);
+      const globalBreakEnd   = parseMins(base.break_end);
+      const breakInShift = !overnight
+        && globalBreakStart > parseMins(closeHHmm)
+        && globalBreakEnd   <= endMins;
+
+      base.checkin_open   = openHHmm;
+      base.late_limit     = lateHHmm;
+      base.close_checkin  = closeHHmm;
+      base.checkout_open  = checkoutOpenHHmm;
+      base.checkout_close = checkoutCloseHHmm;
+      base.sat_checkout_open  = satCheckoutOpenHHmm;
+      base.sat_checkout_close = satCheckoutCloseHHmm;
+      base.isOvernight    = overnight;
+
+      if (!breakInShift) {
+        // Nonaktifkan break (set ke waktu yang tidak pernah selesai)
+        base.break_start = checkoutOpenHHmm;
+        base.break_end   = checkoutOpenHHmm;
       }
+
       setShiftSettings(base);
-    }).catch(() => { setTodayShift(null); });
+    }).catch((err) => {
+      console.error(err);
+      setTodayShift(null);
+    });
   }, []);
 
   // Load today's record on mount
@@ -771,16 +781,13 @@ export function AttendancePage() {
   const inGeofence = distance !== null ? distance <= HOSP_RADIUS : false;
 
   useEffect(() => {
-    if (simIdx !== null) return;
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
-  }, [simIdx]);
+  }, []);
 
-  const current = simIdx !== null
-    ? buildSimDate(SIM_TIMES[simIdx].h, SIM_TIMES[simIdx].m, SIM_TIMES[simIdx].day)
-    : now;
+  const current = now;
 
-  const attendanceWindow = getWindow(current, shiftSettings);
+  const attendanceWindow = todayShift === null ? 'no_shift' : getWindow(current, shiftSettings);
   const wc               = windowConfig[attendanceWindow];
   const dayId    = DAYS_ID[current.getDay()];
   const isSaturday = current.getDay() === 6;
@@ -795,10 +802,12 @@ export function AttendancePage() {
   const faceVerified = faceStep === 'confirmed';
 
   const lockedLabel = () => {
+    if (checkedIn)                          return 'Anda sudah melakukan absen';
+    if (attendanceWindow === 'no_shift')    return 'Tidak ada jadwal shift hari ini';
     if (attendanceWindow === 'too_early')   return `Absen Dibuka Pukul ${shiftSettings.checkin_open}`;
-    if (attendanceWindow === 'late_locked') return checkedIn ? `Menunggu Jam Pulang (${shiftSettings.checkout_open})` : `Batas Check-In Terlewat (${shiftSettings.close_checkin})`;
+    if (attendanceWindow === 'late_locked') return `Batas Check-In Terlewat (${shiftSettings.close_checkin})`;
     if (attendanceWindow === 'break')       return 'Dikunci – Jam Istirahat';
-    if (attendanceWindow === 'working')     return checkedIn ? `Check-Out Dibuka Pukul ${shiftSettings.checkout_open}` : 'Waktu Absen Masuk Telah Lewat';
+    if (attendanceWindow === 'working')     return 'Waktu Absen Masuk Telah Lewat';
     if (attendanceWindow === 'ended')       return 'Waktu Absen Telah Berakhir';
     if (attendanceWindow === 'sunday')      return 'Hari Libur';
     return 'Absen Dikunci';
@@ -809,18 +818,14 @@ export function AttendancePage() {
   };
 
   const confirmAction = async () => {
+    if (submitting) return;
+    setSubmitting(true);
     try {
       const latVal = userLocation?.lat ?? HOSP_LAT;
       const lngVal = userLocation?.lng ?? HOSP_LNG;
       const accVal = userLocation?.accuracy ?? undefined;
       
-      let simulatedTime: string | undefined = undefined;
-      if (simIdx !== null) {
-        // Gunakan jam dari pilihan simulasi, BUKAN jam real
-        const simH = String(SIM_TIMES[simIdx].h).padStart(2, '0');
-        const simM = String(SIM_TIMES[simIdx].m).padStart(2, '0');
-        simulatedTime = `${simH}:${simM}:00`;
-      }
+      const simulatedTime = undefined;
 
       if (canCheckIn) {
         const res = await attendanceApi.checkIn(latVal, lngVal, accVal, capturedImage || undefined, simulatedTime);
@@ -848,6 +853,8 @@ export function AttendancePage() {
       }
     } catch (err: any) {
       alert(err?.message ?? 'Gagal melakukan absensi.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -862,24 +869,27 @@ export function AttendancePage() {
 
   const getAttendStatus = () => {
     if (!checkInTime) return null;
-    const [ih, im] = checkInTime.split(':').map(Number);
-    const mins = ih * 60 + im;
-    if (mins < toMins(8, 30)) return { label: 'Tepat Waktu', color: '#16A34A', bg: '#DCFCE7' };
-    if (mins <= toMins(9, 0)) return { label: 'Terlambat', color: '#D97706', bg: '#FEF3C7' };
+    const mins = parseMins(checkInTime);
+    const lateMins = parseMins(shiftSettings.late_limit);
+    const closeMins = parseMins(shiftSettings.close_checkin);
+    if (mins <= lateMins) return { label: 'Tepat Waktu', color: '#16A34A', bg: '#DCFCE7' };
+    if (mins <= closeMins) return { label: 'Terlambat', color: '#D97706', bg: '#FEF3C7' };
     return { label: 'Hadir', color: '#16A34A', bg: '#DCFCE7' };
   };
   const attendStatus = getAttendStatus();
 
   const timelineItems = isSaturday ? [
-    { time: '08:00', label: 'Check-In', phase: 'checkin' },
-    { time: '13:00', label: 'Check-Out', phase: 'checkout' },
+    { time: shiftSettings.checkin_open, label: 'Check-In', phase: 'checkin' },
+    { time: shiftSettings.sat_checkout_open, label: 'Check-Out', phase: 'checkout' },
   ] : [
-    { time: '08:00', label: 'Buka Absen', phase: 'checkin' },
-    { time: '09:00', label: 'Tutup Absen', phase: 'late_locked' },
-    { time: '12:30', label: 'Istirahat', phase: 'break' },
-    { time: '13:30', label: 'Lanjut Kerja', phase: 'working' },
-    { time: '17:00', label: 'Check-Out', phase: 'checkout' },
-    { time: '18:00', label: 'Batas Akhir', phase: 'ended' },
+    { time: shiftSettings.checkin_open, label: 'Buka Absen', phase: 'checkin' },
+    { time: shiftSettings.close_checkin, label: 'Tutup Absen', phase: 'late_locked' },
+    ...(shiftSettings.break_start !== shiftSettings.checkout_open ? [
+      { time: shiftSettings.break_start, label: 'Istirahat', phase: 'break' },
+      { time: shiftSettings.break_end, label: 'Lanjut Kerja', phase: 'working' },
+    ] : []),
+    { time: shiftSettings.checkout_open, label: 'Check-Out', phase: 'checkout' },
+    { time: shiftSettings.checkout_close, label: 'Batas Akhir', phase: 'ended' },
   ];
 
   const phaseOrder: AttendanceWindow[] = ['too_early','checkin','late_locked','break','working','checkout','ended'];
@@ -898,23 +908,7 @@ export function AttendancePage() {
     setFaceStep('idle');
   };
 
-  const resetSim = (idx: number | null) => {
-    setSimIdx(idx);
-    setShowSim(false);
-    // Reset absensi state saat kembali ke waktu nyata
-    // tapi saat ganti jam simulasi, tetap pertahankan status check-in/face
-    if (idx === null) {
-      setCheckedIn(false); setCheckedOut(false);
-      setCheckInTime(''); setCheckOutTime('');
-      setFaceStep('idle');
-      setCapturedImage(null);
-    } else {
-      // Saat ganti jam simulasi: reset checkedOut agar checkout bisa dicoba,
-      // tapi pertahankan faceStep agar tidak perlu verifikasi wajah berulang
-      setCheckedOut(false);
-      setCheckOutTime('');
-    }
-  };
+  // Camera helpers and handlers
 
   return (
     <div className="p-5 md:p-7 max-w-2xl mx-auto">
@@ -960,31 +954,7 @@ export function AttendancePage() {
         </div>
       )}
 
-      {/* Demo / Simulation Mode Panel — Jam only */}
-      <div className="mb-4 space-y-2">
-        <button onClick={() => setShowSim(!showSim)}
-          className="w-full flex items-center justify-between px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-[12px] text-amber-700 font-medium hover:bg-amber-100 transition-colors">
-          <span>🧪 Mode Simulasi Jam Absen</span>
-          <span className={`transition-transform ${showSim ? 'rotate-180' : ''}`}>▾</span>
-        </button>
-        {showSim && (
-          <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl">
-            <p className="text-[11px] font-semibold text-amber-800 mb-1.5">Simulasikan Jam Absen</p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-              <button onClick={() => resetSim(null)}
-                className={`px-2.5 py-2 rounded-lg text-[11px] font-medium text-left transition-colors ${simIdx === null ? 'bg-amber-500 text-white' : 'bg-white border border-amber-200 text-amber-700 hover:bg-amber-50'}`}>
-                ⏱ Waktu Nyata
-              </button>
-              {SIM_TIMES.map((s, i) => (
-                <button key={i} onClick={() => resetSim(i)}
-                  className={`px-2.5 py-2 rounded-lg text-[11px] font-medium text-left transition-colors ${simIdx === i ? 'bg-amber-500 text-white' : 'bg-white border border-amber-200 text-amber-700 hover:bg-amber-50'}`}>
-                  {s.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+
 
       {/* Schedule Timeline */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
@@ -1146,12 +1116,13 @@ export function AttendancePage() {
         </div>
       ) : (
         <div className={`w-full py-4 rounded-2xl flex items-center justify-center gap-3 border-2 cursor-not-allowed
-          ${attendanceWindow === 'break' ? 'bg-purple-50 border-purple-200 text-purple-400' :
-            attendanceWindow === 'sunday' || attendanceWindow === 'ended' ? 'bg-gray-100 border-gray-200 text-gray-400' :
+          ${checkedIn ? 'bg-green-50 border-green-200 text-[#16A34A]' :
+            attendanceWindow === 'break' ? 'bg-purple-50 border-purple-200 text-purple-400' :
+            attendanceWindow === 'sunday' || attendanceWindow === 'no_shift' || attendanceWindow === 'ended' ? 'bg-gray-100 border-gray-200 text-gray-400' :
             attendanceWindow === 'too_early' ? 'bg-amber-50 border-amber-200 text-amber-400' :
             attendanceWindow === 'late_locked' ? 'bg-red-50 border-red-200 text-red-400' :
             'bg-blue-50 border-blue-200 text-blue-400'}`}>
-          <Lock size={18} />
+          {checkedIn ? <CheckCircle2 size={18} /> : <Lock size={18} />}
           <span className="text-[15px] font-semibold">{lockedLabel()}</span>
         </div>
       )}
@@ -1209,8 +1180,8 @@ export function AttendancePage() {
             </div>
             <div className="flex gap-2">
               <button onClick={() => setShowModal(false)} className="flex-1 py-3 border border-gray-200 rounded-xl text-[14px] font-medium text-gray-600 hover:bg-gray-50 transition-colors">Batal</button>
-              <button onClick={confirmAction} className={`flex-1 py-3 rounded-xl text-[14px] font-semibold text-white transition-all ${canCheckIn ? 'bg-[#16A34A] hover:bg-[#0d9240]' : 'bg-red-500 hover:bg-red-600'}`}>
-                Ya, Konfirmasi
+              <button onClick={confirmAction} disabled={submitting} className={`flex-1 py-3 rounded-xl text-[14px] font-semibold text-white transition-all ${canCheckIn ? 'bg-[#16A34A] hover:bg-[#0d9240]' : 'bg-red-500 hover:bg-red-600'} ${submitting ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                {submitting ? 'Memproses...' : 'Ya, Konfirmasi'}
               </button>
             </div>
           </div>

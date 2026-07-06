@@ -37,68 +37,61 @@ php artisan serve
 
 ---
 
-## Akun Default (Seeder)
-
-| Role | NIP | Username | Password |
-|------|-----|----------|----------|
-| Admin | `ADMIN001` | `admin` | `Admin@RSUCL2025` |
-| Karyawan 1 | `198501012010012001` | `rina.kusumawati` | `Karyawan@RSUCL1` |
-| Karyawan 2 | `198805122012011002` | `ahmad.fauzi` | `Karyawan@RSUCL2` |
-| Karyawan 3 | `199508152018012007` | `rini.handayani` | `Karyawan@RSUCL3` |
-
-> ⚠️ Ganti semua password sebelum deploy ke production.
-
----
-
 ## Daftar Endpoint API
 
 Base URL: `http://localhost:8000/api`
 Format respons: `{ success, message, data }` atau `{ success, message, errors }`
 
 ### Auth (Public)
-| Method | Endpoint | Deskripsi |
-|--------|----------|-----------|
+
+| Method | Endpoint | Deskripsi           |
+| ------ | -------- | ------------------- |
 | `POST` | `/login` | Login, terima token |
 
 ### Auth (Perlu Token)
-| Method | Endpoint | Deskripsi |
-|--------|----------|-----------|
-| `GET` | `/me` | Data user yang sedang login |
-| `POST` | `/logout` | Logout, hapus token |
+
+| Method | Endpoint  | Deskripsi                   |
+| ------ | --------- | --------------------------- |
+| `GET`  | `/me`     | Data user yang sedang login |
+| `POST` | `/logout` | Logout, hapus token         |
 
 ### Absensi (Semua role)
-| Method | Endpoint | Deskripsi |
-|--------|----------|-----------|
-| `GET` | `/attendance/today` | Absensi hari ini (milik sendiri) |
-| `GET` | `/attendance/history` | Riwayat 100 data terakhir |
-| `POST` | `/attendance/check-in` | Check-in dengan GPS opsional |
-| `POST` | `/attendance/check-out` | Check-out |
+
+| Method | Endpoint                | Deskripsi                        |
+| ------ | ----------------------- | -------------------------------- |
+| `GET`  | `/attendance/today`     | Absensi hari ini (milik sendiri) |
+| `GET`  | `/attendance/history`   | Riwayat 100 data terakhir        |
+| `POST` | `/attendance/check-in`  | Check-in dengan GPS opsional     |
+| `POST` | `/attendance/check-out` | Check-out                        |
 
 ### Cuti & Izin (Semua role)
-| Method | Endpoint | Deskripsi |
-|--------|----------|-----------|
-| `GET` | `/leave-requests` | Daftar pengajuan (milik sendiri / semua jika admin) |
-| `POST` | `/leave-requests` | Ajukan cuti/izin/sakit |
+
+| Method | Endpoint          | Deskripsi                                           |
+| ------ | ----------------- | --------------------------------------------------- |
+| `GET`  | `/leave-requests` | Daftar pengajuan (milik sendiri / semua jika admin) |
+| `POST` | `/leave-requests` | Ajukan cuti/izin/sakit                              |
 
 ### Notifikasi (Semua role)
-| Method | Endpoint | Deskripsi |
-|--------|----------|-----------|
-| `GET` | `/notifications` | Daftar notifikasi + jumlah belum dibaca |
-| `PUT` | `/notifications/{id}/read` | Tandai 1 notifikasi dibaca |
-| `PUT` | `/notifications/read-all` | Tandai semua dibaca |
+
+| Method | Endpoint                   | Deskripsi                               |
+| ------ | -------------------------- | --------------------------------------- |
+| `GET`  | `/notifications`           | Daftar notifikasi + jumlah belum dibaca |
+| `PUT`  | `/notifications/{id}/read` | Tandai 1 notifikasi dibaca              |
+| `PUT`  | `/notifications/read-all`  | Tandai semua dibaca                     |
 
 ### Admin Only
-| Method | Endpoint | Deskripsi |
-|--------|----------|-----------|
-| `GET` | `/attendance/all-today` | Kehadiran semua karyawan hari ini |
-| `GET/POST/PUT/DELETE` | `/employees` | CRUD karyawan |
-| `GET` | `/employees/meta` | Data departemen & jabatan |
-| `PUT` | `/leave-requests/{id}/approve` | Setujui pengajuan |
-| `PUT` | `/leave-requests/{id}/reject` | Tolak pengajuan |
-| `GET/POST/PUT/DELETE` | `/schedules` | CRUD jadwal shift |
-| `GET` | `/reports/summary` | Ringkasan laporan |
-| `GET` | `/settings` | Baca pengaturan sistem |
-| `PUT` | `/settings` | Simpan pengaturan sistem |
+
+| Method                | Endpoint                       | Deskripsi                         |
+| --------------------- | ------------------------------ | --------------------------------- |
+| `GET`                 | `/attendance/all-today`        | Kehadiran semua karyawan hari ini |
+| `GET/POST/PUT/DELETE` | `/employees`                   | CRUD karyawan                     |
+| `GET`                 | `/employees/meta`              | Data departemen & jabatan         |
+| `PUT`                 | `/leave-requests/{id}/approve` | Setujui pengajuan                 |
+| `PUT`                 | `/leave-requests/{id}/reject`  | Tolak pengajuan                   |
+| `GET/POST/PUT/DELETE` | `/schedules`                   | CRUD jadwal shift                 |
+| `GET`                 | `/reports/summary`             | Ringkasan laporan                 |
+| `GET`                 | `/settings`                    | Baca pengaturan sistem            |
+| `PUT`                 | `/settings`                    | Simpan pengaturan sistem          |
 
 ---
 

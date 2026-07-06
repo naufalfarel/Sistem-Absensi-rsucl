@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   MapPin, Clock, Shield, Smartphone, ChevronRight,
-  CheckCircle2, BarChart3, Bell, ArrowRight, Navigation
+  CheckCircle2, BarChart3, Bell, ArrowRight, Navigation, Camera, HelpCircle, ZoomIn, Key
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import logoImg from '../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
@@ -11,50 +11,7 @@ interface LandingPageProps {
   onEnter: () => void;
 }
 
-const features = [
-  {
-    icon: MapPin,
-    color: '#16A34A',
-    bg: '#F0FDF4',
-    title: 'Absensi Berbasis GPS',
-    desc: 'Verifikasi lokasi otomatis dengan teknologi geofencing dalam radius area rumah sakit.',
-  },
-  {
-    icon: Clock,
-    color: '#2563EB',
-    bg: '#EFF6FF',
-    title: 'Real-Time Monitoring',
-    desc: 'Pantau kehadiran karyawan secara langsung kapanpun dan dimanapun oleh manajemen.',
-  },
-  {
-    icon: BarChart3,
-    color: '#7C3AED',
-    bg: '#F5F3FF',
-    title: 'Laporan Otomatis',
-    desc: 'Rekap kehadiran harian, mingguan, dan bulanan dapat diekspor ke PDF maupun Excel.',
-  },
-  {
-    icon: Bell,
-    color: '#EA580C',
-    bg: '#FFF7ED',
-    title: 'Notifikasi Instan',
-    desc: 'Pengingat jam masuk, perubahan jadwal, dan pengumuman rumah sakit secara real-time.',
-  },
-  {
-    icon: Shield,
-    color: '#0891B2',
-    bg: '#ECFEFF',
-    title: 'Data Aman & Terenkripsi',
-    desc: 'Seluruh data karyawan dan rekam absensi tersimpan aman dengan sistem keamanan berlapis.',
-  },
-  {
-    icon: Smartphone,
-    color: '#D97706',
-    bg: '#FFFBEB',
-    title: 'Akses Multi-Platform',
-    desc: 'Dapat diakses dari smartphone, tablet, maupun komputer kapan saja dengan mudah.',
-  },
-];
+// Features array removed as per requirement.
 
 
 export function LandingPage({ onEnter }: LandingPageProps) {
@@ -235,46 +192,6 @@ export function LandingPage({ onEnter }: LandingPageProps) {
                   </p>
                 </div>
               </div>
-
-              {/* Mini map below photo */}
-              <div className="relative rounded-2xl overflow-hidden border border-gray-100 shadow-sm bg-[#e8f4e8]" style={{ height: '140px' }}>
-                <div className="absolute inset-0" style={{
-                  backgroundImage: `linear-gradient(rgba(0,0,0,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.04) 1px, transparent 1px)`,
-                  backgroundSize: '36px 36px',
-                }} />
-                <div className="absolute top-[40%] left-0 right-0 h-4 bg-white/75" />
-                <div className="absolute top-[72%] left-0 right-0 h-2.5 bg-white/50" />
-                <div className="absolute left-[28%] top-0 bottom-0 w-3.5 bg-white/75" />
-                <div className="absolute left-[65%] top-0 bottom-0 w-2.5 bg-white/50" />
-                <div className="absolute top-[10%] left-[8%] w-14 h-9 bg-green-300/25 rounded-lg" />
-                <div className="absolute bottom-[12%] right-[10%] w-12 h-7 bg-green-300/20 rounded-lg" />
-                <div className="absolute" style={{
-                  top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-                  width: '100px', height: '100px', borderRadius: '50%',
-                  border: '2px dashed #16A34A', background: 'rgba(22,163,74,0.1)',
-                }} />
-                <div className="absolute" style={{ top: '50%', left: '50%', transform: 'translate(-50%, -90%)' }}>
-                  <div className="flex flex-col items-center">
-                    <div className="w-8 h-8 rounded-full bg-[#16A34A] flex items-center justify-center shadow-lg border-2 border-white overflow-hidden">
-                      <img src={logoUrl || logoImg} alt="RS" className="w-7 h-7 object-contain" />
-                    </div>
-                    <div className="w-0 h-0 border-l-[5px] border-r-[5px] border-t-[7px] border-l-transparent border-r-transparent border-t-[#16A34A] -mt-px" />
-                  </div>
-                </div>
-                <div className="absolute" style={{ top: '50%', left: '50%', transform: 'translate(-50%, 8px)' }}>
-                  <div className="bg-white shadow-md rounded-lg px-2.5 py-1 text-center border border-gray-100 whitespace-nowrap">
-                    <p className="text-[10px] font-bold text-gray-800">RSUCL</p>
-                    <p className="text-[8px] text-gray-500">Jl. Politeknik No. 23</p>
-                  </div>
-                </div>
-                <div className="absolute bottom-2 right-3 bg-white/80 rounded-md px-2 py-0.5 shadow-sm">
-                  <span className="text-[9px] text-gray-600">Banda Aceh</span>
-                </div>
-                <div className="absolute top-2 right-3 flex items-center gap-1 bg-white/80 rounded-full px-2 py-0.5 shadow-sm">
-                  <div className="w-1.5 h-1.5 rounded-full bg-[#16A34A] animate-pulse" />
-                  <span className="text-[9px] text-[#16A34A] font-semibold">GPS Live</span>
-                </div>
-              </div>
             </div>
 
             {/* Info card */}
@@ -322,8 +239,8 @@ export function LandingPage({ onEnter }: LandingPageProps) {
                       <Navigation size={13} className="text-[#16A34A]" />
                     </div>
                     <div>
-                      <p className="text-[11px] text-gray-400 font-medium">Radius Absensi GPS</p>
-                      <p className="text-[13px] text-gray-800 mt-0.5">100 meter dari titik pusat RS</p>
+                      <p className="text-[11px] text-gray-400 font-medium">Verifikasi Area GPS</p>
+                      <p className="text-[13px] text-gray-800 mt-0.5">Wajib berada di area lokasi RSU Cempaka Lima</p>
                     </div>
                   </div>
                 </div>
@@ -342,132 +259,171 @@ export function LandingPage({ onEnter }: LandingPageProps) {
         </div>
       </section>
 
-      {/* ── FEATURES ── */}
-      <section className="py-20 px-6 bg-[#F5F7FA]">
+      {/* ── CARA PEMAKAIAN / PANDUAN PENGGUNAAN ── */}
+      <section className="py-20 px-6 bg-[#F8FAFC] border-t border-b border-gray-100">
         <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-12">
-            <span className="text-[12px] font-semibold text-[#16A34A] bg-green-50 px-3 py-1 rounded-full uppercase tracking-wider">Fitur Unggulan</span>
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mt-3 mb-2">Sistem Absensi Modern & Terpercaya</h2>
-            <p className="text-[14px] text-gray-500 max-w-lg mx-auto">
-              Dirancang khusus untuk kebutuhan tenaga kesehatan dan staf administrasi rumah sakit.
+          
+          {/* Section Header */}
+          <div className="text-center mb-16">
+            <span className="text-[11px] font-bold text-[#16A34A] bg-[#EFFDF4] border border-green-150 px-3 py-1 rounded-full uppercase tracking-wider">
+              Alur Kehadiran
+            </span>
+            <h2 className="text-3xl md:text-4xl font-extrabold text-gray-900 mt-4 tracking-tight">
+              Panduan Langkah Absensi RSUCL
+            </h2>
+            <p className="text-[14px] text-gray-500 max-w-xl mx-auto mt-3 leading-relaxed">
+              Ikuti 4 langkah mudah berikut untuk melakukan pencatatan kehadiran harian secara tepat dan aman melalui perangkat Anda.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {features.map((f, i) => (
-              <div key={i} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-4" style={{ background: f.bg }}>
-                  <f.icon size={18} style={{ color: f.color }} />
+          {/* Steps Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            {/* Step 1 */}
+            <div className="bg-white rounded-2xl border border-gray-200/60 p-6 shadow-sm hover:shadow-md hover:border-green-200 transition-all duration-300 flex flex-col justify-between group relative overflow-hidden">
+              <span className="absolute -right-2 -bottom-6 text-7xl font-extrabold text-gray-50 group-hover:text-gray-100/70 transition-colors pointer-events-none select-none font-mono">
+                01
+              </span>
+              <div>
+                <div className="flex items-center justify-between mb-6">
+                  <div className="w-11 h-11 rounded-xl bg-green-50 flex items-center justify-center text-[#16A34A] group-hover:bg-[#16A34A] group-hover:text-white transition-all duration-300">
+                    <Smartphone size={20} />
+                  </div>
+                  <span className="text-[10px] font-bold text-gray-300 group-hover:text-[#16A34A] transition-colors font-mono">LANGKAH 01</span>
                 </div>
-                <h3 className="text-[14px] font-semibold text-gray-900 mb-1.5">{f.title}</h3>
-                <p className="text-[13px] text-gray-500 leading-relaxed">{f.desc}</p>
+                <h3 className="text-[15px] font-bold text-gray-950 mb-2">Masuk ke Aplikasi</h3>
+                <p className="text-[12px] text-gray-500 leading-relaxed z-10 relative">
+                  Buka aplikasi absensi di browser handphone Anda, lalu masuk menggunakan <strong>Username</strong> dan <strong>Kata Sandi</strong> yang telah terdaftar.
+                </p>
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── PHOTO BANNER ── */}
-      <section className="relative overflow-hidden" style={{ height: '280px' }}>
-        <img
-          src={rsPhoto}
-          alt="RSU Cempaka Lima Banda Aceh"
-          className="w-full h-full object-cover"
-          style={{ objectPosition: 'center 25%' }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/65 via-black/30 to-transparent" />
-        <div className="absolute inset-0 flex items-center px-8 md:px-16">
-          <div className="max-w-lg">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-8 h-8 rounded-xl bg-white/20 border border-white/30 flex items-center justify-center overflow-hidden">
-                <img src={logoUrl || logoImg} alt="logo" className="w-7 h-7 object-contain" />
-              </div>
-              <span className="text-white/80 text-[12px] font-medium uppercase tracking-wider">RSU Cempaka Lima</span>
             </div>
-            <h3 className="text-white text-2xl md:text-3xl font-bold leading-tight mb-2">
-              Melayani dengan Sepenuh Hati
-            </h3>
-            <p className="text-white/75 text-[14px] leading-relaxed mb-4">
-              Berkomitmen memberikan pelayanan kesehatan terbaik untuk masyarakat Kota Banda Aceh dan sekitarnya sejak 2010.
-            </p>
-            <div className="flex items-center gap-2 text-white/70 text-[12px]">
-              <MapPin size={13} className="text-green-300 flex-shrink-0" />
-              <span>Jl. Politeknik No. 23, Desa Beurawe, Kec. Kuta Alam, Banda Aceh</span>
-            </div>
-          </div>
-        </div>
-      </section>
 
-      {/* ── SCHEDULE SECTION ── */}
-      <section className="py-20 px-6 bg-white">
-        <div className="max-w-4xl mx-auto">
-          <div className="text-center mb-10">
-            <span className="text-[12px] font-semibold text-[#16A34A] bg-green-50 px-3 py-1 rounded-full uppercase tracking-wider">Jadwal Kerja</span>
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mt-3">Jadwal Absensi RSUCL</h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {[
-              {
-                day: 'Senin – Jumat',
-                masuk: '08:30',
-                pulang: '17:00',
-                note: 'Istirahat 12:30 – 13:30',
-                color: '#16A34A', bg: 'from-[#16A34A] to-[#0d9240]',
-                emoji: '📅',
-              },
-              {
-                day: 'Sabtu',
-                masuk: '08:30',
-                pulang: '13:00',
-                note: 'Setengah hari kerja',
-                color: '#2563EB', bg: 'from-[#2563EB] to-[#1d4ed8]',
-                emoji: '📆',
-              },
-              {
-                day: 'Minggu & Libur',
-                masuk: '—',
-                pulang: '—',
-                note: 'Hari libur nasional',
-                color: '#6B7280', bg: 'from-[#6B7280] to-[#4B5563]',
-                emoji: '🌴',
-              },
-            ].map((s, i) => (
-              <div key={i} className={`bg-gradient-to-br ${s.bg} rounded-2xl p-5 text-white relative overflow-hidden`}>
-                <div className="absolute top-0 right-0 text-5xl opacity-10 -translate-y-1 translate-x-1">{s.emoji}</div>
-                <p className="text-[13px] font-semibold text-white/80 mb-3">{s.day}</p>
-                {s.masuk !== '—' ? (
-                  <>
-                    <div className="flex items-baseline gap-2 mb-1">
-                      <span className="text-[11px] text-white/60">Masuk</span>
-                      <span className="text-2xl font-bold font-mono">{s.masuk}</span>
-                    </div>
-                    <div className="flex items-baseline gap-2 mb-3">
-                      <span className="text-[11px] text-white/60">Pulang</span>
-                      <span className="text-2xl font-bold font-mono">{s.pulang}</span>
-                    </div>
-                  </>
-                ) : (
-                  <p className="text-3xl font-bold mb-4">Libur</p>
-                )}
-                <div className="text-[11px] text-white/65 bg-white/10 rounded-lg px-2.5 py-1.5 inline-block">
-                  {s.note}
+            {/* Step 2 */}
+            <div className="bg-white rounded-2xl border border-gray-200/60 p-6 shadow-sm hover:shadow-md hover:border-green-200 transition-all duration-300 flex flex-col justify-between group relative overflow-hidden">
+              <span className="absolute -right-2 -bottom-6 text-7xl font-extrabold text-gray-50 group-hover:text-gray-100/70 transition-colors pointer-events-none select-none font-mono">
+                02
+              </span>
+              <div>
+                <div className="flex items-center justify-between mb-6">
+                  <div className="w-11 h-11 rounded-xl bg-blue-50 flex items-center justify-center text-[#2563EB] group-hover:bg-[#2563EB] group-hover:text-white transition-all duration-300">
+                    <MapPin size={20} />
+                  </div>
+                  <span className="text-[10px] font-bold text-gray-300 group-hover:text-[#2563EB] transition-colors font-mono">LANGKAH 02</span>
                 </div>
+                <h3 className="text-[15px] font-bold text-gray-950 mb-2">Aktifkan GPS / Lokasi</h3>
+                <p className="text-[12px] text-gray-500 leading-relaxed z-10 relative">
+                  Nyalakan fitur Lokasi/GPS pada HP Anda. Pastikan Anda berada secara fisik di lokasi RSU Cempaka Lima.
+                </p>
               </div>
-            ))}
-          </div>
-          <div className="mt-4 bg-amber-50 border border-amber-100 rounded-2xl p-4 flex items-start gap-3">
-            <div className="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0">
-              <Clock size={15} className="text-amber-600" />
             </div>
-            <div>
-              <p className="text-[13px] font-semibold text-gray-800">Ketentuan Absensi</p>
-              <p className="text-[12px] text-gray-500 mt-0.5">
-                Absensi hanya dapat dilakukan dalam radius 100m dari RSUCL · Check-out maksimal pukul 18:00 WIB · Sistem otomatis mencatat status tepat waktu atau terlambat.
+
+            {/* Step 3 */}
+            <div className="bg-white rounded-2xl border border-gray-200/60 p-6 shadow-sm hover:shadow-md hover:border-green-200 transition-all duration-300 flex flex-col justify-between group relative overflow-hidden">
+              <span className="absolute -right-2 -bottom-6 text-7xl font-extrabold text-gray-50 group-hover:text-gray-100/70 transition-colors pointer-events-none select-none font-mono">
+                03
+              </span>
+              <div>
+                <div className="flex items-center justify-between mb-6">
+                  <div className="w-11 h-11 rounded-xl bg-purple-50 flex items-center justify-center text-[#7C3AED] group-hover:bg-[#7C3AED] group-hover:text-white transition-all duration-300">
+                    <Camera size={20} />
+                  </div>
+                  <span className="text-[10px] font-bold text-gray-300 group-hover:text-[#7C3AED] transition-colors font-mono">LANGKAH 03</span>
+                </div>
+                <h3 className="text-[15px] font-bold text-gray-950 mb-2">Izinkan Akses Kamera</h3>
+                <p className="text-[12px] text-gray-500 leading-relaxed z-10 relative">
+                  Browser akan meminta izin mengakses kamera HP. Pilih "Izinkan" (Allow) untuk mengambil foto selfie verifikasi wajah.
+                </p>
+              </div>
+            </div>
+
+            {/* Step 4 */}
+            <div className="bg-white rounded-2xl border border-gray-200/60 p-6 shadow-sm hover:shadow-md hover:border-green-200 transition-all duration-300 flex flex-col justify-between group relative overflow-hidden">
+              <span className="absolute -right-2 -bottom-6 text-7xl font-extrabold text-gray-50 group-hover:text-gray-100/70 transition-colors pointer-events-none select-none font-mono">
+                04
+              </span>
+              <div>
+                <div className="flex items-center justify-between mb-6">
+                  <div className="w-11 h-11 rounded-xl bg-amber-50 flex items-center justify-center text-[#D97706] group-hover:bg-[#D97706] group-hover:text-white transition-all duration-300">
+                    <CheckCircle2 size={20} />
+                  </div>
+                  <span className="text-[10px] font-bold text-gray-300 group-hover:text-[#D97706] transition-colors font-mono">LANGKAH 04</span>
+                </div>
+                <h3 className="text-[15px] font-bold text-gray-950 mb-2">Pilih Aksi Absensi</h3>
+                <p className="text-[12px] text-gray-500 leading-relaxed z-10 relative">
+                  Ketuk tombol "Absen Masuk (Check-In)" saat memulai dinas shift Anda, atau "Absen Pulang (Check-Out)" jika jam kerja Anda telah berakhir.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Help & Troubleshooting Section */}
+          <div className="mt-20">
+            <div className="text-center mb-10">
+              <h3 className="text-2xl font-bold text-gray-900 tracking-tight">
+                Pusat Bantuan & Pemecahan Masalah
+              </h3>
+              <p className="text-[13px] text-gray-500 mt-2">
+                Solusi cepat untuk kendala yang sering ditemui oleh staf saat melakukan absensi harian
               </p>
             </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* FAQ 1 */}
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex items-start gap-4 hover:shadow-md transition-all duration-300">
+                <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center text-[#16A34A] flex-shrink-0">
+                  <ZoomIn size={18} />
+                </div>
+                <div>
+                  <h4 className="text-[14px] font-bold text-gray-900">Ukuran Teks / Tulisan Terlalu Kecil?</h4>
+                  <p className="text-[12px] text-gray-500 leading-relaxed mt-2">
+                    Gunakan gerakan mencubit layar dengan dua jari (zoom-in) untuk memperbesar halaman absensi, atau atur tingkat zoom huruf di pengaturan browser Google Chrome / Safari Anda.
+                  </p>
+                </div>
+              </div>
+
+              {/* FAQ 2 */}
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex items-start gap-4 hover:shadow-md transition-all duration-300">
+                <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center text-[#16A34A] flex-shrink-0">
+                  <Camera size={18} />
+                </div>
+                <div>
+                  <h4 className="text-[14px] font-bold text-gray-900">Kamera Tidak Dapat Diakses?</h4>
+                  <p className="text-[12px] text-gray-500 leading-relaxed mt-2">
+                    Browser Anda memerlukan izin kamera HP. Jika tidak sengaja memilih blokir, ketuk ikon gembok di sebelah kiri kolom alamat web (URL) browser Anda, kemudian aktifkan kembali opsi Kamera menjadi "Izinkan" (Allow).
+                  </p>
+                </div>
+              </div>
+
+              {/* FAQ 3 */}
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex items-start gap-4 hover:shadow-md transition-all duration-300">
+                <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center text-[#16A34A] flex-shrink-0">
+                  <Navigation size={18} />
+                </div>
+                <div>
+                  <h4 className="text-[14px] font-bold text-gray-900">Lokasi GPS Di luar Geofence RSUCL?</h4>
+                  <p className="text-[12px] text-gray-500 leading-relaxed mt-2">
+                    Pastikan GPS di HP Anda menyala dengan mode akurasi tinggi. Apabila sinyal GPS lambat terdeteksi, berdirilah di dekat jendela, koridor terbuka, atau teras gedung rumah sakit beberapa saat agar lokasi terdeteksi akurat.
+                  </p>
+                </div>
+              </div>
+
+              {/* FAQ 4 */}
+              <div className="bg-white rounded-2xl border border-gray-150 shadow-sm p-6 flex items-start gap-4 hover:shadow-md transition-all duration-300">
+                <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center text-[#16A34A] flex-shrink-0">
+                  <Key size={18} />
+                </div>
+                <div>
+                  <h4 className="text-[14px] font-bold text-gray-900">Lupa Password / Akun Terkunci?</h4>
+                  <p className="text-[12px] text-gray-500 leading-relaxed mt-2">
+                    Demi keamanan data, silakan hubungi langsung unit Kepegawaian (Administrasi IT RSU Cempaka Lima) untuk mereset kata sandi akun Anda kembali ke bawaan.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
+
+
 
       {/* ── FOOTER ── */}
       <footer className="bg-gradient-to-br from-[#0B7A36] to-[#16A34A] text-white py-12 px-6">

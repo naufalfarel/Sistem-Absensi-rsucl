@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   User, Mail, Lock, Eye, EyeOff, CheckCircle2, Save, Shield, MapPin, Clock,
-  Bell, ToggleLeft, ToggleRight, Power, Upload, RotateCcw, AlertTriangle, ImageIcon, Trash2,
+  Bell, ToggleLeft, ToggleRight, Power, Upload, RotateCcw, AlertTriangle, ImageIcon, Trash2, Sparkles
 } from 'lucide-react';
 import logoImg from '../../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
 import { settingApi, profileApi } from '../../../services/api';
@@ -88,6 +88,18 @@ export function SettingsTab() {
   const [hospLat, setHospLat] = useState('5.552740480177099');
   const [hospLng, setHospLng] = useState('95.33486560781716');
   const [configSaved, setConfigSaved] = useState(false);
+  const [configError, setConfigError] = useState('');
+
+  // ── Jadwal Absensi ──
+  const [checkinOpen, setCheckinOpen]           = useState('0');
+  const [lateLimit, setLateLimit]               = useState('30');
+  const [closeCheckin, setCloseCheckin]         = useState('60');
+  const [breakStart, setBreakStart]             = useState('12:30');
+  const [breakEnd, setBreakEnd]                 = useState('13:30');
+  const [checkoutOpen, setCheckoutOpen]         = useState('0');
+  const [checkoutClose, setCheckoutClose]       = useState('60');
+  const [satCheckoutOpen, setSatCheckoutOpen]   = useState('0');
+  const [satCheckoutClose, setSatCheckoutClose] = useState('60');
 
   // ── System Status ──
   const [systemActive, setSystemActive]         = useState(true);
@@ -120,6 +132,15 @@ export function SettingsTab() {
         if (res.data.notif_late !== undefined) setNotifLate(res.data.notif_late === '1');
         if (res.data.notif_leave !== undefined) setNotifLeave(res.data.notif_leave === '1');
         if (res.data.notif_system !== undefined) setNotifSystem(res.data.notif_system === '1');
+        if (res.data.checkin_open !== undefined) setCheckinOpen(res.data.checkin_open);
+        if (res.data.late_limit !== undefined) setLateLimit(res.data.late_limit);
+        if (res.data.close_checkin !== undefined) setCloseCheckin(res.data.close_checkin);
+        if (res.data.break_start) setBreakStart(res.data.break_start.substring(0, 5));
+        if (res.data.break_end) setBreakEnd(res.data.break_end.substring(0, 5));
+        if (res.data.checkout_open !== undefined) setCheckoutOpen(res.data.checkout_open);
+        if (res.data.checkout_close !== undefined) setCheckoutClose(res.data.checkout_close);
+        if (res.data.sat_checkout_open !== undefined) setSatCheckoutOpen(res.data.sat_checkout_open);
+        if (res.data.sat_checkout_close !== undefined) setSatCheckoutClose(res.data.sat_checkout_close);
       }
     } catch (err) {
       console.error(err);
@@ -253,25 +274,44 @@ export function SettingsTab() {
 
   const handleSaveConfig = async () => {
     setConfigSaved(false);
+    setConfigError('');
     try {
       const res = await settingApi.update({
         gps_radius: radius,
         hospital_lat: hospLat,
         hospital_lng: hospLng,
+        checkin_open: checkinOpen,
+        late_limit: lateLimit,
+        close_checkin: closeCheckin,
+        break_start: breakStart,
+        break_end: breakEnd,
+        checkout_open: checkoutOpen,
+        checkout_close: checkoutClose,
+        sat_checkout_open: satCheckoutOpen,
+        sat_checkout_close: satCheckoutClose,
       });
       if (res.success) {
         setConfigSaved(true);
         setTimeout(() => setConfigSaved(false), 3000);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      const validationErrors = err?.data?.errors;
+      if (validationErrors) {
+        const msg = Object.values(validationErrors).flat().join(' ');
+        setConfigError(msg);
+      } else {
+        setConfigError(err?.message ?? 'Gagal menyimpan konfigurasi.');
+      }
     }
   };
 
   const [notifSaved, setNotifSaved] = useState(false);
+  const [notifError, setNotifError] = useState('');
 
   const handleSaveNotifs = async () => {
     setNotifSaved(false);
+    setNotifError('');
     try {
       const res = await settingApi.update({
         notif_email: notifEmail ? '1' : '0',
@@ -283,8 +323,37 @@ export function SettingsTab() {
         setNotifSaved(true);
         setTimeout(() => setNotifSaved(false), 3000);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      const validationErrors = err?.data?.errors;
+      if (validationErrors) {
+        const msg = Object.values(validationErrors).flat().join(' ');
+        setNotifError(msg);
+      } else {
+        setNotifError(err?.message ?? 'Gagal menyimpan pengaturan notifikasi.');
+      }
+    }
+  };
+
+  // Helper to calculate preview times dynamically in frontend
+  const getPreviewTime = (baseTime: string, offsetMinsStr: string, op: 'add' | 'sub' = 'add') => {
+    try {
+      const [h, m] = baseTime.split(':').map(Number);
+      const offset = parseInt(offsetMinsStr) || 0;
+      let totalMinutes = h * 60 + m;
+      if (op === 'add') {
+        totalMinutes += offset;
+      } else {
+        totalMinutes -= offset;
+      }
+      if (totalMinutes < 0) {
+        totalMinutes += 24 * 60;
+      }
+      const newH = Math.floor(totalMinutes / 60) % 24;
+      const newM = totalMinutes % 60;
+      return `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`;
+    } catch {
+      return baseTime;
     }
   };
 
@@ -533,12 +602,183 @@ export function SettingsTab() {
               <Toggle value={val} onChange={toggle} />
             </div>
           ))}
+          {notifError && (
+            <div className="flex items-center gap-2 bg-red-50 border border-red-100 text-red-600 text-[12px] px-3.5 py-2.5 rounded-xl mb-3">
+              <AlertTriangle size={13} className="flex-shrink-0" />
+              <span>{notifError}</span>
+            </div>
+          )}
           <div className="pt-4 mt-2">
             <button onClick={handleSaveNotifs}
               className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold transition-all shadow-sm ${notifSaved ? 'bg-green-50 text-[#16A34A] border border-green-200' : 'bg-[#16A34A] text-white hover:bg-[#0d9240] shadow-green-200'}`}>
               {notifSaved ? <><CheckCircle2 size={14} /> Tersimpan!</> : <><Save size={14} /> Simpan Pengaturan</>}
             </button>
           </div>
+        </div>
+      </div>
+      {/* ── Ketentuan Waktu & Jadwal Absensi ── */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-50 flex items-center gap-2">
+          <Clock size={15} className="text-[#16A34A]" />
+          <p className="text-[14px] font-semibold text-gray-800">Ketentuan Waktu & Jadwal Absensi RSUCL (Dinamis per-Shift)</p>
+        </div>
+        <div className="p-5 space-y-5">
+          {/* Live Preview Box */}
+          <div className="p-4 bg-green-50/50 rounded-2xl border border-green-100/50 space-y-2.5">
+            <p className="text-[12px] font-bold text-gray-800 flex items-center gap-1.5">
+              <Sparkles size={13} className="text-[#16A34A] animate-pulse" /> 
+              Peninjauan Ketentuan Waktu (Live Preview Shift Reguler: 08:00 - 17:00, Sabtu: 08:00 - 13:00)
+            </p>
+            <p className="text-[11px] text-gray-500 leading-relaxed">
+              Sistem akan otomatis menyesuaikan aturan ini untuk shift lainnya (Pagi, Siang, Malam, dll.) berdasarkan jam masuk dan jam pulang masing-masing shift secara dinamis.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 text-[11px] text-gray-600 pt-1.5 border-t border-green-100/50">
+              <div>
+                <p className="font-bold text-gray-700 mb-1 flex items-center gap-1">⏱️ Absen Masuk (Check-in)</p>
+                <div className="space-y-1 pl-3.5 border-l border-green-200">
+                  <p>• Buka check-in mulai: <span className="font-mono text-gray-800 font-bold">{getPreviewTime('08:00', checkinOpen, 'sub')} WIB</span> <span className="text-gray-400">({checkinOpen || 0} menit sebelum shift)</span></p>
+                  <p>• Tepat waktu: <span className="font-mono text-[#16A34A] font-bold">{getPreviewTime('08:00', '0')} - {getPreviewTime('08:00', lateLimit)} WIB</span> <span className="text-gray-400">({lateLimit || 0} menit pertama)</span></p>
+                  <p>• Terlambat (tetap Hadir): <span className="font-mono text-amber-600 font-bold">{getPreviewTime('08:00', lateLimit)} - {getPreviewTime('08:00', closeCheckin)} WIB</span></p>
+                  <p>• Tutup check-in / Alpha: <span className="font-mono text-red-600 font-bold">Lewat dari {getPreviewTime('08:00', closeCheckin)} WIB</span> <span className="text-gray-400">({closeCheckin || 0} menit setelah shift)</span></p>
+                </div>
+              </div>
+              <div>
+                <p className="font-bold text-gray-700 mb-1 flex items-center gap-1">🚪 Absen Pulang (Check-out)</p>
+                <div className="space-y-1 pl-3.5 border-l border-green-200">
+                  <p>• Buka check-out (Sen-Jum): <span className="font-mono text-gray-800 font-bold">{getPreviewTime('17:00', checkoutOpen, 'sub')} WIB</span> <span className="text-gray-400">({checkoutOpen || 0} menit sebelum selesai)</span></p>
+                  <p>• Tutup check-out (Sen-Jum): <span className="font-mono text-gray-800 font-bold">{getPreviewTime('17:00', checkoutClose)} WIB</span> <span className="text-gray-400">({checkoutClose || 0} menit setelah selesai)</span></p>
+                  <p>• Buka check-out (Sabtu): <span className="font-mono text-gray-800 font-bold">{getPreviewTime('13:00', satCheckoutOpen, 'sub')} WIB</span> <span className="text-gray-400">({satCheckoutOpen || 0} menit sebelum selesai)</span></p>
+                  <p>• Tutup check-out (Sabtu): <span className="font-mono text-gray-800 font-bold">{getPreviewTime('13:00', satCheckoutClose)} WIB</span> <span className="text-gray-400">({satCheckoutClose || 0} menit setelah selesai)</span></p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 1: Check-in (Absen Masuk) */}
+          <div className="pt-2">
+            <h4 className="text-[12px] font-bold text-gray-800 mb-3 border-l-2 border-[#16A34A] pl-2 uppercase tracking-wider">Absen Masuk (Check-in)</h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-[11px] font-medium text-gray-500 mb-1.5">Buka Absen (menit sebelum shift mulai)</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="1440"
+                  value={checkinOpen}
+                  onChange={e => setCheckinOpen(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[12px] focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all bg-gray-50/50"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-gray-500 mb-1.5">Batas Tepat Waktu (menit setelah shift mulai)</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="1440"
+                  value={lateLimit}
+                  onChange={e => setLateLimit(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[12px] focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all bg-gray-50/50"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-gray-500 mb-1.5">Tutup Check-in / Alpha (menit setelah shift mulai)</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="1440"
+                  value={closeCheckin}
+                  onChange={e => setCloseCheckin(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[12px] focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all bg-gray-50/50"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 2: Break (Istirahat) */}
+          <div className="pt-4 border-t border-gray-50">
+            <h4 className="text-[12px] font-bold text-gray-800 mb-3 border-l-2 border-[#16A34A] pl-2 uppercase tracking-wider">Waktu Istirahat Global (Sen-Jum)</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[11px] font-medium text-gray-500 mb-1.5">Mulai Istirahat (Jam Absolut)</label>
+                <input
+                  type="time"
+                  value={breakStart}
+                  onChange={e => setBreakStart(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[12px] focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-gray-500 mb-1.5">Selesai Istirahat (Jam Absolut)</label>
+                <input
+                  type="time"
+                  value={breakEnd}
+                  onChange={e => setBreakEnd(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[12px] focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 3: Check-out (Absen Pulang) */}
+          <div className="pt-4 border-t border-gray-50">
+            <h4 className="text-[12px] font-bold text-gray-800 mb-3 border-l-2 border-[#16A34A] pl-2 uppercase tracking-wider">Absen Pulang (Check-out)</h4>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-[11px] font-medium text-gray-500 mb-1.5">Buka Pulang (menit sebelum shift selesai)</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="1440"
+                  value={checkoutOpen}
+                  onChange={e => setCheckoutOpen(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[12px] focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all bg-gray-50/50"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-gray-500 mb-1.5">Batas Akhir (menit setelah shift selesai)</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="1440"
+                  value={checkoutClose}
+                  onChange={e => setCheckoutClose(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[12px] focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all bg-gray-50/50"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-gray-500 mb-1.5">Buka Pulang Sabtu (menit sebelum selesai)</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="1440"
+                  value={satCheckoutOpen}
+                  onChange={e => setSatCheckoutOpen(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[12px] focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all bg-gray-50/50"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-gray-500 mb-1.5">Batas Akhir Sabtu (menit setelah selesai)</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="1440"
+                  value={satCheckoutClose}
+                  onChange={e => setSatCheckoutClose(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[12px] focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all bg-gray-50/50"
+                />
+              </div>
+            </div>
+          </div>
+
+          {configError && (
+            <div className="flex items-center gap-2 bg-red-50 border border-red-100 text-red-600 text-[12px] px-3.5 py-2.5 rounded-xl mb-3.5">
+              <AlertTriangle size={13} className="flex-shrink-0" />
+              <span>{configError}</span>
+            </div>
+          )}
+          <button onClick={handleSaveConfig} className="flex items-center gap-2 px-5 py-2.5 bg-[#16A34A] text-white rounded-xl text-[13px] font-semibold hover:bg-[#0d9240] transition-all shadow-sm shadow-green-200">
+            {configSaved ? <><CheckCircle2 size={14} /> Tersimpan!</> : <><Save size={14} /> Simpan Konfigurasi</>}
+          </button>
         </div>
       </div>
 
@@ -595,6 +835,12 @@ export function SettingsTab() {
             <p className="text-[11px] text-gray-400 mt-1.5">Koordinat akan digunakan sebagai pusat lingkaran geofence oleh server</p>
           </div>
 
+          {configError && (
+            <div className="flex items-center gap-2 bg-red-50 border border-red-100 text-red-600 text-[12px] px-3.5 py-2.5 rounded-xl mb-3.5">
+              <AlertTriangle size={13} className="flex-shrink-0" />
+              <span>{configError}</span>
+            </div>
+          )}
           <button onClick={handleSaveConfig} className="flex items-center gap-2 px-5 py-2.5 bg-[#16A34A] text-white rounded-xl text-[13px] font-semibold hover:bg-[#0d9240] transition-all shadow-sm shadow-green-200">
             {configSaved ? <><CheckCircle2 size={14} /> Tersimpan!</> : <><Save size={14} /> Simpan Konfigurasi</>}
           </button>

@@ -4,11 +4,11 @@ $app = require_once __DIR__ . '/bootstrap/app.php';
 $app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 
 $settings = [
-    'checkin_open'       => '08:00',
+    'checkin_open'       => '0',
     'break_start'        => '12:30',
     'break_end'          => '13:30',
-    'sat_checkout_open'  => '13:00',
-    'sat_checkout_close' => '13:00',
+    'sat_checkout_open'  => '0',
+    'sat_checkout_close' => '60',
 ];
 
 foreach ($settings as $key => $value) {

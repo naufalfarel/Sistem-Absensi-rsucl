@@ -52,15 +52,15 @@ class SettingController extends Controller
     {
         $request->validate([
             'system_active'      => 'sometimes|in:0,1',
-            'checkin_open'       => 'sometimes|date_format:H:i',
-            'late_limit'         => 'sometimes|date_format:H:i',
-            'close_checkin'      => 'sometimes|date_format:H:i',
+            'checkin_open'       => 'sometimes|integer|min:0|max:1440',
+            'late_limit'         => 'sometimes|integer|min:0|max:1440',
+            'close_checkin'      => 'sometimes|integer|min:0|max:1440',
             'break_start'        => 'sometimes|date_format:H:i',
             'break_end'          => 'sometimes|date_format:H:i',
-            'checkout_open'      => 'sometimes|date_format:H:i',
-            'checkout_close'     => 'sometimes|date_format:H:i',
-            'sat_checkout_open'  => 'sometimes|date_format:H:i',
-            'sat_checkout_close' => 'sometimes|date_format:H:i',
+            'checkout_open'      => 'sometimes|integer|min:0|max:1440',
+            'checkout_close'     => 'sometimes|integer|min:0|max:1440',
+            'sat_checkout_open'  => 'sometimes|integer|min:0|max:1440',
+            'sat_checkout_close' => 'sometimes|integer|min:0|max:1440',
             'gps_radius'         => 'sometimes|integer|min:10|max:1000',
             'hospital_lat'       => 'sometimes|numeric',
             'hospital_lng'       => 'sometimes|numeric',
@@ -90,6 +90,21 @@ class SettingController extends Controller
         foreach (self::ALLOWED_KEYS as $key) {
             if ($key !== 'logo_url' && $request->has($key)) {
                 Setting::set($key, (string) $request->input($key));
+            }
+        }
+
+        // Buat notifikasi sistem jika diaktifkan
+        $notifSystem = Setting::get('notif_system', '0');
+        if ($notifSystem !== '0') {
+            $admins = \App\Models\User::where('role', 'admin')->get();
+            foreach ($admins as $admin) {
+                \App\Models\Notification::create([
+                    'user_id' => $admin->id,
+                    'title'   => 'Konfigurasi Sistem Diperbarui',
+                    'body'    => 'Pengaturan sistem absensi RSUCL telah diperbarui oleh ' . $request->user()->name . '.',
+                    'type'    => 'system',
+                    'data'    => ['updated_by' => $request->user()->id],
+                ]);
             }
         }
 
@@ -140,15 +155,15 @@ class SettingController extends Controller
     {
         return match ($key) {
             'system_active'      => '1',
-            'checkin_open'       => '08:00',
-            'late_limit'         => '08:30',
-            'close_checkin'      => '09:00',
+            'checkin_open'       => '0',
+            'late_limit'         => '30',
+            'close_checkin'      => '60',
             'break_start'        => '12:30',
             'break_end'          => '13:30',
-            'checkout_open'      => '17:00',
-            'checkout_close'     => '18:00',
-            'sat_checkout_open'  => '13:00',
-            'sat_checkout_close' => '13:00',
+            'checkout_open'      => '0',
+            'checkout_close'     => '60',
+            'sat_checkout_open'  => '0',
+            'sat_checkout_close' => '60',
             'gps_radius'         => '40',
             'hospital_lat'       => '5.552740480177099',
             'hospital_lng'       => '95.33486560781716',
