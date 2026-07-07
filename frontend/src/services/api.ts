@@ -223,6 +223,7 @@ export interface LeaveRequest {
   end_date: string;
   days: number;
   reason: string;
+  attachment_url?: string | null;
   status: 'pending' | 'approved' | 'rejected';
   admin_note?: string;
   reviewed_at?: string;
@@ -233,7 +234,7 @@ export interface LeaveRequest {
 
 export const leaveApi = {
   list:    () => api.get<{ success: boolean; data: LeaveRequest[] }>('/leave-requests'),
-  create:  (data: { type: string; start_date: string; end_date: string; reason: string }) =>
+  create:  (data: { type: string; start_date: string; end_date: string; reason: string; attachment?: string | null }) =>
     api.post<{ success: boolean; message: string; data: LeaveRequest }>('/leave-requests', data),
   approve: (id: number, admin_note?: string) =>
     api.put<{ success: boolean; data: LeaveRequest }>(`/leave-requests/${id}/approve`, { admin_note }),
@@ -274,7 +275,7 @@ export interface ReportSummary {
   this_month: { hadir: number; telat: number; alpha: number; cuti: number };
   trends: { presence: number; late: number; alpha: number; cuti: number };
   pending_leave: number;
-  daily_chart: { date: string; label: string; count: number; total: number }[];
+  daily_chart: { date: string; label: string; hadir: number; alpha: number }[];
   monthly_trend: { bulan: string; hadir: number; terlambat: number; alpha: number; cuti: number }[];
   composition: { name: string; value: number; color: string }[];
   weekly_late: { hari: string; count: number }[];

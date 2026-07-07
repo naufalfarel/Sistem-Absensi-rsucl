@@ -2,13 +2,16 @@ import { useState, useEffect, useRef } from 'react';
 import {
   ChevronRight, User, Lock, Bell, Globe, Info, Shield, LogOut,
   Mail, Phone, MapPin, Calendar, Briefcase, Building2, Edit3, Camera,
-  Plus, X, CheckCircle2, Clock, XCircle, FileText, ChevronDown, AlertCircle
+  Plus, X, CheckCircle2, Clock, XCircle, FileText, ChevronDown, AlertCircle, Paperclip
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { leaveApi, LeaveRequest as ApiLeave, profileApi } from '../../services/api';
 
 interface ProfilePageProps {
   onLogout: () => void;
+  initialSection?: 'profile' | 'leave';
+  initialOpenModal?: boolean;
+  onResetInitials?: () => void;
 }
 
 type LeaveType = 'cuti' | 'izin' | 'sakit';
@@ -42,14 +45,28 @@ function CreditCardIcon({ size, className }: { size: number; className?: string 
   );
 }
 
-export function ProfilePage({ onLogout }: ProfilePageProps) {
+export function ProfilePage({ onLogout, initialSection, initialOpenModal, onResetInitials }: ProfilePageProps) {
   const { user, refreshUser } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [showLeaveModal, setShowLeaveModal] = useState(initialOpenModal || false);
   const [requests, setRequests] = useState<ApiLeave[]>([]);
-  const [activeSection, setActiveSection] = useState<'profile' | 'leave'>('profile');
+  const [activeSection, setActiveSection] = useState<'profile' | 'leave'>(initialSection || 'profile');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (initialSection) {
+      setActiveSection(initialSection);
+    }
+    if (initialOpenModal !== undefined) {
+      setShowLeaveModal(initialOpenModal);
+    }
+    if (initialSection || initialOpenModal) {
+      if (onResetInitials) {
+        onResetInitials();
+      }
+    }
+  }, [initialSection, initialOpenModal]);
 
   // Password Modal states
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -189,6 +206,38 @@ export function ProfilePage({ onLogout }: ProfilePageProps) {
   const [reason, setReason] = useState('');
   const [formError, setFormError] = useState('');
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [attachmentName, setAttachmentName] = useState('');
+  const [attachmentBase64, setAttachmentBase64] = useState<string | null>(null);
+
+  const handleAttachmentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      setFormError('Ukuran file maksimal adalah 5MB.');
+      return;
+    }
+    const allowed = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
+    if (!allowed.includes(file.type)) {
+      setFormError('Format file harus berupa PDF, PNG, atau JPG/JPEG.');
+      return;
+    }
+
+    setFormError('');
+    setAttachmentName(file.name);
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setAttachmentBase64(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const clearAttachment = () => {
+    setAttachmentName('');
+    setAttachmentBase64(null);
+  };
 
   const loadLeaveRequests = async () => {
     setLoading(true);
@@ -215,8 +264,9 @@ export function ProfilePage({ onLogout }: ProfilePageProps) {
   };
 
   const handleSubmit = async () => {
-    if (!startDate || !endDate || !reason.trim()) {
-      setFormError('Semua field wajib diisi.');
+    if (submitting) return;
+    if (!startDate || !endDate || !reason.trim() || !attachmentBase64) {
+      setFormError('Semua field wajib diisi, termasuk melampirkan dokumen pendukung.');
       return;
     }
     if (new Date(endDate) < new Date(startDate)) {
@@ -224,24 +274,29 @@ export function ProfilePage({ onLogout }: ProfilePageProps) {
       return;
     }
     setFormError('');
+    setSubmitting(true);
     try {
       const res = await leaveApi.create({
         type: leaveType,
         start_date: startDate,
         end_date: endDate,
         reason: reason.trim(),
+        attachment: attachmentBase64,
       });
       if (res.success) {
         setRequests(prev => [res.data, ...prev]);
         setShowLeaveModal(false);
         setStartDate(''); setEndDate(''); setReason('');
         setLeaveType('cuti');
+        setAttachmentName(''); setAttachmentBase64(null);
         setSubmitSuccess(true);
         setActiveSection('leave');
         setTimeout(() => setSubmitSuccess(false), 4000);
       }
     } catch (err: any) {
       setFormError(err?.message ?? 'Gagal mengirim pengajuan cuti.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -566,12 +621,26 @@ export function ProfilePage({ onLogout }: ProfilePageProps) {
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between">
+                     <div className="flex items-center justify-between">
                       <p className="text-[12px] text-gray-500 italic flex-1 mr-3">"{req.reason}"</p>
                       <span className="text-[11px] font-medium text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full flex-shrink-0">
                         {req.days} hari
                       </span>
                     </div>
+
+                    {req.attachment_url && (
+                      <div className="mt-3">
+                        <a 
+                          href={req.attachment_url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#16A34A] hover:text-[#0d9240] bg-green-50/70 hover:bg-green-100 px-3 py-1.5 rounded-xl border border-green-100 transition-all"
+                        >
+                          <Paperclip size={11} className="flex-shrink-0" />
+                          Lihat Dokumen Pendukung
+                        </a>
+                      </div>
+                    )}
 
                     {req.admin_note && (
                       <div className={`mt-3 px-3 py-2 rounded-xl border text-[11px] ${
@@ -593,7 +662,7 @@ export function ProfilePage({ onLogout }: ProfilePageProps) {
 
       {/* ── MODAL PENGAJUAN CUTI ── */}
       {showLeaveModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+        <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center">
           <div className="absolute inset-0 bg-black/35 backdrop-blur-sm" onClick={() => { setShowLeaveModal(false); setFormError(''); }} />
           <div className="relative bg-white rounded-t-3xl sm:rounded-2xl w-full sm:max-w-md shadow-2xl mx-0 sm:mx-4 max-h-[90vh] overflow-y-auto">
 
@@ -669,6 +738,40 @@ export function ProfilePage({ onLogout }: ProfilePageProps) {
                   className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all resize-none placeholder:text-gray-300" />
               </div>
 
+              {/* Document upload field */}
+              <div>
+                <label className="block text-[12px] font-medium text-gray-600 mb-1.5">
+                  Dokumen Pendukung <span className="text-red-500">*</span> <span className="text-gray-400 font-normal">(PDF, PNG, JPG max 5MB)</span>
+                </label>
+                {!attachmentName ? (
+                  <label className="flex flex-col items-center justify-center border-2 border-dashed border-gray-250 rounded-2xl p-4.5 cursor-pointer hover:border-[#16A34A] hover:bg-green-50/5 transition-all text-center">
+                    <Paperclip size={18} className="text-gray-400 mb-1.5" />
+                    <span className="text-[12px] text-gray-500 font-medium">Klik untuk unggah dokumen</span>
+                    <span className="text-[10px] text-gray-400 mt-0.5">Surat sakit, surat tugas, atau dokumen lainnya</span>
+                    <input 
+                      type="file" 
+                      onChange={handleAttachmentChange} 
+                      accept=".pdf,image/png,image/jpeg,image/jpg" 
+                      className="hidden" 
+                    />
+                  </label>
+                ) : (
+                  <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <FileText size={16} className="text-[#16A34A] flex-shrink-0" />
+                      <span className="text-[12px] font-medium text-gray-700 truncate">{attachmentName}</span>
+                    </div>
+                    <button 
+                      type="button" 
+                      onClick={clearAttachment} 
+                      className="w-6 h-6 rounded-lg hover:bg-gray-200 flex items-center justify-center text-gray-400 hover:text-red-500 transition-colors flex-shrink-0"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                )}
+              </div>
+
               {/* Sakit note */}
               {leaveType === 'sakit' && (
                 <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-xl px-3.5 py-2.5">
@@ -678,15 +781,22 @@ export function ProfilePage({ onLogout }: ProfilePageProps) {
               )}
             </div>
 
-            {/* Footer */}
+             {/* Footer */}
             <div className="flex gap-2 px-6 pb-6">
-              <button onClick={() => { setShowLeaveModal(false); setFormError(''); }}
-                className="flex-1 py-3 border border-gray-200 rounded-xl text-[13px] font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+              <button 
+                onClick={() => { setShowLeaveModal(false); setFormError(''); clearAttachment(); }}
+                disabled={submitting}
+                className="flex-1 py-3 border border-gray-200 rounded-xl text-[13px] font-medium text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
                 Batal
               </button>
-              <button onClick={handleSubmit}
-                className="flex-1 py-3 bg-[#16A34A] hover:bg-[#0d9240] rounded-xl text-[13px] font-semibold text-white transition-all shadow-sm shadow-green-200">
-                Kirim Pengajuan
+              <button 
+                onClick={handleSubmit}
+                disabled={submitting}
+                className="flex-1 py-3 bg-[#16A34A] hover:bg-[#0d9240] rounded-xl text-[13px] font-semibold text-white transition-all shadow-sm shadow-green-200 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+              >
+                {submitting && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                {submitting ? 'Mengirim...' : 'Kirim Pengajuan'}
               </button>
             </div>
           </div>
@@ -695,7 +805,7 @@ export function ProfilePage({ onLogout }: ProfilePageProps) {
 
       {/* Logout confirm */}
       {showLogoutConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center px-4">
           <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setShowLogoutConfirm(false)} />
           <div className="relative bg-white rounded-2xl p-6 shadow-2xl w-full max-w-xs">
             <div className="w-12 h-12 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
@@ -719,7 +829,7 @@ export function ProfilePage({ onLogout }: ProfilePageProps) {
 
       {/* ── MODAL UBAH PASSWORD ── */}
       {showPasswordModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center px-4">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => { setShowPasswordModal(false); setPasswordError(''); setPasswordSuccess(''); setOldPassword(''); }} />
           <div className="relative bg-white rounded-2xl p-6 shadow-2xl w-full max-w-sm">
             <button onClick={() => { setShowPasswordModal(false); setPasswordError(''); setPasswordSuccess(''); setOldPassword(''); }} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
@@ -789,7 +899,7 @@ export function ProfilePage({ onLogout }: ProfilePageProps) {
 
       {/* ── MODAL EDIT PROFIL ── */}
       {showEditProfileModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center px-4">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => { setShowEditProfileModal(false); setEditProfileError(''); setEditProfileSuccess(''); }} />
           <div className="relative bg-white rounded-2xl p-6 shadow-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto">
             <button onClick={() => { setShowEditProfileModal(false); setEditProfileError(''); setEditProfileSuccess(''); }} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">

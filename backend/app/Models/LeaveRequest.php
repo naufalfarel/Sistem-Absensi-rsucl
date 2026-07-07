@@ -8,7 +8,7 @@ class LeaveRequest extends Model
 {
     protected $fillable = [
         'employee_id', 'type', 'start_date', 'end_date',
-        'reason', 'status', 'reviewed_by', 'reviewed_at', 'admin_note',
+        'reason', 'attachment_url', 'status', 'reviewed_by', 'reviewed_at', 'admin_note',
     ];
 
     protected $casts = [

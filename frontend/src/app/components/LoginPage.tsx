@@ -113,7 +113,7 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
               </div>
             )}
             <div>
-              <div className="text-[15px] font-semibold text-gray-900 leading-tight">Sistem Absensi Karyawan</div>
+              <div className="text-[15px] font-semibold text-gray-900 leading-tight">Sistem Absensi Pegawai</div>
               <div className="text-xs text-gray-500 mt-0.5">Rumah Sakit Umum Cempaka Lima</div>
             </div>
           </div>
@@ -278,7 +278,7 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
               <div className="w-12 h-12 rounded-2xl bg-green-50 flex items-center justify-center mx-auto mb-3 text-[#16A34A]">
                 <Lock size={22} />
               </div>
-              <h3 className="text-[16px] font-bold text-gray-900">Ubah Kata Sandi Karyawan</h3>
+              <h3 className="text-[16px] font-bold text-gray-900">Ubah Kata Sandi Pegawai</h3>
               <p className="text-[11px] text-gray-500 mt-1">Verifikasi identitas Anda untuk mengubah kata sandi secara mandiri</p>
             </div>
 

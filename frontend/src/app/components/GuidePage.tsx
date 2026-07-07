@@ -16,16 +16,17 @@ import {
   Info,
   Smartphone,
   Clock,
-  HelpCircle,
-  Navigation,
-  ClipboardList,
   FileText,
-  Paperclip,
   Send,
   Eye,
   WifiOff,
   CircleDot,
+  Navigation,
+  ClipboardList,
+  Paperclip,
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import logoImg from '../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
 
 /* ─── Types ─────────────────────────────────────────────────── */
 type TipType = 'info' | 'warning' | 'success';
@@ -65,11 +66,11 @@ const sections: Section[] = [
     title: 'Cara Check-In (Absen Masuk)',
     subtitle: 'Langkah melakukan absensi masuk harian',
     steps: [
-      { icon: Smartphone,    title: 'Buka Menu Absensi',     desc: 'Ketuk menu "Absensi" di sidebar (desktop) atau navbar bawah (mobile). Pastikan koneksi internet dan GPS aktif.' },
-      { icon: Navigation,    title: 'Izinkan Akses Lokasi',   desc: 'Saat pertama kali, browser akan meminta izin lokasi. Pilih "Izinkan" agar GPS dapat mendeteksi posisi Anda.' },
-      { icon: MapPin,        title: 'Verifikasi Posisi',       desc: 'Sistem menampilkan peta dan status lokasi Anda. Pastikan status menunjukkan "Dalam Area RSUCL".' },
-      { icon: LogIn,         title: 'Tekan Tombol Check-In',  desc: 'Jika lokasi sudah terverifikasi, tekan tombol "Check In". Waktu dan lokasi dicatat otomatis.' },
-      { icon: CheckCircle2,  title: 'Konfirmasi Berhasil',    desc: 'Notifikasi akan muncul menandakan check-in berhasil. Jam masuk tampil di dashboard.' },
+      { icon: Smartphone,    title: 'Buka Menu Absensi',    desc: 'Ketuk menu "Absensi" di sidebar (desktop) atau navbar bawah (mobile). Pastikan koneksi internet dan GPS aktif.' },
+      { icon: Navigation,    title: 'Izinkan Akses Lokasi',  desc: 'Saat pertama kali, browser akan meminta izin lokasi. Pilih "Izinkan" agar GPS dapat mendeteksi posisi Anda.' },
+      { icon: MapPin,        title: 'Verifikasi Posisi',      desc: 'Sistem menampilkan peta dan status lokasi Anda. Pastikan status menunjukkan "Dalam Area RSUCL".' },
+      { icon: LogIn,         title: 'Tekan Tombol Check-In', desc: 'Jika lokasi sudah terverifikasi, tekan tombol "Check In". Waktu dan lokasi dicatat otomatis.' },
+      { icon: CheckCircle2,  title: 'Konfirmasi Berhasil',   desc: 'Notifikasi akan muncul menandakan check-in berhasil. Jam masuk tampil di dashboard.' },
     ],
     tips: [
       { type: 'warning', text: 'Check-in hanya bisa dilakukan sekali per hari dalam radius yang ditentukan admin.' },
@@ -82,10 +83,10 @@ const sections: Section[] = [
     title: 'Cara Check-Out (Absen Pulang)',
     subtitle: 'Langkah melakukan absensi pulang',
     steps: [
-      { icon: Smartphone,   title: 'Buka Menu Absensi',      desc: 'Kembali ke menu "Absensi". Setelah check-in, tombol berganti menjadi "Check Out".' },
-      { icon: MapPin,       title: 'Pastikan Dalam Area',     desc: 'Anda harus berada di dalam radius area RSUCL saat melakukan check-out, sama seperti check-in.' },
-      { icon: LogOut,       title: 'Tekan Tombol Check-Out',  desc: 'Tekan tombol "Check Out". Sistem mencatat jam kepulangan Anda.' },
-      { icon: Eye,          title: 'Lihat Ringkasan',         desc: 'Setelah check-out, dashboard menampilkan ringkasan kehadiran hari ini termasuk total jam kerja.' },
+      { icon: Smartphone,  title: 'Buka Menu Absensi',      desc: 'Kembali ke menu "Absensi". Setelah check-in, tombol berganti menjadi "Check Out".' },
+      { icon: MapPin,      title: 'Pastikan Dalam Area',     desc: 'Anda harus berada di dalam radius area RSUCL saat melakukan check-out, sama seperti check-in.' },
+      { icon: LogOut,      title: 'Tekan Tombol Check-Out',  desc: 'Tekan tombol "Check Out". Sistem mencatat jam kepulangan Anda.' },
+      { icon: Eye,         title: 'Lihat Ringkasan',         desc: 'Setelah check-out, dashboard menampilkan ringkasan kehadiran hari ini termasuk total jam kerja.' },
     ],
     tips: [
       { type: 'success', text: 'Pastikan selalu melakukan check-out sebelum meninggalkan area kerja.' },
@@ -98,15 +99,17 @@ const sections: Section[] = [
     title: 'Cara Mengajukan Izin / Cuti',
     subtitle: 'Langkah pengajuan izin atau cuti melalui aplikasi',
     steps: [
-      { icon: User,          title: 'Buka Menu Profil',       desc: 'Masuk ke menu "Profil". Scroll ke bawah untuk menemukan bagian pengajuan izin/cuti.' },
-      { icon: ClipboardList, title: 'Pilih Jenis Izin',       desc: 'Pilih jenis permohonan: Cuti Tahunan, Izin Sakit, Izin Mendadak, atau jenis lainnya sesuai kebutuhan.' },
-      { icon: Calendar,      title: 'Isi Tanggal & Alasan',   desc: 'Tentukan tanggal mulai dan selesai. Tuliskan alasan dengan jelas pada kolom keterangan.' },
-      { icon: Send,          title: 'Kirim Permohonan',       desc: 'Tekan tombol "Ajukan". Permohonan dikirim untuk disetujui.' },
-      { icon: Bell,          title: 'Pantau Status',          desc: 'Status permohonan (Menunggu/Disetujui/Ditolak) dapat dipantau di menu Notifikasi atau Riwayat.' },
+      { icon: User,          title: 'Buka Menu Profil',                  desc: 'Masuk ke menu "Profil". Scroll ke bawah untuk menemukan bagian pengajuan izin/cuti.' },
+      { icon: ClipboardList, title: 'Pilih Jenis Izin',                  desc: 'Pilih jenis permohonan: Cuti Tahunan, Izin Sakit, Izin Mendadak, atau jenis lainnya sesuai kebutuhan.' },
+      { icon: Calendar,      title: 'Isi Tanggal & Alasan',             desc: 'Tentukan tanggal mulai dan selesai. Tuliskan alasan dengan jelas pada kolom keterangan.' },
+      { icon: Paperclip,     title: 'Lampirkan Dokumen Pelengkap',       desc: 'Unggah dokumen pendukung yang relevan (contoh: surat dokter untuk izin sakit, surat keterangan untuk cuti). Format yang diterima: PDF, JPG, atau PNG (maks. 5 MB). Dokumen ini bersifat wajib dan akan diverifikasi oleh Admin.' },
+      { icon: Send,          title: 'Kirim Permohonan',                  desc: 'Tekan tombol "Ajukan". Permohonan beserta dokumen pelengkap dikirim untuk disetujui admin.' },
+      { icon: Bell,          title: 'Pantau Status',                     desc: 'Status permohonan (Menunggu/Disetujui/Ditolak) dapat dipantau di menu Notifikasi atau Riwayat.' },
     ],
     tips: [
       { type: 'info',    text: 'Ajukan cuti minimal H-3 agar ada waktu bagi atasan untuk menyetujui permohonan.' },
-      { type: 'warning', text: 'Kuota cuti tahunan terbatas. Pantau sisa cuti Anda di halaman Profil.' },
+      { type: 'success', text: 'Dokumen pelengkap wajib dilampirkan untuk setiap pengajuan izin/cuti. Pastikan dokumen jelas dan terbaca sebelum diunggah.' },
+      { type: 'warning', text: 'Permohonan tanpa dokumen pendukung tidak dapat diproses. Kuota cuti tahunan terbatas — pantau sisa cuti Anda di halaman Profil.' },
     ],
   },
   {
@@ -115,10 +118,10 @@ const sections: Section[] = [
     title: 'Cara Membaca Status GPS / Lokasi',
     subtitle: 'Memahami indikator lokasi di halaman Absensi',
     steps: [
-      { icon: CheckCircle2, title: 'Dalam Area',          desc: 'Indikator hijau "Dalam Area RSUCL" berarti posisi Anda terdeteksi dalam radius yang diizinkan. Absensi dapat dilakukan.' },
-      { icon: CircleDot,    title: 'Di Luar Area',        desc: 'Indikator merah berarti Anda berada di luar radius. Anda perlu berpindah ke lokasi yang sesuai terlebih dahulu.' },
-      { icon: Clock,        title: 'Memuat Lokasi',       desc: 'Indikator kuning berarti GPS sedang mendeteksi posisi. Tunggu beberapa saat hingga status berubah.' },
-      { icon: WifiOff,      title: 'GPS Tidak Tersedia',  desc: 'Jika GPS gagal: (1) pastikan izin lokasi browser sudah diberikan, (2) GPS perangkat aktif, (3) Anda tidak menggunakan VPN.' },
+      { icon: CheckCircle2, title: 'Dalam Area',         desc: 'Indikator hijau "Dalam Area RSUCL" berarti posisi Anda terdeteksi dalam radius yang diizinkan. Absensi dapat dilakukan.' },
+      { icon: CircleDot,    title: 'Di Luar Area',       desc: 'Indikator merah berarti Anda berada di luar radius. Anda perlu berpindah ke lokasi yang sesuai terlebih dahulu.' },
+      { icon: Clock,        title: 'Memuat Lokasi',      desc: 'Indikator kuning berarti GPS sedang mendeteksi posisi. Tunggu beberapa saat hingga status berubah.' },
+      { icon: WifiOff,      title: 'GPS Tidak Tersedia', desc: 'Jika GPS gagal: (1) pastikan izin lokasi browser sudah diberikan, (2) GPS perangkat aktif, (3) Anda tidak menggunakan VPN.' },
     ],
     tips: [
       { type: 'info',    text: 'Akurasi GPS lebih baik di area terbuka dibanding dalam gedung dengan banyak penghalang.' },
@@ -132,12 +135,12 @@ const sections: Section[] = [
     title: 'Penjelasan Menu Sidebar',
     subtitle: 'Fungsi setiap menu yang tersedia di aplikasi',
     menuItems: [
-      { icon: Home,      label: 'Beranda',   desc: 'Halaman utama yang menampilkan ringkasan kehadiran hari ini, info shift, notifikasi terbaru, dan aksi cepat.' },
-      { icon: MapPin,    label: 'Absensi',   desc: 'Halaman untuk melakukan check-in dan check-out, dilengkapi peta interaktif dan status GPS real-time.' },
-      { icon: History,   label: 'Riwayat',   desc: 'Melihat rekap kehadiran bulanan termasuk status hadir, terlambat, izin, dan filter berdasarkan bulan/tahun.' },
-      { icon: Bell,      label: 'Notifikasi',desc: 'Pusat pemberitahuan untuk approval izin, pengumuman shift, dan informasi penting dari admin.' },
-      { icon: User,      label: 'Profil',    desc: 'Kelola data diri, ganti foto profil, lihat sisa cuti, dan ajukan permohonan izin/cuti.' },
-      { icon: BookOpen,  label: 'Panduan',   desc: 'Halaman ini — panduan lengkap penggunaan seluruh fitur aplikasi.' },
+      { icon: Home,     label: 'Beranda',    desc: 'Halaman utama yang menampilkan ringkasan kehadiran hari ini, info shift, notifikasi terbaru, dan aksi cepat.' },
+      { icon: MapPin,   label: 'Absensi',    desc: 'Halaman untuk melakukan check-in dan check-out, dilengkapi peta interaktif dan status GPS real-time.' },
+      { icon: History,  label: 'Riwayat',    desc: 'Melihat rekap kehadiran bulanan termasuk status hadir, terlambat, izin, dan filter berdasarkan bulan/tahun.' },
+      { icon: Bell,     label: 'Notifikasi', desc: 'Pusat pemberitahuan untuk approval izin, pengumuman shift, dan informasi penting dari admin.' },
+      { icon: User,     label: 'Profil',     desc: 'Kelola data diri, ganti foto profil, lihat sisa cuti, dan ajukan permohonan izin/cuti.' },
+      { icon: BookOpen, label: 'Panduan',    desc: 'Halaman ini — panduan lengkap penggunaan seluruh fitur aplikasi.' },
     ],
   },
 ];
@@ -145,27 +148,25 @@ const sections: Section[] = [
 /* ─── Sub-components ─────────────────────────────────────────── */
 function TipBox({ type, text }: { type: TipType; text: string }) {
   const map = {
-    info:    { Icon: Info,          color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE', label: 'Info' },
-    warning: { Icon: AlertTriangle, color: '#B45309', bg: '#FFFBEB', border: '#FDE68A', label: 'Perhatian' },
-    success: { Icon: CheckCircle2,  color: '#15803D', bg: '#F0FDF4', border: '#BBF7D0', label: 'Tips' },
+    info:    { Icon: Info,          borderColor: '#93C5FD', iconColor: '#3B82F6' },
+    warning: { Icon: AlertTriangle, borderColor: '#FCD34D', iconColor: '#D97706' },
+    success: { Icon: CheckCircle2,  borderColor: '#86EFAC', iconColor: '#16A34A' },
   };
-  const { Icon, color, bg, border, label } = map[type];
-
+  const { Icon, borderColor, iconColor } = map[type];
   return (
     <div
-      className="flex items-start gap-2.5 px-3.5 py-2.5 rounded-xl text-[12px] leading-relaxed"
-      style={{ background: bg, border: `1px solid ${border}` }}
+      className="flex items-start gap-3 px-3.5 py-2.5 rounded-lg bg-gray-50"
+      style={{ borderLeft: `3px solid ${borderColor}` }}
     >
-      <Icon size={13} style={{ color }} className="mt-0.5 flex-shrink-0" />
-      <span style={{ color }}>
-        <span className="font-semibold">{label}:</span> {text}
-      </span>
+      <Icon size={13} style={{ color: iconColor }} className="mt-0.5 flex-shrink-0" />
+      <p className="text-[12px] text-gray-600 leading-relaxed">{text}</p>
     </div>
   );
 }
 
 /* ─── Main Component ─────────────────────────────────────────── */
 export function GuidePage() {
+  const { logoUrl } = useAuth();
   const [openSection, setOpenSection] = useState<string | null>('checkin');
 
   const toggle = (id: string) =>
@@ -175,17 +176,22 @@ export function GuidePage() {
     <div className="p-5 md:p-7 max-w-3xl mx-auto">
 
       {/* ── Header ── */}
-      <div className="mb-6">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-9 h-9 rounded-xl bg-[#16A34A] flex items-center justify-center">
-            <BookOpen size={17} className="text-white" />
+      <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-[#16A34A] to-[#15803D] text-white">
+        <div className="flex items-center gap-3">
+          {/* Logo */}
+          <div className="w-11 h-11 rounded-xl bg-white flex items-center justify-center flex-shrink-0 overflow-hidden shadow-sm">
+            {logoUrl && logoUrl !== 'none' ? (
+              <img src={logoUrl} alt="Logo RSUCL" className="w-10 h-10 object-contain" />
+            ) : (
+              <img src={logoImg} alt="Logo RSUCL" className="w-10 h-10 object-contain" />
+            )}
           </div>
           <div>
-            <h1 className="text-[18px] font-semibold text-gray-900">Panduan Penggunaan</h1>
-            <p className="text-[12px] text-gray-400">Sistem Absensi RSUCL · Panduan Pegawai</p>
+            <h1 className="text-[17px] font-semibold leading-tight">Panduan Penggunaan</h1>
+            <p className="text-[12px] text-green-100 mt-0.5">Absensi RSUCL</p>
           </div>
         </div>
-        <p className="text-[13px] text-gray-500 leading-relaxed border-l-2 border-[#16A34A]/30 pl-3">
+        <p className="text-[12px] text-green-50 leading-relaxed mt-3 border-t border-white/20 pt-3">
           Ikuti langkah-langkah di bawah ini untuk menggunakan setiap fitur dengan benar.
           Klik judul bagian untuk membuka panduan.
         </p>
@@ -201,25 +207,35 @@ export function GuidePage() {
             <div
               key={section.id}
               id={`guide-${section.id}`}
-              className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden"
+              className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all ${
+                isOpen ? 'border-[#16A34A]/25' : 'border-gray-100'
+              }`}
             >
               {/* Header button */}
               <button
                 onClick={() => toggle(section.id)}
-                className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-gray-50 transition-colors"
+                className={`w-full flex items-center justify-between px-5 py-4 text-left transition-colors ${
+                  isOpen ? 'bg-[#F0FDF4]' : 'hover:bg-gray-50'
+                }`}
               >
                 <div className="flex items-center gap-3">
-                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${isOpen ? 'bg-[#16A34A]' : 'bg-gray-100'}`}>
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                    isOpen ? 'bg-[#16A34A]' : 'bg-gray-100'
+                  }`}>
                     <Icon size={15} className={isOpen ? 'text-white' : 'text-gray-500'} />
                   </div>
                   <div className="text-left">
-                    <p className="text-[13px] font-semibold text-gray-800">{section.title}</p>
+                    <p className={`text-[13px] font-semibold ${isOpen ? 'text-[#15803D]' : 'text-gray-800'}`}>
+                      {section.title}
+                    </p>
                     <p className="text-[11px] text-gray-400">{section.subtitle}</p>
                   </div>
                 </div>
-                <div className="w-6 h-6 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                <div className={`w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                  isOpen ? 'bg-[#16A34A]/10' : 'bg-gray-100'
+                }`}>
                   {isOpen
-                    ? <ChevronUp size={13} className="text-gray-500" />
+                    ? <ChevronUp size={13} className="text-[#16A34A]" />
                     : <ChevronDown size={13} className="text-gray-400" />
                   }
                 </div>
@@ -227,7 +243,7 @@ export function GuidePage() {
 
               {/* Body */}
               {isOpen && (
-                <div className="px-5 pb-5 border-t border-gray-100">
+                <div className="px-5 pb-5 border-t border-[#16A34A]/10">
 
                   {/* Steps */}
                   {section.steps && (
@@ -239,17 +255,17 @@ export function GuidePage() {
                           <div key={i} className="flex items-start gap-4">
                             {/* Timeline */}
                             <div className="flex flex-col items-center flex-shrink-0 pt-0.5">
-                              <div className="w-7 h-7 rounded-full border-2 border-gray-200 bg-white flex items-center justify-center">
-                                <StepIcon size={13} className="text-gray-400" />
+                              <div className="w-7 h-7 rounded-full border-2 border-[#16A34A]/30 bg-[#F0FDF4] flex items-center justify-center">
+                                <StepIcon size={13} className="text-[#16A34A]" />
                               </div>
                               {!isLast && (
-                                <div className="w-px flex-1 bg-gray-100 mt-1 min-h-[24px]" />
+                                <div className="w-px flex-1 bg-[#16A34A]/15 mt-1 min-h-[24px]" />
                               )}
                             </div>
                             {/* Content */}
                             <div className={`flex-1 ${!isLast ? 'pb-4' : ''}`}>
                               <div className="flex items-center gap-2 mb-0.5">
-                                <span className="text-[10px] font-medium text-gray-400">
+                                <span className="text-[10px] font-bold text-[#16A34A]">
                                   {i + 1}.
                                 </span>
                                 <p className="text-[13px] font-semibold text-gray-800">{step.title}</p>
@@ -269,8 +285,8 @@ export function GuidePage() {
                         const MIcon = item.icon;
                         return (
                           <div key={i} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
-                            <div className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                              <MIcon size={13} className="text-gray-500" />
+                            <div className="w-7 h-7 rounded-lg bg-[#F0FDF4] border border-[#16A34A]/15 flex items-center justify-center flex-shrink-0 mt-0.5">
+                              <MIcon size={13} className="text-[#16A34A]" />
                             </div>
                             <div>
                               <p className="text-[13px] font-semibold text-gray-800">{item.label}</p>
@@ -298,9 +314,9 @@ export function GuidePage() {
       </div>
 
       {/* Version note */}
-      <div className="mt-4 flex items-center justify-center gap-1.5 text-[10px] text-gray-300">
+      <div className="mt-5 flex items-center justify-center gap-1.5 text-[10px] text-gray-300">
         <FileText size={10} />
-        <span>Panduan v1.0 · Sistem Absensi RSUCL · Diperbarui Juli 2026</span>
+        <span>Panduan v1.0 · Absensi RSUCL · Diperbarui Juli 2026</span>
       </div>
     </div>
   );

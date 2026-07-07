@@ -1,12 +1,24 @@
 import { useState, useEffect } from 'react';
-import { CheckCircle2, Clock, Stethoscope, MapPin, Calendar, ChevronRight, Bell, TrendingUp, Users, Activity, BookOpen } from 'lucide-react';
+import { CheckCircle2, Clock, Stethoscope, MapPin, Calendar, ChevronRight, Bell, TrendingUp, Users, User, Activity, BookOpen } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { attendanceApi, AttendanceRecord, notificationApi, AppNotification, scheduleApi, MyShiftSchedule } from '../../services/api';
+import { attendanceApi, AttendanceRecord, notificationApi, AppNotification, scheduleApi, MyShiftSchedule, settingApi } from '../../services/api';
 
 /** Format "HH:mm:ss" atau "HH:mm" menjadi "HH:mm" */
 function fmtTime(t: string | undefined | null): string {
   if (!t) return '--:--';
   return t.substring(0, 5);
+}
+
+/** Haversine formula — returns distance in metres */
+function haversine(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => void }) {
@@ -17,6 +29,14 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
   const [unreadNotifsCount, setUnreadNotifsCount] = useState(0);
   const [todayShift, setTodayShift] = useState<MyShiftSchedule | null | undefined>(undefined); // undefined = loading
   const [shiftDay, setShiftDay] = useState<string>('');
+
+  // ── GPS / Geofence state ──────────────────────────────────────────────
+  const [hospLat, setHospLat] = useState<number>(5.552740480177099);
+  const [hospLng, setHospLng] = useState<number>(95.33486560781716);
+  const [hospRadius, setHospRadius] = useState<number>(40);
+  const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
+  // null = sedang memuat, true/false = hasil cek
+  const [gpsStatus, setGpsStatus] = useState<'loading' | 'in' | 'out' | 'unavailable'>('loading');
 
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
@@ -53,6 +73,40 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
   useEffect(() => {
     fetchDashboardData();
   }, []);
+
+  // ── Load hospital coordinates from settings ───────────────────────────
+  useEffect(() => {
+    settingApi.get().then(res => {
+      if (res.success && res.data) {
+        const lat = parseFloat(res.data.hospital_lat);
+        const lng = parseFloat(res.data.hospital_lng);
+        const rad = parseFloat(res.data.gps_radius);
+        if (!isNaN(lat)) setHospLat(lat);
+        if (!isNaN(lng)) setHospLng(lng);
+        if (!isNaN(rad) && rad > 0) setHospRadius(rad);
+      }
+    }).catch(() => { /* gunakan koordinat default */ });
+  }, []);
+
+  // ── Watch GPS ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!navigator.geolocation) {
+      setGpsStatus('unavailable');
+      return;
+    }
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setUserCoords({ lat, lng });
+        const dist = haversine(lat, lng, hospLat, hospLng);
+        setGpsStatus(dist <= hospRadius ? 'in' : 'out');
+      },
+      () => setGpsStatus('unavailable'),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [hospLat, hospLng, hospRadius]);
 
   const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
   const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
@@ -143,13 +197,31 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
     {
       icon: MapPin,
       label: 'Status Lokasi',
-      value: todayRecord ? 'Terverifikasi' : 'Dalam Area',
+      value: gpsStatus === 'loading' ? 'Memuat GPS…'
+           : gpsStatus === 'in'      ? 'Dalam Area'
+           : gpsStatus === 'out'     ? 'Luar Area'
+           : 'GPS Nonaktif',
       sub: 'RSUCL',
-      color: '#EA580C',
-      bg: '#FFF7ED',
-      badge: 'GPS On',
-      badgeColor: '#EA580C',
-      badgeBg: '#FFEDD5',
+      color: gpsStatus === 'in'  ? '#16A34A'
+           : gpsStatus === 'out' ? '#DC2626'
+           : gpsStatus === 'unavailable' ? '#6B7280'
+           : '#D97706',
+      bg: gpsStatus === 'in'  ? '#DCFCE7'
+        : gpsStatus === 'out' ? '#FEE2E2'
+        : gpsStatus === 'unavailable' ? '#F9FAFB'
+        : '#FEF3C7',
+      badge: gpsStatus === 'loading'     ? 'GPS…'
+           : gpsStatus === 'in'          ? 'GPS On'
+           : gpsStatus === 'out'         ? 'GPS On'
+           : 'GPS Off',
+      badgeColor: gpsStatus === 'in'  ? '#16A34A'
+                : gpsStatus === 'out' ? '#DC2626'
+                : gpsStatus === 'unavailable' ? '#6B7280'
+                : '#D97706',
+      badgeBg: gpsStatus === 'in'  ? '#DCFCE7'
+             : gpsStatus === 'out' ? '#FEE2E2'
+             : gpsStatus === 'unavailable' ? '#F3F4F6'
+             : '#FEF3C7',
     },
   ];
 
@@ -300,8 +372,8 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
               {[
                 { label: 'Absensi Check-Out', icon: Clock, tab: 'attendance' },
                 { label: 'Riwayat Kehadiran', icon: TrendingUp, tab: 'history' },
-                { label: 'Ajukan Cuti', icon: Calendar, tab: 'profile' },
-                { label: 'Tim Saya', icon: Users, tab: 'profile' },
+                { label: 'Ajukan Cuti', icon: Calendar, tab: 'profile-leave' },
+                { label: 'Profil Saya', icon: User, tab: 'profile' },
                 { label: 'Panduan Penggunaan', icon: BookOpen, tab: 'guide' },
               ].map(({ label, icon: Icon, tab }, i) => (
                 <button

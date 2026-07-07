@@ -62,7 +62,7 @@ export function ReportsTab() {
     }
   };
 
-  const downloadXlsx = (wb: unknown, filename: string) => {
+  const downloadXlsx = (wb: any, filename: string) => {
     const wbout = XLSXStyle.write(wb, { bookType: 'xlsx', type: 'array' });
     const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CheckCircle2, XCircle, Clock, FileText, Trash2 } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, FileText, Trash2, Paperclip } from 'lucide-react';
 import { leaveApi, LeaveRequest } from '../../../services/api';
 
 type LeaveType = 'cuti' | 'izin' | 'sakit';
@@ -19,7 +19,11 @@ const statusConfig: Record<LeaveStatus, { label: string; color: string; bg: stri
 
 const filterTabs = ['Semua', 'Menunggu', 'Disetujui', 'Ditolak'];
 
-export function LeaveTab() {
+interface LeaveTabProps {
+  onUpdateCount?: () => void;
+}
+
+export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [filter, setFilter] = useState('Semua');
   const [typeFilter, setTypeFilter] = useState('all');
@@ -66,6 +70,7 @@ export function LeaveTab() {
       }
       if (res.success) {
         setRequests(prev => prev.map(r => r.id === id ? res.data : r));
+        if (onUpdateCount) onUpdateCount();
       }
     } catch (err: any) {
       alert(err?.message ?? 'Gagal memproses permohonan.');
@@ -90,6 +95,7 @@ export function LeaveTab() {
       const res = await leaveApi.delete(id);
       if (res.success) {
         setRequests(prev => prev.filter(r => r.id !== id));
+        if (onUpdateCount) onUpdateCount();
       }
     } catch (err: any) {
       alert(err?.message ?? 'Gagal menghapus pengajuan.');
@@ -102,6 +108,7 @@ export function LeaveTab() {
       const res = await leaveApi.deleteAllProcessed();
       if (res.success) {
         setRequests(prev => prev.filter(r => r.status === 'pending'));
+        if (onUpdateCount) onUpdateCount();
       }
     } catch (err: any) {
       alert(err?.message ?? 'Gagal menghapus pengajuan lama.');
@@ -206,6 +213,19 @@ export function LeaveTab() {
                       <div className="mt-2 bg-gray-50 rounded-xl px-3 py-2">
                         <p className="text-[12px] text-gray-600 italic">"{req.reason}"</p>
                       </div>
+                      {req.attachment_url && (
+                        <div className="mt-2">
+                          <a 
+                            href={req.attachment_url} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#16A34A] hover:text-[#0d9240] bg-green-50/70 hover:bg-green-100 px-3 py-1.5 rounded-xl border border-green-100 transition-all"
+                          >
+                            <Paperclip size={11} className="flex-shrink-0" />
+                            Lihat Dokumen Pendukung
+                          </a>
+                        </div>
+                      )}
                       {req.admin_note && (
                         <div className={`mt-2 rounded-xl px-3 py-2 border ${req.status === 'approved' ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'}`}>
                           <p className="text-[11px] font-medium text-gray-600">Catatan admin: <span className={req.status === 'approved' ? 'text-green-700' : 'text-red-600'}>{req.admin_note}</span></p>

@@ -48,12 +48,22 @@ class LeaveRequestController extends Controller
             'start_date' => 'required|date|after_or_equal:today',
             'end_date'   => 'required|date|after_or_equal:start_date',
             'reason'     => 'required|string|max:500',
+            'attachment' => 'required|string', // Base64 encoded file (PDF or Image) REQUIRED
         ]);
 
+        $attachmentUrl = $this->storeBase64Attachment(
+            $data['attachment'],
+            'attachment_leave_' . $employee->id . '_' . time()
+        );
+
         $lr = LeaveRequest::create([
-            'employee_id' => $employee->id,
-            ...$data,
-            'status' => 'pending',
+            'employee_id'    => $employee->id,
+            'type'           => $data['type'],
+            'start_date'     => $data['start_date'],
+            'end_date'       => $data['end_date'],
+            'reason'         => $data['reason'],
+            'attachment_url' => $attachmentUrl,
+            'status'         => 'pending',
         ]);
 
         // Beri notifikasi ke semua admin
@@ -222,23 +232,52 @@ class LeaveRequestController extends Controller
     private function format(LeaveRequest $lr): array
     {
         return [
-            'id'          => $lr->id,
-            'type'        => $lr->type,
-            'start_date'  => $lr->start_date?->toDateString(),
-            'end_date'    => $lr->end_date?->toDateString(),
-            'days'        => $lr->days_count,
-            'reason'      => $lr->reason,
-            'status'      => $lr->status,
-            'admin_note'  => $lr->admin_note,
-            'reviewed_at' => $lr->reviewed_at?->toDateTimeString(),
-            'created_at'  => $lr->created_at?->toDateTimeString(),
-            'employee'    => [
+            'id'             => $lr->id,
+            'type'           => $lr->type,
+            'start_date'     => $lr->start_date?->toDateString(),
+            'end_date'       => $lr->end_date?->toDateString(),
+            'days'           => $lr->days_count,
+            'reason'         => $lr->reason,
+            'attachment_url' => $lr->attachment_url ? url($lr->attachment_url) : null,
+            'status'         => $lr->status,
+            'admin_note'     => $lr->admin_note,
+            'reviewed_at'    => $lr->reviewed_at?->toDateTimeString(),
+            'created_at'     => $lr->created_at?->toDateTimeString(),
+            'employee'       => [
                 'id'         => $lr->employee?->id,
                 'name'       => $lr->employee?->user?->name,
                 'nip'        => $lr->employee?->nip,
                 'department' => $lr->employee?->department?->name,
             ],
-            'reviewer'    => $lr->reviewer ? ['name' => $lr->reviewer->name] : null,
+            'reviewer'       => $lr->reviewer ? ['name' => $lr->reviewer->name] : null,
         ];
+    }
+
+    private function storeBase64Attachment(?string $base64Data, string $baseName): ?string
+    {
+        if (!$base64Data) {
+            return null;
+        }
+
+        if (!preg_match('/^data:(image\/|application\/)(\w+);base64,/', $base64Data, $type)) {
+            return null;
+        }
+
+        $decodedData = substr($base64Data, strpos($base64Data, ',') + 1);
+        $ext = strtolower($type[2]);
+
+        if (!in_array($ext, ['pdf', 'png', 'jpeg', 'jpg'])) {
+            return null;
+        }
+
+        $decoded = base64_decode($decodedData);
+        if ($decoded === false) {
+            return null;
+        }
+
+        $fileName = $baseName . '.' . $ext;
+        \Illuminate\Support\Facades\Storage::disk('public')->put('attachments/' . $fileName, $decoded);
+
+        return '/storage/attachments/' . $fileName;
     }
 }

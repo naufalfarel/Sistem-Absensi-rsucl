@@ -1,6 +1,4 @@
-import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { LandingPage } from './components/LandingPage';
 import { LoginPage } from './components/LoginPage';
 import { EmployeeApp } from './components/EmployeeApp';
 import { AdminApp } from './components/AdminApp';
@@ -8,7 +6,6 @@ import logoImg from '../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpe
 
 export default function App() {
   const { user, loading, login, logout, logoUrl } = useAuth();
-  const [view, setView] = useState<'landing' | 'login'>('landing');
 
   // Loading state (sleek, high-end design)
   if (loading) {
@@ -62,14 +59,9 @@ export default function App() {
     return res.success ? 'ok' : (res.message || 'wrong');
   };
 
-  if (view === 'landing') {
-    return <LandingPage onEnter={() => setView('login')} />;
-  }
-
   return (
     <LoginPage
       onLogin={handleLogin}
-      onBack={() => setView('landing')}
     />
   );
 }

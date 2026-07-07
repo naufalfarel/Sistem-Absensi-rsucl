@@ -23,6 +23,14 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [time, setTime] = useState(new Date());
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [profileInitialSection, setProfileInitialSection] = useState<'profile' | 'leave' | undefined>(undefined);
+  const [profileInitialOpenModal, setProfileInitialOpenModal] = useState<boolean | undefined>(undefined);
+
+  const handleTabChange = (tab: Tab) => {
+    setProfileInitialSection(undefined);
+    setProfileInitialOpenModal(undefined);
+    setActiveTab(tab);
+  };
 
   const fetchUnreadCount = async () => {
     try {
@@ -60,11 +68,35 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
 
   const renderPage = () => {
     switch (activeTab) {
-      case 'dashboard': return <DashboardHome onNavigate={(tab) => setActiveTab(tab as Tab)} />;
+      case 'dashboard': 
+        return (
+          <DashboardHome 
+            onNavigate={(tab) => {
+              if (tab === 'profile-leave') {
+                setProfileInitialSection('leave');
+                setProfileInitialOpenModal(true);
+                setActiveTab('profile');
+              } else {
+                handleTabChange(tab as Tab);
+              }
+            }} 
+          />
+        );
       case 'attendance': return <AttendancePage />;
       case 'history': return <HistoryPage />;
       case 'notifications': return <NotificationsPage onUpdateCount={fetchUnreadCount} />;
-      case 'profile': return <ProfilePage onLogout={onLogout} />;
+      case 'profile': 
+        return (
+          <ProfilePage 
+            onLogout={onLogout} 
+            initialSection={profileInitialSection}
+            initialOpenModal={profileInitialOpenModal}
+            onResetInitials={() => {
+              setProfileInitialSection(undefined);
+              setProfileInitialOpenModal(undefined);
+            }}
+          />
+        );
       case 'guide': return <GuidePage />;
     }
   };
@@ -86,36 +118,13 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
         </div>
       </div>
 
-      {/* User info */}
-      <div className="mx-3 mt-3 mb-1 p-3 rounded-xl bg-gradient-to-r from-[#16A34A]/8 to-transparent border border-[#16A34A]/10">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-[#16A34A] flex items-center justify-center flex-shrink-0 overflow-hidden">
-            {user?.profile_picture ? (
-              <img src={user.profile_picture} alt={user.name} className="w-full h-full object-cover" />
-            ) : (
-              <span className="text-white text-[11px] font-bold">
-                {user?.name?.replace(/^(dr\.|Ns\.|Dr\.)\s*/i, '').charAt(0) || 'U'}
-              </span>
-            )}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-semibold text-gray-800 truncate">
-              {user?.name?.split(' ').slice(0, 2).join(' ') || 'User'}
-            </p>
-            <p className="text-[11px] text-gray-500 truncate">
-              {user?.position || 'Karyawan'} · {user?.department || 'RSUCL'}
-            </p>
-          </div>
-        </div>
-      </div>
-
       {/* Navigation */}
       <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-3 mb-2 mt-2">Menu</p>
+        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-3 mb-2 mt-1">Menu</p>
         {navItems.map(item => (
           <button
             key={item.id}
-            onClick={() => { setActiveTab(item.id); if (mobile) setSidebarOpen(false); }}
+            onClick={() => { handleTabChange(item.id); if (mobile) setSidebarOpen(false); }}
             className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-[13px] transition-all ${
               activeTab === item.id
                 ? 'bg-[#16A34A] text-white font-medium shadow-sm shadow-green-200'
@@ -137,14 +146,31 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
         ))}
       </nav>
 
-      {/* Time & Logout */}
-      <div className="p-3 border-t border-gray-100 space-y-1">
-        <div className="px-3 py-2 text-center">
-          <p className="text-[18px] font-mono font-semibold text-gray-800 tracking-tight">{timeStr}</p>
-          <p className="text-[10px] text-gray-400">
-            WIB · {time.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-          </p>
-        </div>
+      {/* Clickable Profile Card & Logout */}
+      <div className="p-3 border-t border-gray-100 space-y-1.5">
+        <button
+          onClick={() => { handleTabChange('profile'); if (mobile) setSidebarOpen(false); }}
+          className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition-all text-left group"
+        >
+          <div className="w-9 h-9 rounded-xl bg-[#16A34A] flex items-center justify-center flex-shrink-0 overflow-hidden shadow-sm">
+            {user?.profile_picture ? (
+              <img src={user.profile_picture} alt={user.name} className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-white text-[11px] font-bold">
+                {user?.name?.replace(/^(dr\.|Ns\.|Dr\.)\s*/i, '').charAt(0) || 'U'}
+              </span>
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[13px] font-semibold text-gray-800 truncate group-hover:text-[#16A34A] transition-colors">
+              {user?.name || 'Karyawan'}
+            </p>
+            <p className="text-[11px] text-gray-400 truncate">
+              {user?.position || 'Staf'} · {user?.department || 'RSUCL'}
+            </p>
+          </div>
+        </button>
+
         <button
           onClick={onLogout}
           className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[13px] text-red-500 hover:bg-red-50 transition-colors"
@@ -222,7 +248,7 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
         </div>
 
         {/* Page content */}
-        <div className="flex-1 overflow-y-auto pb-20 md:pb-0" style={{ isolation: 'isolate' }}>
+        <div className="flex-1 overflow-y-auto pb-20 md:pb-0">
           {renderPage()}
         </div>
 
@@ -232,7 +258,7 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
             {navItems.filter(item => item.id !== 'guide').map(item => (
               <button
                 key={item.id}
-                onClick={() => setActiveTab(item.id)}
+                onClick={() => handleTabChange(item.id)}
                 className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all relative ${
                   activeTab === item.id ? 'text-[#16A34A]' : 'text-gray-400'
                 }`}

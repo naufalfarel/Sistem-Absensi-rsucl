@@ -425,7 +425,7 @@ function GPSCard({
       </div>
 
       {/* Leaflet Map */}
-      <div className="h-52 w-full relative">
+      <div className="h-52 w-full relative" style={{ isolation: 'isolate' }}>
         <MapContainer
           center={mapCenter}
           zoom={17}
@@ -958,34 +958,86 @@ export function AttendancePage() {
 
       {/* Schedule Timeline */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Clock size={14} className="text-[#16A34A]" />
-          <p className="text-[13px] font-semibold text-gray-800">Jadwal {isSaturday ? 'Sabtu' : 'Senin – Jumat'}</p>
-          {!isSaturday && (
-            <span className="ml-auto text-[11px] text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full flex items-center gap-1">
-              <Coffee size={10} /> Istirahat 12:30–13:30
+        <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Clock size={14} className="text-[#16A34A]" />
+            <p className="text-[13px] font-semibold text-gray-800">
+              {todayShift === undefined 
+                ? 'Memuat Jadwal...' 
+                : todayShift 
+                  ? `Jadwal Shift: ${todayShift.name}` 
+                  : 'Jadwal Absensi'}
+            </p>
+          </div>
+          {todayShift && shiftSettings.break_start !== shiftSettings.checkout_open && (
+            <span className="text-[10.5px] font-medium text-purple-600 bg-purple-50 px-2.5 py-0.5 rounded-full flex items-center gap-1 border border-purple-100/50">
+              <Coffee size={10.5} className="flex-shrink-0" /> Istirahat {shiftSettings.break_start}–{shiftSettings.break_end}
             </span>
           )}
         </div>
-        <div className="flex items-center gap-0">
-          {timelineItems.map((item, i) => {
-            const phaseIdx = phaseOrder.indexOf(item.phase as AttendanceWindow);
-            const isDone   = phaseIdx < currentPhaseIdx;
-            const isActive = item.phase === attendanceWindow || (attendanceWindow === 'checkin' && item.phase === 'checkin') || (attendanceWindow === 'checkout' && item.phase === 'checkout');
-            return (
-              <div key={i} className="flex items-center flex-1 min-w-0">
-                <div className="flex flex-col items-center flex-shrink-0">
-                  <div className={`w-3 h-3 rounded-full border-2 transition-all ${isActive ? 'bg-[#16A34A] border-[#16A34A] ring-2 ring-[#16A34A]/20' : isDone ? 'bg-[#16A34A] border-[#16A34A]' : 'bg-white border-gray-300'}`} />
-                  <p className="text-[9px] font-mono text-gray-500 mt-1 whitespace-nowrap">{item.time}</p>
-                  <p className={`text-[9px] font-medium mt-0.5 whitespace-nowrap ${isActive ? 'text-[#16A34A]' : isDone ? 'text-gray-400' : 'text-gray-300'}`}>{item.label}</p>
-                </div>
-                {i < timelineItems.length - 1 && (
-                  <div className={`flex-1 h-0.5 mx-1 -mt-4 transition-all ${isDone ? 'bg-[#16A34A]' : 'bg-gray-150'}`} />
-                )}
-              </div>
-            );
-          })}
-        </div>
+
+        {todayShift === undefined ? (
+          <div className="text-center py-6 text-gray-400 text-[12px] animate-pulse">Memuat jadwal shift hari ini...</div>
+        ) : todayShift ? (
+          <>
+            {/* Desktop View: Horizontal Timeline */}
+            <div className="hidden sm:flex items-center gap-0">
+              {timelineItems.map((item, i) => {
+                const phaseIdx = phaseOrder.indexOf(item.phase as AttendanceWindow);
+                const isDone   = phaseIdx < currentPhaseIdx;
+                const isActive = item.phase === attendanceWindow || (attendanceWindow === 'checkin' && item.phase === 'checkin') || (attendanceWindow === 'checkout' && item.phase === 'checkout');
+                return (
+                  <div key={i} className="flex items-center flex-1 min-w-0">
+                    <div className="flex flex-col items-center flex-shrink-0">
+                      <div className={`w-3 h-3 rounded-full border-2 transition-all ${isActive ? 'bg-[#16A34A] border-[#16A34A] ring-2 ring-[#16A34A]/20' : isDone ? 'bg-[#16A34A] border-[#16A34A]' : 'bg-white border-gray-300'}`} />
+                      <p className="text-[9px] font-mono text-gray-500 mt-1 whitespace-nowrap">{item.time}</p>
+                      <p className={`text-[9px] font-medium mt-0.5 whitespace-nowrap ${isActive ? 'text-[#16A34A]' : isDone ? 'text-gray-400' : 'text-gray-300'}`}>{item.label}</p>
+                    </div>
+                    {i < timelineItems.length - 1 && (
+                      <div className={`flex-1 h-0.5 mx-1 -mt-4 transition-all ${isDone ? 'bg-[#16A34A]' : 'bg-gray-150'}`} />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Mobile View: Vertical Timeline */}
+            <div className="sm:hidden space-y-3.5 pl-2.5 relative before:absolute before:left-4 before:top-2.5 before:bottom-2.5 before:w-0.5 before:bg-gray-100">
+              {timelineItems.map((item, i) => {
+                const phaseIdx = phaseOrder.indexOf(item.phase as AttendanceWindow);
+                const isDone   = phaseIdx < currentPhaseIdx;
+                const isActive = item.phase === attendanceWindow || (attendanceWindow === 'checkin' && item.phase === 'checkin') || (attendanceWindow === 'checkout' && item.phase === 'checkout');
+                return (
+                  <div key={i} className="flex items-center gap-4 relative">
+                    <div className={`w-3 h-3 rounded-full border-2 z-10 flex items-center justify-center transition-all ${
+                      isActive 
+                        ? 'bg-[#16A34A] border-[#16A34A] ring-4 ring-[#16A34A]/15' 
+                        : isDone 
+                          ? 'bg-[#16A34A] border-[#16A34A]' 
+                          : 'bg-white border-gray-300'
+                    }`} />
+                    <div className="flex items-center justify-between flex-1 min-w-0 pr-1">
+                      <span className={`text-[12px] font-medium ${isActive ? 'text-[#16A34A] font-bold' : isDone ? 'text-gray-600' : 'text-gray-400'}`}>
+                        {item.label}
+                      </span>
+                      <span className="text-[12px] font-mono text-gray-500 flex-shrink-0">
+                        {item.time} WIB
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        ) : (
+          <div className="text-center py-6 px-4 bg-gray-50/50 rounded-2xl border border-dashed border-gray-200">
+            <Moon size={22} className="text-gray-300 mx-auto mb-2" />
+            <p className="text-[12.5px] text-gray-600 font-semibold">Tidak Ada Jadwal Absensi</p>
+            <p className="text-[11px] text-gray-400 mt-1 max-w-[280px] mx-auto leading-relaxed">
+              Hari ini adalah hari libur Anda. Jadwal absensi harian akan otomatis mengikuti jadwal shift dinas yang ditentukan oleh Administrator.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Face Verification viewfinder */}

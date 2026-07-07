@@ -107,6 +107,17 @@ export function AdminApp({ onLogout }: AdminAppProps) {
     }
   };
 
+  const refreshReportSummary = async () => {
+    try {
+      const reportRes = await reportApi.summary();
+      if (reportRes.success) {
+        setReportSummary(reportRes.data);
+      }
+    } catch (err) {
+      console.error('Error refreshing summary:', err);
+    }
+  };
+
   useEffect(() => {
     loadData();
     fetchUnreadNotificationsCount();
@@ -574,7 +585,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
           {activeTab === 'attendance' && <AttendanceTab />}
           {activeTab === 'history' && <HistoryTab />}
           {activeTab === 'schedule' && <ScheduleTab />}
-          {activeTab === 'leave' && <LeaveTab />}
+          {activeTab === 'leave' && <LeaveTab onUpdateCount={refreshReportSummary} />}
           {activeTab === 'reports' && <ReportsTab />}
           {activeTab === 'notifications' && <NotificationsTab onUpdateCount={fetchUnreadNotificationsCount} />}
           {activeTab === 'settings' && <SettingsTab />}
