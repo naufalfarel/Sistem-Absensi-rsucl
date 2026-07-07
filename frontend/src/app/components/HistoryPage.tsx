@@ -204,10 +204,10 @@ export function HistoryPage() {
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
         {[
-          { label: 'Hari Hadir',  value: String(hadirCount), total: `/${totalDays || 0}`, color: '#16A34A', bg: '#F0FDF4' },
-          { label: 'Terlambat',   value: String(telatCount), total: ' hari',              color: '#D97706', bg: '#FFFBEB' },
-          { label: 'Alpha',       value: String(alphaCount), total: ' hari',              color: '#DC2626', bg: '#FFF5F5' },
-          { label: 'Izin / Sakit', value: String(izinCount), total: ' hari',             color: '#2563EB', bg: '#DBEAFE' },
+          { label: 'Hari Hadir',   value: String(hadirCount), total: ' hari', color: '#16A34A', bg: '#F0FDF4' },
+          { label: 'Terlambat',    value: String(telatCount), total: ' hari', color: '#D97706', bg: '#FFFBEB' },
+          { label: 'Alpha',        value: String(alphaCount), total: ' hari', color: '#DC2626', bg: '#FFF5F5' },
+          { label: 'Izin / Sakit', value: String(izinCount),  total: ' hari', color: '#2563EB', bg: '#DBEAFE' },
         ].map((s, i) => (
           <div key={i} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
             <div className="w-8 h-8 rounded-xl mb-3 flex items-center justify-center" style={{ background: s.bg }}>

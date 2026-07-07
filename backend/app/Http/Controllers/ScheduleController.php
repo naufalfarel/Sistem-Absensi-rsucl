@@ -167,9 +167,23 @@ class ScheduleController extends Controller
         $emp->schedules()->wherePivot('day_of_week', $data['day_of_week'])->detach();
 
         // If schedule_id is provided, attach new assignment
+        $scheduleName = 'Libur (Tidak Ada Shift)';
         if ($data['schedule_id']) {
             $emp->schedules()->attach($data['schedule_id'], ['day_of_week' => $data['day_of_week']]);
+            $scheduleObj = \App\Models\Schedule::find($data['schedule_id']);
+            if ($scheduleObj) {
+                $scheduleName = $scheduleObj->name;
+            }
         }
+
+        // Create a notification for the employee informing them of the shift update
+        \App\Models\Notification::create([
+            'user_id' => $emp->user_id,
+            'title'   => 'Jadwal Shift Diperbarui',
+            'body'    => 'Jadwal dinas Anda untuk hari ' . $data['day_of_week'] . ' telah diperbarui menjadi "' . $scheduleName . '" oleh Administrator.',
+            'type'    => 'system',
+            'data'    => ['employee_id' => $emp->id, 'day_of_week' => $data['day_of_week']],
+        ]);
 
         return response()->json([
             'success' => true,

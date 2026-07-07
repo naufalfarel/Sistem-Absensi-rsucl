@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Bell, CheckCircle2, MapPin, Clock, Calendar, AlertTriangle, RefreshCw, XCircle, Megaphone, Check, Trash2 } from 'lucide-react';
+import { 
+  Bell, Check, Calendar, Trash2, Clock, AlertTriangle, Layers, Settings, MessageSquare
+} from 'lucide-react';
 import { notificationApi, AppNotification } from '../../services/api';
 
 const filterOptions = ['Semua', 'Belum Dibaca'];
@@ -103,9 +105,9 @@ export function NotificationsPage({ onUpdateCount }: NotificationsPageProps) {
       case 'attendance':
         return { icon: Clock, color: '#16A34A', bg: '#F0FDF4' };
       case 'system':
-        return { icon: AlertTriangle, color: '#D97706', bg: '#FFFBEB' };
+        return { icon: Settings, color: '#2563EB', bg: '#EFF6FF' };
       default:
-        return { icon: Bell, color: '#2563EB', bg: '#EFF6FF' };
+        return { icon: Bell, color: '#EA580C', bg: '#FFF7ED' };
     }
   };
 
@@ -116,49 +118,56 @@ export function NotificationsPage({ onUpdateCount }: NotificationsPageProps) {
   };
 
   return (
-    <div className="p-5 md:p-7 max-w-2xl mx-auto">
-      <div className="flex items-start justify-between mb-6">
+    <div className="p-5 md:p-7 max-w-2xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Notifikasi</h1>
-          <p className="text-[13px] text-gray-500 mt-0.5">
+          <h1 className="text-xl font-bold text-gray-900">Notifikasi</h1>
+          <p className="text-[12px] text-gray-500 mt-0.5 font-medium">
             {unreadCount > 0 ? `${unreadCount} pesan belum dibaca` : 'Semua pesan telah dibaca'}
           </p>
         </div>
-        <div className="flex items-center gap-3 flex-wrap mt-1">
+        <div className="flex items-center gap-2.5 flex-wrap">
           {unreadCount > 0 && (
             <button
               onClick={markAllRead}
-              className="flex items-center gap-1.5 text-[12px] text-[#16A34A] font-medium hover:underline"
+              className="flex items-center gap-1.5 text-[11.5px] text-[#16A34A] bg-green-50/70 hover:bg-green-100 px-3 py-1.5 rounded-xl border border-green-150 font-semibold transition-all duration-200"
             >
-              <Check size={13} />
-              Tandai semua dibaca
+              <Check size={12.5} className="stroke-[2.5]" />
+              Tandai Semua Dibaca
             </button>
           )}
           {notifications.some(n => n.is_read) && (
             <button
               onClick={handleDeleteAllRead}
-              className="flex items-center gap-1.5 text-[12px] text-red-500 font-medium hover:underline"
+              className="flex items-center gap-1.5 text-[11.5px] text-red-600 bg-red-50/70 hover:bg-red-100 px-3 py-1.5 rounded-xl border border-red-100 font-semibold transition-all duration-200"
             >
-              <Trash2 size={13} />
-              Hapus semua dibaca
+              <Trash2 size={12.5} />
+              Hapus Semua Dibaca
             </button>
           )}
         </div>
       </div>
 
-      {/* Filter */}
-      <div className="flex gap-1.5 mb-5 bg-white rounded-xl border border-gray-100 p-1 shadow-sm w-fit">
+      {/* Filter Tabs */}
+      <div className="flex gap-2 mb-2 bg-gray-100/60 p-1 rounded-2xl w-fit border border-gray-100/50">
         {filterOptions.map(f => (
           <button
             key={f}
             onClick={() => setActiveFilter(f)}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-medium transition-all flex items-center gap-1.5 ${
-              activeFilter === f ? 'bg-[#16A34A] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            className={`px-4 py-1.5 rounded-xl text-[12px] font-semibold transition-all flex items-center gap-1.5 duration-200 ${
+              activeFilter === f 
+                ? 'bg-white text-gray-800 shadow-sm' 
+                : 'text-gray-500 hover:text-gray-800'
             }`}
           >
-            {f}
+            <span>{f}</span>
             {f === 'Belum Dibaca' && unreadCount > 0 && (
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${activeFilter === f ? 'bg-white/25' : 'bg-red-100 text-red-600'}`}>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                activeFilter === f 
+                  ? 'bg-green-50 text-[#16A34A] border border-green-100' 
+                  : 'bg-green-100/80 text-green-700'
+              }`}>
                 {unreadCount}
               </span>
             )}
@@ -166,77 +175,107 @@ export function NotificationsPage({ onUpdateCount }: NotificationsPageProps) {
         ))}
       </div>
 
-      {/* Notifications */}
-      <div className="space-y-2">
+      {/* Notifications list */}
+      <div className="space-y-3">
         {loading && (
-          <div className="text-center py-5 text-gray-400 text-[12px]">Memuat notifikasi...</div>
+          <div className="text-center py-8 text-gray-400 text-[12px] animate-pulse">Memuat notifikasi...</div>
         )}
+        
         {filtered.map(n => {
           const ip = getIconProps(n.type);
           const Icon = ip.icon;
+          
+          let borderTheme = 'border-l-gray-250';
+          let bgTheme = 'bg-white';
+          
+          if (!n.is_read) {
+            if (n.type === 'leave') {
+              borderTheme = 'border-l-purple-500';
+              bgTheme = 'bg-purple-50/15 hover:bg-purple-50/25';
+            } else if (n.type === 'attendance') {
+              borderTheme = 'border-l-green-500';
+              bgTheme = 'bg-green-50/15 hover:bg-green-50/25';
+            } else if (n.type === 'system') {
+              borderTheme = 'border-l-blue-500';
+              bgTheme = 'bg-blue-50/15 hover:bg-blue-50/25';
+            } else {
+              borderTheme = 'border-l-amber-500';
+              bgTheme = 'bg-amber-50/15 hover:bg-amber-50/25';
+            }
+          } else {
+            bgTheme = 'bg-white hover:bg-gray-50/60';
+            borderTheme = 'border-l-gray-300';
+          }
+
           return (
             <div
               key={n.id}
               onClick={() => markRead(n.id)}
-              className={`bg-white rounded-2xl border shadow-sm overflow-hidden cursor-pointer transition-all hover:shadow-md ${
-                !n.is_read ? 'border-[#16A34A]/20 bg-green-50/5' : 'border-gray-100'
-              }`}
+              className={`group bg-white rounded-2xl border-y border-r border-l-4 ${borderTheme} ${bgTheme} border-gray-100 shadow-sm overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-md hover:translate-y-[-1px] flex gap-4 p-4.5`}
             >
-              <div className="flex gap-3.5 p-4">
-                {/* Icon */}
-                <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5"
-                  style={{ background: ip.bg }}
-                >
-                  <Icon size={18} style={{ color: ip.color }} />
-                </div>
-
-                {/* Content */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2 mb-1">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <p className={`text-[13px] leading-tight ${!n.is_read ? 'font-semibold text-gray-900' : 'font-medium text-gray-700'}`}>
-                        {n.title}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1.5 flex-shrink-0">
-                      <span className="text-[11px] text-gray-400 whitespace-nowrap">{formatTime(n.created_at)}</span>
-                      {!n.is_read ? (
-                        <div className="w-2 h-2 rounded-full bg-[#16A34A] flex-shrink-0" />
-                      ) : (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation(); // Stop click from triggering markRead again
-                            handleDelete(n.id);
-                          }}
-                          className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                          title="Hapus notifikasi"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  <p className="text-[12px] text-gray-500 leading-relaxed">{n.body}</p>
-                </div>
+              {/* Icon Container */}
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors duration-300"
+                style={{ background: ip.bg }}
+              >
+                <Icon size={18} style={{ color: ip.color }} />
               </div>
 
-              {/* Unread indicator bar */}
-              {!n.is_read && (
-                <div className="h-0.5 bg-gradient-to-r from-[#16A34A] to-transparent" />
-              )}
+              {/* Text Body */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-3 mb-1">
+                  <div className="min-w-0 flex-1">
+                    <span className={`text-[13px] leading-snug break-words ${!n.is_read ? 'font-bold text-gray-900' : 'font-medium text-gray-700'}`}>
+                      {n.title}
+                    </span>
+                    {!n.is_read && (
+                      <span className="ml-2 inline-block w-1.5 h-1.5 rounded-full bg-[#16A34A] animate-pulse" />
+                    )}
+                  </div>
+                  <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap mt-0.5">
+                    {formatTime(n.created_at)}
+                  </span>
+                </div>
+                <p className="text-[12px] text-gray-500 leading-relaxed font-normal">{n.body}</p>
+              </div>
+
+              {/* Hover actions */}
+              <div className="flex items-center gap-1.5 self-center flex-shrink-0 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                {!n.is_read && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      markRead(n.id);
+                    }}
+                    className="p-1.5 text-gray-400 hover:text-[#16A34A] hover:bg-green-50 rounded-xl transition-all"
+                    title="Tandai dibaca"
+                  >
+                    <Check size={13} className="stroke-[2.5]" />
+                  </button>
+                )}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(n.id);
+                  }}
+                  className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                  title="Hapus notifikasi"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
             </div>
           );
         })}
       </div>
 
       {filtered.length === 0 && !loading && (
-        <div className="text-center py-16">
-          <div className="w-16 h-16 rounded-2xl bg-gray-50 flex items-center justify-center mx-auto mb-4">
-            <Bell size={24} className="text-gray-200" />
+        <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-gray-200">
+          <div className="w-14 h-14 rounded-2xl bg-gray-50 flex items-center justify-center mx-auto mb-3">
+            <Bell size={24} className="text-gray-300" />
           </div>
-          <p className="text-[14px] text-gray-400 font-medium">Tidak ada notifikasi</p>
-          <p className="text-[12px] text-gray-300 mt-1">Semua notifikasi akan muncul di sini</p>
+          <p className="text-[13px] font-semibold text-gray-600">Tidak Ada Notifikasi</p>
+          <p className="text-[11px] text-gray-400 mt-1">Semua notifikasi di filter ini telah dibaca atau kosong.</p>
         </div>
       )}
     </div>

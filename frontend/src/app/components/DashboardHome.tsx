@@ -114,6 +114,14 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
   const dateStr = `${days[time.getDay()]}, ${time.getDate()} ${months[time.getMonth()]} ${time.getFullYear()}`;
   const timeStr = time.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
+  const getGreeting = () => {
+    const hours = time.getHours();
+    if (hours >= 4 && hours < 11) return 'Selamat Pagi';
+    if (hours >= 11 && hours < 15) return 'Selamat Siang';
+    if (hours >= 15 && hours < 18) return 'Selamat Sore';
+    return 'Selamat Malam';
+  };
+
   // ── Shift display helpers ──────────────────────────────────────────────
   const shiftName       = todayShift ? `Shift ${todayShift.name}` : todayShift === null ? 'Tidak Ada Shift' : 'Memuat…';
   const shiftStartTime  = fmtTime(todayShift?.start_time);
@@ -231,7 +239,7 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
       <div className="flex items-start justify-between mb-6">
         <div>
           <p className="text-[13px] text-gray-500 mb-0.5">{dateStr}</p>
-          <h1 className="text-xl font-semibold text-gray-900">Selamat Pagi, <span className="text-[#16A34A]">{user?.name}</span> 👋</h1>
+          <h1 className="text-xl font-semibold text-gray-900">{getGreeting()}, <span className="text-[#16A34A]">{user?.name}</span> 👋</h1>
           <p className="text-[13px] text-gray-500 mt-0.5">{user?.position} · {user?.department}</p>
         </div>
         <div className="text-right hidden sm:block">
