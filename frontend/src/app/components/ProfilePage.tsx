@@ -53,6 +53,7 @@ export function ProfilePage({ onLogout }: ProfilePageProps) {
 
   // Password Modal states
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
@@ -112,6 +113,10 @@ export function ProfilePage({ onLogout }: ProfilePageProps) {
 
   // Password change submit handler
   const handlePasswordChange = async () => {
+    if (!oldPassword) {
+      setPasswordError('Password lama wajib diisi.');
+      return;
+    }
     if (!newPassword) {
       setPasswordError('Password baru wajib diisi.');
       return;
@@ -128,9 +133,10 @@ export function ProfilePage({ onLogout }: ProfilePageProps) {
     setPasswordSuccess('');
     setPasswordLoading(true);
     try {
-      const res = await profileApi.update({ password: newPassword });
+      const res = await profileApi.update({ password: newPassword, old_password: oldPassword });
       if (res.success) {
         setPasswordSuccess('Password berhasil diperbarui.');
+        setOldPassword('');
         setNewPassword('');
         setConfirmPassword('');
         setTimeout(() => {
@@ -714,9 +720,9 @@ export function ProfilePage({ onLogout }: ProfilePageProps) {
       {/* ── MODAL UBAH PASSWORD ── */}
       {showPasswordModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => { setShowPasswordModal(false); setPasswordError(''); setPasswordSuccess(''); }} />
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => { setShowPasswordModal(false); setPasswordError(''); setPasswordSuccess(''); setOldPassword(''); }} />
           <div className="relative bg-white rounded-2xl p-6 shadow-2xl w-full max-w-sm">
-            <button onClick={() => { setShowPasswordModal(false); setPasswordError(''); setPasswordSuccess(''); }} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+            <button onClick={() => { setShowPasswordModal(false); setPasswordError(''); setPasswordSuccess(''); setOldPassword(''); }} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
               <X size={16} className="text-gray-500" />
             </button>
             <h3 className="text-[16px] font-semibold text-gray-900 mb-4 flex items-center gap-2">
@@ -730,13 +736,23 @@ export function ProfilePage({ onLogout }: ProfilePageProps) {
             )}
             <div className="space-y-3 mb-5">
               <div>
+                <label className="block text-[12px] font-medium text-gray-600 mb-1">Password Lama</label>
+                <input
+                  type="password"
+                  placeholder="Masukkan password saat ini"
+                  value={oldPassword}
+                  onChange={e => setOldPassword(e.target.value)}
+                  className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-[16px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all"
+                />
+              </div>
+              <div>
                 <label className="block text-[12px] font-medium text-gray-600 mb-1">Password Baru</label>
                 <input
                   type="password"
                   placeholder="Minimal 6 karakter"
                   value={newPassword}
                   onChange={e => setNewPassword(e.target.value)}
-                  className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all"
+                  className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-[16px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all"
                 />
               </div>
               <div>
@@ -746,13 +762,13 @@ export function ProfilePage({ onLogout }: ProfilePageProps) {
                   placeholder="Ulangi password baru"
                   value={confirmPassword}
                   onChange={e => setConfirmPassword(e.target.value)}
-                  className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all"
+                  className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-[16px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all"
                 />
               </div>
             </div>
             <div className="flex gap-2">
               <button 
-                onClick={() => { setShowPasswordModal(false); setPasswordError(''); setPasswordSuccess(''); }} 
+                onClick={() => { setShowPasswordModal(false); setPasswordError(''); setPasswordSuccess(''); setOldPassword(''); }} 
                 className="flex-1 py-2.5 border border-gray-200 rounded-xl text-[13px] font-medium text-gray-600 hover:bg-gray-50 transition-colors"
                 disabled={passwordLoading}
               >

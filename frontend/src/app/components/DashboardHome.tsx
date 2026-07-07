@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CheckCircle2, Clock, Stethoscope, MapPin, Calendar, ChevronRight, Bell, TrendingUp, Users, Activity } from 'lucide-react';
+import { CheckCircle2, Clock, Stethoscope, MapPin, Calendar, ChevronRight, Bell, TrendingUp, Users, Activity, BookOpen } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { attendanceApi, AttendanceRecord, notificationApi, AppNotification, scheduleApi, MyShiftSchedule } from '../../services/api';
 
@@ -302,6 +302,7 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
                 { label: 'Riwayat Kehadiran', icon: TrendingUp, tab: 'history' },
                 { label: 'Ajukan Cuti', icon: Calendar, tab: 'profile' },
                 { label: 'Tim Saya', icon: Users, tab: 'profile' },
+                { label: 'Panduan Penggunaan', icon: BookOpen, tab: 'guide' },
               ].map(({ label, icon: Icon, tab }, i) => (
                 <button
                   key={i}
