@@ -9,7 +9,7 @@ function fmtTime(t: string | undefined | null): string {
   return t.substring(0, 5);
 }
 
-/** Haversine formula — returns distance in metres */
+/** Rumus Haversine — mengembalikan jarak dalam meter */
 function haversine(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371000;
   const toRad = (d: number) => (d * Math.PI) / 180;
@@ -27,10 +27,10 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
   const [todayRecord, setTodayRecord] = useState<AttendanceRecord | null>(null);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadNotifsCount, setUnreadNotifsCount] = useState(0);
-  const [todayShift, setTodayShift] = useState<MyShiftSchedule | null | undefined>(undefined); // undefined = loading
+  const [todayShift, setTodayShift] = useState<MyShiftSchedule | null | undefined>(undefined); // undefined = sedang memuat
   const [shiftDay, setShiftDay] = useState<string>('');
 
-  // ── GPS / Geofence state ──────────────────────────────────────────────
+  // ── State GPS / Geofence ──────────────────────────────────────────────
   const [hospLat, setHospLat] = useState<number>(5.552740480177099);
   const [hospLng, setHospLng] = useState<number>(95.33486560781716);
   const [hospRadius, setHospRadius] = useState<number>(40);
@@ -74,7 +74,7 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
     fetchDashboardData();
   }, []);
 
-  // ── Load hospital coordinates from settings ───────────────────────────
+  // ── Memuat koordinat rumah sakit dari pengaturan ─────────────────────
   useEffect(() => {
     settingApi.get().then(res => {
       if (res.success && res.data) {
@@ -88,7 +88,7 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
     }).catch(() => { /* gunakan koordinat default */ });
   }, []);
 
-  // ── Watch GPS ─────────────────────────────────────────────────────────
+  // ── Pantau GPS ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!navigator.geolocation) {
       setGpsStatus('unavailable');
@@ -122,16 +122,20 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
     return 'Selamat Malam';
   };
 
-  // ── Shift display helpers ──────────────────────────────────────────────
+  // ── Helper tampilan shift ──────────────────────────────────────────────
   const shiftName       = todayShift ? `Shift ${todayShift.name}` : todayShift === null ? 'Tidak Ada Shift' : 'Memuat…';
   const shiftStartTime  = fmtTime(todayShift?.start_time);
   const shiftEndTime    = fmtTime(todayShift?.end_time);
   const shiftRange      = todayShift ? `${shiftStartTime} – ${shiftEndTime} WIB` : todayShift === null ? 'Tidak ada jadwal hari ini' : '';
 
   // ── Stat card helpers ───────────────────────────────────────────────────
+  // Menentukan apakah hari ini karyawan bebas tugas (libur / tidak ada shift ATAU berstatus cuti/izin/sakit)
   const isOffDuty = todayShift === null || todayRecord?.status === 'cuti' || todayRecord?.status === 'izin' || todayRecord?.status === 'sakit';
+  
+  // Format string tipe izin/cuti yang sedang aktif untuk label UI
   const leaveType = todayRecord?.status === 'cuti' ? 'Cuti' : todayRecord?.status === 'izin' ? 'Izin' : todayRecord?.status === 'sakit' ? 'Sakit' : null;
 
+  // Mendapatkan label utama penanda status kehadiran (misal: Hadir, Terlambat, Cuti, Libur)
   const getStatusLabel = () => {
     if (isOffDuty) return leaveType ?? 'Libur';
     if (!todayRecord) {
@@ -146,6 +150,7 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
     return statusMap[todayRecord.status] ?? 'Sudah Absen';
   };
 
+  // Mendapatkan label badge status kehadiran (misal: Bebas Tugas, Tepat Waktu, Sudah Pulang)
   const getStatusBadge = () => {
     if (isOffDuty) return 'Bebas Tugas';
     if (!todayRecord) return 'Belum Check-In';
@@ -155,10 +160,11 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
     return 'Tepat Waktu';
   };
 
+  // Mendapatkan kombinasi warna tema UI (teks dan background) sesuai status kehadiran
   const getStatusColor = () => {
     if (isOffDuty) {
-      if (leaveType) return { color: '#7C3AED', bg: '#F5F3FF' }; // Purple/Violet
-      return { color: '#4B5563', bg: '#F3F4F6' }; // Grey
+      if (leaveType) return { color: '#7C3AED', bg: '#F5F3FF' }; // Ungu/Violet untuk cuti/izin/sakit
+      return { color: '#4B5563', bg: '#F3F4F6' }; // Abu-abu untuk libur biasa
     }
     if (!todayRecord) return { color: '#6B7280', bg: '#F9FAFB' };
     if (todayRecord.status === 'hadir') return { color: '#16A34A', bg: '#DCFCE7' };
@@ -308,7 +314,7 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
           </div>
           <div className="p-5 space-y-3">
             {todayShift === undefined ? (
-              /* Loading state */
+              /* Status memuat */
               <div className="flex items-center gap-3 p-3.5 rounded-xl bg-gray-50 border border-gray-100 animate-pulse">
                 <div className="w-9 h-9 rounded-xl bg-gray-200 flex-shrink-0" />
                 <div className="flex-1 space-y-2">
@@ -317,7 +323,7 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
                 </div>
               </div>
             ) : todayShift === null ? (
-              /* No shift assigned */
+              /* Tidak ada jadwal shift */
               <div className="flex items-center gap-3 p-3.5 rounded-xl bg-gray-50 border border-gray-100">
                 <div className="w-9 h-9 rounded-xl bg-gray-200 flex items-center justify-center flex-shrink-0">
                   <Calendar size={16} className="text-gray-400" />
@@ -329,7 +335,7 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
                 <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-gray-500">Libur</span>
               </div>
             ) : (
-              /* Shift badge */
+              /* Badge shift */
               <div className="flex items-center gap-3 p-3.5 rounded-xl border" style={{ background: todayShift.color + '15', borderColor: todayShift.color + '30' }}>
                 <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: todayShift.color }}>
                   <Clock size={16} className="text-white" />
@@ -342,7 +348,7 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
               </div>
             )}
 
-            {/* Time blocks */}
+            {/* Blok waktu */}
             {todayShift !== undefined && (
               <div className="grid grid-cols-3 gap-2.5">
                 {[
@@ -379,7 +385,7 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
               </div>
             )}
 
-            {/* Check-out info */}
+            {/* Informasi check-out */}
             {todayRecord?.check_out && (
               <div className="flex items-center gap-2.5 px-3.5 py-2.5 bg-green-50 border border-green-100 rounded-xl">
                 <span className="text-base">✅</span>
@@ -389,7 +395,7 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
               </div>
             )}
 
-            {/* No shift note */}
+            {/* Catatan tidak ada shift */}
             {todayShift === null && (
               <div className="flex items-center gap-2.5 px-3.5 py-2.5 bg-gray-50 border border-gray-100 rounded-xl">
                 <span className="text-base">📋</span>
@@ -399,9 +405,9 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
           </div>
         </div>
 
-        {/* Right column */}
+        {/* Kolom kanan */}
         <div className="space-y-4">
-          {/* Quick Actions */}
+          {/* Aksi Cepat */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="flex items-center gap-2 px-5 py-4 border-b border-gray-50">
               <Activity size={16} className="text-[#16A34A]" />
@@ -432,7 +438,7 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
             </div>
           </div>
 
-          {/* Notifications preview */}
+          {/* Pratinjau notifikasi */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
               <div className="flex items-center gap-2">

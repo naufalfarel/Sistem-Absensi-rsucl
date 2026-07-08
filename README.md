@@ -2,7 +2,7 @@
 
 # Sistem Absensi RS Umum Cempaka Lima
 
-**Aplikasi manajemen kehadiran pegawai rumah sakit berbasis web — full-stack, real-time, dan siap produksi.**
+**Aplikasi manajemen kehadiran pegawai Rumah Sakit Umum Cempaka Lima**
 
 [![Laravel](https://img.shields.io/badge/Laravel-13.x-FF2D20?style=for-the-badge&logo=laravel&logoColor=white)](https://laravel.com)
 [![React](https://img.shields.io/badge/React-18.3-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev)
@@ -46,18 +46,18 @@ Sistem ini mendukung dua peran utama:
 
 ## Fitur Utama
 
-| Fitur | Deskripsi |
-|-------|-----------|
-| Autentikasi | Login aman dengan Laravel Sanctum (Bearer Token) |
-| Check-in / Check-out | Presensi harian dengan dukungan GPS opsional |
-| Pengajuan Cuti & Izin | Pengajuan cuti, izin, dan sakit dengan alur persetujuan admin |
-| Manajemen Jadwal Shift | CRUD jadwal shift per pegawai |
-| Notifikasi | Notifikasi sistem untuk pegawai dan admin |
-| Laporan Rekap | Rekap kehadiran dengan visualisasi grafik (Recharts) |
-| Manajemen Karyawan | CRUD data karyawan, departemen, dan jabatan |
-| Pengaturan Sistem | Konfigurasi jam kerja, radius GPS, dan parameter sistem |
-| Export Data | Export laporan ke format Excel (ExcelJS / XLSX) |
-| Peta Lokasi | Visualisasi lokasi check-in dengan Leaflet Maps |
+| Fitur                  | Deskripsi                                                     |
+| ---------------------- | ------------------------------------------------------------- |
+| Autentikasi            | Login aman dengan Laravel Sanctum (Bearer Token)              |
+| Check-in / Check-out   | Presensi harian dengan dukungan GPS opsional                  |
+| Pengajuan Cuti & Izin  | Pengajuan cuti, izin, dan sakit dengan alur persetujuan admin |
+| Manajemen Jadwal Shift | CRUD jadwal shift per pegawai                                 |
+| Notifikasi             | Notifikasi sistem untuk pegawai dan admin                     |
+| Laporan Rekap          | Rekap kehadiran dengan visualisasi grafik (Recharts)          |
+| Manajemen Karyawan     | CRUD data karyawan, departemen, dan jabatan                   |
+| Pengaturan Sistem      | Konfigurasi jam kerja, radius GPS, dan parameter sistem       |
+| Export Data            | Export laporan ke format Excel (ExcelJS / XLSX)               |
+| Peta Lokasi            | Visualisasi lokasi check-in dengan Leaflet Maps               |
 
 ---
 
@@ -107,37 +107,37 @@ Sistem menggunakan arsitektur **Decoupled / Headless** — backend dan frontend 
 
 ### Backend
 
-| Teknologi | Versi | Kegunaan |
-|-----------|-------|----------|
-| PHP | >= 8.3 | Runtime bahasa |
-| Laravel | 13.x | Framework utama (MVC, routing, ORM) |
-| Laravel Sanctum | 4.x | Autentikasi API via Bearer Token |
-| MySQL / SQLite | — | Database relasional |
-| Laravel Tinker | 3.x | REPL interaktif untuk debugging |
-| PHPUnit | 12.x | Unit & Feature testing |
-| Laravel Pint | 1.x | Code style fixer (PSR-12) |
+| Teknologi       | Versi  | Kegunaan                            |
+| --------------- | ------ | ----------------------------------- |
+| PHP             | >= 8.3 | Runtime bahasa                      |
+| Laravel         | 13.x   | Framework utama (MVC, routing, ORM) |
+| Laravel Sanctum | 4.x    | Autentikasi API via Bearer Token    |
+| MySQL / SQLite  | —      | Database relasional                 |
+| Laravel Tinker  | 3.x    | REPL interaktif untuk debugging     |
+| PHPUnit         | 12.x   | Unit & Feature testing              |
+| Laravel Pint    | 1.x    | Code style fixer (PSR-12)           |
 
 ### Frontend
 
-| Teknologi | Versi | Kegunaan |
-|-----------|-------|----------|
-| React | 18.3 | UI library utama |
-| TypeScript | 6.x | Type safety |
-| Vite | 6.x | Build tool & dev server |
-| Tailwind CSS | v4 | Utility-first styling |
-| shadcn/ui | — | Komponen UI berbasis Radix UI |
-| Material UI (MUI) | 7.x | Komponen UI tambahan |
-| Radix UI | — | Primitive komponen (accessible) |
-| React Router | 7.x | Client-side routing |
-| Axios | 1.7 | HTTP client untuk REST API |
-| Recharts | 2.x | Grafik & visualisasi data |
-| React Hook Form | 7.x | Manajemen form & validasi |
-| Leaflet + React Leaflet | 1.9 | Peta interaktif (lokasi GPS) |
-| date-fns | 3.x | Manipulasi tanggal |
-| ExcelJS / XLSX | — | Export laporan ke Excel |
-| Motion | 12.x | Animasi UI |
-| Lucide React | 0.487 | Icon library |
-| Sonner | 2.x | Toast notification |
+| Teknologi               | Versi | Kegunaan                        |
+| ----------------------- | ----- | ------------------------------- |
+| React                   | 18.3  | UI library utama                |
+| TypeScript              | 6.x   | Type safety                     |
+| Vite                    | 6.x   | Build tool & dev server         |
+| Tailwind CSS            | v4    | Utility-first styling           |
+| shadcn/ui               | —     | Komponen UI berbasis Radix UI   |
+| Material UI (MUI)       | 7.x   | Komponen UI tambahan            |
+| Radix UI                | —     | Primitive komponen (accessible) |
+| React Router            | 7.x   | Client-side routing             |
+| Axios                   | 1.7   | HTTP client untuk REST API      |
+| Recharts                | 2.x   | Grafik & visualisasi data       |
+| React Hook Form         | 7.x   | Manajemen form & validasi       |
+| Leaflet + React Leaflet | 1.9   | Peta interaktif (lokasi GPS)    |
+| date-fns                | 3.x   | Manipulasi tanggal              |
+| ExcelJS / XLSX          | —     | Export laporan ke Excel         |
+| Motion                  | 12.x  | Animasi UI                      |
+| Lucide React            | 0.487 | Icon library                    |
+| Sonner                  | 2.x   | Toast notification              |
 
 ---
 
@@ -185,14 +185,14 @@ sistem-absensi-rsucl/
 
 Pastikan perangkat Anda telah menginstal:
 
-| Kebutuhan | Versi Minimum | Cek Versi |
-|-----------|--------------|-----------|
-| PHP | 8.3+ | `php -v` |
-| Composer | 2.x | `composer -V` |
-| Node.js | 18+ | `node -v` |
-| npm | 9+ | `npm -v` |
-| MySQL | 8.0+ | `mysql --version` |
-| Git | — | `git --version` |
+| Kebutuhan | Versi Minimum | Cek Versi         |
+| --------- | ------------- | ----------------- |
+| PHP       | 8.3+          | `php -v`          |
+| Composer  | 2.x           | `composer -V`     |
+| Node.js   | 18+           | `node -v`         |
+| npm       | 9+            | `npm -v`          |
+| MySQL     | 8.0+          | `mysql --version` |
+| Git       | —             | `git --version`   |
 
 > SQLite (default untuk development) sudah bundled dengan PHP — tidak perlu instalasi terpisah.
 
@@ -281,12 +281,9 @@ APP_ENV=local
 APP_DEBUG=true
 APP_URL=http://localhost:8000
 
-# Database — pilih salah satu:
+# Database
 
-# Opsi 1: SQLite (default, cocok untuk development)
-DB_CONNECTION=sqlite
-
-# Opsi 2: MySQL (untuk production)
+# MySQL
 # DB_CONNECTION=mysql
 # DB_HOST=127.0.0.1
 # DB_PORT=3306
@@ -308,46 +305,47 @@ VITE_API_URL=http://localhost:8000/api
 **Base URL:** `http://localhost:8000/api`
 
 **Format Respons:**
+
 ```json
 { "success": true, "message": "...", "data": { ... } }
 ```
 
 ### Public (Tanpa Token)
 
-| Method | Endpoint | Deskripsi |
-|--------|----------|-----------|
+| Method | Endpoint | Deskripsi                        |
+| ------ | -------- | -------------------------------- |
 | `POST` | `/login` | Login & mendapatkan Bearer Token |
 
 ### Authenticated (Semua Role)
 
-| Method | Endpoint | Deskripsi |
-|--------|----------|-----------|
-| `GET` | `/me` | Data profil user yang sedang login |
-| `POST` | `/logout` | Logout & invalidasi token |
-| `GET` | `/attendance/today` | Absensi hari ini (milik sendiri) |
-| `GET` | `/attendance/history` | Riwayat 100 data absensi terakhir |
-| `POST` | `/attendance/check-in` | Check-in (dengan GPS opsional) |
-| `POST` | `/attendance/check-out` | Check-out |
-| `GET` | `/leave-requests` | Daftar pengajuan cuti/izin milik sendiri |
-| `POST` | `/leave-requests` | Buat pengajuan cuti / izin / sakit |
-| `GET` | `/notifications` | Daftar notifikasi + jumlah belum dibaca |
-| `PUT` | `/notifications/{id}/read` | Tandai 1 notifikasi sebagai dibaca |
-| `PUT` | `/notifications/read-all` | Tandai semua notifikasi sebagai dibaca |
+| Method | Endpoint                   | Deskripsi                                |
+| ------ | -------------------------- | ---------------------------------------- |
+| `GET`  | `/me`                      | Data profil user yang sedang login       |
+| `POST` | `/logout`                  | Logout & invalidasi token                |
+| `GET`  | `/attendance/today`        | Absensi hari ini (milik sendiri)         |
+| `GET`  | `/attendance/history`      | Riwayat 100 data absensi terakhir        |
+| `POST` | `/attendance/check-in`     | Check-in (dengan GPS opsional)           |
+| `POST` | `/attendance/check-out`    | Check-out                                |
+| `GET`  | `/leave-requests`          | Daftar pengajuan cuti/izin milik sendiri |
+| `POST` | `/leave-requests`          | Buat pengajuan cuti / izin / sakit       |
+| `GET`  | `/notifications`           | Daftar notifikasi + jumlah belum dibaca  |
+| `PUT`  | `/notifications/{id}/read` | Tandai 1 notifikasi sebagai dibaca       |
+| `PUT`  | `/notifications/read-all`  | Tandai semua notifikasi sebagai dibaca   |
 
 ### Admin Only
 
-| Method | Endpoint | Deskripsi |
-|--------|----------|-----------|
-| `GET` | `/attendance/all-today` | Kehadiran semua karyawan hari ini |
-| `GET/POST/PUT/DELETE` | `/employees` | CRUD data karyawan |
-| `GET` | `/employees/meta` | Data master departemen & jabatan |
-| `PUT` | `/leave-requests/{id}/approve` | Setujui pengajuan |
-| `PUT` | `/leave-requests/{id}/reject` | Tolak pengajuan |
-| `GET` | `/leave-requests` | Daftar semua pengajuan (seluruh karyawan) |
-| `GET/POST/PUT/DELETE` | `/schedules` | CRUD jadwal shift |
-| `GET` | `/reports/summary` | Ringkasan laporan kehadiran |
-| `GET` | `/settings` | Baca pengaturan sistem |
-| `PUT` | `/settings` | Perbarui pengaturan sistem |
+| Method                | Endpoint                       | Deskripsi                                 |
+| --------------------- | ------------------------------ | ----------------------------------------- |
+| `GET`                 | `/attendance/all-today`        | Kehadiran semua karyawan hari ini         |
+| `GET/POST/PUT/DELETE` | `/employees`                   | CRUD data karyawan                        |
+| `GET`                 | `/employees/meta`              | Data master departemen & jabatan          |
+| `PUT`                 | `/leave-requests/{id}/approve` | Setujui pengajuan                         |
+| `PUT`                 | `/leave-requests/{id}/reject`  | Tolak pengajuan                           |
+| `GET`                 | `/leave-requests`              | Daftar semua pengajuan (seluruh karyawan) |
+| `GET/POST/PUT/DELETE` | `/schedules`                   | CRUD jadwal shift                         |
+| `GET`                 | `/reports/summary`             | Ringkasan laporan kehadiran               |
+| `GET`                 | `/settings`                    | Baca pengaturan sistem                    |
+| `PUT`                 | `/settings`                    | Perbarui pengaturan sistem                |
 
 > Endpoint admin dilindungi middleware `EnsureIsAdmin` — akses tanpa role admin akan mengembalikan `403 Forbidden`.
 
@@ -359,22 +357,22 @@ VITE_API_URL=http://localhost:8000/api
 
 #### Production Dependencies
 
-| Package | Versi | Fungsi |
-|---------|-------|--------|
+| Package             | Versi | Fungsi                                    |
+| ------------------- | ----- | ----------------------------------------- |
 | `laravel/framework` | ^13.8 | Core framework (routing, ORM, middleware) |
-| `laravel/sanctum` | ^4.0 | API token authentication |
-| `laravel/tinker` | ^3.0 | Interactive REPL untuk debugging |
+| `laravel/sanctum`   | ^4.0  | API token authentication                  |
+| `laravel/tinker`    | ^3.0  | Interactive REPL untuk debugging          |
 
 #### Development Dependencies
 
-| Package | Versi | Fungsi |
-|---------|-------|--------|
-| `fakerphp/faker` | ^1.23 | Generate data palsu untuk seeder |
-| `laravel/pail` | ^1.2 | Log viewer interaktif di terminal |
-| `laravel/pint` | ^1.27 | Auto-formatter kode (PSR-12) |
-| `mockery/mockery` | ^1.6 | Mocking library untuk unit test |
-| `nunomaduro/collision` | ^8.6 | Error reporting yang cantik di CLI |
-| `phpunit/phpunit` | ^12.5 | Testing framework |
+| Package                | Versi | Fungsi                             |
+| ---------------------- | ----- | ---------------------------------- |
+| `fakerphp/faker`       | ^1.23 | Generate data palsu untuk seeder   |
+| `laravel/pail`         | ^1.2  | Log viewer interaktif di terminal  |
+| `laravel/pint`         | ^1.27 | Auto-formatter kode (PSR-12)       |
+| `mockery/mockery`      | ^1.6  | Mocking library untuk unit test    |
+| `nunomaduro/collision` | ^8.6  | Error reporting yang cantik di CLI |
+| `phpunit/phpunit`      | ^12.5 | Testing framework                  |
 
 ---
 
@@ -382,98 +380,98 @@ VITE_API_URL=http://localhost:8000/api
 
 #### Core
 
-| Package | Versi | Fungsi |
-|---------|-------|--------|
-| `react` | 18.3.1 | UI library |
-| `react-dom` | 18.3.1 | React DOM renderer |
-| `react-router` | 7.13.0 | Client-side routing |
-| `typescript` | ^6.0 | Static type checking |
-| `vite` | 6.3.5 | Build tool & dev server cepat |
+| Package        | Versi  | Fungsi                        |
+| -------------- | ------ | ----------------------------- |
+| `react`        | 18.3.1 | UI library                    |
+| `react-dom`    | 18.3.1 | React DOM renderer            |
+| `react-router` | 7.13.0 | Client-side routing           |
+| `typescript`   | ^6.0   | Static type checking          |
+| `vite`         | 6.3.5  | Build tool & dev server cepat |
 
 #### UI & Styling
 
-| Package | Versi | Fungsi |
-|---------|-------|--------|
-| `tailwindcss` | 4.1.12 | Utility-first CSS framework |
-| `@mui/material` | 7.3.5 | Material UI components |
-| `@mui/icons-material` | 7.3.5 | MUI icon set |
-| `@emotion/react` | 11.14.0 | CSS-in-JS (dependency MUI) |
-| `@emotion/styled` | 11.14.1 | Styled components (dependency MUI) |
-| `lucide-react` | 0.487.0 | Icon library modern |
-| `next-themes` | 0.4.6 | Dark/light mode toggle |
-| `tw-animate-css` | 1.3.8 | Animasi Tailwind tambahan |
-| `motion` | 12.23.24 | Animasi komponen (Framer Motion) |
-| `canvas-confetti` | 1.9.4 | Efek confetti |
+| Package               | Versi    | Fungsi                             |
+| --------------------- | -------- | ---------------------------------- |
+| `tailwindcss`         | 4.1.12   | Utility-first CSS framework        |
+| `@mui/material`       | 7.3.5    | Material UI components             |
+| `@mui/icons-material` | 7.3.5    | MUI icon set                       |
+| `@emotion/react`      | 11.14.0  | CSS-in-JS (dependency MUI)         |
+| `@emotion/styled`     | 11.14.1  | Styled components (dependency MUI) |
+| `lucide-react`        | 0.487.0  | Icon library modern                |
+| `next-themes`         | 0.4.6    | Dark/light mode toggle             |
+| `tw-animate-css`      | 1.3.8    | Animasi Tailwind tambahan          |
+| `motion`              | 12.23.24 | Animasi komponen (Framer Motion)   |
+| `canvas-confetti`     | 1.9.4    | Efek confetti                      |
 
 #### Radix UI Primitives (shadcn/ui)
 
-| Package | Fungsi |
-|---------|--------|
-| `@radix-ui/react-accordion` | Accordion |
-| `@radix-ui/react-alert-dialog` | Alert dialog |
-| `@radix-ui/react-avatar` | Avatar |
-| `@radix-ui/react-checkbox` | Checkbox |
-| `@radix-ui/react-dialog` | Modal/Dialog |
-| `@radix-ui/react-dropdown-menu` | Dropdown menu |
-| `@radix-ui/react-select` | Select input |
-| `@radix-ui/react-tabs` | Tab navigation |
-| `@radix-ui/react-tooltip` | Tooltip |
-| `@radix-ui/react-popover` | Popover |
-| `@radix-ui/react-switch` | Toggle switch |
-| `@radix-ui/react-slider` | Slider input |
-| `@radix-ui/react-progress` | Progress bar |
-| `@radix-ui/react-label` | Form label |
-| `@radix-ui/react-slot` | Slot (polymorphic) |
-| `class-variance-authority` | CVA untuk variant komponen |
-| `clsx` | Conditional class names |
-| `tailwind-merge` | Merge class Tailwind |
-| `cmdk` | Command palette |
-| `vaul` | Drawer/bottom sheet |
+| Package                         | Fungsi                     |
+| ------------------------------- | -------------------------- |
+| `@radix-ui/react-accordion`     | Accordion                  |
+| `@radix-ui/react-alert-dialog`  | Alert dialog               |
+| `@radix-ui/react-avatar`        | Avatar                     |
+| `@radix-ui/react-checkbox`      | Checkbox                   |
+| `@radix-ui/react-dialog`        | Modal/Dialog               |
+| `@radix-ui/react-dropdown-menu` | Dropdown menu              |
+| `@radix-ui/react-select`        | Select input               |
+| `@radix-ui/react-tabs`          | Tab navigation             |
+| `@radix-ui/react-tooltip`       | Tooltip                    |
+| `@radix-ui/react-popover`       | Popover                    |
+| `@radix-ui/react-switch`        | Toggle switch              |
+| `@radix-ui/react-slider`        | Slider input               |
+| `@radix-ui/react-progress`      | Progress bar               |
+| `@radix-ui/react-label`         | Form label                 |
+| `@radix-ui/react-slot`          | Slot (polymorphic)         |
+| `class-variance-authority`      | CVA untuk variant komponen |
+| `clsx`                          | Conditional class names    |
+| `tailwind-merge`                | Merge class Tailwind       |
+| `cmdk`                          | Command palette            |
+| `vaul`                          | Drawer/bottom sheet        |
 
 #### Data, Form & HTTP
 
-| Package | Versi | Fungsi |
-|---------|-------|--------|
-| `axios` | ^1.7.2 | HTTP client untuk REST API |
-| `react-hook-form` | 7.55.0 | Form management & validasi |
-| `date-fns` | 3.6.0 | Utilitas manipulasi tanggal |
+| Package           | Versi  | Fungsi                      |
+| ----------------- | ------ | --------------------------- |
+| `axios`           | ^1.7.2 | HTTP client untuk REST API  |
+| `react-hook-form` | 7.55.0 | Form management & validasi  |
+| `date-fns`        | 3.6.0  | Utilitas manipulasi tanggal |
 
 #### Grafik & Visualisasi
 
-| Package | Versi | Fungsi |
-|---------|-------|--------|
-| `recharts` | 2.15.2 | Grafik kehadiran & laporan |
-| `react-day-picker` | 8.10.1 | Calendar date picker |
-| `embla-carousel-react` | 8.6.0 | Carousel/slider |
-| `react-resizable-panels` | 2.1.7 | Panel layout yang bisa diubah ukurannya |
+| Package                  | Versi  | Fungsi                                  |
+| ------------------------ | ------ | --------------------------------------- |
+| `recharts`               | 2.15.2 | Grafik kehadiran & laporan              |
+| `react-day-picker`       | 8.10.1 | Calendar date picker                    |
+| `embla-carousel-react`   | 8.6.0  | Carousel/slider                         |
+| `react-resizable-panels` | 2.1.7  | Panel layout yang bisa diubah ukurannya |
 
 #### Peta & Lokasi
 
-| Package | Versi | Fungsi |
-|---------|-------|--------|
-| `leaflet` | ^1.9.4 | Library peta interaktif |
-| `react-leaflet` | ^4.2.1 | Integrasi Leaflet ke React |
+| Package          | Versi   | Fungsi                         |
+| ---------------- | ------- | ------------------------------ |
+| `leaflet`        | ^1.9.4  | Library peta interaktif        |
+| `react-leaflet`  | ^4.2.1  | Integrasi Leaflet ke React     |
 | `@types/leaflet` | ^1.9.21 | TypeScript types untuk Leaflet |
 
 #### Export Data
 
-| Package | Versi | Fungsi |
-|---------|-------|--------|
-| `exceljs` | ^4.4.0 | Generate file Excel (.xlsx) |
-| `xlsx` | ^0.18.5 | Baca/tulis file Excel |
-| `xlsx-js-style` | ^1.2.0 | Excel dengan kustomisasi style |
+| Package         | Versi   | Fungsi                         |
+| --------------- | ------- | ------------------------------ |
+| `exceljs`       | ^4.4.0  | Generate file Excel (.xlsx)    |
+| `xlsx`          | ^0.18.5 | Baca/tulis file Excel          |
+| `xlsx-js-style` | ^1.2.0  | Excel dengan kustomisasi style |
 
 #### Drag & Drop
 
-| Package | Versi | Fungsi |
-|---------|-------|--------|
-| `react-dnd` | 16.0.1 | Drag and drop (jadwal shift) |
+| Package                   | Versi  | Fungsi                        |
+| ------------------------- | ------ | ----------------------------- |
+| `react-dnd`               | 16.0.1 | Drag and drop (jadwal shift)  |
 | `react-dnd-html5-backend` | 16.0.1 | HTML5 backend untuk react-dnd |
 
 #### Notifikasi
 
-| Package | Versi | Fungsi |
-|---------|-------|--------|
+| Package  | Versi | Fungsi             |
+| -------- | ----- | ------------------ |
 | `sonner` | 2.0.3 | Toast notification |
 
 ---
@@ -492,11 +490,11 @@ Proyek ini dikembangkan sebagai bagian dari program magang di RS Umum Cempaka Li
 
 ## Dokumentasi Lanjutan
 
-| Dokumen | Deskripsi |
-|---------|-----------|
+| Dokumen                                          | Deskripsi                                  |
+| ------------------------------------------------ | ------------------------------------------ |
 | [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) | Arsitektur sistem & skema database lengkap |
-| [`backend/README.md`](./backend/README.md) | Setup detail backend, endpoint, keamanan |
-| [`frontend/README.md`](./frontend/README.md) | Setup detail frontend, struktur halaman |
+| [`backend/README.md`](./backend/README.md)       | Setup detail backend, endpoint, keamanan   |
+| [`frontend/README.md`](./frontend/README.md)     | Setup detail frontend, struktur halaman    |
 
 ---
 
@@ -504,6 +502,6 @@ Proyek ini dikembangkan sebagai bagian dari program magang di RS Umum Cempaka Li
 
 Dibuat untuk RS Umum Cempaka Lima
 
-*Sistem Absensi RSUCL &copy; 2025 &mdash; MIT License*
+_Sistem Absensi RSUCL &copy; 2025 &mdash; MIT License_
 
 </div>

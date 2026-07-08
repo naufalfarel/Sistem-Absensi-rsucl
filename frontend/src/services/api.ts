@@ -8,13 +8,13 @@
 
 const getApiUrl = () => {
   const envVal = import.meta.env.VITE_API_URL;
-  if (envVal === '') return ''; // Relative path for proxy support
+  if (envVal === '') return ''; // Path relatif untuk dukungan proxy
   return envVal ?? 'http://localhost:8000';
 };
 const BASE_URL = getApiUrl() + '/api';
 const TOKEN_KEY = 'rsucl_token';
 
-// ── Token helpers ─────────────────────────────────────────────────────
+// ── Helper Token ─────────────────────────────────────────────────────
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }
@@ -25,7 +25,7 @@ export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY);
 }
 
-// ── Core fetch wrapper ─────────────────────────────────────────────────
+// ── Wrapper Fetch Utama ───────────────────────────────────────────────
 async function request<T = unknown>(
   method: string,
   path: string,
@@ -55,7 +55,7 @@ async function request<T = unknown>(
   return json as T;
 }
 
-// Shorthand methods
+// Metode Singkat
 export const api = {
   get:    <T>(path: string)                => request<T>('GET',    path),
   post:   <T>(path: string, body: unknown) => request<T>('POST',   path, body),
@@ -63,7 +63,7 @@ export const api = {
   delete: <T>(path: string)               => request<T>('DELETE', path),
 };
 
-// Custom error class
+// Kelas Error Kustom
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
@@ -76,7 +76,7 @@ export class ApiError extends Error {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Auth
+// Auth (Autentikasi)
 // ─────────────────────────────────────────────────────────────────────
 export interface AuthUser {
   id: number;
@@ -120,7 +120,7 @@ export const profileApi = {
 };
 
 // ─────────────────────────────────────────────────────────────────────
-// Employees (admin only)
+// Karyawan (khusus admin)
 // ─────────────────────────────────────────────────────────────────────
 export interface Employee {
   id: number;
@@ -152,7 +152,7 @@ export const employeeApi = {
 };
 
 // ─────────────────────────────────────────────────────────────────────
-// Departments (admin only)
+// Departemen (khusus admin)
 // ─────────────────────────────────────────────────────────────────────
 export interface DepartmentModel {
   id: number;
@@ -173,7 +173,7 @@ export const departmentApi = {
 };
 
 // ─────────────────────────────────────────────────────────────────────
-// Attendance
+// Absensi
 // ─────────────────────────────────────────────────────────────────────
 export interface AttendanceRecord {
   id: number;
@@ -214,7 +214,7 @@ export const attendanceApi = {
 };
 
 // ─────────────────────────────────────────────────────────────────────
-// Leave Requests
+// Pengajuan Cuti/Izin
 // ─────────────────────────────────────────────────────────────────────
 export interface LeaveRequest {
   id: number;
@@ -245,7 +245,7 @@ export const leaveApi = {
 };
 
 // ─────────────────────────────────────────────────────────────────────
-// Notifications
+// Notifikasi
 // ─────────────────────────────────────────────────────────────────────
 export interface AppNotification {
   id: number;
@@ -267,7 +267,7 @@ export const notificationApi = {
 };
 
 // ─────────────────────────────────────────────────────────────────────
-// Reports (admin)
+// Laporan (admin)
 // ─────────────────────────────────────────────────────────────────────
 export interface ReportSummary {
   total_employees: number;
@@ -302,7 +302,7 @@ export const reportApi = {
 };
 
 // ─────────────────────────────────────────────────────────────────────
-// Settings (admin)
+// Pengaturan (admin)
 // ─────────────────────────────────────────────────────────────────────
 export interface AppSettings {
   system_active: '0' | '1';
@@ -331,7 +331,7 @@ export const settingApi = {
 };
 
 // ─────────────────────────────────────────────────────────────────────
-// Schedules (admin)
+// Jadwal (admin)
 // ─────────────────────────────────────────────────────────────────────
 export interface ShiftSchedule {
   id: number;
@@ -366,7 +366,7 @@ export interface EmployeeWeeklySchedule {
 export interface MyShiftSchedule {
   id: number;
   name: string;
-  start_time: string; // "HH:mm:ss" or "HH:mm"
+  start_time: string; // "HH:mm:ss" atau "HH:mm"
   end_time: string;
   color: string;
   icon: string;

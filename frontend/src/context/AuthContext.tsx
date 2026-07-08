@@ -31,7 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem('hospital_logo');
       }
     } catch {
-      // Keep cached logo in localStorage on error
+      // Tetap simpan logo cache di localStorage jika terjadi kesalahan
     }
   };
 
@@ -45,7 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } catch (err: any) {
       console.error('Profile fetch failed:', err);
-      // Only clear session if backend explicitly rejects the token (401/403)
+      // Hanya hapus sesi jika backend secara eksplisit menolak token (401/403)
       if (err?.status === 401 || err?.status === 403) {
         handleLogoutLocal();
       }
