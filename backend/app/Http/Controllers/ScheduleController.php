@@ -153,8 +153,15 @@ class ScheduleController extends Controller
         ]);
     }
 
+    /**
+     * POST /api/schedules/assign
+     * Menugaskan atau memperbarui jadwal shift pegawai berdasarkan hari kerja (day_of_week).
+     * Jika schedule_id dikirimkan null, maka pegawai diatur libur pada hari tersebut.
+     * Mengirimkan notifikasi pembaruan jadwal secara real-time ke akun pegawai bersangkutan.
+     */
     public function assignEmployeeSchedule(Request $request)
     {
+        // Validasi input pegawai, nama hari, dan ID jadwal shift
         $data = $request->validate([
             'employee_id' => 'required|exists:employees,id',
             'day_of_week' => 'required|string|in:Senin,Selasa,Rabu,Kamis,Jumat,Sabtu,Minggu',
@@ -163,10 +170,10 @@ class ScheduleController extends Controller
 
         $emp = \App\Models\Employee::findOrFail($data['employee_id']);
 
-        // Remove existing assignment for this day of the week
+        // Hapus penugasan shift lama pegawai pada hari kerja yang sama (jika ada)
         $emp->schedules()->wherePivot('day_of_week', $data['day_of_week'])->detach();
 
-        // If schedule_id is provided, attach new assignment
+        // Jika schedule_id dikirim (bukan null), pasang penugasan shift baru ke tabel pivot
         $scheduleName = 'Libur (Tidak Ada Shift)';
         if ($data['schedule_id']) {
             $emp->schedules()->attach($data['schedule_id'], ['day_of_week' => $data['day_of_week']]);
@@ -176,7 +183,8 @@ class ScheduleController extends Controller
             }
         }
 
-        // Create a notification for the employee informing them of the shift update
+        // Kirim notifikasi sistem secara langsung ke user pegawai yang bersangkutan
+        // untuk menginformasikan perubahan/penugasan shift barunya.
         \App\Models\Notification::create([
             'user_id' => $emp->user_id,
             'title'   => 'Jadwal Shift Diperbarui',

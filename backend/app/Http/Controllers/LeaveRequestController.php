@@ -253,31 +253,43 @@ class LeaveRequestController extends Controller
         ];
     }
 
+    /**
+     * Memproses file upload berbasis Base64 (diterima dari frontend),
+     * melakukan validasi ekstensi berkas, men-decode berkas,
+     * lalu menyimpannya ke disk penyimpanan public (storage/app/public/attachments).
+     * Mengembalikan URL path file agar dapat disimpan di database dan diakses via web.
+     */
     private function storeBase64Attachment(?string $base64Data, string $baseName): ?string
     {
         if (!$base64Data) {
             return null;
         }
 
+        // Regex untuk mendeteksi tipe mime file (aplikasi pdf atau gambar jpeg/png)
         if (!preg_match('/^data:(image\/|application\/)(\w+);base64,/', $base64Data, $type)) {
             return null;
         }
 
+        // Bersihkan string Base64 dari header metadata (e.g. data:image/png;base64,)
         $decodedData = substr($base64Data, strpos($base64Data, ',') + 1);
         $ext = strtolower($type[2]);
 
+        // Validasi ekstensi berkas yang diizinkan (PDF, PNG, JPEG, JPG)
         if (!in_array($ext, ['pdf', 'png', 'jpeg', 'jpg'])) {
             return null;
         }
 
+        // Decode data base64 menjadi raw binary data
         $decoded = base64_decode($decodedData);
         if ($decoded === false) {
             return null;
         }
 
+        // Tentukan nama file unik dan simpan ke Storage disk public
         $fileName = $baseName . '.' . $ext;
         \Illuminate\Support\Facades\Storage::disk('public')->put('attachments/' . $fileName, $decoded);
 
+        // Kembalikan URL path file yang valid (diarahkan ke /storage/...)
         return '/storage/attachments/' . $fileName;
     }
 }

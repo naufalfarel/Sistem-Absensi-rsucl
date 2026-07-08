@@ -956,7 +956,12 @@ export function AttendancePage() {
 
 
 
-      {/* Schedule Timeline */}
+      {/* 
+        ── SCHEDULE TIMELINE (JADWAL ABSENSI) ── 
+        Membaca shiftSettings dan todayShift yang dimuat dari API.
+        Jika pegawai memiliki shift aktif, alur milestone absensi digambar secara responsif.
+        Jika pegawai libur, card akan menampilkan state informasi kosong (tidak ada alur).
+      */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
         <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
           <div className="flex items-center gap-2">
@@ -965,10 +970,11 @@ export function AttendancePage() {
               {todayShift === undefined 
                 ? 'Memuat Jadwal...' 
                 : todayShift 
-                  ? `Jadwal Shift: ${todayShift.name}` 
+                  ? `Jadwal Shift: ${todayShift.name}` // Menampilkan nama shift secara dinamis
                   : 'Jadwal Absensi'}
             </p>
           </div>
+          {/* Lencana Istirahat: Hanya dirender jika hari ini ada shift aktif & ada jam istirahat di dalam rentang shift */}
           {todayShift && shiftSettings.break_start !== shiftSettings.checkout_open && (
             <span className="text-[10.5px] font-medium text-purple-600 bg-purple-50 px-2.5 py-0.5 rounded-full flex items-center gap-1 border border-purple-100/50">
               <Coffee size={10.5} className="flex-shrink-0" /> Istirahat {shiftSettings.break_start}–{shiftSettings.break_end}
@@ -977,10 +983,11 @@ export function AttendancePage() {
         </div>
 
         {todayShift === undefined ? (
+          // State loading data
           <div className="text-center py-6 text-gray-400 text-[12px] animate-pulse">Memuat jadwal shift hari ini...</div>
         ) : todayShift ? (
           <>
-            {/* Desktop View: Horizontal Timeline */}
+            {/* TAMPILAN DESKTOP: Render alur horizontal mendatar jika lebar layar >= sm */}
             <div className="hidden sm:flex items-center gap-0">
               {timelineItems.map((item, i) => {
                 const phaseIdx = phaseOrder.indexOf(item.phase as AttendanceWindow);
@@ -1001,7 +1008,7 @@ export function AttendancePage() {
               })}
             </div>
 
-            {/* Mobile View: Vertical Timeline */}
+            {/* TAMPILAN MOBILE: Render alur vertikal ke bawah jika lebar layar < sm (layar HP) */}
             <div className="sm:hidden space-y-3.5 pl-2.5 relative before:absolute before:left-4 before:top-2.5 before:bottom-2.5 before:w-0.5 before:bg-gray-100">
               {timelineItems.map((item, i) => {
                 const phaseIdx = phaseOrder.indexOf(item.phase as AttendanceWindow);
@@ -1009,6 +1016,7 @@ export function AttendancePage() {
                 const isActive = item.phase === attendanceWindow || (attendanceWindow === 'checkin' && item.phase === 'checkin') || (attendanceWindow === 'checkout' && item.phase === 'checkout');
                 return (
                   <div key={i} className="flex items-center gap-4 relative">
+                    {/* Lingkaran Status: glowing hijau jika aktif, hijau solid jika selesai, abu-abu jika belum mulai */}
                     <div className={`w-3 h-3 rounded-full border-2 z-10 flex items-center justify-center transition-all ${
                       isActive 
                         ? 'bg-[#16A34A] border-[#16A34A] ring-4 ring-[#16A34A]/15' 
@@ -1030,6 +1038,7 @@ export function AttendancePage() {
             </div>
           </>
         ) : (
+          // STATE HARI LIBUR: Pegawai tidak memiliki jadwal shift apa pun hari ini (todayShift === null)
           <div className="text-center py-6 px-4 bg-gray-50/50 rounded-2xl border border-dashed border-gray-200">
             <Moon size={22} className="text-gray-300 mx-auto mb-2" />
             <p className="text-[12.5px] text-gray-600 font-semibold">Tidak Ada Jadwal Absensi</p>

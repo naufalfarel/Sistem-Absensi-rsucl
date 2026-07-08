@@ -129,26 +129,37 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
   const shiftRange      = todayShift ? `${shiftStartTime} – ${shiftEndTime} WIB` : todayShift === null ? 'Tidak ada jadwal hari ini' : '';
 
   // ── Stat card helpers ───────────────────────────────────────────────────
+  const isOffDuty = todayShift === null || todayRecord?.status === 'cuti' || todayRecord?.status === 'izin' || todayRecord?.status === 'sakit';
+  const leaveType = todayRecord?.status === 'cuti' ? 'Cuti' : todayRecord?.status === 'izin' ? 'Izin' : todayRecord?.status === 'sakit' ? 'Sakit' : null;
+
   const getStatusLabel = () => {
-    if (!todayRecord) return 'Belum Absen';
+    if (isOffDuty) return leaveType ?? 'Libur';
+    if (!todayRecord) {
+      if (todayShift === undefined) return 'Memuat…';
+      return 'Belum Absen';
+    }
     const statusMap: Record<string, string> = {
       hadir: 'Hadir',
       telat: 'Terlambat',
-      izin: 'Cuti/Izin',
-      sakit: 'Sakit',
       alpha: 'Alpha',
     };
     return statusMap[todayRecord.status] ?? 'Sudah Absen';
   };
 
   const getStatusBadge = () => {
+    if (isOffDuty) return 'Bebas Tugas';
     if (!todayRecord) return 'Belum Check-In';
+    if (todayRecord.status === 'alpha') return 'Tidak Hadir';
     if (todayRecord.check_out) return 'Sudah Pulang';
     if (todayRecord.status === 'telat') return 'Terlambat';
     return 'Tepat Waktu';
   };
 
   const getStatusColor = () => {
+    if (isOffDuty) {
+      if (leaveType) return { color: '#7C3AED', bg: '#F5F3FF' }; // Purple/Violet
+      return { color: '#4B5563', bg: '#F3F4F6' }; // Grey
+    }
     if (!todayRecord) return { color: '#6B7280', bg: '#F9FAFB' };
     if (todayRecord.status === 'hadir') return { color: '#16A34A', bg: '#DCFCE7' };
     if (todayRecord.status === 'telat') return { color: '#D97706', bg: '#FEF3C7' };
@@ -176,9 +187,15 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
       sub: 'WIB',
       color: '#2563EB',
       bg: '#EFF6FF',
-      badge: todayRecord?.check_in ? (todayRecord.status === 'telat' ? 'Terlambat' : 'Tepat Waktu') : 'Menunggu',
-      badgeColor: todayRecord?.check_in ? (todayRecord.status === 'telat' ? '#D97706' : '#2563EB') : '#9CA3AF',
-      badgeBg: todayRecord?.check_in ? (todayRecord.status === 'telat' ? '#FEF3C7' : '#DBEAFE') : '#F3F4F6',
+      badge: todayRecord?.check_in 
+        ? (todayRecord.status === 'telat' ? 'Terlambat' : 'Tepat Waktu') 
+        : (isOffDuty ? (leaveType ?? 'Libur') : 'Menunggu'),
+      badgeColor: todayRecord?.check_in 
+        ? (todayRecord.status === 'telat' ? '#D97706' : '#2563EB') 
+        : (isOffDuty ? (leaveType ? '#7C3AED' : '#4B5563') : '#9CA3AF'),
+      badgeBg: todayRecord?.check_in 
+        ? (todayRecord.status === 'telat' ? '#FEF3C7' : '#DBEAFE') 
+        : (isOffDuty ? (leaveType ? '#F5F3FF' : '#F3F4F6') : '#F3F4F6'),
     },
     {
       icon: Clock,
@@ -187,9 +204,21 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
       sub: 'WIB',
       color: '#DC2626',
       bg: '#FFF1F2',
-      badge: todayRecord?.check_out ? 'Selesai' : (todayRecord?.check_in ? 'Belum Pulang' : 'Belum Absen'),
-      badgeColor: todayRecord?.check_out ? '#16A34A' : (todayRecord?.check_in ? '#EA580C' : '#9CA3AF'),
-      badgeBg: todayRecord?.check_out ? '#DCFCE7' : (todayRecord?.check_in ? '#FFF7ED' : '#F3F4F6'),
+      badge: todayRecord?.check_out 
+        ? 'Selesai' 
+        : (todayRecord?.check_in 
+            ? 'Belum Pulang' 
+            : (isOffDuty ? (leaveType ?? 'Libur') : 'Belum Absen')),
+      badgeColor: todayRecord?.check_out 
+        ? '#16A34A' 
+        : (todayRecord?.check_in 
+            ? '#EA580C' 
+            : (isOffDuty ? (leaveType ? '#7C3AED' : '#4B5563') : '#9CA3AF')),
+      badgeBg: todayRecord?.check_out 
+        ? '#DCFCE7' 
+        : (todayRecord?.check_in 
+            ? '#FFF7ED' 
+            : (isOffDuty ? (leaveType ? '#F5F3FF' : '#F3F4F6') : '#F3F4F6')),
     },
     {
       icon: Stethoscope,
@@ -327,7 +356,9 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
                   {
                     label: 'Check-In Aktual',
                     value: todayRecord?.check_in ? todayRecord.check_in.substring(0, 5) : '--:--',
-                    sub: todayRecord?.check_in ? (todayRecord.status === 'telat' ? 'Terlambat' : 'Tepat Waktu') : 'Belum Absen',
+                    sub: todayRecord?.check_in 
+                      ? (todayRecord.status === 'telat' ? 'Terlambat' : 'Tepat Waktu') 
+                      : (isOffDuty ? (leaveType ?? 'Bebas Tugas') : 'Belum Absen'),
                     color: todayRecord?.check_in ? '#000000' : '#9CA3AF',
                     bg: todayRecord?.check_in ? (todayRecord.status === 'telat' ? '#FFFBEB' : '#F0FDF4') : '#F9FAFB',
                   },

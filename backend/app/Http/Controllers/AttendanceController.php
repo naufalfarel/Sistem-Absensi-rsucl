@@ -469,17 +469,21 @@ class AttendanceController extends Controller
     public function history(Request $request)
     {
         $user = $request->user();
+        \Illuminate\Support\Facades\Log::info('History request by user ID: ' . ($user ? $user->id : 'null') . ' | Role: ' . ($user ? $user->role : 'null'));
+        \Illuminate\Support\Facades\Log::info('Query params: ' . json_encode($request->all()));
 
         if ($request->has('month') && $request->has('year')) {
             $month = (int)$request->query('month');
             $year  = (int)$request->query('year');
             $employeeId = !$user->isAdmin() ? ($user->employee?->id) : null;
+            \Illuminate\Support\Facades\Log::info("Monthly history filter applied. Month: {$month}, Year: {$year}, Employee ID: " . ($employeeId ?? 'null'));
 
             if (!$user->isAdmin() && !$employeeId) {
                 return response()->json(['success' => false, 'message' => 'Data karyawan tidak ditemukan.'], 404);
             }
 
             $records = Attendance::getMonthlyReportData($month, $year, $employeeId);
+            \Illuminate\Support\Facades\Log::info('Monthly records count returned: ' . count($records));
             return response()->json(['success' => true, 'data' => $records]);
         }
 
@@ -492,10 +496,14 @@ class AttendanceController extends Controller
             if (!$employee) {
                 return response()->json(['success' => false, 'message' => 'Data karyawan tidak ditemukan.'], 404);
             }
+            \Illuminate\Support\Facades\Log::info("Filtering history query for non-admin employee ID: {$employee->id}");
             $query->where('employee_id', $employee->id);
+        } else {
+            \Illuminate\Support\Facades\Log::info("User is admin. No employee filter applied to history query.");
         }
 
         $records = $query->get()->map(fn($r) => $this->formatRecord($r, withEmployee: $user->isAdmin()));
+        \Illuminate\Support\Facades\Log::info('Query records count returned: ' . count($records));
 
         return response()->json(['success' => true, 'data' => $records]);
     }

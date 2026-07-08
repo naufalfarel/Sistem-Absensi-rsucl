@@ -20,10 +20,16 @@ export function HistoryTab() {
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<AttendanceRecord | null>(null);
 
+  // State untuk filter bulan dan tahun aktif agar sinkron dengan data Laporan (termasuk Alpha dinamis)
+  const currentDate = new Date();
+  const [selectedMonth, setSelectedMonth] = useState<number>(currentDate.getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState<number>(currentDate.getFullYear());
+
   const loadHistory = async () => {
     setLoading(true);
     try {
-      const res = await attendanceApi.history();
+      // Mengirimkan parameter bulan dan tahun agar backend memproses data bulanan lengkap
+      const res = await attendanceApi.history(selectedMonth, selectedYear);
       if (res.success) {
         setRecords(res.data);
       }
@@ -36,7 +42,7 @@ export function HistoryTab() {
 
   useEffect(() => {
     loadHistory();
-  }, []);
+  }, [selectedMonth, selectedYear]);
 
   const getDurationStr = (mins: number | null) => {
     if (!mins) return '--';
@@ -94,15 +100,34 @@ export function HistoryTab() {
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-center">
-        <div className="flex gap-1 bg-white rounded-xl border border-gray-100 p-1 shadow-sm">
-          {filterOptions.map(f => (
-            <button
-              key={f}
-              className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-[#16A34A] text-white shadow-sm"
+        {/* Dropdown Filter Bulan & Tahun */}
+        <div className="flex gap-2 bg-white p-1 rounded-xl border border-gray-100 shadow-sm">
+          <div className="relative">
+            <select 
+              value={selectedMonth} 
+              onChange={e => setSelectedMonth(Number(e.target.value))}
+              className="appearance-none pl-3 pr-8 py-1.5 rounded-lg text-[12px] bg-white focus:outline-none text-gray-700 font-semibold cursor-pointer border border-transparent hover:border-gray-200 transition-all"
             >
-              {f}
-            </button>
-          ))}
+              {[
+                { v: 1, l: 'Januari' }, { v: 2, l: 'Februari' }, { v: 3, l: 'Maret' },
+                { v: 4, l: 'April' }, { v: 5, l: 'Mei' }, { v: 6, l: 'Juni' },
+                { v: 7, l: 'Juli' }, { v: 8, l: 'Agustus' }, { v: 9, l: 'September' },
+                { v: 10, l: 'Oktober' }, { v: 11, l: 'November' }, { v: 12, l: 'Desember' }
+              ].map(m => <option key={m.v} value={m.v}>{m.l}</option>)}
+            </select>
+            <ChevronDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          </div>
+
+          <div className="relative border-l border-gray-100 pl-1">
+            <select 
+              value={selectedYear} 
+              onChange={e => setSelectedYear(Number(e.target.value))}
+              className="appearance-none pl-3 pr-8 py-1.5 rounded-lg text-[12px] bg-white focus:outline-none text-gray-700 font-semibold cursor-pointer border border-transparent hover:border-gray-200 transition-all"
+            >
+              {[2025, 2026, 2027, 2028].map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+            <ChevronDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          </div>
         </div>
         <div className="relative">
           <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}

@@ -682,6 +682,7 @@ export function ReportsTab() {
           {
             label: 'Kehadiran Bulan Ini',
             value: `${getMonthlyAttendanceRate()}%`,
+            sub: 'Rata-rata persentase',
             trend: `${summary ? (summary.trends.presence >= 0 ? '+' : '') + summary.trends.presence : 0}%`,
             trendColor: getTrendColor(summary?.trends.presence ?? 0),
             icon: Users,
@@ -690,8 +691,9 @@ export function ReportsTab() {
           },
           {
             label: 'Keterlambatan',
-            value: `${summary?.this_month.telat ?? 0} org`,
-            trend: formatTrend(summary?.trends.late ?? 0, 'org'),
+            value: `${summary?.this_month.telat ?? 0} kali`,
+            sub: 'Total akumulasi terlambat',
+            trend: formatTrend(summary?.trends.late ?? 0, 'kali'),
             trendColor: getTrendColor(summary?.trends.late ?? 0),
             icon: Clock,
             color: '#D97706',
@@ -699,8 +701,9 @@ export function ReportsTab() {
           },
           {
             label: 'Alpha',
-            value: `${summary?.this_month.alpha ?? 0} org`,
-            trend: formatTrend(summary?.trends.alpha ?? 0, 'org'),
+            value: `${summary?.this_month.alpha ?? 0} hari`,
+            sub: 'Total akumulasi alpa',
+            trend: formatTrend(summary?.trends.alpha ?? 0, 'hari'),
             trendColor: getTrendColor(summary?.trends.alpha ?? 0),
             icon: AlertTriangle,
             color: '#DC2626',
@@ -708,8 +711,9 @@ export function ReportsTab() {
           },
           {
             label: 'Cuti & Izin',
-            value: `${summary?.this_month.cuti ?? 0} org`,
-            trend: formatTrend(summary?.trends.cuti ?? 0, 'org'),
+            value: `${summary?.this_month.cuti ?? 0} hari`,
+            sub: 'Total akumulasi hari izin',
+            trend: formatTrend(summary?.trends.cuti ?? 0, 'hari'),
             trendColor: getTrendColor(summary?.trends.cuti ?? 0),
             icon: Calendar,
             color: '#7C3AED',
@@ -727,7 +731,8 @@ export function ReportsTab() {
                 </div>
               </div>
               <p className="text-[22px] font-bold text-black">{k.value}</p>
-              <p className="text-[11px] text-gray-500 mt-0.5">{k.label}</p>
+              <p className="text-[12px] font-semibold text-gray-800 mt-0.5">{k.label}</p>
+              <p className="text-[9.5px] text-gray-400 mt-0.5">{k.sub}</p>
             </div>
           );
         })}
