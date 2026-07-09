@@ -8,11 +8,24 @@ use App\Models\Setting;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
+/**
+ * Class AttendanceController
+ * 
+ * Mengelola alur absen masuk (check-in) dan absen pulang (check-out) karyawan.
+ * Mendukung validasi lokasi geofence (Haversine formula), batasan jam shift dinamis,
+ * penyimpanan foto selfie (Base64), penanganan shift lintas hari (overnight),
+ * riwayat kehadiran, serta notifikasi keterlambatan real-time.
+ */
 class AttendanceController extends Controller
 {
     /**
      * GET /api/attendance/today
-     * Absensi hari ini milik pegawai yang login
+     * 
+     * Mengambil status absensi hari ini milik karyawan yang sedang login.
+     * Juga mendeteksi apakah hari ini karyawan sedang dalam masa cuti/izin/sakit aktif.
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
      */
     public function today(Request $request)
     {
@@ -21,11 +34,12 @@ class AttendanceController extends Controller
             return response()->json(['success' => false, 'message' => 'Data karyawan tidak ditemukan.'], 404);
         }
 
+        // Ambil data absensi hari ini jika ada
         $record = Attendance::where('employee_id', $employee->id)
-                            ->where('date', today()->toDateString())
-                            ->first();
+                             ->where('date', today()->toDateString())
+                             ->first();
 
-        // Cek cuti aktif hari ini
+        // Cek apakah ada pengajuan cuti/izin/sakit yang aktif hari ini
         $todayStr = today()->toDateString();
         $activeLeave = \App\Models\LeaveRequest::where('employee_id', $employee->id)
             ->where('status', 'approved')
@@ -49,8 +63,11 @@ class AttendanceController extends Controller
     }
 
     /**
-     * GET /api/attendance/all-today  (admin only)
-     * Semua absensi hari ini
+     * GET /api/attendance/all-today
+     * 
+     * Mengambil data kehadiran seluruh karyawan untuk hari berjalan (hanya untuk Admin).
+     * 
+     * @return \Illuminate\Http\JsonResponse
      */
     public function allToday()
     {
@@ -64,11 +81,20 @@ class AttendanceController extends Controller
 
     /**
      * POST /api/attendance/check-in
+     * 
+     * Melakukan absensi masuk (check-in) karyawan.
+     * Meliputi validasi status sistem, validasi masa cuti/izin aktif, pencegahan absensi ganda,
+     * validasi radius koordinat GPS (geofence), penentuan status (hadir vs telat),
+     * serta penyimpanan foto selfie.
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
      */
     public function checkIn(Request $request)
     {
         \Illuminate\Support\Facades\Log::info('Check-in request inputs: ' . json_encode($request->all()));
-        // Cek apakah sistem aktif
+        
+        // 1. Validasi keaktifan sistem absensi secara global
         $systemActive = Setting::get('system_active', '1');
         if ($systemActive === '0') {
             return response()->json([
@@ -82,7 +108,7 @@ class AttendanceController extends Controller
             return response()->json(['success' => false, 'message' => 'Data karyawan tidak ditemukan.'], 404);
         }
 
-        // Cek apakah sedang dalam masa cuti/izin/sakit yang disetujui hari ini
+        // 2. Validasi apakah karyawan bersangkutan sedang cuti/izin/sakit yang disetujui hari ini
         $todayStr = today()->toDateString();
         $activeLeave = \App\Models\LeaveRequest::where('employee_id', $employee->id)
             ->where('status', 'approved')
@@ -103,7 +129,7 @@ class AttendanceController extends Controller
             ], 422);
         }
 
-        // Cek apakah sudah check-in hari ini
+        // 3. Validasi absensi ganda pada hari yang sama
         $existing = Attendance::where('employee_id', $employee->id)
                               ->where('date', today()->toDateString())
                               ->first();
@@ -118,7 +144,7 @@ class AttendanceController extends Controller
             }
 
             if ($existing->check_in) {
-                // Mode simulasi: hapus record lama agar bisa check-in ulang untuk testing
+                // Mendukung mode simulasi waktu untuk keperluan testing di frontend/development
                 if ($request->has('simulated_time')) {
                     $existing->delete();
                 } else {
@@ -130,10 +156,10 @@ class AttendanceController extends Controller
             }
         }
 
-        // ── Validasi Geofence (server-side Haversine) ─────────────────
+        // 4. Validasi Geofence (menggunakan rumus Matematika Haversine)
         $hospLat    = (float) Setting::get('hospital_lat',  '5.552740480177099');
         $hospLng    = (float) Setting::get('hospital_lng',  '95.33486560781716');
-        $hospRadius = (float) Setting::get('gps_radius',    '40');
+        $hospRadius = (float) Setting::get('gps_radius',    '40'); // Radius default 40 meter
 
         $clientLat  = $request->input('latitude');
         $clientLng  = $request->input('longitude');
@@ -155,15 +181,14 @@ class AttendanceController extends Controller
                 ], 422);
             }
         } else {
-            // Koordinat tidak dikirim — tolak untuk keamanan
             return response()->json([
                 'success' => false,
                 'message' => 'Koordinat GPS diperlukan untuk melakukan check-in. Aktifkan GPS pada perangkat Anda.',
             ], 422);
         }
 
-        // Tentukan status: hadir vs telat
-        $now        = Carbon::now('Asia/Jakarta');
+        // 5. Tentukan waktu check-in (mendukung simulasi)
+        $now = Carbon::now('Asia/Jakarta');
         if ($request->has('simulated_time')) {
             $simTime = $request->input('simulated_time');
             try {
@@ -174,7 +199,7 @@ class AttendanceController extends Controller
             } catch (\Exception $e) {}
         }
 
-        // Cek apakah hari ini adalah hari libur (tidak ada jadwal shift)
+        // Pastikan karyawan memiliki jadwal shift dinas hari ini
         $todayShift = $this->getEmployeeTodayShift($employee, $now);
         if (!$todayShift) {
             return response()->json([
@@ -183,13 +208,12 @@ class AttendanceController extends Controller
             ], 422);
         }
 
-        // ── Tentukan batas check-in berdasarkan shift karyawan & pengaturan dinamis ──────────────
-        $shiftStart = substr($todayShift->start_time, 0, 5); // "HH:mm"
+        // 6. Evaluasi batas waktu check-in berdasarkan konfigurasi shift
+        $shiftStart = substr($todayShift->start_time, 0, 5); // Format: "HH:mm"
 
-        // Ambil pengaturan dinamis (dalam satuan menit)
-        $checkinOpenOffset  = (int) Setting::get('checkin_open', '0');
-        $lateLimitOffset    = (int) Setting::get('late_limit', '30');
-        $closeCheckinOffset = (int) Setting::get('close_checkin', '60');
+        $checkinOpenOffset  = (int) Setting::get('checkin_open', '0'); // Menit sebelum shift dimulai absensi dibuka
+        $lateLimitOffset    = (int) Setting::get('late_limit', '30');  // Menit toleransi keterlambatan
+        $closeCheckinOffset = (int) Setting::get('close_checkin', '60'); // Menit penutupan akses check-in
 
         $openLimit  = ($checkinOpenOffset > 0) ? $this->subMins($shiftStart, $checkinOpenOffset) : $shiftStart;
         $lateLimit  = $this->addMins($shiftStart, $lateLimitOffset);
@@ -197,7 +221,7 @@ class AttendanceController extends Controller
 
         $nowMins   = $now->hour * 60 + $now->minute;
 
-        // Cek jika absen masuk belum dibuka
+        // Cek jika tombol check-in ditekan sebelum waktu buka
         if ($nowMins < $this->timeToMins($openLimit)) {
             return response()->json([
                 'success' => false,
@@ -205,7 +229,7 @@ class AttendanceController extends Controller
             ], 422);
         }
 
-        // Cek jika batas check-in sudah tutup
+        // Cek jika batas check-in sudah ditutup
         $closeMins = $this->timeToMins($closeLimit);
         if ($nowMins > $closeMins) {
             return response()->json([
@@ -214,14 +238,17 @@ class AttendanceController extends Controller
             ], 422);
         }
 
+        // Tentukan apakah status absensinya 'hadir' (tepat waktu) atau 'telat'
         $lateMins = $this->timeToMins($lateLimit);
         $status   = ($nowMins <= $lateMins) ? 'hadir' : 'telat';
 
+        // Simpan foto selfie check-in jika terlampir
         $imageUrl = null;
         if ($request->has('image')) {
             $imageUrl = $this->storeBase64Image($request->input('image'), 'selfie_in_' . $employee->id . '_' . time());
         }
 
+        // 7. Simpan absensi baru ke database
         $record = Attendance::create([
             'employee_id'       => $employee->id,
             'date'              => today()->toDateString(),
@@ -234,11 +261,13 @@ class AttendanceController extends Controller
             'image_check_in'    => $imageUrl,
         ]);
 
+        // Kirim notifikasi keterlambatan ke administrator jika statusnya terlambat
         if ($status === 'telat') {
             $notifLate = \App\Models\Setting::get('notif_late', '1');
             if ($notifLate !== '0') {
                 $admins = \App\Models\User::where('role', 'admin')->get();
                 foreach ($admins as $admin) {
+                    // Cegah duplikasi notifikasi harian untuk karyawan terlambat yang sama
                     $exists = \App\Models\Notification::where('user_id', $admin->id)
                         ->where('type', 'attendance')
                         ->where('data->employee_id', $employee->id)
@@ -257,6 +286,7 @@ class AttendanceController extends Controller
                 }
             }
 
+            // Kirim notifikasi email ke admin jika diaktifkan
             $notifEmail = \App\Models\Setting::get('notif_email', '1');
             if ($notifEmail !== '0') {
                 $admins = \App\Models\User::where('role', 'admin')->get();
@@ -285,6 +315,14 @@ class AttendanceController extends Controller
 
     /**
      * POST /api/attendance/check-out
+     * 
+     * Melakukan absensi pulang (check-out) karyawan.
+     * Mendukung deteksi shift normal maupun shift lintas malam (overnight).
+     * Melakukan validasi geofence, window waktu check-out (termasuk diskriminasi hari Sabtu),
+     * serta meng-update database absensi berjalan.
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
      */
     public function checkOut(Request $request)
     {
@@ -294,24 +332,25 @@ class AttendanceController extends Controller
             return response()->json(['success' => false, 'message' => 'Data karyawan tidak ditemukan.'], 404);
         }
 
-        // 1. Cek record absensi hari ini yang belum checkout
+        // 1. Cari data check-in hari ini
         $record = Attendance::where('employee_id', $employee->id)
                             ->where('date', today()->toDateString())
                             ->first();
 
-        // 2. Jika tidak ada record hari ini, cek apakah ada record kemarin yang belum checkout (untuk shift overnight)
+        // 2. Fallback untuk shift lintas malam (Overnight / Night shift):
+        // Jika check-in hari ini belum ada, cek apakah ada check-in kemarin yang belum di-checkout
         if (!$record) {
             $yesterdayRecord = Attendance::where('employee_id', $employee->id)
                                          ->where('date', today()->subDay()->toDateString())
                                          ->first();
             if ($yesterdayRecord && !$yesterdayRecord->check_out) {
-                // Cek apakah shift kemarin memang shift overnight
+                // Pastikan shift kemarin memang shift overnight (jam pulang < jam masuk)
                 $yesterdayShift = $this->getEmployeeTodayShift($employee, Carbon::now('Asia/Jakarta')->subDay());
                 if ($yesterdayShift) {
                     $shiftStart = $this->timeToMins(substr($yesterdayShift->start_time, 0, 5));
                     $shiftEnd   = $this->timeToMins(substr($yesterdayShift->end_time, 0, 5));
-                    if ($shiftEnd < $shiftStart) { // overnight
-                        $record = $yesterdayRecord;
+                    if ($shiftEnd < $shiftStart) {
+                        $record = $yesterdayRecord; // Gunakan record kemarin sebagai target update checkout
                     }
                 }
             }
@@ -331,7 +370,7 @@ class AttendanceController extends Controller
             ], 422);
         }
 
-        // ── Validasi Geofence (server-side Haversine) ─────────────────
+        // 3. Validasi Geofence (Haversine)
         $hospLat    = (float) Setting::get('hospital_lat',  '5.552740480177099');
         $hospLng    = (float) Setting::get('hospital_lng',  '95.33486560781716');
         $hospRadius = (float) Setting::get('gps_radius',    '40');
@@ -362,11 +401,13 @@ class AttendanceController extends Controller
             ], 422);
         }
 
+        // Simpan foto selfie check-out jika terlampir
         $imageUrl = null;
         if ($request->has('image')) {
             $imageUrl = $this->storeBase64Image($request->input('image'), 'selfie_out_' . $employee->id . '_' . time());
         }
 
+        // Tentukan waktu check-out (mendukung simulasi)
         $now = Carbon::now('Asia/Jakarta');
         if ($request->has('simulated_time')) {
             $simTime = $request->input('simulated_time');
@@ -378,7 +419,7 @@ class AttendanceController extends Controller
             } catch (\Exception $e) {}
         }
 
-        // Gunakan tanggal dari record check-in untuk validasi shift
+        // Gunakan tanggal dari record check-in asli untuk validasi shift
         $shiftDate = Carbon::parse($record->date);
         $todayShift = $this->getEmployeeTodayShift($employee, $shiftDate);
 
@@ -389,10 +430,10 @@ class AttendanceController extends Controller
             ], 422);
         }
 
-        $shiftStart    = substr($todayShift->start_time, 0, 5); // "HH:mm"
-        $shiftEnd      = substr($todayShift->end_time,   0, 5); // "HH:mm"
+        $shiftStart    = substr($todayShift->start_time, 0, 5);
+        $shiftEnd      = substr($todayShift->end_time,   0, 5);
 
-        // Ambil pengaturan dinamis check-out (dalam satuan menit)
+        // 4. Hitung parameter batas pembukaan & penutupan check-out (Diferensiasi Hari Sabtu vs Hari Biasa)
         $isSaturday = \Carbon\Carbon::parse($record->date)->dayOfWeek === \Carbon\Carbon::SATURDAY;
         if ($isSaturday) {
             $satOpenOffset  = (int) Setting::get('sat_checkout_open', '0');
@@ -411,19 +452,17 @@ class AttendanceController extends Controller
         $openMins  = $this->timeToMins($checkoutOpen);
         $closeMins = $this->timeToMins($checkoutClose);
 
+        // 5. Validasi window check-out
         if ($isOvernight) {
-            // Shift lintas tengah malam (mis. Malam 21:00–07:00)
-            // Setelah jam mulai shift: check-out belum dibuka
-            // Setelah tengah malam hingga jam tutup: dalam window check-out
+            // Lintas tengah malam
             $startMins = $this->timeToMins(isset($shiftStart) ? $shiftStart : '21:00');
             if ($nowMins >= $startMins) {
-                // Masih malam hari (sebelum tengah malam) → belum saatnya checkout
+                // Masih di malam hari sebelum tengah malam → tombol check-out dinonaktifkan
                 return response()->json([
                     'success' => false,
                     'message' => "Check-out belum dibuka. Waktu check-out shift ini dibuka pukul {$checkoutOpen} WIB (hari berikutnya).",
                 ], 422);
             }
-            // Setelah tengah malam: cek apakah masih dalam window checkout
             if ($nowMins > $closeMins) {
                 return response()->json([
                     'success' => false,
@@ -431,7 +470,7 @@ class AttendanceController extends Controller
                 ], 422);
             }
         } else {
-            // Shift normal (tidak lintas tengah malam)
+            // Shift normal di hari yang sama
             if ($nowMins < $openMins) {
                 return response()->json([
                     'success' => false,
@@ -446,6 +485,7 @@ class AttendanceController extends Controller
             }
         }
 
+        // 6. Update database dengan data check-out
         $record->update([
             'check_out'          => $now->format('H:i:s'),
             'latitude'           => $clientLat,
@@ -464,7 +504,14 @@ class AttendanceController extends Controller
 
     /**
      * GET /api/attendance/history
-     * Riwayat absensi 30 hari terakhir (karyawan sendiri, atau semua jika admin)
+     * 
+     * Mengambil riwayat absensi.
+     * Jika melampirkan parameter query 'month' & 'year', sistem akan menjana (generate) laporan bulanan lengkap
+     * termasuk kalkulasi Alpa/off-day (menggunakan model Attendance::getMonthlyReportData).
+     * Jika tanpa parameter, akan mengambil 100 log riwayat absensi mentah terakhir.
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
      */
     public function history(Request $request)
     {
@@ -472,6 +519,7 @@ class AttendanceController extends Controller
         \Illuminate\Support\Facades\Log::info('History request by user ID: ' . ($user ? $user->id : 'null') . ' | Role: ' . ($user ? $user->role : 'null'));
         \Illuminate\Support\Facades\Log::info('Query params: ' . json_encode($request->all()));
 
+        // Kasus A: Filter bulanan spesifik (menghasilkan laporan lengkap)
         if ($request->has('month') && $request->has('year')) {
             $month = (int)$request->query('month');
             $year  = (int)$request->query('year');
@@ -487,6 +535,7 @@ class AttendanceController extends Controller
             return response()->json(['success' => true, 'data' => $records]);
         }
 
+        // Kasus B: Mengambil 100 log absensi mentah terakhir
         $query = Attendance::with(['employee.user', 'employee.department', 'employee.schedules'])
                            ->orderBy('date', 'desc')
                            ->limit(100);
@@ -511,7 +560,11 @@ class AttendanceController extends Controller
     // ── Private Helpers ───────────────────────────────────────────────
 
     /**
-     * Konversi "HH:mm" atau "HH:mm:ss" ke menit dari tengah malam.
+     * Mengubah string format waktu "HH:mm" atau "HH:mm:ss" ke jumlah total menit dari tengah malam.
+     * Mempermudah operasi matematika pembandingan waktu.
+     * 
+     * @param string $hhmm
+     * @return int Jumlah menit
      */
     private function timeToMins(string $hhmm): int
     {
@@ -520,7 +573,11 @@ class AttendanceController extends Controller
     }
 
     /**
-     * Tambah sejumlah menit ke string "HH:mm", kembalikan "HH:mm" baru.
+     * Menambahkan sejumlah menit ke format string "HH:mm".
+     * 
+     * @param string $hhmm
+     * @param int $mins
+     * @return string String "HH:mm" baru
      */
     private function addMins(string $hhmm, int $mins): string
     {
@@ -529,7 +586,11 @@ class AttendanceController extends Controller
     }
 
     /**
-     * Kurangi sejumlah menit dari string "HH:mm", kembalikan "HH:mm" baru.
+     * Mengurangi sejumlah menit dari format string "HH:mm".
+     * 
+     * @param string $hhmm
+     * @param int $mins
+     * @return string String "HH:mm" baru
      */
     private function subMins(string $hhmm, int $mins): string
     {
@@ -541,8 +602,11 @@ class AttendanceController extends Controller
     }
 
     /**
-     * Ambil shift karyawan yang berlaku hari ini berdasarkan hari dalam seminggu.
-     * Mengembalikan Schedule model atau null jika tidak ada assignment.
+     * Mengambil jadwal shift kerja karyawan yang berlaku hari ini.
+     * 
+     * @param Employee $employee
+     * @param Carbon $now Tanggal/waktu pembanding
+     * @return \App\Models\Schedule|null
      */
     private function getEmployeeTodayShift(\App\Models\Employee $employee, Carbon $now): ?\App\Models\Schedule
     {
@@ -555,11 +619,17 @@ class AttendanceController extends Controller
     }
 
     /**
-     * Rumus Haversine — mengembalikan jarak dalam meter.
+     * Menghitung jarak antara dua titik koordinat GPS menggunakan Rumus Haversine (meter).
+     * 
+     * @param float $lat1 Lintang titik pertama
+     * @param float $lon1 Bujur titik pertama
+     * @param float $lat2 Lintang titik kedua
+     * @param float $lon2 Bujur titik kedua
+     * @return float Jarak dalam satuan meter
      */
     private function haversine(float $lat1, float $lon1, float $lat2, float $lon2): float
     {
-        $R    = 6371000; // radius bumi dalam meter
+        $R    = 6371000; // Radius rata-rata bumi dalam meter
         $φ1   = deg2rad($lat1);
         $φ2   = deg2rad($lat2);
         $Δφ   = deg2rad($lat2 - $lat1);
@@ -572,7 +642,11 @@ class AttendanceController extends Controller
     }
 
     /**
-     * Simpan gambar base64 ke storage, kembalikan path relatif.
+     * Menyimpan gambar Base64 (foto selfie) ke public storage disk.
+     * 
+     * @param string $imgData String Base64 gambar
+     * @param string $baseName Nama dasar file unik
+     * @return string|null Path relatif file gambar hasil penyimpanan
      */
     private function storeBase64Image(string $imgData, string $baseName): ?string
     {
@@ -580,7 +654,7 @@ class AttendanceController extends Controller
             return null;
         }
         $imgData = substr($imgData, strpos($imgData, ',') + 1);
-        $type    = strtolower($type[1]); // png, jpg, jpeg
+        $type    = strtolower($type[1]); // jpeg, png, webp
 
         if (!in_array($type, ['jpg', 'jpeg', 'png'])) {
             return null;
@@ -596,6 +670,13 @@ class AttendanceController extends Controller
         return '/storage/selfies/' . $fileName;
     }
 
+    /**
+     * Memformat output record absensi agar konsisten untuk dikonsumsi frontend.
+     * 
+     * @param Attendance $r Record absensi
+     * @param bool $withEmployee Sertakan detail profile karyawan
+     * @return array
+     */
     private function formatRecord(Attendance $r, bool $withEmployee = false): array
     {
         $shiftName = 'Reguler';
@@ -607,6 +688,7 @@ class AttendanceController extends Controller
             $carbonDate = \Carbon\Carbon::parse($r->date);
             $dayName = $dayMap[$carbonDate->dayOfWeek];
             
+            // Periksa apakah relasi schedules sudah di-load untuk efisiensi kueri database (Eager Loading)
             if ($r->employee->relationLoaded('schedules')) {
                 $sched = $r->employee->schedules->first(function ($s) use ($dayName) {
                     return $s->pivot->day_of_week === $dayName;

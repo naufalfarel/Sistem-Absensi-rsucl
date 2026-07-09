@@ -7,14 +7,26 @@ use App\Models\Employee;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
+/**
+ * Class AuthController
+ * 
+ * Mengelola alur otentikasi pengguna termasuk proses Login, Logout,
+ * pengambilan profil aktif (me), update profil, serta pengaturan ulang password (forgot password).
+ */
 class AuthController extends Controller
 {
     /**
      * POST /api/login
-     * Body: { username, password }
+     * 
+     * Memproses otentikasi user menggunakan username dan password.
+     * Jika login sukses, token Laravel Sanctum akan diterbitkan dan dikirim kembali beserta data user.
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
      */
     public function login(Request $request)
     {
+        // Validasi input parameter login
         $request->validate([
             'username' => 'required|string',
             'password' => 'required|string',
@@ -23,6 +35,7 @@ class AuthController extends Controller
         // Cari user berdasarkan username
         $user = User::where('username', $request->username)->first();
 
+        // Verifikasi keberadaan user dan kecocokan password menggunakan Hash::check
         if (!$user || !Hash::check($request->password, $user->password)) {
             return response()->json([
                 'success' => false,
@@ -30,10 +43,11 @@ class AuthController extends Controller
             ], 401);
         }
 
-        // Hapus token lama, buat token baru
+        // Hapus token lama untuk mencegah kebocoran sesi multipel, lalu terbitkan token baru
         $user->tokens()->delete();
         $token = $user->createToken('rsucl-token')->plainTextToken;
 
+        // Siapkan struktur dasar payload data pengguna
         $userData = [
             'id'              => $user->id,
             'name'            => $user->name,
@@ -44,7 +58,7 @@ class AuthController extends Controller
             'profile_picture' => $user->profile_picture ? url($user->profile_picture) : null,
         ];
 
-        // Sertakan data employee jika bukan admin
+        // Jika user bukan admin (berarti karyawan/employee), sertakan info jabatan dan departemen
         if (!$user->isAdmin()) {
             $emp = $user->employee()->with(['department', 'position'])->first();
             if ($emp) {
@@ -69,10 +83,17 @@ class AuthController extends Controller
 
     /**
      * GET /api/me
+     * 
+     * Mengambil detail profil user yang sedang login saat ini (berdasarkan token bearer).
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
      */
     public function me(Request $request)
     {
         $user = $request->user();
+        
+        // Buat representasi data user aktif
         $data = [
             'id'              => $user->id,
             'name'            => $user->name,
@@ -83,6 +104,7 @@ class AuthController extends Controller
             'profile_picture' => $user->profile_picture ? url($user->profile_picture) : null,
         ];
 
+        // Lampirkan data kepegawaian jika role-nya adalah employee
         if (!$user->isAdmin()) {
             $emp = $user->employee()->with(['department', 'position'])->first();
             if ($emp) {
@@ -100,31 +122,45 @@ class AuthController extends Controller
 
     /**
      * POST /api/logout
+     * 
+     * Menghapus token otentikasi aktif yang digunakan untuk request saat ini.
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
      */
     public function logout(Request $request)
     {
+        // Hapus token akses saat ini dari database
         $request->user()->currentAccessToken()->delete();
         return response()->json(['success' => true, 'message' => 'Logout berhasil.']);
     }
 
     /**
      * PUT /api/profile
+     * 
+     * Memperbarui detail profil user (seperti nama, email, username, password, dan foto profil).
+     * Foto profil diproses dari format upload Base64.
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
      */
     public function updateProfile(Request $request)
     {
         $user = $request->user();
 
+        // Validasi payload perubahan profil
         $request->validate([
             'name'            => 'sometimes|string|max:255',
             'email'           => 'sometimes|email|unique:users,email,' . $user->id,
             'username'        => 'sometimes|string|max:255|unique:users,username,' . $user->id,
             'password'        => 'sometimes|string|min:6',
             'old_password'    => 'sometimes|string',
-            'profile_picture' => 'nullable|string', // base64
+            'profile_picture' => 'nullable|string', // String base64
             'phone'           => 'sometimes|nullable|string|max:20',
             'gender'          => 'sometimes|nullable|string|max:20',
         ]);
 
+        // Perbarui atribut umum User jika dilampirkan
         if ($request->has('name')) {
             $user->name = $request->name;
         }
@@ -137,8 +173,8 @@ class AuthController extends Controller
             $user->username = $request->username;
         }
 
+        // Jika mengubah password, wajib melakukan verifikasi password lama terlebih dahulu
         if ($request->filled('password')) {
-            // Wajib verifikasi password lama untuk keamanan
             if (!$request->has('old_password') || !Hash::check($request->old_password, $user->password)) {
                 return response()->json([
                     'success' => false,
@@ -148,6 +184,7 @@ class AuthController extends Controller
             $user->password = Hash::make($request->password);
         }
 
+        // Proses penyimpanan file foto profil jika terdapat upload Base64 baru
         if ($request->has('profile_picture')) {
             $imgData = $request->input('profile_picture');
             if ($imgData === null) {
@@ -163,11 +200,12 @@ class AuthController extends Controller
                         $user->profile_picture = '/storage/profiles/' . $fileName;
                     }
                 }
-              }
+            }
         }
 
         $user->save();
 
+        // Jika user adalah karyawan, perbarui juga data profile employee terkait
         if (!$user->isAdmin()) {
             $emp = $user->employee;
             if ($emp) {
@@ -181,6 +219,7 @@ class AuthController extends Controller
             }
         }
 
+        // Siapkan ulang response payload data profil terbaru
         $data = [
             'id'              => $user->id,
             'name'            => $user->name,
@@ -212,10 +251,16 @@ class AuthController extends Controller
 
     /**
      * POST /api/forgot-password
-     * Body: { username, nip, email, password }
+     * 
+     * Melakukan set ulang password tanpa login.
+     * Menggunakan validasi kecocokan data kombinasi Username, NIP, dan Email.
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
      */
     public function resetPassword(Request $request)
     {
+        // Validasi parameter reset password
         $request->validate([
             'username' => 'required|string',
             'nip'      => 'required|string',
@@ -223,6 +268,7 @@ class AuthController extends Controller
             'password' => 'required|string|min:6',
         ]);
 
+        // Pastikan kombinasi username, NIP, dan email benar-benar terdaftar di database
         $user = User::where('username', $request->username)
                     ->where('nip', $request->nip)
                     ->where('email', $request->email)
@@ -235,6 +281,7 @@ class AuthController extends Controller
             ], 422);
         }
 
+        // Set password baru dan lakukan hashing
         $user->password = Hash::make($request->password);
         $user->save();
 

@@ -8,8 +8,24 @@ use App\Models\LeaveRequest;
 use App\Models\Department;
 use Illuminate\Http\Request;
 
+/**
+ * Class ReportController
+ * 
+ * Mengolah dan menghasilkan data statistik absensi karyawan untuk dashboard admin,
+ * grafik perkembangan kehadiran mingguan/bulanan, serta rekapitulasi laporan bulanan.
+ */
 class ReportController extends Controller
 {
+    /**
+     * GET /api/reports/summary
+     * 
+     * Mengambil data statistik absensi lengkap untuk dashboard administrator.
+     * Mengkalkulasi tren kehadiran, status hari ini, diagram lingkaran komposisi absensi,
+     * grafik absensi 7 hari terakhir, keterlambatan per hari dalam seminggu, dan breakdown departemen.
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function summary(Request $request)
     {
         $today     = today()->toDateString();
@@ -17,23 +33,24 @@ class ReportController extends Controller
         $year      = now()->year;
         $totalEmp  = Employee::where('status', 'active')->count();
 
-        // ── Today stats (derived from our dynamic monthly report data) ──
+        // ── 1. Data absensi bulan berjalan secara real-time ──
         $monthReport = Attendance::getMonthlyReportData($month, $year);
         $monthReportColl = collect($monthReport);
         
+        // Pengecekan status absensi untuk hari ini
         $todayReport = $monthReportColl->where('date', $today);
         $todayHadir  = $todayReport->where('status', 'hadir')->count();
         $todayTelat  = $todayReport->where('status', 'telat')->count();
         $todayAlpha  = $todayReport->where('status', 'alpha')->count();
         $todayCuti   = $todayReport->whereIn('status', ['cuti', 'izin', 'sakit'])->count();
         
-        // ── This month stats ──
+        // Akumulasi statistik bulan berjalan
         $monthHadir = $monthReportColl->where('status', 'hadir')->count();
         $monthTelat = $monthReportColl->where('status', 'telat')->count();
         $monthAlpha = $monthReportColl->where('status', 'alpha')->count();
         $monthCuti  = $monthReportColl->whereIn('status', ['cuti', 'izin', 'sakit'])->count();
 
-        // ── Previous month stats (for trends) ──
+        // ── 2. Data absensi bulan lalu (untuk analisis tren kenaikan/penurunan) ──
         $prevMonthDate = now()->subMonth();
         $prevMonth     = $prevMonthDate->month;
         $prevYear      = $prevMonthDate->year;
@@ -46,25 +63,27 @@ class ReportController extends Controller
         $prevMonthAlpha = $prevMonthColl->where('status', 'alpha')->count();
         $prevMonthCuti  = $prevMonthColl->whereIn('status', ['cuti', 'izin', 'sakit'])->count();
 
-        // Calculate trends
+        // Hitung persentase tren kehadiran
         $elapsedDaysThisMonth = now()->day;
-        // Total expected shifts this month (sum of shifts for all active employees up to today)
+        // Total ekspektasi shift yang seharusnya berjalan bulan ini s.d hari ini
         $expectedThisMonth = $monthReportColl->where('date', '<=', $today)->count();
         $rateThisMonth     = $expectedThisMonth > 0 ? (($monthHadir + $monthTelat) / $expectedThisMonth) * 100 : 0;
 
-        // Total expected shifts last month
+        // Total ekspektasi shift bulan lalu
         $expectedPrevMonth = $prevMonthColl->count();
         $ratePrevMonth     = $expectedPrevMonth > 0 ? (($prevMonthHadir + $prevMonthTelat) / $expectedPrevMonth) * 100 : 0;
 
+        // Hitung tren (selisih bulan berjalan dengan bulan lalu)
         $presenceTrend = round($rateThisMonth - $ratePrevMonth);
         $lateTrend     = $monthTelat - $prevMonthTelat;
         $alphaTrend    = $monthAlpha - $prevMonthAlpha;
         $cutiTrend     = $monthCuti - $prevMonthCuti;
 
+        // Hitung pengajuan cuti yang butuh persetujuan
         $pendingLeave = LeaveRequest::where('status', 'pending')->count();
 
-        // ── 7-day chart ──
-        // Find earliest attendance date to avoid showing fake Alpha before system started
+        // ── 3. Data grafik absensi harian (7 hari terakhir) ──
+        // Batasi grafik agar tidak menampilkan Alpha palsu sebelum tanggal operasional sistem dimulai
         $firstAttDate = \App\Models\Attendance::orderBy('date', 'asc')->value('date');
         $systemStart  = $firstAttDate ? \Carbon\Carbon::parse($firstAttDate)->startOfDay() : now();
 
@@ -78,7 +97,7 @@ class ReportController extends Controller
             $hadirCount = $dayReport->whereIn('status', ['hadir', 'telat'])->count();
             $alphaCount = $dayReport->where('status', 'alpha')->count();
 
-            // If the date is before the system's first attendance, show 0/0 (system wasn't running)
+            // Set ke 0 jika tanggal tersebut mendahului tanggal sistem absensi diaktifkan
             $beforeSystem = $dateCarbon->lt($systemStart);
             if ($beforeSystem) {
                 $hadirCount = 0;
@@ -93,7 +112,7 @@ class ReportController extends Controller
             ];
         }
 
-        // ── 1. Monthly trend ──
+        // ── 4. Tren bulanan (6 bulan terakhir) ──
         $monthlyTrend = [];
         for ($i = 6; $i >= 0; $i--) {
             $monthDate = now()->subMonths($i);
@@ -116,7 +135,7 @@ class ReportController extends Controller
             ];
         }
 
-        // ── 2. Composition percentages ──
+        // ── 5. Persentase komposisi status absensi bulan berjalan ──
         $tot = $monthHadir + $monthTelat + $monthAlpha + $monthCuti;
         $hadirPct = $tot > 0 ? round(($monthHadir / $tot) * 100) : 0;
         $telatPct = $tot > 0 ? round(($monthTelat / $tot) * 100) : 0;
@@ -130,7 +149,7 @@ class ReportController extends Controller
             ['name' => 'Cuti/Izin', 'value' => $cutiPct, 'color' => '#A78BFA']
         ];
 
-        // ── 3. Weekly late ──
+        // ── 6. Statistik hari terlambat mingguan (Senin-Sabtu) ──
         $weeklyLate = [];
         $dayLabels = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
         $startOfWeek = now()->startOfWeek();
@@ -142,14 +161,14 @@ class ReportController extends Controller
             ];
         }
 
-        // ── 4. Department breakdown ──
+        // ── 7. Tingkat persentase kehadiran per Departemen/Bagian Unit Kerja ──
         $deptList = Department::with('employees')->get();
         $deptData = [];
         foreach ($deptList as $dept) {
             $empIds = $dept->employees->pluck('id');
             $deptReport = $monthReportColl->whereIn('employee_id', $empIds);
             $actual = $deptReport->whereIn('status', ['hadir', 'telat'])->count();
-            $expected = $deptReport->count(); // only count shifts assigned to this department
+            $expected = $deptReport->count(); // total shift terjadwal pada departemen tersebut
             $percent = $expected > 0 ? round(($actual / $expected) * 100) : 0;
 
             $deptData[] = [
@@ -167,7 +186,7 @@ class ReportController extends Controller
                     'telat'  => $todayTelat,
                     'alpha'  => $todayAlpha,
                     'cuti'   => $todayCuti,
-                    'belum'  => max(0, $todayReport->count() - ($todayHadir + $todayTelat) - $todayCuti),
+                    'belum'  => max(0, $todayReport->count() - ($todayHadir + $todayTelat) - $todayCuti), // karyawan terjadwal hari ini yang belum absen
                 ],
                 'this_month' => [
                     'hadir'  => $monthHadir,
@@ -191,16 +210,28 @@ class ReportController extends Controller
         ]);
     }
 
+    /**
+     * GET /api/reports/monthly-rekap
+     * 
+     * Menghasilkan rekapitulasi data absensi tabular bulanan per karyawan.
+     * Output menyajikan akumulasi jumlah Hadir, Terlambat, Izin, Sakit, Cuti, Alpha, dan total durasi kerja (menit).
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function monthlyRekap(Request $request)
     {
+        // Filter bulan & tahun rekap, default menggunakan bulan berjalan
         $month = (int)$request->query('month', now('Asia/Jakarta')->month);
         $year  = (int)$request->query('year', now('Asia/Jakarta')->year);
 
+        // Ambil data seluruh karyawan aktif
         $employees = Employee::with(['user', 'department', 'position'])
             ->where('status', 'active')
             ->get()
             ->sortBy(fn($emp) => ($emp->department?->name ?? 'Umum') . '_' . ($emp->user?->name ?? 'Karyawan'));
 
+        // Generate database laporan bulanan real-time
         $records = Attendance::getMonthlyReportData($month, $year);
         $recordsByEmployee = collect($records)->groupBy('employee_id');
 
@@ -208,6 +239,7 @@ class ReportController extends Controller
         foreach ($employees as $emp) {
             $empRecords = $recordsByEmployee->get($emp->id, collect());
 
+            // Hitung akumulasi status absensi
             $hadir = $empRecords->where('status', 'hadir')->count();
             $telat = $empRecords->where('status', 'telat')->count();
             $izin  = $empRecords->where('status', 'izin')->count();
@@ -215,7 +247,7 @@ class ReportController extends Controller
             $cuti  = $empRecords->where('status', 'cuti')->count();
             $alpha = $empRecords->where('status', 'alpha')->count();
 
-            // Durasi kerja (total menit)
+            // Hitung akumulasi durasi kerja dalam menit (selisih check-in & check-out)
             $totalDurationMin = 0;
             foreach ($empRecords as $r) {
                 if ($r['check_in'] && $r['check_out']) {

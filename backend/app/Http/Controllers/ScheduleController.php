@@ -7,10 +7,19 @@ use Illuminate\Http\Request;
 
 class ScheduleController extends Controller
 {
+    /**
+     * GET /api/schedules
+     * 
+     * Mengambil daftar seluruh master jadwal shift kerja,
+     * lengkap dengan data karyawan yang ditugaskan beserta jumlah totalnya.
+     * 
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function index()
     {
         $schedules = Schedule::with(['employees.user', 'employees.department'])->get();
         
+        // Tambahkan atribut custom 'employees_count' untuk menghitung pegawai unik
         $schedules->each(function ($schedule) {
             $uniqueCount = $schedule->employees->unique('id')->count();
             $schedule->setAttribute('employees_count', $uniqueCount);
@@ -19,8 +28,17 @@ class ScheduleController extends Controller
         return response()->json(['success' => true, 'data' => $schedules]);
     }
 
+    /**
+     * POST /api/schedules
+     * 
+     * Membuat master jadwal shift baru (misal: Shift Sore, Jam masuk 14:00 s.d 21:00).
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function store(Request $request)
     {
+        // Validasi input data shift baru
         $data = $request->validate([
             'name'       => 'required|string|max:50',
             'start_time' => 'required|date_format:H:i',
@@ -29,6 +47,7 @@ class ScheduleController extends Controller
             'icon'       => 'required|string|max:20',
         ]);
 
+        // Buat jadwal shift di database
         $schedule = Schedule::create($data);
         $schedule->setAttribute('employees_count', 0);
         $schedule->setAttribute('employees', []);
@@ -40,8 +59,18 @@ class ScheduleController extends Controller
         ], 201);
     }
 
+    /**
+     * PUT /api/schedules/{id}
+     * 
+     * Memperbarui data detail master jadwal shift yang sudah ada.
+     * 
+     * @param Request $request
+     * @param Schedule $schedule
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function update(Request $request, Schedule $schedule)
     {
+        // Validasi payload perubahan data shift
         $data = $request->validate([
             'name'       => 'sometimes|string|max:50',
             'start_time' => 'sometimes|date_format:H:i',
@@ -52,6 +81,7 @@ class ScheduleController extends Controller
 
         $schedule->update($data);
 
+        // Load relasi terbaru dan hitung ulang jumlah karyawan terkait
         $schedule->load(['employees.user', 'employees.department']);
         $uniqueCount = $schedule->employees->unique('id')->count();
         $schedule->setAttribute('employees_count', $uniqueCount);
@@ -59,16 +89,34 @@ class ScheduleController extends Controller
         return response()->json(['success' => true, 'message' => 'Jadwal shift berhasil diperbarui.', 'data' => $schedule]);
     }
 
+    /**
+     * DELETE /api/schedules/{id}
+     * 
+     * Menghapus master jadwal shift dari database.
+     * 
+     * @param Schedule $schedule
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function destroy(Schedule $schedule)
     {
         $schedule->delete();
         return response()->json(['success' => true, 'message' => 'Jadwal shift berhasil dihapus.']);
     }
 
+    /**
+     * GET /api/employee-schedules
+     * 
+     * Mengambil matriks pemetaan jadwal shift kerja mingguan (Senin-Minggu) untuk seluruh karyawan yang aktif.
+     * Digunakan oleh Admin untuk memetakan atau melihat sebaran shift karyawan.
+     * 
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function getEmployeeSchedules()
     {
+        // Ambil data seluruh karyawan aktif beserta jadwal pivotnya
         $employees = \App\Models\Employee::with(['user', 'schedules'])->where('status', 'active')->get();
         
+        // Format pemetaan hari kerja per karyawan
         $data = $employees->map(function ($emp) {
             $scheduleMap = [];
             foreach ($emp->schedules as $sched) {
@@ -91,6 +139,15 @@ class ScheduleController extends Controller
         return response()->json(['success' => true, 'data' => $data]);
     }
 
+    /**
+     * GET /api/my-schedule
+     * 
+     * Mengambil jadwal shift kerja karyawan yang saat ini sedang login untuk hari ini,
+     * serta informasi khusus untuk shift hari Sabtu (jika ada) guna keperluan kalkulasi checkout awal.
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function mySchedule(\Illuminate\Http\Request $request)
     {
         $employee = $request->user()->employee;
@@ -98,7 +155,7 @@ class ScheduleController extends Controller
             return response()->json(['success' => false, 'message' => 'Data karyawan tidak ditemukan.'], 404);
         }
 
-        // Nama hari dalam bahasa Indonesia sesuai pivot day_of_week
+        // Mapping index hari PHP ke penulisan hari Indonesia pada tabel pivot database
         $dayMap = [
             0 => 'Minggu',
             1 => 'Senin',
@@ -110,13 +167,15 @@ class ScheduleController extends Controller
         ];
         $todayName = $dayMap[now('Asia/Jakarta')->dayOfWeek];
 
-        // Fetch all schedules to locate today's and Saturday's shifts
+        // Ambil semua jadwal shift yang ditugaskan ke karyawan
         $schedules = $employee->schedules()->get();
 
+        // Cari shift untuk hari ini
         $todaySchedule = $schedules->first(function ($s) use ($todayName) {
             return $s->pivot->day_of_week === $todayName;
         });
 
+        // Cari shift untuk hari Sabtu (digunakan frontend/backend untuk pengaturan kepulangan lebih cepat)
         $saturdaySchedule = $schedules->first(function ($s) {
             return $s->pivot->day_of_week === 'Sabtu';
         });
@@ -154,10 +213,14 @@ class ScheduleController extends Controller
     }
 
     /**
-     * POST /api/schedules/assign
+     * POST /api/employee-schedules/assign
+     * 
      * Menugaskan atau memperbarui jadwal shift pegawai berdasarkan hari kerja (day_of_week).
      * Jika schedule_id dikirimkan null, maka pegawai diatur libur pada hari tersebut.
      * Mengirimkan notifikasi pembaruan jadwal secara real-time ke akun pegawai bersangkutan.
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
      */
     public function assignEmployeeSchedule(Request $request)
     {

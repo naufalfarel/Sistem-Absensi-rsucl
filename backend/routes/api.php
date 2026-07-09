@@ -21,70 +21,99 @@ use App\Http\Controllers\SettingController;
 |
 */
 
-// ── Public (tanpa token) ──────────────────────────────────────────────
+// ── Rute Publik (Akses tanpa token / tanpa login) ───────────────────────
+// Endpoint untuk proses login user
 Route::post('/login', [AuthController::class, 'login']);
+// Endpoint untuk reset password mandiri
 Route::post('/forgot-password', [AuthController::class, 'resetPassword']);
+// Endpoint untuk mengambil konfigurasi sistem absensi (misal data radius, geofence, nama instansi)
 Route::get('/settings', [SettingController::class, 'index']);
 
-// ── Protected (perlu token) ───────────────────────────────────────────
+// ── Rute Terproteksi (Wajib menggunakan token Laravel Sanctum) ─────────────
 Route::middleware('auth:sanctum')->group(function () {
 
-    // Auth
+    // ── Manajemen Autentikasi & Akun
+    // Mendapatkan data profile user yang sedang login
     Route::get('/me',     [AuthController::class, 'me']);
+    // Mengakhiri sesi / menghapus token login saat ini
     Route::post('/logout', [AuthController::class, 'logout']);
+    // Mengubah informasi profil (termasuk email, foto profil, dan password)
     Route::put('/profile', [AuthController::class, 'updateProfile']);
 
-    // Notifikasi (semua role)
+    // ── Fitur Notifikasi (Dapat diakses admin & karyawan)
+    // Mendapatkan daftar notifikasi miliknya
     Route::get('/notifications',              [NotificationController::class, 'index']);
+    // Menandai seluruh notifikasi miliknya telah dibaca
     Route::put('/notifications/read-all',     [NotificationController::class, 'markAllRead']);
+    // Menandai satu notifikasi tertentu sebagai telah dibaca
     Route::put('/notifications/{notification}/read', [NotificationController::class, 'markRead']);
+    // Menghapus semua notifikasi yang berstatus sudah dibaca
     Route::delete('/notifications/delete-read', [NotificationController::class, 'deleteAllRead']);
+    // Menghapus satu notifikasi tertentu
     Route::delete('/notifications/{notification}', [NotificationController::class, 'delete']);
 
-    // Absensi (karyawan + admin)
+    // ── Fitur Absensi Mandiri (Karyawan & Admin)
+    // Mengecek apakah hari ini sudah melakukan absensi (Check-in/Check-out)
     Route::get('/attendance/today',   [AttendanceController::class, 'today']);
+    // Mengambil daftar riwayat absensi diri sendiri pada bulan/tahun tertentu
     Route::get('/attendance/history', [AttendanceController::class, 'history']);
+    // Melakukan Check-in kehadiran dengan verifikasi koordinat & foto selfie
     Route::post('/attendance/check-in',  [AttendanceController::class, 'checkIn']);
+    // Melakukan Check-out kehadiran saat selesai shift
     Route::post('/attendance/check-out', [AttendanceController::class, 'checkOut']);
 
-    // Pengajuan Cuti/Izin (karyawan bisa buat & lihat miliknya; admin lihat semua)
+    // ── Fitur Pengajuan Izin/Cuti
+    // Melihat daftar pengajuan izin/cuti diri sendiri (karyawan) atau seluruh karyawan (admin)
     Route::get('/leave-requests',  [LeaveRequestController::class, 'index']);
+    // Membuat form pengajuan izin/cuti/sakit baru beserta lampirannya
     Route::post('/leave-requests', [LeaveRequestController::class, 'store']);
 
-
-
-    // Jadwal shift karyawan yang sedang login (hari ini)
+    // ── Fitur Jadwal Shift
+    // Mendapatkan rincian jadwal shift diri sendiri untuk hari berjalan
     Route::get('/my-schedule', [ScheduleController::class, 'mySchedule']);
 
-    // ── Admin only ────────────────────────────────────────────────────
+    // ── RUTE KHUSUS ADMINISTRATOR (Hanya untuk User dengan Role 'admin') ──────
     Route::middleware(\App\Http\Middleware\EnsureIsAdmin::class)->group(function () {
 
-        // Absensi semua karyawan (hari ini)
+        // ── Dashboard / Monitoring Kehadiran
+        // Memonitoring status absensi seluruh karyawan hari ini secara real-time
         Route::get('/attendance/all-today', [AttendanceController::class, 'allToday']);
 
-        // Karyawan CRUD
+        // ── CRUD Karyawan
+        // Mendapatkan data meta pendukung (list department/position) untuk registrasi karyawan
         Route::get('/employees/meta',   [EmployeeController::class, 'meta']);
+        // API Resource standar untuk CRUD data Karyawan
         Route::apiResource('/employees', EmployeeController::class);
 
-        // Departemen/Bagian CRUD
+        // ── CRUD Departemen / Bagian Unit Kerja
         Route::apiResource('/departments', \App\Http\Controllers\DepartmentController::class);
 
-        // Approve / Reject / Hapus pengajuan cuti
+        // ── Verifikasi Pengajuan Izin/Cuti
+        // Menyetujui pengajuan cuti/izin karyawan
         Route::put('/leave-requests/{leaveRequest}/approve', [LeaveRequestController::class, 'approve']);
+        // Menolak pengajuan cuti/izin karyawan disertai alasan penolakan
         Route::put('/leave-requests/{leaveRequest}/reject',  [LeaveRequestController::class, 'reject']);
+        // Menghapus massal pengajuan cuti yang sudah berstatus 'approved' atau 'rejected'
         Route::delete('/leave-requests/all-processed',       [LeaveRequestController::class, 'destroyAll']);
+        // Menghapus satu data pengajuan cuti tertentu
         Route::delete('/leave-requests/{leaveRequest}',       [LeaveRequestController::class, 'destroy']);
 
-        // Jadwal Shift
+        // ── Manajemen Shift Kerja & Penugasan Jadwal
+        // Mengambil daftar relasi shift karyawan
         Route::get('/employee-schedules', [ScheduleController::class, 'getEmployeeSchedules']);
+        // Menugaskan/memetakan jadwal shift mingguan ke karyawan tertentu
         Route::post('/employee-schedules/assign', [ScheduleController::class, 'assignEmployeeSchedule']);
+        // API Resource standar untuk CRUD data Shift (Schedules) kecuali endpoint Detail (show)
         Route::apiResource('/schedules', ScheduleController::class)->except(['show']);
 
-        // Laporan
+        // ── Fitur Pelaporan
+        // Mengambil summary data statistik absensi (misal jumlah hadir, sakit, alpa) untuk dashboard admin
         Route::get('/reports/summary', [ReportController::class, 'summary']);
+        // Mengambil rekapitulasi data absensi bulanan dalam format tabular untuk pelaporan/ekspor
         Route::get('/reports/monthly-rekap', [ReportController::class, 'monthlyRekap']);
 
-        // Pengaturan (PUT hanya admin)
+        // ── Pengaturan Sistem
+        // Mengubah parameter pengaturan global (koordinat geofence, radius, dll)
         Route::put('/settings',  [SettingController::class, 'update']);
     });
 });

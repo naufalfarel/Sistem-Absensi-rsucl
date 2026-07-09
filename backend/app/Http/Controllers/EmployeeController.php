@@ -10,14 +10,27 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 
+/**
+ * Class EmployeeController
+ * 
+ * Mengelola fungsi CRUD data profil kepegawaian (karyawan/employee).
+ * Menghubungkan pembuatan/update profile karyawan dengan data akun user (otentikasi).
+ * Hanya dapat diakses oleh administrator.
+ */
 class EmployeeController extends Controller
 {
     /**
      * GET /api/employees
-     * Daftar seluruh karyawan (admin only)
+     * 
+     * Mengambil daftar seluruh karyawan aktif/tidak aktif beserta relasi user, departemen, jabatan,
+     * serta status absensi hari ini.
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
      */
     public function index(Request $request)
     {
+        // Ambil seluruh karyawan beserta relasi terkait
         $employees = Employee::with(['user', 'department', 'position', 'todayAttendance'])
             ->get()
             ->map(fn($e) => $this->formatEmployee($e));
@@ -27,10 +40,16 @@ class EmployeeController extends Controller
 
     /**
      * POST /api/employees
-     * Tambah karyawan baru (admin only)
+     * 
+     * Mendaftarkan karyawan baru.
+     * Langkah ini sekaligus membuat akun user untuk otentikasi serta data profil karyawan.
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
      */
     public function store(Request $request)
     {
+        // Validasi parameter data karyawan baru beserta keunikan email, username, NIP
         $data = $request->validate([
             'name'          => 'required|string|max:100',
             'email'         => 'required|email|unique:users,email',
@@ -44,7 +63,7 @@ class EmployeeController extends Controller
             'join_date'     => 'nullable|date',
         ]);
 
-        // Buat akun User
+        // 1. Buat akun User untuk login karyawan
         $user = User::create([
             'name'     => $data['name'],
             'email'    => $data['email'],
@@ -54,7 +73,7 @@ class EmployeeController extends Controller
             'username' => $data['username'],
         ]);
 
-        // Buat data karyawan
+        // 2. Buat profil karyawan yang terelasi ke akun user tersebut
         $employee = Employee::create([
             'user_id'       => $user->id,
             'department_id' => $data['department_id'],
@@ -76,6 +95,11 @@ class EmployeeController extends Controller
 
     /**
      * GET /api/employees/{id}
+     * 
+     * Mengambil profil lengkap satu karyawan berdasarkan ID.
+     * 
+     * @param Employee $employee
+     * @return \Illuminate\Http\JsonResponse
      */
     public function show(Employee $employee)
     {
@@ -85,9 +109,16 @@ class EmployeeController extends Controller
 
     /**
      * PUT /api/employees/{id}
+     * 
+     * Memperbarui informasi profil karyawan serta akun usernya.
+     * 
+     * @param Request $request
+     * @param Employee $employee
+     * @return \Illuminate\Http\JsonResponse
      */
     public function update(Request $request, Employee $employee)
     {
+        // Validasi input data update (mengabaikan keunikan untuk data milik sendiri)
         $data = $request->validate([
             'name'          => 'sometimes|string|max:100',
             'email'         => ['sometimes', 'email', Rule::unique('users', 'email')->ignore($employee->user_id)],
@@ -100,7 +131,7 @@ class EmployeeController extends Controller
             'password'      => 'sometimes|string|min:6',
         ]);
 
-        // Update user
+        // 1. Perbarui atribut user
         $userFields = array_filter([
             'name'     => $data['name'] ?? null,
             'email'    => $data['email'] ?? null,
@@ -108,7 +139,7 @@ class EmployeeController extends Controller
         ]);
         if ($userFields) $employee->user->update($userFields);
 
-        // Update employee
+        // 2. Perbarui data kepegawaian karyawan
         $empFields = array_filter([
             'department_id' => $data['department_id'] ?? null,
             'position_id'   => $data['position_id'] ?? null,
@@ -129,6 +160,11 @@ class EmployeeController extends Controller
 
     /**
      * DELETE /api/employees/{id}
+     * 
+     * Menghapus karyawan dari sistem (mendukung soft-delete sesuai trait SoftDeletes di model Employee).
+     * 
+     * @param Employee $employee
+     * @return \Illuminate\Http\JsonResponse
      */
     public function destroy(Employee $employee)
     {
@@ -136,7 +172,13 @@ class EmployeeController extends Controller
         return response()->json(['success' => true, 'message' => 'Karyawan berhasil dihapus.']);
     }
 
-    /** Daftar departemen & jabatan untuk form */
+    /**
+     * GET /api/employees/meta
+     * 
+     * Mengambil list departemen dan jabatan untuk mempermudah pengisian opsi dropdown pada form admin.
+     * 
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function meta()
     {
         return response()->json([
@@ -148,7 +190,12 @@ class EmployeeController extends Controller
         ]);
     }
 
-    // ── Helper ────────────────────────────────────────────────────────
+    /**
+     * Memformat output JSON karyawan agar konsisten dan mempermudah frontend.
+     * 
+     * @param Employee $e
+     * @return array
+     */
     private function formatEmployee(Employee $e): array
     {
         $today = $e->todayAttendance;

@@ -5,18 +5,32 @@ namespace App\Http\Controllers;
 use App\Models\Notification;
 use Illuminate\Http\Request;
 
+/**
+ * Class NotificationController
+ * 
+ * Mengelola interaksi notifikasi sistem untuk pengguna yang masuk.
+ * Mendukung pembacaan detail notifikasi, penandaan "dibaca semua", serta penghapusan.
+ */
 class NotificationController extends Controller
 {
     /**
      * GET /api/notifications
+     * 
+     * Mengambil seluruh daftar notifikasi milik pengguna saat ini
+     * beserta jumlah notifikasi yang belum dibaca (unread count).
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
      */
     public function index(Request $request)
     {
+        // Ambil notifikasi dari user, diurutkan dari yang terbaru
         $notifications = Notification::where('user_id', $request->user()->id)
                                      ->orderBy('created_at', 'desc')
                                      ->get()
                                      ->map(fn($n) => $this->format($n));
 
+        // Hitung jumlah notifikasi yang belum dibaca
         $unreadCount = Notification::where('user_id', $request->user()->id)
                                    ->whereNull('read_at')
                                    ->count();
@@ -32,18 +46,32 @@ class NotificationController extends Controller
 
     /**
      * PUT /api/notifications/{id}/read
+     * 
+     * Menandai satu notifikasi tertentu sebagai telah dibaca.
+     * 
+     * @param Request $request
+     * @param Notification $notification
+     * @return \Illuminate\Http\JsonResponse
      */
     public function markRead(Request $request, Notification $notification)
     {
+        // Validasi kepemilikan notifikasi
         if ($notification->user_id !== $request->user()->id) {
             return response()->json(['success' => false, 'message' => 'Akses ditolak.'], 403);
         }
+        
+        // Update waktu keterbacaan
         $notification->update(['read_at' => now()]);
         return response()->json(['success' => true, 'message' => 'Notifikasi ditandai telah dibaca.']);
     }
 
     /**
      * PUT /api/notifications/read-all
+     * 
+     * Menandai seluruh notifikasi milik user saat ini sebagai telah dibaca.
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
      */
     public function markAllRead(Request $request)
     {
@@ -56,6 +84,11 @@ class NotificationController extends Controller
 
     /**
      * DELETE /api/notifications/delete-read
+     * 
+     * Menghapus semua notifikasi milik user saat ini yang sudah dibaca (read_at tidak null).
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
      */
     public function deleteAllRead(Request $request)
     {
@@ -68,13 +101,21 @@ class NotificationController extends Controller
 
     /**
      * DELETE /api/notifications/{id}
+     * 
+     * Menghapus satu notifikasi tertentu. Hanya notifikasi yang sudah dibaca yang diizinkan untuk dihapus.
+     * 
+     * @param Request $request
+     * @param Notification $notification
+     * @return \Illuminate\Http\JsonResponse
      */
     public function delete(Request $request, Notification $notification)
     {
+        // Validasi kepemilikan notifikasi
         if ($notification->user_id !== $request->user()->id) {
             return response()->json(['success' => false, 'message' => 'Akses ditolak.'], 403);
         }
 
+        // Cegah penghapusan jika belum dibaca
         if ($notification->read_at === null) {
             return response()->json(['success' => false, 'message' => 'Hanya notifikasi yang telah dibaca yang dapat dihapus.'], 422);
         }
@@ -84,6 +125,12 @@ class NotificationController extends Controller
         return response()->json(['success' => true, 'message' => 'Notifikasi berhasil dihapus.']);
     }
 
+    /**
+     * Format data output JSON notifikasi.
+     * 
+     * @param Notification $n
+     * @return array
+     */
     private function format(Notification $n): array
     {
         return [

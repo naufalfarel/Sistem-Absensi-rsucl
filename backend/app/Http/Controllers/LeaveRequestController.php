@@ -6,19 +6,34 @@ use App\Models\LeaveRequest;
 use App\Models\Notification;
 use Illuminate\Http\Request;
 
+/**
+ * Class LeaveRequestController
+ * 
+ * Mengelola proses pengajuan cuti, izin, atau sakit oleh karyawan.
+ * Mendukung penyimpanan file lampiran (Base64), peninjauan oleh administrator,
+ * notifikasi real-time (email & sistem), dan pembuatan otomatis record absensi bagi pengajuan yang disetujui.
+ */
 class LeaveRequestController extends Controller
 {
     /**
      * GET /api/leave-requests
-     * Karyawan: milik sendiri. Admin: semua.
+     * 
+     * Mengambil daftar pengajuan cuti/izin/sakit.
+     * Jika role adalah Karyawan: hanya mengambil milik sendiri.
+     * Jika role adalah Admin: mengambil seluruh pengajuan yang terdaftar untuk keperluan verifikasi.
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
      */
     public function index(Request $request)
     {
         $user = $request->user();
 
+        // Siapkan query pengambilan data beserta relasi profil karyawan & reviewer (admin)
         $query = LeaveRequest::with(['employee.user', 'employee.department', 'reviewer'])
                              ->orderBy('created_at', 'desc');
 
+        // Filter data jika user login bukan admin
         if (!$user->isAdmin()) {
             $employee = $user->employee;
             if (!$employee) {
@@ -34,7 +49,12 @@ class LeaveRequestController extends Controller
 
     /**
      * POST /api/leave-requests
-     * Karyawan mengajukan permohonan cuti/izin/sakit
+     * 
+     * Mengajukan izin/cuti/sakit baru beserta dokumen pendukung (Base64).
+     * Mengirimkan notifikasi sistem dan email secara real-time ke semua akun admin.
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
      */
     public function store(Request $request)
     {
@@ -43,19 +63,22 @@ class LeaveRequestController extends Controller
             return response()->json(['success' => false, 'message' => 'Data karyawan tidak ditemukan.'], 404);
         }
 
+        // Validasi input data pengajuan cuti
         $data = $request->validate([
             'type'       => 'required|in:cuti,izin,sakit',
             'start_date' => 'required|date|after_or_equal:today',
             'end_date'   => 'required|date|after_or_equal:start_date',
             'reason'     => 'required|string|max:500',
-            'attachment' => 'required|string', // Base64 encoded file (PDF or Image) REQUIRED
+            'attachment' => 'required|string', // String file ter-encode Base64 (PDF/Gambar)
         ]);
 
+        // Simpan file dokumen pendukung ke server storage
         $attachmentUrl = $this->storeBase64Attachment(
             $data['attachment'],
             'attachment_leave_' . $employee->id . '_' . time()
         );
 
+        // Buat record pengajuan berstatus 'pending'
         $lr = LeaveRequest::create([
             'employee_id'    => $employee->id,
             'type'           => $data['type'],
@@ -66,7 +89,7 @@ class LeaveRequestController extends Controller
             'status'         => 'pending',
         ]);
 
-        // Beri notifikasi ke semua admin
+        // Kirim notifikasi sistem ke admin jika opsi notif_leave diaktifkan
         $notifLeave = \App\Models\Setting::get('notif_leave', '1');
         if ($notifLeave !== '0') {
             $admins = \App\Models\User::where('role', 'admin')->get();
@@ -82,7 +105,7 @@ class LeaveRequestController extends Controller
             }
         }
 
-        // Kirim notifikasi email ke semua admin jika diaktifkan
+        // Kirim email pengajuan baru ke semua admin (jika notif_email diset aktif)
         $notifEmail = \App\Models\Setting::get('notif_email', '1');
         if ($notifEmail !== '0') {
             $admins = \App\Models\User::where('role', 'admin')->get();
@@ -112,6 +135,12 @@ class LeaveRequestController extends Controller
 
     /**
      * PUT /api/leave-requests/{id}/approve
+     * 
+     * Menyetujui pengajuan izin/cuti/sakit.
+     * 
+     * @param Request $request
+     * @param LeaveRequest $leaveRequest
+     * @return \Illuminate\Http\JsonResponse
      */
     public function approve(Request $request, LeaveRequest $leaveRequest)
     {
@@ -120,15 +149,31 @@ class LeaveRequestController extends Controller
 
     /**
      * PUT /api/leave-requests/{id}/reject
+     * 
+     * Menolak pengajuan izin/cuti/sakit.
+     * 
+     * @param Request $request
+     * @param LeaveRequest $leaveRequest
+     * @return \Illuminate\Http\JsonResponse
      */
     public function reject(Request $request, LeaveRequest $leaveRequest)
     {
         return $this->review($request, $leaveRequest, 'rejected');
     }
 
-    // ── Private ───────────────────────────────────────────────────────
+    /**
+     * Logika inti pemrosesan persetujuan/penolakan izin/cuti/sakit.
+     * Jika disetujui ('approved'), sistem akan meng-generate otomatis record absensi pada tabel attendance
+     * sepanjang rentang tanggal tersebut dengan status cuti/izin/sakit untuk mencegah tanda Alpa otomatis.
+     * 
+     * @param Request $request
+     * @param LeaveRequest $lr
+     * @param string $newStatus 'approved' atau 'rejected'
+     * @return \Illuminate\Http\JsonResponse
+     */
     private function review(Request $request, LeaveRequest $lr, string $newStatus)
     {
+        // Cegah pemrosesan ulang data yang sudah disetujui/ditolak
         if ($lr->status !== 'pending') {
             return response()->json([
                 'success' => false,
@@ -138,6 +183,7 @@ class LeaveRequestController extends Controller
 
         $data = $request->validate(['admin_note' => 'nullable|string|max:300']);
 
+        // Update status pengajuan beserta data reviewer
         $lr->update([
             'status'      => $newStatus,
             'reviewed_by' => $request->user()->id,
@@ -145,6 +191,7 @@ class LeaveRequestController extends Controller
             'admin_note'  => $data['admin_note'] ?? null,
         ]);
 
+        // Jika disetujui, buat/perbarui record absensi harian karyawan tersebut
         if ($newStatus === 'approved') {
             $start = \Carbon\Carbon::parse($lr->start_date);
             $end = \Carbon\Carbon::parse($lr->end_date);
@@ -156,7 +203,7 @@ class LeaveRequestController extends Controller
                         'date'        => $dateStr,
                     ],
                     [
-                        'status'             => $lr->type,
+                        'status'             => $lr->type, // cuti, izin, sakit
                         'check_in'           => null,
                         'check_out'          => null,
                         'note'               => "Masa " . ucfirst($lr->type) . ": " . $lr->reason,
@@ -171,7 +218,7 @@ class LeaveRequestController extends Controller
             }
         }
 
-        // Notifikasi ke karyawan
+        // Kirim notifikasi sistem secara real-time ke akun karyawan bersangkutan
         $statusLabel = $newStatus === 'approved' ? 'Disetujui ✅' : 'Ditolak ❌';
         Notification::create([
             'user_id' => $lr->employee->user_id,
@@ -195,7 +242,12 @@ class LeaveRequestController extends Controller
 
     /**
      * DELETE /api/leave-requests/{id}
-     * Admin: Hapus satu pengajuan cuti
+     * 
+     * Menghapus satu pengajuan cuti tertentu dari database.
+     * 
+     * @param Request $request
+     * @param LeaveRequest $leaveRequest
+     * @return \Illuminate\Http\JsonResponse
      */
     public function destroy(Request $request, LeaveRequest $leaveRequest)
     {
@@ -213,7 +265,12 @@ class LeaveRequestController extends Controller
 
     /**
      * DELETE /api/leave-requests/all-processed
-     * Admin: Hapus semua pengajuan cuti yang sudah diproses (approved/rejected)
+     * 
+     * Menghapus seluruh data pengajuan cuti yang sudah selesai diproses (status: approved/rejected).
+     * Digunakan untuk pembersihan data lama (log cleaning).
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
      */
     public function destroyAll(Request $request)
     {
@@ -229,6 +286,12 @@ class LeaveRequestController extends Controller
         ]);
     }
 
+    /**
+     * Memformat output data pengajuan cuti/izin/sakit untuk response JSON API.
+     * 
+     * @param LeaveRequest $lr
+     * @return array
+     */
     private function format(LeaveRequest $lr): array
     {
         return [
@@ -258,6 +321,10 @@ class LeaveRequestController extends Controller
      * melakukan validasi ekstensi berkas, men-decode berkas,
      * lalu menyimpannya ke disk penyimpanan public (storage/app/public/attachments).
      * Mengembalikan URL path file agar dapat disimpan di database dan diakses via web.
+     * 
+     * @param string|null $base64Data String file Base64
+     * @param string $baseName Nama dasar file unik
+     * @return string|null Path relatif file yang disimpan
      */
     private function storeBase64Attachment(?string $base64Data, string $baseName): ?string
     {
