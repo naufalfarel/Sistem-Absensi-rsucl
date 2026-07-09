@@ -40,6 +40,19 @@ const statusColors: Record<string, { color: string; bg: string }> = {
   cuti: { color: '#2563EB', bg: '#DBEAFE' },
   izin: { color: '#7C3AED', bg: '#F5F3FF' },
   sakit: { color: '#EA580C', bg: '#FFF7ED' },
+  tidak_ada_shift: { color: '#6B7280', bg: '#F3F4F6' },
+  belum_hadir: { color: '#9CA3AF', bg: '#F9FAFB' },
+};
+
+const statusLabels: Record<string, string> = {
+  hadir: 'Hadir',
+  telat: 'Terlambat',
+  alpha: 'Alpha',
+  cuti: 'Cuti',
+  izin: 'Izin',
+  sakit: 'Sakit',
+  tidak_ada_shift: 'Tidak Ada Shift',
+  belum_hadir: 'Belum Hadir',
 };
 
 const emptyForm = {
@@ -51,28 +64,56 @@ interface AdminAppProps {
   onLogout: () => void;
 }
 
+/**
+ * Layang Utama Administrator (AdminApp) — Sistem Absensi RSUCL
+ * 
+ * Komponen induk untuk seluruh fitur manajemen admin (Dashboard statistik, manajemen pegawai,
+ * manajemen departemen, absensi real-time, laporan bulanan, persetujuan cuti/izin, pengaturan geofence,
+ * serta notifikasi sistem).
+ * 
+ * @param onLogout Callback untuk membersihkan sesi autentikasi dan keluar sistem
+ */
 export function AdminApp({ onLogout }: AdminAppProps) {
   const { user, logoUrl } = useAuth();
+  
+  // Tab menu aktif di sidebar (default: 'dashboard')
   const [activeTab, setActiveTab] = useState('dashboard');
+  
+  // Pengontrol buka/tutup laci sidebar pada tampilan layar kecil (mobile)
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  
+  // Kata kunci pencarian data pegawai
   const [searchQuery, setSearchQuery] = useState('');
 
-  // API States
+  // ── States Penyimpanan Data dari API ──────────────────────────────────────
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [departments, setDepartments] = useState<{ id: number; name: string }[]>([]);
   const [positions, setPositions] = useState<{ id: number; name: string }[]>([]);
   const [reportSummary, setReportSummary] = useState<ReportSummary | null>(null);
+  
+  // Indikator status loading tarik data
   const [loading, setLoading] = useState(false);
+  
+  // Penampung pesan error dari backend
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Modal States
+  // ── States Pengelolaan Modal CRUD Pegawai ────────────────────────────────
   const [modalType, setModalType] = useState<'add' | 'edit' | 'delete' | null>(null);
   const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
   const [form, setForm] = useState({ ...emptyForm });
+  
+  // Melacak baris tabel data pegawai mana yang opsi popover-nya sedang dibuka
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  
+  // Penampung pesan error validasi input di dalam form modal
   const [formError, setFormError] = useState('');
+  
+  // Jumlah notifikasi sistem admin yang belum dibaca
   const [unreadNotifications, setUnreadNotifications] = useState(0);
 
+  /**
+   * Mengambil jumlah notifikasi admin belum dibaca dari API.
+   */
   const fetchUnreadNotificationsCount = async () => {
     try {
       const res = await notificationApi.list();
@@ -84,6 +125,9 @@ export function AdminApp({ onLogout }: AdminAppProps) {
     }
   };
 
+  /**
+   * Mengambil data utama secara massal (Daftar Pegawai, Metadata Departemen & Jabatan, Ringkasan Laporan).
+   */
   const loadData = async () => {
     setLoading(true);
     setErrorMsg('');
@@ -107,6 +151,9 @@ export function AdminApp({ onLogout }: AdminAppProps) {
     }
   };
 
+  /**
+   * Mengambil ringkasan laporan terbaru saja (untuk update instan sehabis persetujuan cuti).
+   */
   const refreshReportSummary = async () => {
     try {
       const reportRes = await reportApi.summary();
@@ -118,6 +165,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
     }
   };
 
+  // Pemuatan data awal saat komponen terpasang di DOM dan inisialisasi polling notifikasi (20 detik)
   useEffect(() => {
     loadData();
     fetchUnreadNotificationsCount();
@@ -493,7 +541,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
                   { label: 'Total', value: employees.length, color: '#374151' },
                   { label: 'Hadir', value: employees.filter(e => e.today_attendance?.status === 'hadir' || e.today_attendance?.status === 'telat').length, color: '#16A34A' },
                   { label: 'Terlambat', value: employees.filter(e => e.today_attendance?.status === 'telat').length, color: '#D97706' },
-                  { label: 'Alpha', value: employees.filter(e => !e.today_attendance || e.today_attendance.status === 'alpha').length, color: '#DC2626' },
+                  { label: 'Alpha', value: employees.filter(e => e.today_attendance?.status === 'alpha').length, color: '#DC2626' },
                   { label: 'Cuti', value: employees.filter(e => e.today_attendance?.status === 'izin' || e.today_attendance?.status === 'sakit' || e.today_attendance?.status === 'cuti').length, color: '#2563EB' },
                 ].map((s, i) => (
                   <div key={i} className="bg-white rounded-xl border border-gray-100 px-3 py-2.5 text-center shadow-sm">
@@ -540,7 +588,9 @@ export function AdminApp({ onLogout }: AdminAppProps) {
                             <td className="px-4 py-3.5 text-[13px] text-gray-600">{emp.department}</td>
                             <td className="px-4 py-3.5 text-[13px] text-gray-600">{emp.position}</td>
                             <td className="px-4 py-3.5">
-                              <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full uppercase" style={{ color: sc.color, background: sc.bg }}>{todayStatus}</span>
+                              <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full uppercase" style={{ color: sc.color, background: sc.bg }}>
+                                {statusLabels[todayStatus] || todayStatus}
+                              </span>
                             </td>
                             <td className="px-4 py-3.5 text-[13px] font-mono text-gray-600">{emp.today_attendance?.check_in || '--:--'}</td>
                             <td className="px-4 py-3.5 relative">

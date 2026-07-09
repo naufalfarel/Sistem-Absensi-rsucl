@@ -7,26 +7,42 @@ import { useAuth } from '../../context/AuthContext';
 import logoImg from '../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
 import rsPhoto from '../../imports/2328bb14-b47f-4ac6-a2be-6db33f64fce3_980x381.png';
 
+/**
+ * Interface properti untuk komponen LandingPage.
+ */
 interface LandingPageProps {
+  // Callback untuk mengalihkan halaman utama ke halaman login
   onEnter: () => void;
 }
 
-// Features array removed as per requirement.
-
-
+/**
+ * Halaman Beranda (LandingPage) — Sistem Absensi RSUCL
+ * 
+ * Merupakan pintu gerbang selamat datang yang diakses oleh pengguna sebelum login.
+ * Menampilkan peta ringkas, panduan cara melakukan absensi, waktu server waktu nyata (realtime clock),
+ * koordinat RSUCL, serta informasi pemecahan masalah (troubleshooting) untuk membantu staf.
+ */
 export function LandingPage({ onEnter }: LandingPageProps) {
   const { logoUrl } = useAuth();
+  
+  // State untuk menyimpan waktu jam server berjalan aktual (real-time clock)
   const [time, setTime] = useState(new Date());
+  
+  // State untuk mengontrol animasi fade-in komponen saat pertama kali dirender
   const [visible, setVisible] = useState(false);
 
+  // Mengatur interval waktu update jam setiap detik dan memicu animasi fade-in
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
     setTimeout(() => setVisible(true), 100);
     return () => clearInterval(t);
   }, []);
 
+  // Format array hari dan bulan Indonesia untuk teks tanggal digital
   const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
   const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+  
+  // Merangkai string tanggal & waktu
   const dateStr = `${days[time.getDay()]}, ${time.getDate()} ${months[time.getMonth()]} ${time.getFullYear()}`;
   const timeStr = time.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 

@@ -21,28 +21,58 @@ function haversine(lat1: number, lng1: number, lat2: number, lng2: number): numb
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+/**
+ * Halaman Dashboard Utama Karyawan (DashboardHome) — Sistem Absensi RSUCL
+ * 
+ * Menampilkan ringkasan status kehadiran hari ini (Jam Masuk, Jam Pulang, Shift aktif),
+ * koordinat lokasi GPS secara realtime untuk pengecekan geofencing, menu aksi cepat,
+ * serta daftar notifikasi terbaru.
+ * 
+ * @param onNavigate Callback untuk berpindah tab/halaman di EmployeeApp parent
+ */
 export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => void }) {
   const { user } = useAuth();
+  
+  // State waktu jam realtime di pojok dashboard
   const [time, setTime] = useState(new Date());
+  
+  // State data absensi hari ini yang ditarik dari API
   const [todayRecord, setTodayRecord] = useState<AttendanceRecord | null>(null);
+  
+  // State notifikasi dan jumlah notifikasi yang belum dibaca
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadNotifsCount, setUnreadNotifsCount] = useState(0);
+  
+  // State jadwal shift kerja yang berlaku hari ini
   const [todayShift, setTodayShift] = useState<MyShiftSchedule | null | undefined>(undefined); // undefined = sedang memuat
   const [shiftDay, setShiftDay] = useState<string>('');
-
-  // ── State GPS / Geofence ──────────────────────────────────────────────
+ 
+  // ── State GPS / Geofencing RSUCL ──────────────────────────────────────────
+  
+  // Koordinat latitude RSUCL (diambil dari settings database, default Banda Aceh)
   const [hospLat, setHospLat] = useState<number>(5.552740480177099);
+  
+  // Koordinat longitude RSUCL
   const [hospLng, setHospLng] = useState<number>(95.33486560781716);
+  
+  // Radius maksimal toleransi absensi (meter)
   const [hospRadius, setHospRadius] = useState<number>(40);
+  
+  // Koordinat aktual perangkat karyawan saat ini
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
-  // null = sedang memuat, true/false = hasil cek
+  
+  // Status keberadaan GPS ('loading', 'in' = dalam area, 'out' = di luar area, 'unavailable')
   const [gpsStatus, setGpsStatus] = useState<'loading' | 'in' | 'out' | 'unavailable'>('loading');
 
+  // Menjalankan interval jam digital
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
 
+  /**
+   * Mengambil data dashboard secara paralel (hari ini, notifikasi, jadwal shift).
+   */
   const fetchDashboardData = async () => {
     try {
       const [attendRes, notifRes, shiftRes] = await Promise.allSettled([
@@ -70,11 +100,12 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
     }
   };
 
+  // Panggil data awal saat mounting
   useEffect(() => {
     fetchDashboardData();
   }, []);
 
-  // ── Memuat koordinat rumah sakit dari pengaturan ─────────────────────
+  // ── Memuat koordinat rumah sakit dari pengaturan API ─────────────────────
   useEffect(() => {
     settingApi.get().then(res => {
       if (res.success && res.data) {
@@ -85,10 +116,10 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
         if (!isNaN(lng)) setHospLng(lng);
         if (!isNaN(rad) && rad > 0) setHospRadius(rad);
       }
-    }).catch(() => { /* gunakan koordinat default */ });
+    }).catch(() => { /* gunakan koordinat default jika API bermasalah */ });
   }, []);
 
-  // ── Pantau GPS ────────────────────────────────────────────────────────
+  // ── Pemantauan GPS Terus Menerus (Real-time Watcher) ──────────────────────
   useEffect(() => {
     if (!navigator.geolocation) {
       setGpsStatus('unavailable');
@@ -99,6 +130,8 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
         setUserCoords({ lat, lng });
+        
+        // Hitung jarak haversine antara posisi user dan koordinat RSUCL
         const dist = haversine(lat, lng, hospLat, hospLng);
         setGpsStatus(dist <= hospRadius ? 'in' : 'out');
       },
@@ -108,12 +141,17 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
     return () => navigator.geolocation.clearWatch(watchId);
   }, [hospLat, hospLng, hospRadius]);
 
+  // Array nama hari & bulan bahasa Indonesia
   const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
   const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 
+  // Penyusunan teks string waktu & tanggal
   const dateStr = `${days[time.getDay()]}, ${time.getDate()} ${months[time.getMonth()]} ${time.getFullYear()}`;
   const timeStr = time.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
+  /**
+   * Menentukan kalimat sapaan sesuai waktu jam saat ini.
+   */
   const getGreeting = () => {
     const hours = time.getHours();
     if (hours >= 4 && hours < 11) return 'Selamat Pagi';

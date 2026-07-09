@@ -4,13 +4,26 @@ import { Eye, EyeOff, Lock, User, MapPin, Clock, BarChart3, Shield, AlertCircle,
 import logoImg from '../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
 import { authApi } from '../../services/api';
 
+/**
+ * Interface properti untuk komponen LoginPage.
+ */
 interface LoginPageProps {
+  // Callback untuk memicu fungsi autentikasi login di parent component
   onLogin: (password: string, username: string) => Promise<'ok' | string>;
+  // Callback opsional untuk tombol kembali ke landing page utama
   onBack?: () => void;
 }
 
+/**
+ * Halaman Login — Sistem Absensi RSUCL
+ * 
+ * Menyediakan form masuk untuk Admin dan Karyawan, serta modal ubah/reset password mandiri
+ * dengan mencocokkan data NIP, Username, dan Email terdaftar.
+ */
 export function LoginPage({ onLogin, onBack }: LoginPageProps) {
   const { logoUrl } = useAuth();
+  
+  // State untuk form login utama
   const [showPassword, setShowPassword] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -18,13 +31,17 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Forgot password state
+  // State untuk alur modal lupa password (reset password mandiri)
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [forgotForm, setForgotForm] = useState({ username: '', nip: '', email: '', newPassword: '', confirmPassword: '' });
   const [forgotError, setForgotError] = useState('');
   const [forgotSuccess, setForgotSuccess] = useState('');
   const [forgotLoading, setForgotLoading] = useState(false);
 
+  /**
+   * Menangani proses submit login.
+   * Melakukan validasi input lokal sebelum mengirim request login ke parent/API.
+   */
   const handleLogin = async () => {
     if (!username.trim() || !password) {
       setError('Username dan Password wajib diisi.');
@@ -48,6 +65,10 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
     }
   };
 
+  /**
+   * Menangani proses submit reset password mandiri.
+   * Memvalidasi kecocokan data username, nip, email, dan password baru sebelum dikirim ke backend.
+   */
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!forgotForm.username.trim() || !forgotForm.nip.trim() || !forgotForm.email.trim() || !forgotForm.newPassword) {
@@ -83,6 +104,9 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
     }
   };
 
+  /**
+   * Mengirimkan form login ketika menekan tombol Enter pada keyboard di kolom input.
+   */
   const handleKey = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') handleLogin();
   };

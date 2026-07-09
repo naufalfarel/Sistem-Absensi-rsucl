@@ -13,18 +13,38 @@ const statusConfig: Record<string, { label: string; color: string; bg: string }>
 
 const filterOptions = ['Semua Data'];
 
+/**
+ * Komponen Tab Riwayat Admin (HistoryTab) — Sistem Absensi RSUCL
+ * 
+ * Halaman khusus admin untuk meninjau rekaman data kehadiran historis seluruh karyawan RSUCL.
+ * Dilengkapi filter pencarian berdasarkan nama/departemen, filter kategori status absensi,
+ * filter dropdown bulan & tahun berjalan, serta detail modal pratinjau selfie masuk/pulang.
+ */
 export function HistoryTab() {
+  const currentDate = new Date();
+
+  // State daftar objek rekaman riwayat absensi yang ditarik dari API
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
+  
+  // Kata kunci pencarian karyawan (Nama / Departemen)
   const [search, setSearch] = useState('');
+  
+  // Filter status kehadiran aktif ('all' vs status spesifik)
   const [statusFilter, setStatusFilter] = useState('all');
+  
+  // Indikator memproses/memuat data
   const [loading, setLoading] = useState(false);
+  
+  // Objek rekaman terpilih untuk pratinjau detail selfie & metadata
   const [selected, setSelected] = useState<AttendanceRecord | null>(null);
 
-  // State untuk filter bulan dan tahun aktif agar sinkron dengan data Laporan (termasuk Alpha dinamis)
-  const currentDate = new Date();
+  // States penampung bulan dan tahun filter aktif (sinkron dengan data Laporan)
   const [selectedMonth, setSelectedMonth] = useState<number>(currentDate.getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState<number>(currentDate.getFullYear());
 
+  /**
+   * Menarik daftar riwayat absensi karyawan bulanan berdasarkan bulan/tahun aktif dari API.
+   */
   const loadHistory = async () => {
     setLoading(true);
     try {
@@ -40,6 +60,7 @@ export function HistoryTab() {
     }
   };
 
+  // Muat ulang data riwayat absensi setiap kali bulan atau tahun filter berubah
   useEffect(() => {
     loadHistory();
   }, [selectedMonth, selectedYear]);

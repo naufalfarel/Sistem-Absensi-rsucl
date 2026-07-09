@@ -9,19 +9,46 @@ import * as XLSX from 'xlsx';
 // @ts-ignore
 import XLSXStyle from 'xlsx-js-style';
 
+/**
+ * Komponen Tab Laporan Admin (ReportsTab) — Sistem Absensi RSUCL
+ * 
+ * Halaman modul pelaporan dan analitik kehadiran komprehensif bagi manajemen RSUCL.
+ * Menyediakan grafik tren bulanan, grafik pie komposisi kehadiran, ekspor laporan
+ * harian (detail jam absensi) dan bulanan (rekap total hari status kehadiran) dalam format
+ * Excel (kompatibel dengan WPS/Excel) dan cetak PDF dengan layout resmi rumah sakit.
+ */
 export function ReportsTab() {
   const { logoUrl } = useAuth();
+  
+  // State menampung data analitik ringkasan KPI (kehadiran, terlambat, alpa, cuti)
   const [summary, setSummary] = useState<ReportSummary | null>(null);
+  
+  // Indikator memuat data statistik
   const [loading, setLoading] = useState(false);
+  
+  // Indikator status ekspor file XLSX / PDF sedang berlangsung
   const [exporting, setExporting] = useState(false);
+  
+  // Jenis laporan yang dipilih ('harian' = detil masuk-pulang, 'bulanan' = rekap kehadiran pegawai)
   const [reportType, setReportType] = useState<'harian' | 'bulanan'>('harian');
 
   const currentDate = new Date();
+  
+  // State dropdown filter bulan laporan aktif
   const [selectedMonth, setSelectedMonth] = useState<number>(currentDate.getMonth() + 1);
+  
+  // State dropdown filter tahun laporan aktif
   const [selectedYear, setSelectedYear] = useState<number>(currentDate.getFullYear());
+  
+  // State filter departemen karyawan
   const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
+  
+  // Menampung daftar departemen untuk dropdown filter
   const [departments, setDepartments] = useState<{ id: number; name: string }[]>([]);
 
+  /**
+   * Mengambil data base64 dari file gambar URL (digunakan untuk menyematkan logo resmi pada file PDF).
+   */
   const getBase64Image = async (imgUrl: string): Promise<string> => {
     try {
       const response = await fetch(imgUrl);
@@ -38,6 +65,9 @@ export function ReportsTab() {
     }
   };
 
+  /**
+   * Mengambil data analitik KPI absensi berjalan dari API backend.
+   */
   const loadSummary = async () => {
     setLoading(true);
     try {

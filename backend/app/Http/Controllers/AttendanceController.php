@@ -71,10 +71,80 @@ class AttendanceController extends Controller
      */
     public function allToday()
     {
-        $records = Attendance::with(['employee.user', 'employee.department', 'employee.position', 'employee.schedules'])
-                             ->where('date', today()->toDateString())
-                             ->get()
-                             ->map(fn($r) => $this->formatRecord($r, withEmployee: true));
+        $todayStr = today()->toDateString();
+        $dayMap = [
+            0 => 'Minggu', 1 => 'Senin', 2 => 'Selasa',
+            3 => 'Rabu',   4 => 'Kamis', 5 => 'Jumat', 6 => 'Sabtu',
+        ];
+        $todayName = $dayMap[today()->dayOfWeek];
+
+        // Ambil semua karyawan aktif beserta relasinya
+        $employees = Employee::with(['user', 'department', 'position', 'schedules'])
+                             ->where('status', 'active')
+                             ->get();
+
+        // Ambil data absensi aktual hari ini
+        $attendances = Attendance::where('date', $todayStr)->get()->keyBy('employee_id');
+
+        $records = [];
+        foreach ($employees as $emp) {
+            if ($attendances->has($emp->id)) {
+                $att = $attendances->get($emp->id);
+                $records[] = $this->formatRecord($att, withEmployee: true);
+            } else {
+                // Cari jadwal shift hari ini
+                $schedule = $emp->schedules->first(function($s) use ($todayName) {
+                    return $s->pivot->day_of_week === $todayName;
+                });
+
+                if (!$schedule) {
+                    $status = 'tidak_ada_shift';
+                    $shiftName = 'Tidak Ada Shift';
+                    $note = 'Hari Libur / Tidak Ada Shift';
+                } else {
+                    $shiftName = $schedule->name;
+                    
+                    // Evaluasi apakah batas waktu check-in sudah terlewati
+                    $now = Carbon::now('Asia/Jakarta');
+                    $shiftStart = $schedule->start_time; // "HH:mm:ss"
+                    $closeCheckinOffset = (int) Setting::get('close_checkin', '60');
+                    $shiftStartCarbon = Carbon::today('Asia/Jakarta')->setTimeFromTimeString($shiftStart);
+                    $closeLimitCarbon = $shiftStartCarbon->copy()->addMinutes($closeCheckinOffset);
+
+                    if ($now->gt($closeLimitCarbon)) {
+                        $status = 'alpha';
+                        $note = 'Tidak Hadir Tanpa Keterangan';
+                    } else {
+                        $status = 'belum_hadir';
+                        $note = 'Belum Absen Masuk';
+                    }
+                }
+
+                $records[] = [
+                    'id'                 => null,
+                    'date'               => $todayStr,
+                    'check_in'           => null,
+                    'check_out'          => null,
+                    'status'             => $status,
+                    'duration_min'       => null,
+                    'latitude'           => null,
+                    'longitude'          => null,
+                    'accuracy'           => null,
+                    'is_within_geofence' => false,
+                    'note'               => $note,
+                    'image_check_in'     => null,
+                    'image_check_out'    => null,
+                    'shift_name'         => $shiftName,
+                    'employee'           => [
+                        'id'         => $emp->id,
+                        'name'       => $emp->user?->name ?? 'Karyawan',
+                        'nip'        => $emp->nip,
+                        'department' => $emp->department?->name ?? 'Umum',
+                        'position'   => $emp->position?->name ?? 'Staff',
+                    ]
+                ];
+            }
+        }
 
         return response()->json(['success' => true, 'data' => $records]);
     }
@@ -679,7 +749,7 @@ class AttendanceController extends Controller
      */
     private function formatRecord(Attendance $r, bool $withEmployee = false): array
     {
-        $shiftName = 'Reguler';
+        $shiftName = 'Tidak Ada Shift';
         if ($r->employee && $r->date) {
             $dayMap = [
                 0 => 'Minggu', 1 => 'Senin', 2 => 'Selasa',

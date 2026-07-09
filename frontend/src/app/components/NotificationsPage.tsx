@@ -10,12 +10,31 @@ interface NotificationsPageProps {
   onUpdateCount?: () => void;
 }
 
+/**
+ * Halaman Notifikasi Staf (NotificationsPage) — Sistem Absensi RSUCL
+ * 
+ * Menampilkan seluruh pemberitahuan yang relevan dengan absensi, penugasan shift,
+ * maupun persetujuan izin/cuti oleh administrator. Menyediakan filter status baca,
+ * penandaan pesan dibaca, serta penghapusan log notifikasi.
+ * 
+ * @param onUpdateCount Callback opsional untuk sinkronisasi ulang lencana angka notifikasi di parent/sidebar
+ */
 export function NotificationsPage({ onUpdateCount }: NotificationsPageProps) {
+  // Filter aktif ('Semua' vs 'Belum Dibaca')
   const [activeFilter, setActiveFilter] = useState('Semua');
+  
+  // State menyimpan daftar objek notifikasi hasil fetch
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  
+  // Jumlah notifikasi belum dibaca
   const [unreadCount, setUnreadCount] = useState(0);
+  
+  // Indikator memuat request
   const [loading, setLoading] = useState(false);
 
+  /**
+   * Menarik daftar notifikasi terbaru dari API backend.
+   */
   const loadNotifications = async () => {
     setLoading(true);
     try {
@@ -32,6 +51,7 @@ export function NotificationsPage({ onUpdateCount }: NotificationsPageProps) {
     }
   };
 
+  // Muat notifikasi saat halaman terpasang di DOM
   useEffect(() => {
     loadNotifications();
   }, []);

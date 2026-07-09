@@ -61,21 +61,37 @@ function applyDateRange(records: AttendanceRecord[], mode: RangeMode, customMont
 const MONTHS = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
 
 /* ─── Main Component ─────────────────────────────────────────── */
+/**
+ * Halaman Riwayat Kehadiran Karyawan (HistoryPage) — Sistem Absensi RSUCL
+ * 
+ * Menampilkan data historis absensi karyawan bersangkutan. Dilengkapi dengan filter
+ * rentang waktu cepat (7 hari, 1 bulan, 3 bulan, custom per bulan), grafik distribusi sebaran,
+ * pencarian dinamis, dan tabulasi kategori status absensi (Hadir, Terlambat, Izin/Sakit).
+ */
 export function HistoryPage() {
   const now = new Date();
 
+  // Filter status aktif ('Semua', 'Hadir', 'Terlambat', 'Izin/Sakit')
   const [activeStatus, setActiveStatus] = useState('Semua');
+  
+  // Kata kunci pencarian untuk menyaring data riwayat
   const [searchQuery,  setSearchQuery]  = useState('');
+  
+  // State menampung seluruh daftar riwayat absensi yang didapatkan dari API
   const [allRecords,   setAllRecords]   = useState<AttendanceRecord[]>([]);
+  
+  // Indikator loading data riwayat
   const [loading,      setLoading]      = useState(false);
 
-  // Range filter state
+  // States untuk pengelolaan filter rentang waktu (default: '1m' / 1 bulan terakhir)
   const [rangeMode,    setRangeMode]    = useState<RangeMode>('1m');
   const [customMonth,  setCustomMonth]  = useState(now.getMonth() + 1);
   const [customYear,   setCustomYear]   = useState(now.getFullYear());
   const [showRange,    setShowRange]    = useState(false);
 
-  /* Fetch all history once */
+  /**
+   * Mengambil data riwayat absensi bulanan user aktif dari API backend.
+   */
   const loadHistory = useCallback(async () => {
     setLoading(true);
     try {
@@ -88,6 +104,7 @@ export function HistoryPage() {
     }
   }, []);
 
+  // Panggil loadHistory saat komponen dimuat pertama kali
   useEffect(() => { loadHistory(); }, [loadHistory]);
 
   /* ── Derived data ───────────────────────────────────────────── */

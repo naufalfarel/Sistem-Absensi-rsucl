@@ -331,25 +331,48 @@ function AddEmployeeToShiftModal({
 }
 
 // ── Main ScheduleTab ───────────────────────────────────────────────────
+/**
+ * Komponen Tab Penjadwalan Admin (ScheduleTab) — Sistem Absensi RSUCL
+ * 
+ * Halaman modul pengelolaan jadwal kerja shift karyawan RSUCL.
+ * Dilengkapi dengan alur pembuatan shift kerja baru (custom nama, jam mulai/selesai, ikon lucide, dan warna preset),
+ * visualisasi tabel matriks mingguan (Senin-Minggu) status shift karyawan, dan popover untuk mengubah/libur shift secara langsung.
+ */
 export function ScheduleTab() {
+  // Daftar shift yang terdaftar di database
   const [shifts, setShifts]           = useState<ShiftSchedule[]>([]);
+  
+  // Data rekap jadwal mingguan per karyawan
   const [employeeSchedules, setEmployeeSchedules] = useState<EmployeeWeeklySchedule[]>([]);
+  
+  // Id shift yang sedang diedit sebaris (inline editing)
   const [editingId, setEditingId]     = useState<number | null>(null);
   const [editName, setEditName]       = useState('');
   const [editStart, setEditStart]     = useState('');
   const [editEnd, setEditEnd]         = useState('');
+  
+  // Id shift yang dibuka daftar detail karyawannya
   const [expandedShift, setExpandedShift] = useState<number | null>(null);
+  
+  // Pengontrol dialog tambah shift baru
   const [showAddModal, setShowAddModal]   = useState(false);
+  
+  // Objek shift yang ditargetkan untuk dihapus
   const [deleteTarget, setDeleteTarget]   = useState<ShiftSchedule | null>(null);
+  
+  // Indikator loading memuat API
   const [loading, setLoading]         = useState(false);
 
-  // States for adding employee to shift
+  // States untuk modal menambah karyawan ke dalam penugasan shift
   const [showAddEmpModal, setShowAddEmpModal] = useState(false);
   const [assigningShiftId, setAssigningShiftId] = useState<number | null>(null);
 
-  // Active cell popover for assigning shifts
+  // Sel koordinat (karyawan, hari) penugasan shift popover yang sedang aktif
   const [activeAssignCell, setActiveAssignCell] = useState<{ empId: number; day: string } | null>(null);
 
+  /**
+   * Menarik seluruh daftar template shift dari API.
+   */
   const loadShifts = async () => {
     setLoading(true);
     try {
@@ -364,6 +387,9 @@ export function ScheduleTab() {
     }
   };
 
+  /**
+   * Menarik data penugasan mingguan lengkap per karyawan dari API.
+   */
   const loadEmployeeSchedules = async () => {
     try {
       const res = await scheduleApi.getEmployeeSchedules();
@@ -375,6 +401,7 @@ export function ScheduleTab() {
     }
   };
 
+  // Muat shift dan penugasan saat halaman terpasang di DOM
   useEffect(() => {
     loadShifts();
     loadEmployeeSchedules();

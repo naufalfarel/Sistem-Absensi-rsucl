@@ -1,25 +1,43 @@
+/**
+ * Context Autentikasi — Sistem Absensi RSUCL
+ * 
+ * Mengelola state global autentikasi pengguna (user, token, status loading) 
+ * dan logo rumah sakit dari pengaturan sistem, agar bisa diakses oleh seluruh komponen.
+ */
+
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { authApi, AuthUser, getToken, setToken, clearToken, settingApi } from '../services/api';
 
+/**
+ * Tipe data untuk value yang disediakan oleh AuthContext.
+ */
 interface AuthContextType {
-  user: AuthUser | null;
-  token: string | null;
-  loading: boolean;
-  logoUrl: string | null;
+  user: AuthUser | null;             // Profil pengguna yang sedang masuk
+  token: string | null;              // Bearer Token Sanctum aktif
+  loading: boolean;                  // Status memuat inisialisasi sesi di awal
+  logoUrl: string | null;            // URL logo rumah sakit yang di-cache / didapatkan dari server
   login: (username: string, pass: string) => Promise<{ success: boolean; message?: string }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   refreshLogo: () => Promise<void>;
 }
 
+// Inisialisasi Context
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+/**
+ * Provider Komponen untuk membungkus aplikasi React dan menyebarkan state auth.
+ */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setTokenState] = useState<string | null>(getToken());
   const [loading, setLoading] = useState(true);
   const [logoUrl, setLogoUrl] = useState<string | null>(localStorage.getItem('hospital_logo'));
 
+  /**
+   * Mengambil logo rumah sakit terbaru dari pengaturan sistem di database.
+   * Disimpan ke localStorage sebagai cache agar loading awal lebih cepat.
+   */
   const refreshLogo = async () => {
     try {
       const res = await settingApi.get();
@@ -31,10 +49,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem('hospital_logo');
       }
     } catch {
-      // Tetap simpan logo cache di localStorage jika terjadi kesalahan
+      // Tetap simpan logo cache di localStorage jika terjadi kesalahan jaringan
     }
   };
 
+  /**
+   * Mengambil data profil user yang sedang login menggunakan token aktif.
+   */
   const fetchProfile = async () => {
     try {
       const res = await authApi.me();
@@ -52,6 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Efek inisialisasi sesi saat aplikasi pertama kali dimuat
   useEffect(() => {
     const initAuth = async () => {
       await refreshLogo();
@@ -66,12 +88,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /**
+   * Menghapus sesi autentikasi dari state React dan penyimpanan lokal (cookie/localStorage).
+   */
   const handleLogoutLocal = () => {
     setUser(null);
     setTokenState(null);
     clearToken();
   };
 
+  /**
+   * Melakukan proses masuk ke sistem.
+   * 
+   * @param username Kredensial username
+   * @param pass Kredensial password
+   */
   const login = async (username: string, pass: string): Promise<{ success: boolean; message?: string }> => {
     try {
       const res = await authApi.login(username, pass);
@@ -89,6 +120,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  /**
+   * Melakukan proses keluar (logout) dengan memberi tahu backend dan membersihkan state lokal.
+   */
   const logout = async () => {
     try {
       await authApi.logout();
@@ -99,6 +133,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  /**
+   * Memperbarui informasi profil pengguna yang tersimpan di state.
+   */
   const refreshUser = async () => {
     if (token) {
       await fetchProfile();
@@ -112,6 +149,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * Custom Hook untuk mempermudah akses ke data autentikasi di seluruh komponen anak.
+ */
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) {
@@ -119,3 +159,4 @@ export function useAuth() {
   }
   return context;
 }
+

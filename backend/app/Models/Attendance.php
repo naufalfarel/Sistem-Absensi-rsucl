@@ -143,6 +143,11 @@ class Attendance extends Model
                     continue;
                 }
 
+                $matchingShift = $emp->schedules->first(function($schedule) use ($dayOfWeekName) {
+                    return $schedule->pivot->day_of_week === $dayOfWeekName;
+                });
+                $shiftName = $matchingShift ? $matchingShift->name : 'Reguler';
+
                 $key = $emp->id . '_' . $dateStr;
 
                 // Kasus A: Karyawan melakukan absensi (Check-in/Check-out ada)
@@ -170,6 +175,7 @@ class Attendance extends Model
                         ],
                         'image_check_in' => $attRecord->image_check_in,
                         'image_check_out' => $attRecord->image_check_out,
+                        'shift_name' => $shiftName,
                     ];
                 } else {
                     // Kasus B: Karyawan tidak absen. Periksa apakah sedang cuti/izin/sakit
@@ -201,25 +207,44 @@ class Attendance extends Model
                             ],
                             'image_check_in' => null,
                             'image_check_out' => null,
+                            'shift_name' => $shiftName,
                         ];
                     } else {
                         // Kasus C: Tidak ada absensi dan tidak ada izin.
                         // Karyawan dinyatakan Alpa jika tanggal tersebut adalah hari lalu/hari ini,
                         // dan setelah sistem absensi resmi dimulai.
                         if ($date->lte($limitDate) && $date->gte($systemStartDate)) {
+                            $status = 'alpha';
+                            $note = 'Tidak Hadir Tanpa Keterangan';
+
+                            if ($date->isToday()) {
+                                if ($matchingShift) {
+                                    $now = Carbon::now('Asia/Jakarta');
+                                    $shiftStart = $matchingShift->start_time; // "HH:mm:ss"
+                                    $closeCheckinOffset = (int) \App\Models\Setting::get('close_checkin', '60');
+                                    $shiftStartCarbon = Carbon::today('Asia/Jakarta')->setTimeFromTimeString($shiftStart);
+                                    $closeLimitCarbon = $shiftStartCarbon->copy()->addMinutes($closeCheckinOffset);
+
+                                    if ($now->lte($closeLimitCarbon)) {
+                                        $status = 'belum_hadir';
+                                        $note = 'Belum Absen Masuk';
+                                    }
+                                }
+                            }
+
                             $reportRecords[] = [
                                 'id' => null,
                                 'employee_id' => $emp->id,
                                 'date' => $dateStr,
                                 'check_in' => null,
                                 'check_out' => null,
-                                'status' => 'alpha',
+                                'status' => $status,
                                 'duration_min' => null,
                                 'latitude' => null,
                                 'longitude' => null,
                                 'accuracy' => null,
                                 'is_within_geofence' => false,
-                                'note' => 'Tidak Hadir Tanpa Keterangan',
+                                'note' => $note,
                                 'employee' => [
                                     'id' => $emp->id,
                                     'name' => $emp->user?->name ?? 'Karyawan',
@@ -229,6 +254,7 @@ class Attendance extends Model
                                 ],
                                 'image_check_in' => null,
                                 'image_check_out' => null,
+                                'shift_name' => $shiftName,
                             ];
                         }
                     }

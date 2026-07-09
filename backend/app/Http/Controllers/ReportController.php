@@ -186,7 +186,7 @@ class ReportController extends Controller
                     'telat'  => $todayTelat,
                     'alpha'  => $todayAlpha,
                     'cuti'   => $todayCuti,
-                    'belum'  => max(0, $todayReport->count() - ($todayHadir + $todayTelat) - $todayCuti), // karyawan terjadwal hari ini yang belum absen
+                    'belum'  => max(0, $todayReport->count() - ($todayHadir + $todayTelat) - $todayCuti - $todayAlpha), // karyawan terjadwal hari ini yang belum absen
                 ],
                 'this_month' => [
                     'hadir'  => $monthHadir,

@@ -15,12 +15,30 @@ interface NotificationsTabProps {
   onUpdateCount?: () => void;
 }
 
+/**
+ * Komponen Tab Notifikasi Admin (NotificationsTab) — Sistem Absensi RSUCL
+ * 
+ * Halaman pemberitahuan khusus untuk Administrator. Menampilkan laporan keterlambatan karyawan,
+ * log pengajuan cuti/izin/sakit baru, penugasan jadwal kerja shift, serta pemberitahuan sistem.
+ * 
+ * @param onUpdateCount Callback opsional untuk sinkronisasi lencana jumlah notifikasi belum dibaca di sidebar
+ */
 export function NotificationsTab({ onUpdateCount }: NotificationsTabProps) {
+  // Filter kategori aktif ('all', 'attendance', 'leave', 'system')
   const [filter, setFilter] = useState('all');
+  
+  // Daftar objek notifikasi admin
   const [notifs, setNotifs] = useState<AppNotification[]>([]);
+  
+  // Jumlah notifikasi belum dibaca
   const [unread, setUnread] = useState(0);
+  
+  // Indikator memproses request ke server
   const [loading, setLoading] = useState(false);
 
+  /**
+   * Menarik daftar notifikasi terbaru admin dari API.
+   */
   const loadNotifications = async () => {
     setLoading(true);
     try {
@@ -37,6 +55,7 @@ export function NotificationsTab({ onUpdateCount }: NotificationsTabProps) {
     }
   };
 
+  // Muat notifikasi saat tab ini dipasang di DOM
   useEffect(() => {
     loadNotifications();
   }, []);

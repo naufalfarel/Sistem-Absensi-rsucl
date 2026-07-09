@@ -61,9 +61,23 @@ const Toggle = ({ value, onChange }: { value: boolean; onChange: () => void }) =
 );
 
 // ── Main SettingsTab ───────────────────────────────────────────────────
+/**
+ * Komponen Tab Pengaturan Admin (SettingsTab) — Sistem Absensi RSUCL
+ * 
+ * Halaman kontrol panel utama bagi administrator untuk mengelola parameter sistem absensi RSUCL.
+ * Fitur yang dicakup meliputi:
+ * 1. Aktivasi/Nonaktivasi status sistem absensi global.
+ * 2. Upload / Hapus / Kembalikan Logo resmi rumah sakit.
+ * 3. Update profil biodata akun admin yang sedang login.
+ * 4. Ubah password admin.
+ * 5. Konfigurasi notifikasi email, keterlambatan, cuti, dan sistem.
+ * 6. Pengaturan ketentuan waktu toleransi check-in (tepat waktu, telat, alpha) dan check-out (Senin-Sabtu) secara dinamis.
+ * 7. Konfigurasi koordinat GPS RSUCL (Latitude & Longitude) beserta radius toleransi Geofence.
+ */
 export function SettingsTab() {
   const { user, logoUrl, refreshLogo, refreshUser } = useAuth();
-  // ── Account ──
+  
+  // ── States Pengaturan Akun Admin ──
   const [name, setName]               = useState('Super Admin');
   const [email, setEmail]             = useState('admin@rsucl.id');
   const [username, setUsername]       = useState('admin');
@@ -77,20 +91,20 @@ export function SettingsTab() {
   const [passSaved, setPassSaved]     = useState(false);
   const [passError, setPassError]     = useState('');
 
-  // ── Notifications ──
+  // ── States Pengaturan Notifikasi Email & Peringatan ──
   const [notifEmail, setNotifEmail]   = useState(true);
   const [notifLate, setNotifLate]     = useState(true);
   const [notifLeave, setNotifLeave]   = useState(true);
   const [notifSystem, setNotifSystem] = useState(false);
 
-  // ── System Config ──
+  // ── States Konfigurasi Geofencing RSUCL ──
   const [radius, setRadius]   = useState('100');
   const [hospLat, setHospLat] = useState('5.552740480177099');
   const [hospLng, setHospLng] = useState('95.33486560781716');
   const [configSaved, setConfigSaved] = useState(false);
   const [configError, setConfigError] = useState('');
 
-  // ── Jadwal Absensi ──
+  // ── States Toleransi Waktu & Jadwal Absensi ──
   const [checkinOpen, setCheckinOpen]           = useState('0');
   const [lateLimit, setLateLimit]               = useState('30');
   const [closeCheckin, setCloseCheckin]         = useState('60');
@@ -101,16 +115,17 @@ export function SettingsTab() {
   const [satCheckoutOpen, setSatCheckoutOpen]   = useState('0');
   const [satCheckoutClose, setSatCheckoutClose] = useState('60');
 
-  // ── System Status ──
+  // ── State Pengontrol Status Sistem Absensi & Modal Konfirmasi ──
   const [systemActive, setSystemActive]         = useState(true);
   const [showStatusModal, setShowStatusModal]   = useState(false);
 
-  // ── Logo ──
+  // ── States Pengendali Preview & File Logo Rumah Sakit ──
   const [logoPreview, setLogoPreview] = useState<string>(logoImg);
   const [logoFile, setLogoFile]       = useState<File | null>(null);
   const [logoSaved, setLogoSaved]     = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Efek memantau ketersediaan URL logo kustom
   useEffect(() => {
     if (logoUrl) {
       setLogoPreview(logoUrl);

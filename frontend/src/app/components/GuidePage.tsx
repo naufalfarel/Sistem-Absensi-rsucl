@@ -165,10 +165,20 @@ function TipBox({ type, text }: { type: TipType; text: string }) {
 }
 
 /* ─── Main Component ─────────────────────────────────────────── */
+/**
+ * Halaman Panduan Penggunaan (GuidePage) — Sistem Absensi RSUCL
+ * 
+ * Menampilkan petunjuk operasional interaktif berbentuk accordion untuk memandu karyawan
+ * mengenai alur check-in, check-out, pengajuan cuti, pembacaan status lokasi GPS,
+ * dan deskripsi masing-masing menu.
+ */
 export function GuidePage() {
   const { logoUrl } = useAuth();
+  
+  // State accordion bagian mana yang sedang terbuka (default: 'checkin')
   const [openSection, setOpenSection] = useState<string | null>('checkin');
 
+  // Toggle buka/tutup bagian accordion panduan
   const toggle = (id: string) =>
     setOpenSection(prev => (prev === id ? null : id));
 

@@ -45,15 +45,35 @@ function CreditCardIcon({ size, className }: { size: number; className?: string 
   );
 }
 
+/**
+ * Halaman Profil Staf (ProfilePage) — Sistem Absensi RSUCL
+ * 
+ * Mengelola tampilan biodata pribadi karyawan, informasi jabatan/kepegawaian,
+ * pengajuan cuti/izin/sakit baru beserta dokumen lampiran pendukung,
+ * riwayat permohonan cuti, ubah password mandiri, dan update foto profil.
+ */
 export function ProfilePage({ onLogout, initialSection, initialOpenModal, onResetInitials }: ProfilePageProps) {
   const { user, refreshUser } = useAuth();
+  
+  // Referensi input file tersembunyi untuk upload foto avatar
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // State konfirmasi modal keluar sistem
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  
+  // State pengontrol modal pengajuan cuti/izin/sakit baru
   const [showLeaveModal, setShowLeaveModal] = useState(initialOpenModal || false);
+  
+  // State menyimpan seluruh riwayat pengajuan cuti karyawan aktif
   const [requests, setRequests] = useState<ApiLeave[]>([]);
+  
+  // State melacak tab sub-seksi aktif ('profile' = biodata, 'leave' = pengajuan cuti)
   const [activeSection, setActiveSection] = useState<'profile' | 'leave'>(initialSection || 'profile');
+  
+  // Indikator memuat data
   const [loading, setLoading] = useState(false);
 
+  // Mensinkronisasikan seksi tab jika dilempar parameter dari dashboard parent
   useEffect(() => {
     if (initialSection) {
       setActiveSection(initialSection);
@@ -68,7 +88,7 @@ export function ProfilePage({ onLogout, initialSection, initialOpenModal, onRese
     }
   }, [initialSection, initialOpenModal]);
 
-  // Password Modal states
+  // ── States Form Modal Ubah Password Mandiri ──────────────────────────────
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -77,7 +97,7 @@ export function ProfilePage({ onLogout, initialSection, initialOpenModal, onRese
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const [passwordLoading, setPasswordLoading] = useState(false);
 
-  // Edit Profile states
+  // ── States Form Modal Ubah Profil Pribadi ────────────────────────────────
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
   const [editName, setEditName] = useState('');
   const [editUsername, setEditUsername] = useState('');
@@ -88,12 +108,15 @@ export function ProfilePage({ onLogout, initialSection, initialOpenModal, onRese
   const [editProfileSuccess, setEditProfileSuccess] = useState('');
   const [editProfileLoading, setEditProfileLoading] = useState(false);
 
-  // Notification toggle state
+  // ── State Toggle Notifikasi Sistem Lokal ──────────────────────────────────
   const [notifEnabled, setNotifEnabled] = useState(() => {
     const saved = localStorage.getItem('notifications_enabled');
     return saved !== null ? JSON.parse(saved) : true;
   });
 
+  /**
+   * Mengubah preferensi aktifasi notifikasi dan menyimpannya di localStorage.
+   */
   const toggleNotifs = () => {
     const newValue = !notifEnabled;
     setNotifEnabled(newValue);

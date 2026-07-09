@@ -371,6 +371,12 @@ function FaceVerificationCard({
 }
 
 // ── GPS Card (Leaflet Real Map) ───────────────────────────────────────────
+/**
+ * Komponen Kartu GPS (GPSCard)
+ * 
+ * Merender peta berbasis Leaflet untuk memetakan koordinat perangkat karyawan
+ * dan radius geofence RSUCL. Dilengkapi indikator kekuatan sinyal akurasi GPS.
+ */
 function GPSCard({
   userLocation,
   gpsActive,
@@ -388,12 +394,14 @@ function GPSCard({
   hospLng: number;
   hospRadius: number;
 }) {
+  // Kekuatan sinyal diukur dari akurasi GPS (di bawah 15 meter dianggap sangat bagus)
   const signalBars = gpsActive ? (userLocation && userLocation.accuracy <= 15 ? 4 : 3) : 0;
 
   const mapCenter: [number, number] = userLocation
     ? [userLocation.lat, userLocation.lng]
     : [hospLat, hospLng];
 
+  // Susunan metadata GPS untuk pratinjau informasi di bawah peta
   const gpsData = [
     { label: 'Latitude',       value: userLocation ? `${userLocation.lat.toFixed(7)}°` : 'Mencari...' },
     { label: 'Longitude',      value: userLocation ? `${userLocation.lng.toFixed(7)}°` : 'Mencari...' },
@@ -509,10 +517,19 @@ function GPSCard({
 }
 
 // ── Success Animation ─────────────────────────────────────────────────
+/**
+ * Komponen Animasi Sukses (SuccessAnimation)
+ * 
+ * Menampilkan modal popup transparan dengan efek riak gelombang (ripple) hijau 
+ * dan jam detil ketika absen masuk (check-in) atau absen pulang (check-out) berhasil dikirim.
+ */
 function SuccessAnimation({ action, time, onDone }: { action: string; time: string; onDone: () => void }) {
   const { user } = useAuth();
+  
+  // State mengontrol opasitas modal
   const [visible, setVisible] = useState(true);
 
+  // Menutup otomatis modal popup setelah 3.5 detik dan memicu callback onDone
   useEffect(() => {
     const t = setTimeout(() => { setVisible(false); setTimeout(onDone, 500); }, 3500);
     return () => clearTimeout(t);
@@ -523,6 +540,7 @@ function SuccessAnimation({ action, time, onDone }: { action: string; time: stri
       <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" />
       <div className="relative flex flex-col items-center gap-4" onClick={(e) => e.stopPropagation()}>
         <div className="relative w-32 h-32 flex items-center justify-center">
+          {/* Efek riak gelombang hijau */}
           {[0,1,2].map(i => (
             <div key={i} className="absolute rounded-full bg-[#16A34A] opacity-0"
               style={{
@@ -560,11 +578,23 @@ const RIPPLE_STYLE = `
 `;
 
 // ── Main AttendancePage ───────────────────────────────────────────────
+/**
+ * Halaman Absensi Karyawan (AttendancePage) — Sistem Absensi RSUCL
+ * 
+ * Fitur inti untuk melakukan pencatatan kehadiran (absen masuk / absen pulang) bagi karyawan.
+ * Mengintegrasikan pelacakan lokasi GPS geofencing, verifikasi wajah dengan kamera depan,
+ * pengecekan koneksi internet, serta penyesuaian waktu shift (termasuk shift lintas malam dan hari Sabtu).
+ */
 export function AttendancePage() {
   const { user } = useAuth();
+  
+  // State menyimpan file base64 foto selfie wajah yang berhasil diambil
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  
+  // State status konektivitas internet perangkat karyawan
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
+  // Memantau event perubahan status koneksi internet (online/offline)
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
@@ -576,29 +606,45 @@ export function AttendancePage() {
     };
   }, []);
 
+  // State jam sistem yang berjalan secara realtime
   const [now, setNow]               = useState(new Date());
+  
+  // Penanda apakah karyawan sudah absen masuk (check-in) hari ini
   const [checkedIn, setCheckedIn]   = useState(false);
+  
+  // Penanda apakah karyawan sudah absen pulang (check-out) hari ini
   const [checkedOut, setCheckedOut] = useState(false);
+  
+  // Pengontrol tampilan dialog konfirmasi submit absensi
   const [showModal, setShowModal]   = useState(false);
+  
+  // Menyimpan jam check-in aktual dari backend
   const [checkInTime, setCheckInTime]   = useState('');
+  
+  // Menyimpan jam check-out aktual dari backend
   const [checkOutTime, setCheckOutTime] = useState('');
+  
+  // Indikator status loading saat absensi sedang diposting ke API
   const [submitting, setSubmitting]     = useState(false);
 
-  // Face verification state machine
+  // Status state machine untuk verifikasi wajah ('idle', 'scanning', 'captured', 'confirmed')
   const [faceStep, setFaceStep] = useState<FaceStep>('idle');
 
-  // Active leave state (cuti/izin/sakit)
+  // Menampung data pengajuan cuti/izin/sakit yang sedang aktif hari ini (jika ada)
   const [activeLeave, setActiveLeave] = useState<{ type: string; reason: string } | null>(null);
 
-  // Success animation
+  // Pengendali parameter tampilan popup SuccessAnimation
   const [successAction, setSuccessAction] = useState('');
   const [successTime, setSuccessTime]     = useState('');
   const [showSuccess, setShowSuccess]     = useState(false);
 
-  // Dynamic shift settings from backend
+  // Pengaturan jam kerja absensi dinamis (geofence radius, jam buka/tutup absensi)
   const [shiftSettings, setShiftSettings] = useState<ShiftSettings>(DEFAULT_SHIFT);
-  // Shift karyawan hari ini dari admin
+  
+  // Shift kerja karyawan yang aktif hari ini
   const [todayShift, setTodayShift] = useState<MyShiftSchedule | null | undefined>(undefined);
+  
+  // Shift khusus hari Sabtu jika ada
   const [saturdayShift, setSaturdayShift] = useState<MyShiftSchedule | null>(null);
 
   // GPS state

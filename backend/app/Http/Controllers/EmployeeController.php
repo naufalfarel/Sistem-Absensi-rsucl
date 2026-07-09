@@ -199,6 +199,44 @@ class EmployeeController extends Controller
     private function formatEmployee(Employee $e): array
     {
         $today = $e->todayAttendance;
+
+        $dayMap = [
+            0 => 'Minggu', 1 => 'Senin', 2 => 'Selasa',
+            3 => 'Rabu',   4 => 'Kamis', 5 => 'Jumat', 6 => 'Sabtu',
+        ];
+        $todayName = $dayMap[\Carbon\Carbon::today('Asia/Jakarta')->dayOfWeek];
+
+        // Eager loaded schedules check
+        if ($e->relationLoaded('schedules')) {
+            $schedule = $e->schedules->first(function($s) use ($todayName) {
+                return $s->pivot->day_of_week === $todayName;
+            });
+        } else {
+            $schedule = $e->schedules()->wherePivot('day_of_week', $todayName)->first();
+        }
+
+        $computedStatus = null;
+        if ($today) {
+            $computedStatus = $today->status;
+        } else {
+            if (!$schedule) {
+                $computedStatus = 'tidak_ada_shift';
+            } else {
+                $now = \Carbon\Carbon::now('Asia/Jakarta');
+                $shiftStart = $schedule->start_time; // "HH:mm:ss"
+                $closeCheckinOffset = (int) \App\Models\Setting::get('close_checkin', '60');
+                
+                $shiftStartCarbon = \Carbon\Carbon::today('Asia/Jakarta')->setTimeFromTimeString($shiftStart);
+                $closeLimitCarbon = $shiftStartCarbon->copy()->addMinutes($closeCheckinOffset);
+                
+                if ($now->gt($closeLimitCarbon)) {
+                    $computedStatus = 'alpha';
+                } else {
+                    $computedStatus = 'belum_hadir';
+                }
+            }
+        }
+
         return [
             'id'          => $e->id,
             'user_id'     => $e->user_id,
@@ -214,11 +252,11 @@ class EmployeeController extends Controller
             'gender'      => $e->gender,
             'join_date'   => $e->join_date?->toDateString(),
             'status'      => $e->status,
-            'today_attendance' => $today ? [
-                'check_in'  => $today->check_in,
-                'check_out' => $today->check_out,
-                'status'    => $today->status,
-            ] : null,
+            'today_attendance' => [
+                'check_in'  => $today?->check_in,
+                'check_out' => $today?->check_out,
+                'status'    => $computedStatus,
+            ],
         ];
     }
 }

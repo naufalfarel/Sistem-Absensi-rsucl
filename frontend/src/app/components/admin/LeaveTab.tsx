@@ -23,14 +23,37 @@ interface LeaveTabProps {
   onUpdateCount?: () => void;
 }
 
+/**
+ * Komponen Tab Cuti Admin (LeaveTab) — Sistem Absensi RSUCL
+ * 
+ * Digunakan oleh Administrator untuk meninjau, menyetujui, atau menolak permohonan
+ * cuti, izin, dan sakit yang diajukan oleh karyawan. Administrator juga dapat menyertakan
+ * catatan (admin_note) dan menghapus catatan pengajuan yang sudah lampau.
+ * 
+ * @param onUpdateCount Callback opsional untuk sinkronisasi ulang lencana jumlah waiting list approval di sidebar
+ */
 export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
+  // Daftar lengkap seluruh pengajuan cuti masuk
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
+  
+  // Filter status aktif ('Semua', 'Menunggu', 'Disetujui', 'Ditolak')
   const [filter, setFilter] = useState('Semua');
+  
+  // Filter kategori tipe cuti ('all', 'cuti', 'izin', 'sakit')
   const [typeFilter, setTypeFilter] = useState('all');
+  
+  // Menyimpan data dialog konfirmasi permohonan
   const [confirmModal, setConfirmModal] = useState<{ id: number; action: 'approve' | 'reject'; name: string } | null>(null);
+  
+  // Catatan persetujuan/penolakan dari administrator
   const [adminNote, setAdminNote] = useState('');
+  
+  // Indikator loading request
   const [loading, setLoading] = useState(false);
 
+  /**
+   * Menarik seluruh daftar pengajuan cuti masuk dari API backend.
+   */
   const loadRequests = async () => {
     setLoading(true);
     try {
@@ -45,6 +68,7 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
     }
   };
 
+  // Panggil loadRequests saat tab ini dimuat di layar
   useEffect(() => {
     loadRequests();
   }, []);

@@ -3,13 +3,13 @@ import { Search, CheckCircle2, Clock, AlertTriangle, XCircle, Coffee, CalendarOf
 import { attendanceApi, AttendanceRecord } from '../../../services/api';
 
 interface MappedAttendance {
-  id: number;
+  id: number | null;
   name: string;
   dept: string;
   shift: string;
   checkIn: string;
   checkOut: string | null;
-  status: 'working' | 'done' | 'late' | 'absent' | 'leave' | 'not_yet';
+  status: 'working' | 'done' | 'late' | 'absent' | 'leave' | 'not_yet' | 'no_shift';
   pos: string;
   imageCheckIn?: string | null;
   imageCheckOut?: string | null;
@@ -22,6 +22,7 @@ const statusMap: Record<string, { label: string; color: string; bg: string; icon
   absent:   { label: 'Alpha',          color: '#DC2626', bg: '#FEE2E2', icon: XCircle,        border: '#FECACA' },
   leave:    { label: 'Cuti/Izin',      color: '#7C3AED', bg: '#F5F3FF', icon: CalendarOff,    border: '#DDD6FE' },
   not_yet:  { label: 'Belum Hadir',    color: '#6B7280', bg: '#F9FAFB', icon: Coffee,         border: '#E5E7EB' },
+  no_shift: { label: 'Tidak Ada Shift',color: '#6B7280', bg: '#F3F4F6', icon: Coffee,         border: '#E5E7EB' },
 };
 
 const summaryStats = [
@@ -33,19 +34,38 @@ const summaryStats = [
   { key: 'not_yet', label: 'Belum Hadir',    color: '#6B7280', bg: '#F9FAFB' },
 ];
 
+/**
+ * Komponen Tab Kehadiran Admin (AttendanceTab) — Sistem Absensi RSUCL
+ * 
+ * Digunakan oleh Administrator untuk memantau status absensi seluruh karyawan RSUCL secara realtime
+ * pada hari berjalan. Menampilkan ringkasan statistik (Bekerja, Pulang, Terlambat, Alpha, Izin/Cuti, Belum Hadir),
+ * daftar pencarian nama, detil jam masuk/pulang, serta pratinjau foto selfie wajah absensi karyawan.
+ */
 export function AttendanceTab() {
+  // State menampung daftar absensi karyawan yang dipetakan
   const [records, setRecords] = useState<MappedAttendance[]>([]);
+  
+  // State untuk pencarian nama atau departemen karyawan
   const [search, setSearch] = useState('');
+  
+  // Filter status absensi aktif ('all' atau status spesifik)
   const [filterStatus, setFilterStatus] = useState('all');
+  
+  // Objek karyawan terpilih untuk pratinjau detil & foto selfie
   const [selected, setSelected] = useState<MappedAttendance | null>(null);
+  
+  // Indikator memproses/loading data dari server
   const [loading, setLoading] = useState(false);
 
+  /**
+   * Menarik daftar kehadiran harian seluruh karyawan dari API backend.
+   */
   const loadTodayRecords = async () => {
     setLoading(true);
     try {
       const res = await attendanceApi.allToday();
       if (res.success) {
-        // Map backend response into table structure
+        // Lakukan pemetaan dari model respons mentah backend ke representasi UI
         const mapped: MappedAttendance[] = res.data.map(r => {
           let statusKey: MappedAttendance['status'] = 'not_yet';
           if (r.status === 'hadir') {
@@ -56,6 +76,10 @@ export function AttendanceTab() {
             statusKey = 'leave';
           } else if (r.status === 'alpha') {
             statusKey = 'absent';
+          } else if (r.status === 'tidak_ada_shift') {
+            statusKey = 'no_shift';
+          } else if (r.status === 'belum_hadir') {
+            statusKey = 'not_yet';
           }
 
           return {
@@ -80,6 +104,7 @@ export function AttendanceTab() {
     }
   };
 
+  // Muat data saat komponen dirender pertama kali
   useEffect(() => {
     loadTodayRecords();
   }, []);

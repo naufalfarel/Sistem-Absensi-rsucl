@@ -10,28 +10,56 @@ import { ProfilePage } from './ProfilePage';
 import { GuidePage } from './GuidePage';
 import { notificationApi } from '../../services/api';
 
+// Tipe union untuk mendefinisikan tab navigasi yang valid pada dashboard karyawan
 type Tab = 'dashboard' | 'attendance' | 'history' | 'notifications' | 'profile' | 'guide';
 
+/**
+ * Interface properti untuk komponen EmployeeApp.
+ */
 interface EmployeeAppProps {
+  // Callback untuk logout
   onLogout: () => void;
+  // Objek data profil karyawan yang sedang login
   employee?: { name: string; pos: string; dept: string; nip: string; username: string } | null;
 }
 
+/**
+ * Layang Utama Panel Karyawan (EmployeeApp) — Sistem Absensi RSUCL
+ * 
+ * Mengelola sidebar navigasi desktop, menu hamburger mobile, bottom navbar mobile,
+ * polling notifikasi berkala, serta melakukan rendering dinamis halaman/tab yang dipilih.
+ */
 export function EmployeeApp({ onLogout }: EmployeeAppProps) {
   const { user, logoUrl } = useAuth();
+  
+  // State untuk melacak tab aktif
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+  
+  // State drawer sidebar pada tampilan mobile
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  
+  // State jam realtime untuk di mobile top-bar
   const [time, setTime] = useState(new Date());
+  
+  // State jumlah notifikasi belum dibaca (untuk diletakkan di badge)
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  
+  // State pembantu untuk mengarahkan rute profil langsung membuka modal cuti
   const [profileInitialSection, setProfileInitialSection] = useState<'profile' | 'leave' | undefined>(undefined);
   const [profileInitialOpenModal, setProfileInitialOpenModal] = useState<boolean | undefined>(undefined);
 
+  /**
+   * Mengubah tab navigasi aktif sekaligus membersihkan state bypass profil jika ada.
+   */
   const handleTabChange = (tab: Tab) => {
     setProfileInitialSection(undefined);
     setProfileInitialOpenModal(undefined);
     setActiveTab(tab);
   };
 
+  /**
+   * Mengambil jumlah notifikasi yang belum dibaca dari API Laravel.
+   */
   const fetchUnreadCount = async () => {
     try {
       const res = await notificationApi.list();
@@ -43,18 +71,20 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
     }
   };
 
+  // Efek polling untuk sinkronisasi notifikasi belum dibaca setiap 20 detik
   useEffect(() => {
     fetchUnreadCount();
-    // Poll every 20 seconds
     const interval = setInterval(fetchUnreadCount, 20000);
     return () => clearInterval(interval);
   }, []);
 
+  // Efek interval penunjuk jam menit di top-bar mobile
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
 
+  // Daftar item navigasi menu sidebar & bottom nav
   const navItems: { id: Tab; icon: typeof Home; label: string; badge?: number }[] = [
     { id: 'dashboard', icon: Home, label: 'Beranda' },
     { id: 'attendance', icon: MapPin, label: 'Absensi' },

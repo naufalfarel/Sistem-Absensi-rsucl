@@ -6,19 +6,36 @@ interface DepartmentsTabProps {
   onRefreshDepartments?: () => void;
 }
 
+/**
+ * Komponen Tab Departemen Admin (DepartmentsTab) — Sistem Absensi RSUCL
+ * 
+ * Fitur pengelolaan Master Data Departemen / Bagian rumah sakit secara dinamis.
+ * Menyediakan alur CRUD (Create, Read, Update, Delete) untuk mendefinisikan unit penugasan karyawan
+ * beserta kalkulasi jumlah pegawai terdaftar per departemen.
+ */
 export function DepartmentsTab({ onRefreshDepartments }: DepartmentsTabProps) {
+  // Daftar departemen yang didapat dari server
   const [departments, setDepartments] = useState<DepartmentModel[]>([]);
+  
+  // State pencarian teks nama departemen
   const [search, setSearch] = useState('');
+  
+  // Indikator loading memuat tabel
   const [loading, setLoading] = useState(false);
+  
+  // State menyimpan string error API utama jika ada
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Modals state
+  // ── States Pengendali Modal & Form CRUD ────────────────────────────────────
   const [modalType, setModalType] = useState<'add' | 'edit' | 'delete' | null>(null);
   const [selectedDept, setSelectedDept] = useState<DepartmentModel | null>(null);
   const [formName, setFormName] = useState('');
   const [modalError, setModalError] = useState('');
   const [saving, setSaving] = useState(false);
 
+  /**
+   * Menarik daftar departemen lengkap dengan statistik dari API.
+   */
   const loadDepartments = async () => {
     setLoading(true);
     setErrorMsg('');
@@ -34,6 +51,7 @@ export function DepartmentsTab({ onRefreshDepartments }: DepartmentsTabProps) {
     }
   };
 
+  // Muat data departemen saat komponen terpasang di DOM
   useEffect(() => {
     loadDepartments();
   }, []);

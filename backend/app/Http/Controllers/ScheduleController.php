@@ -234,7 +234,10 @@ class ScheduleController extends Controller
         $emp = \App\Models\Employee::findOrFail($data['employee_id']);
 
         // Hapus penugasan shift lama pegawai pada hari kerja yang sama (jika ada)
-        $emp->schedules()->wherePivot('day_of_week', $data['day_of_week'])->detach();
+        \Illuminate\Support\Facades\DB::table('employee_schedule')
+            ->where('employee_id', $emp->id)
+            ->where('day_of_week', $data['day_of_week'])
+            ->delete();
 
         // Jika schedule_id dikirim (bukan null), pasang penugasan shift baru ke tabel pivot
         $scheduleName = 'Libur (Tidak Ada Shift)';
