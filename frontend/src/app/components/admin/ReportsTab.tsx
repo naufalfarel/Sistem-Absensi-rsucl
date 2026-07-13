@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { FileText, Download, Users, Calendar, Clock, AlertTriangle, ChevronDown } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { reportApi, ReportSummary, attendanceApi, departmentApi } from '../../../services/api';
+import { reportApi, ReportSummary, attendanceApi, departmentApi, getToken } from '../../../services/api';
 import logoImg from '../../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
 import rsLogoImg from '../../../imports/rsucl_wide_logo.png';
 import { useAuth } from '../../../context/AuthContext';
@@ -291,7 +291,7 @@ export function ReportsTab() {
         filteredData.forEach(r => {
           const dept = r.department ?? 'UMUM';
           if (dept !== lastDept) {
-            bodyRows += `<tr class="dept-row"><td colspan="10">${dept}</td></tr>`;
+            bodyRows += `<tr class="dept-row"><td colspan="12">${dept}</td></tr>`;
             lastDept = dept;
           }
           const dur = r.duration_min ? `${Math.floor(r.duration_min / 60)}j ${r.duration_min % 60}m` : '0j 0m';
@@ -305,6 +305,8 @@ export function ReportsTab() {
             <td class="center">${r.sakit} d</td>
             <td class="center">${r.cuti} d</td>
             <td class="center">${r.alpha} d</td>
+            <td class="center">${r.early_checkout_count ?? 0} d</td>
+            <td class="center">${r.overtime_minutes ?? 0} m</td>
             <td class="center bold">${dur}</td>
           </tr>`;
         });
@@ -313,11 +315,11 @@ export function ReportsTab() {
           <table style="border:none;margin-bottom:8px;border-collapse:collapse;">
             <tr style="height:22px;">
               <td rowspan="3" colspan="3" class="logo-cell">${logoImg}</td>
-              <td colspan="7" class="header-title">DATA ABSENSI KARYAWAN</td>
+              <td colspan="9" class="header-title">DATA ABSENSI KARYAWAN</td>
             </tr>
-            <tr style="height:18px;"><td colspan="7" class="header-rs">RUMAH SAKIT UMUM CEMPAKA LIMA</td></tr>
-            <tr style="height:16px;"><td colspan="7" class="header-period">${periodStr}${deptLabelText}</td></tr>
-            <tr style="height:3px;"><td colspan="10" class="separator">&nbsp;</td></tr>
+            <tr style="height:18px;"><td colspan="9" class="header-rs">RUMAH SAKIT UMUM CEMPAKA LIMA</td></tr>
+            <tr style="height:16px;"><td colspan="9" class="header-period">${periodStr}${deptLabelText}</td></tr>
+            <tr style="height:3px;"><td colspan="12" class="separator">&nbsp;</td></tr>
           </table>
           <table>
             <thead><tr>
@@ -325,7 +327,7 @@ export function ReportsTab() {
               <th>NIP</th><th>Nama Karyawan</th>
               <th>Hadir (Hari)</th><th>Terlambat (Hari)</th>
               <th>Izin (Hari)</th><th>Sakit (Hari)</th><th>Cuti (Hari)</th>
-              <th>Alpha (Hari)</th><th>Total Durasi Kerja</th>
+              <th>Alpha (Hari)</th><th>Plg Cepat (Hari)</th><th>Lembur (menit)</th><th>Total Durasi Kerja</th>
             </tr></thead>
             <tbody>${bodyRows}</tbody>
           </table>`;
@@ -338,6 +340,43 @@ export function ReportsTab() {
     } catch (err) {
       console.error(err);
       alert('Terjadi kesalahan saat mengekspor Excel.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleExportVehicles = async () => {
+    setExporting(true);
+    try {
+      const token = getToken();
+      const getApiUrl = () => {
+        const envVal = import.meta.env.VITE_API_URL;
+        if (envVal === '') return '';
+        return envVal ?? 'http://localhost:8000';
+      };
+      const apiUrl = getApiUrl();
+      const response = await fetch(`${apiUrl}/api/reports/vehicles/export`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (!response.ok) {
+        throw new Error('Gagal mengekspor data kendaraan. Pastikan Anda masuk sebagai Admin.');
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'Data_Kendaraan_Pegawai_RSUCL.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || 'Terjadi kesalahan saat mengekspor Excel.');
     } finally {
       setExporting(false);
     }
@@ -443,13 +482,15 @@ export function ReportsTab() {
             <th style="text-align: center; width: 40px;">No</th>
             <th>NIP</th>
             <th>Nama</th>
-            <th style="text-align: center; width: 60px;">Hadir</th>
-            <th style="text-align: center; width: 60px;">Telat</th>
-            <th style="text-align: center; width: 60px;">Izin</th>
-            <th style="text-align: center; width: 60px;">Sakit</th>
-            <th style="text-align: center; width: 60px;">Cuti</th>
-            <th style="text-align: center; width: 60px;">Alpha</th>
-            <th style="text-align: center; width: 100px;">Total Jam</th>
+            <th style="text-align: center; width: 55px;">Hadir</th>
+            <th style="text-align: center; width: 55px;">Telat</th>
+            <th style="text-align: center; width: 55px;">Izin</th>
+            <th style="text-align: center; width: 55px;">Sakit</th>
+            <th style="text-align: center; width: 55px;">Cuti</th>
+            <th style="text-align: center; width: 55px;">Alpha</th>
+            <th style="text-align: center; width: 70px;">Plg Cepat</th>
+            <th style="text-align: center; width: 70px;">Lembur (m)</th>
+            <th style="text-align: center; width: 80px;">Total Jam</th>
           </tr>
         `;
 
@@ -467,7 +508,7 @@ export function ReportsTab() {
           if (deptName !== lastDept) {
             deptRow = `
               <tr style="background-color: #E5E7EB; font-weight: bold; font-size: 11px;">
-                <td colspan="10" style="padding: 8px; border-bottom: 1px solid #E5E7EB; border-right: 1px solid #E5E7EB; text-transform: uppercase; color: #374151;">
+                <td colspan="12" style="padding: 8px; border-bottom: 1px solid #E5E7EB; border-right: 1px solid #E5E7EB; text-transform: uppercase; color: #374151;">
                   ${deptName}
                 </td>
               </tr>
@@ -486,6 +527,8 @@ export function ReportsTab() {
               <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${r.sakit} d</td>
               <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${r.cuti} d</td>
               <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${r.alpha} d</td>
+              <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${r.early_checkout_count ?? 0} d</td>
+              <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${r.overtime_minutes ?? 0} m</td>
               <td style="padding: 8px; text-align: center; font-weight: bold;">${r.duration_min ? `${Math.floor(r.duration_min / 60)}j ${r.duration_min % 60}m` : '0j'}</td>
             </tr>
           `;
@@ -634,21 +677,43 @@ export function ReportsTab() {
           <h2 className="text-[16px] font-bold text-gray-900">Laporan Kehadiran</h2>
           <p className="text-[12px] text-gray-400 mt-0.5">Analitik dan statistik absensi Rumah Sakit Umum Cempaka Lima · Real-time</p>
         </div>
-        <div className="flex gap-2">
-          <button 
-            onClick={handleExportPDF} 
-            disabled={exporting}
-            className="flex items-center gap-2 px-3.5 py-2 bg-red-50 border border-red-100 rounded-xl text-[12px] font-medium text-red-600 hover:bg-red-100 transition-colors shadow-sm disabled:opacity-50"
-          >
-            <FileText size={13} /> {exporting ? 'Memproses...' : 'Export PDF'}
-          </button>
-          <button 
-            onClick={handleExportExcel} 
-            disabled={exporting}
-            className="flex items-center gap-2 px-3.5 py-2 bg-green-50 border border-green-100 rounded-xl text-[12px] font-medium text-[#16A34A] hover:bg-green-100 transition-colors shadow-sm disabled:opacity-50"
-          >
-            <Download size={13} /> {exporting ? 'Memproses...' : 'Export Excel'}
-          </button>
+        <div className="flex gap-3 flex-wrap items-center">
+          {/* Kelompok Laporan Absensi */}
+          <div className="flex items-center gap-2 p-1.5 bg-gray-50/60 rounded-xl border border-gray-100 shadow-sm">
+            <div className="text-left px-2 hidden sm:block">
+              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Laporan Absensi</p>
+              <p className="text-[8.5px] text-gray-400 leading-none mt-0.5">Sesuai filter aktif</p>
+            </div>
+            <button 
+              onClick={handleExportPDF} 
+              disabled={exporting}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 border border-red-100 rounded-lg text-[11px] font-medium text-red-600 hover:bg-red-100 transition-colors disabled:opacity-50"
+            >
+              <FileText size={12} /> {exporting ? 'Memproses...' : 'Export PDF'}
+            </button>
+            <button 
+              onClick={handleExportExcel} 
+              disabled={exporting}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 border border-green-100 rounded-lg text-[11px] font-medium text-[#16A34A] hover:bg-green-100 transition-colors disabled:opacity-50"
+            >
+              <Download size={12} /> {exporting ? 'Memproses...' : 'Export Excel'}
+            </button>
+          </div>
+
+          {/* Kelompok Laporan Kendaraan */}
+          <div className="flex items-center gap-2 p-1.5 bg-gray-50/60 rounded-xl border border-gray-100 shadow-sm">
+            <div className="text-left px-2 hidden sm:block">
+              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Data Kendaraan</p>
+              <p className="text-[8.5px] text-gray-400 leading-none mt-0.5">Daftar plat nomor</p>
+            </div>
+            <button 
+              onClick={handleExportVehicles} 
+              disabled={exporting}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#16A34A] hover:bg-[#0d9240] rounded-lg text-[11px] font-medium text-white transition-colors disabled:opacity-50"
+            >
+              <Download size={12} /> {exporting ? 'Memproses...' : 'Export Kendaraan'}
+            </button>
+          </div>
         </div>
       </div>
 

@@ -13,6 +13,8 @@ interface MappedAttendance {
   pos: string;
   imageCheckIn?: string | null;
   imageCheckOut?: string | null;
+  checkinLocationNote?: string | null;
+  checkoutLocationNote?: string | null;
 }
 
 const statusMap: Record<string, { label: string; color: string; bg: string; icon: typeof CheckCircle2; border: string }> = {
@@ -56,16 +58,11 @@ export function AttendanceTab() {
   
   // Indikator memproses/loading data dari server
   const [loading, setLoading] = useState(false);
-
-  /**
-   * Menarik daftar kehadiran harian seluruh karyawan dari API backend.
-   */
   const loadTodayRecords = async () => {
     setLoading(true);
     try {
       const res = await attendanceApi.allToday();
       if (res.success) {
-        // Lakukan pemetaan dari model respons mentah backend ke representasi UI
         const mapped: MappedAttendance[] = res.data.map(r => {
           let statusKey: MappedAttendance['status'] = 'not_yet';
           if (r.status === 'hadir') {
@@ -93,6 +90,8 @@ export function AttendanceTab() {
             pos: 'Staff',
             imageCheckIn: r.image_check_in,
             imageCheckOut: r.image_check_out,
+            checkinLocationNote: r.checkin_location_note,
+            checkoutLocationNote: r.checkout_location_note,
           };
         });
         setRecords(mapped);
@@ -104,10 +103,10 @@ export function AttendanceTab() {
     }
   };
 
-  // Muat data saat komponen dirender pertama kali
   useEffect(() => {
     loadTodayRecords();
   }, []);
+
 
   const counts: Record<string, number> = {};
   records.forEach(e => { counts[e.status] = (counts[e.status] || 0) + 1; });
@@ -135,16 +134,12 @@ export function AttendanceTab() {
   return (
     <div className="max-w-6xl mx-auto space-y-5">
       {/* Date header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-3">
         <div>
           <h2 className="text-[16px] font-bold text-gray-900">Kehadiran Hari Ini</h2>
           <p className="text-[12px] text-gray-400 mt-0.5">
-            {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · Real-time
+            {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
-        </div>
-        <div className="flex items-center gap-1.5 bg-green-50 border border-green-100 px-3 py-1.5 rounded-full">
-          <div className="w-1.5 h-1.5 rounded-full bg-[#16A34A] animate-pulse" />
-          <span className="text-[11px] font-semibold text-[#16A34A]">Live</span>
         </div>
       </div>
 
@@ -166,92 +161,93 @@ export function AttendanceTab() {
       </div>
 
       {/* Search & filter */}
-      <div className="flex gap-3 items-center">
-        <div className="relative flex-1">
-          <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Cari nama atau departemen/bagian..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 border border-gray-100 rounded-xl text-[13px] bg-white shadow-sm focus:outline-none focus:border-[#16A34A] transition-all placeholder:text-gray-300"
-          />
-        </div>
-        {filterStatus !== 'all' && (
-          <button onClick={() => setFilterStatus('all')} className="text-[12px] text-gray-500 bg-white border border-gray-100 rounded-xl px-3 py-2.5 hover:bg-gray-50 shadow-sm">
-            Reset filter
-          </button>
-        )}
-      </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-gray-50/70 border-b border-gray-100">
-                {['Nama Karyawan', 'Departemen/Bagian', 'Shift', 'Jam Masuk', 'Jam Keluar', 'Durasi', 'Status', ''].map((h, i) => (
-                  <th key={i} className="text-left px-4 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {loading && (
-                <tr>
-                  <td colSpan={8} className="text-center py-5 text-gray-400 text-[12px]">Memuat absensi hari ini...</td>
-                </tr>
-              )}
-              {filtered.map(emp => {
-                const sc = statusMap[emp.status] || { label: emp.status, color: '#6B7280', bg: '#F9FAFB', icon: Coffee, border: '#E5E7EB' };
-                return (
-                  <tr key={emp.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                    <td className="px-4 py-3.5">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-xl bg-gray-50 flex items-center justify-center flex-shrink-0" style={{ background: sc.bg }}>
-                          <span className="text-[11px] font-bold" style={{ color: sc.color }}>
-                            {emp.name.replace(/^(dr\.|Ns\.|Dr\.)\s*/i, '').charAt(0)}
-                          </span>
-                        </div>
-                        <div>
-                          <p className="text-[13px] font-medium text-gray-800">{emp.name}</p>
-                          <p className="text-[11px] text-gray-400">{emp.pos}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3.5 text-[13px] text-gray-600">{emp.dept}</td>
-                    <td className="px-4 py-3.5">
-                      <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full bg-green-50 text-green-700`}>{emp.shift}</span>
-                    </td>
-                    <td className="px-4 py-3.5 font-mono text-[13px] text-gray-700">{emp.checkIn}</td>
-                    <td className="px-4 py-3.5 font-mono text-[13px] text-gray-700">
-                      {emp.checkOut || (emp.checkIn !== '--' ? <span className="text-gray-300">Belum</span> : '--')}
-                    </td>
-                    <td className="px-4 py-3.5 text-[13px] text-gray-600">{getDuration(emp.checkIn, emp.checkOut)}</td>
-                    <td className="px-4 py-3.5">
-                      <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full border border-dashed" style={{ color: sc.color, background: sc.bg, borderColor: sc.border }}>
-                        <sc.icon size={11} />
-                        {sc.label}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <button onClick={() => setSelected(emp)} className="w-7 h-7 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center hover:bg-gray-100 transition-colors">
-                        <Eye size={13} className="text-gray-400" />
-                      </button>
-                    </td>
+          <div className="flex gap-3 items-center">
+            <div className="relative flex-1">
+              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Cari nama atau departemen/bagian..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 border border-gray-100 rounded-xl text-[13px] bg-white shadow-sm focus:outline-none focus:border-[#16A34A] transition-all placeholder:text-gray-300"
+              />
+            </div>
+            {filterStatus !== 'all' && (
+              <button onClick={() => setFilterStatus('all')} className="text-[12px] text-gray-500 bg-white border border-gray-100 rounded-xl px-3 py-2.5 hover:bg-gray-50 shadow-sm">
+                Reset filter
+              </button>
+            )}
+          </div>
+
+          {/* Table */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-gray-50/70 border-b border-gray-100">
+                    {['Nama Karyawan', 'Departemen/Bagian', 'Shift', 'Jam Masuk', 'Jam Keluar', 'Durasi', 'Status', ''].map((h, i) => (
+                      <th key={i} className="text-left px-4 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                    ))}
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        {filtered.length === 0 && !loading && (
-          <div className="text-center py-5 text-gray-300 text-[11px]">Tidak ada data absensi ditemukan.</div>
-        )}
-        <div className="px-5 py-3 border-t border-gray-50 flex items-center justify-between bg-gray-50/30">
-          <p className="text-[12px] text-gray-400">Menampilkan {filtered.length} dari {records.length} karyawan</p>
-          <p className="text-[12px] text-gray-400">Diperbarui otomatis dari server</p>
-        </div>
-      </div>
+                </thead>
+                <tbody>
+                  {loading && (
+                    <tr>
+                      <td colSpan={8} className="text-center py-5 text-gray-400 text-[12px]">Memuat absensi hari ini...</td>
+                    </tr>
+                  )}
+                  {filtered.map(emp => {
+                    const sc = statusMap[emp.status] || { label: emp.status, color: '#6B7280', bg: '#F9FAFB', icon: Coffee, border: '#E5E7EB' };
+                    return (
+                      <tr key={emp.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                        <td className="px-4 py-3.5">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-xl bg-gray-50 flex items-center justify-center flex-shrink-0" style={{ background: sc.bg }}>
+                              <span className="text-[11px] font-bold" style={{ color: sc.color }}>
+                                {emp.name.replace(/^(dr\.|Ns\.|Dr\.)\s*/i, '').charAt(0)}
+                              </span>
+                            </div>
+                            <div>
+                              <p className="text-[13px] font-medium text-gray-800">{emp.name}</p>
+                              <p className="text-[11px] text-gray-400">{emp.pos}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3.5 text-[13px] text-gray-600">{emp.dept}</td>
+                        <td className="px-4 py-3.5">
+                          <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full bg-green-50 text-green-700`}>{emp.shift}</span>
+                        </td>
+                        <td className="px-4 py-3.5 font-mono text-[13px] text-gray-700">{emp.checkIn}</td>
+                        <td className="px-4 py-3.5 font-mono text-[13px] text-gray-700">
+                          {emp.checkOut || (emp.checkIn !== '--' ? <span className="text-gray-300">Belum</span> : '--')}
+                        </td>
+                        <td className="px-4 py-3.5 text-[13px] text-gray-600">{getDuration(emp.checkIn, emp.checkOut)}</td>
+                        <td className="px-4 py-3.5">
+                          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full border border-dashed" style={{ color: sc.color, background: sc.bg, borderColor: sc.border }}>
+                            <sc.icon size={11} />
+                            {sc.label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <button onClick={() => setSelected(emp)} className="w-7 h-7 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center hover:bg-gray-100 transition-colors">
+                            <Eye size={13} className="text-gray-400" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {filtered.length === 0 && !loading && (
+              <div className="text-center py-5 text-gray-300 text-[11px]">Tidak ada data absensi ditemukan.</div>
+            )}
+            <div className="px-5 py-3 border-t border-gray-50 flex items-center justify-between bg-gray-50/30">
+              <p className="text-[12px] text-gray-400">Menampilkan {filtered.length} dari {records.length} karyawan</p>
+              <p className="text-[12px] text-gray-400">Diperbarui otomatis dari server</p>
+            </div>
+          </div>
 
       {/* Detail modal */}
       {selected && (
@@ -270,15 +266,17 @@ export function AttendanceTab() {
               </div>
             </div>
             <div className="space-y-2.5 bg-gray-50 rounded-xl p-4 mb-5">
-              {[
+               {[
                 { l: 'Shift', v: selected.shift },
                 { l: 'Jam Masuk', v: selected.checkIn },
                 { l: 'Jam Keluar', v: selected.checkOut || 'Belum checkout' },
                 { l: 'Status', v: statusMap[selected.status].label },
+                ...(selected.checkinLocationNote ? [{ l: 'Lokasi Masuk', v: selected.checkinLocationNote }] : []),
+                ...(selected.checkoutLocationNote ? [{ l: 'Lokasi Pulang', v: selected.checkoutLocationNote }] : []),
               ].map(({ l, v }, i) => (
                 <div key={i} className="flex justify-between">
                   <span className="text-[12px] text-gray-500">{l}</span>
-                  <span className="text-[12px] font-medium text-gray-800">{v}</span>
+                  <span className="text-[12px] font-medium text-gray-800 text-right max-w-[180px] break-words">{v}</span>
                 </div>
               ))}
             </div>

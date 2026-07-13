@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import {
   LayoutDashboard, Users, ClipboardList, History, CalendarDays, FileText,
@@ -58,6 +58,7 @@ const statusLabels: Record<string, string> = {
 const emptyForm = {
   name: '', nip: '', username: '', password: '', department_id: '', position_id: '',
   email: '', phone: '', gender: 'Laki-laki', joinDate: '',
+  motor_plate_1: '', motor_plate_2: '', car_plate_1: '', car_plate_2: '',
 };
 
 interface AdminAppProps {
@@ -104,6 +105,9 @@ export function AdminApp({ onLogout }: AdminAppProps) {
   
   // Melacak baris tabel data pegawai mana yang opsi popover-nya sedang dibuka
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  
+  // Melacak baris tabel pegawai mana yang sedang di-expand untuk menampilkan kendaraan
+  const [expandedEmpId, setExpandedEmpId] = useState<number | null>(null);
   
   // Penampung pesan error validasi input di dalam form modal
   const [formError, setFormError] = useState('');
@@ -197,6 +201,10 @@ export function AdminApp({ onLogout }: AdminAppProps) {
       phone: emp.phone || '',
       gender: emp.gender || 'Laki-laki',
       joinDate: emp.join_date || '',
+      motor_plate_1: emp.vehicles?.motor_plate_1 || '',
+      motor_plate_2: emp.vehicles?.motor_plate_2 || '',
+      car_plate_1: emp.vehicles?.car_plate_1 || '',
+      car_plate_2: emp.vehicles?.car_plate_2 || '',
     });
     setFormError('');
     setSelectedEmp(emp);
@@ -235,6 +243,10 @@ export function AdminApp({ onLogout }: AdminAppProps) {
           phone: form.phone,
           gender: form.gender as any,
           join_date: form.joinDate || undefined,
+          motor_plate_1: form.motor_plate_1 || undefined,
+          motor_plate_2: form.motor_plate_2 || undefined,
+          car_plate_1: form.car_plate_1 || undefined,
+          car_plate_2: form.car_plate_2 || undefined,
         });
         if (res.success) {
           setEmployees(prev => [res.data, ...prev]);
@@ -248,6 +260,10 @@ export function AdminApp({ onLogout }: AdminAppProps) {
           phone: form.phone,
           gender: form.gender,
           join_date: form.joinDate || undefined,
+          motor_plate_1: form.motor_plate_1 || null,
+          motor_plate_2: form.motor_plate_2 || null,
+          car_plate_1: form.car_plate_1 || null,
+          car_plate_2: form.car_plate_2 || null,
         };
         if (form.password.trim()) {
           updateData.password = form.password;
@@ -565,54 +581,85 @@ export function AdminApp({ onLogout }: AdminAppProps) {
                       {filtered.map(emp => {
                         const todayStatus = emp.today_attendance?.status ?? 'alpha';
                         const sc = statusColors[todayStatus] || { color: '#6B7280', bg: '#F3F4F6' };
+                        const isExpanded = expandedEmpId === emp.id;
                         return (
-                          <tr key={emp.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                            <td className="px-4 py-3.5">
-                              <div className="flex items-center gap-2.5">
-                                <div className="w-8 h-8 rounded-xl bg-[#16A34A]/10 flex items-center justify-center flex-shrink-0">
-                                  <span className="text-[#16A34A] text-[11px] font-bold">{emp.name.replace(/^(dr\.|Ns\.|Dr\.)\s*/i, '').charAt(0)}</span>
+                          <Fragment key={emp.id}>
+                            <tr
+                              onClick={() => setExpandedEmpId(isExpanded ? null : emp.id)}
+                              className={`border-b border-gray-50 hover:bg-gray-50/50 transition-colors cursor-pointer ${isExpanded ? 'bg-green-50/10' : ''}`}
+                            >
+                              <td className="px-4 py-3.5">
+                                <div className="flex items-center gap-2.5">
+                                  <div className="w-8 h-8 rounded-xl bg-[#16A34A]/10 flex items-center justify-center flex-shrink-0">
+                                    <span className="text-[#16A34A] text-[11px] font-bold">{emp.name.replace(/^(dr\.|Ns\.|Dr\.)\s*/i, '').charAt(0)}</span>
+                                  </div>
+                                  <div>
+                                    <p className="text-[13px] font-medium text-gray-800">{emp.name}</p>
+                                    <p className="text-[11px] text-gray-400">{emp.email}</p>
+                                  </div>
                                 </div>
-                                <div>
-                                  <p className="text-[13px] font-medium text-gray-800">{emp.name}</p>
-                                  <p className="text-[11px] text-gray-400">{emp.email}</p>
+                              </td>
+                              <td className="px-4 py-3.5 text-[12px] font-mono text-gray-500">{emp.nip}</td>
+                              <td className="px-4 py-3.5">
+                                <div className="flex items-center gap-1.5">
+                                  <Lock size={11} className="text-gray-300 flex-shrink-0" />
+                                  <span className="text-[12px] text-gray-500">{emp.username || '—'}</span>
                                 </div>
-                              </div>
-                            </td>
-                            <td className="px-4 py-3.5 text-[12px] font-mono text-gray-500">{emp.nip}</td>
-                            <td className="px-4 py-3.5">
-                              <div className="flex items-center gap-1.5">
-                                <Lock size={11} className="text-gray-300 flex-shrink-0" />
-                                <span className="text-[12px] text-gray-500">{emp.username || '—'}</span>
-                              </div>
-                            </td>
-                            <td className="px-4 py-3.5 text-[13px] text-gray-600">{emp.department}</td>
-                            <td className="px-4 py-3.5 text-[13px] text-gray-600">{emp.position}</td>
-                            <td className="px-4 py-3.5">
-                              <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full uppercase" style={{ color: sc.color, background: sc.bg }}>
-                                {statusLabels[todayStatus] || todayStatus}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3.5 text-[13px] font-mono text-gray-600">{emp.today_attendance?.check_in || '--:--'}</td>
-                            <td className="px-4 py-3.5 relative">
-                              <button
-                                onClick={e => { e.stopPropagation(); setOpenMenuId(openMenuId === emp.id ? null : emp.id); }}
-                                className="w-7 h-7 rounded-lg hover:bg-gray-100 flex items-center justify-center transition-colors"
-                              >
-                                <MoreHorizontal size={14} className="text-gray-400" />
-                              </button>
-                              {openMenuId === emp.id && (
-                                <div className="absolute right-8 top-2 z-20 bg-white rounded-xl border border-gray-100 shadow-lg py-1 min-w-[130px]" onClick={e => e.stopPropagation()}>
-                                  <button onClick={() => openEdit(emp)} className="w-full flex items-center gap-2.5 px-3.5 py-2 text-[13px] text-gray-700 hover:bg-gray-50 transition-colors">
-                                    <Edit2 size={13} className="text-[#16A34A]" /> Edit Pegawai
-                                  </button>
-                                  <div className="h-px bg-gray-50 mx-2" />
-                                  <button onClick={() => openDelete(emp)} className="w-full flex items-center gap-2.5 px-3.5 py-2 text-[13px] text-red-600 hover:bg-red-50 transition-colors">
-                                    <Trash2 size={13} /> Hapus
-                                  </button>
-                                </div>
-                              )}
-                            </td>
-                          </tr>
+                              </td>
+                              <td className="px-4 py-3.5 text-[13px] text-gray-600">{emp.department}</td>
+                              <td className="px-4 py-3.5 text-[13px] text-gray-600">{emp.position}</td>
+                              <td className="px-4 py-3.5">
+                                <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full uppercase" style={{ color: sc.color, background: sc.bg }}>
+                                  {statusLabels[todayStatus] || todayStatus}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3.5 text-[13px] font-mono text-gray-600">{emp.today_attendance?.check_in || '--:--'}</td>
+                              <td className="px-4 py-3.5 relative" onClick={e => e.stopPropagation()}>
+                                <button
+                                  onClick={e => { e.stopPropagation(); setOpenMenuId(openMenuId === emp.id ? null : emp.id); }}
+                                  className="w-7 h-7 rounded-lg hover:bg-gray-100 flex items-center justify-center transition-colors"
+                                >
+                                  <MoreHorizontal size={14} className="text-gray-400" />
+                                </button>
+                                {openMenuId === emp.id && (
+                                  <div className="absolute right-8 top-2 z-20 bg-white rounded-xl border border-gray-100 shadow-lg py-1 min-w-[130px]" onClick={e => e.stopPropagation()}>
+                                    <button onClick={() => openEdit(emp)} className="w-full flex items-center gap-2.5 px-3.5 py-2 text-[13px] text-gray-700 hover:bg-gray-50 transition-colors">
+                                      <Edit2 size={13} className="text-[#16A34A]" /> Edit Pegawai
+                                    </button>
+                                    <div className="h-px bg-gray-50 mx-2" />
+                                    <button onClick={() => openDelete(emp)} className="w-full flex items-center gap-2.5 px-3.5 py-2 text-[13px] text-red-600 hover:bg-red-50 transition-colors">
+                                      <Trash2 size={13} /> Hapus
+                                    </button>
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                            {isExpanded && (
+                              <tr className="bg-gray-50/50">
+                                <td colSpan={8} className="px-6 py-3.5 border-b border-gray-100">
+                                  <div className="flex flex-wrap gap-x-8 gap-y-2 text-[12px]">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-semibold text-gray-400 uppercase text-[9px] tracking-wider">Motor 1:</span>
+                                      <span className="font-mono bg-white border border-gray-205 rounded px-2 py-0.5 text-gray-700">{emp.vehicles?.motor_plate_1 || '—'}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-semibold text-gray-400 uppercase text-[9px] tracking-wider">Motor 2:</span>
+                                      <span className="font-mono bg-white border border-gray-205 rounded px-2 py-0.5 text-gray-700">{emp.vehicles?.motor_plate_2 || '—'}</span>
+                                    </div>
+                                    <div className="w-px bg-gray-200 hidden sm:block" />
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-semibold text-gray-400 uppercase text-[9px] tracking-wider">Mobil 1:</span>
+                                      <span className="font-mono bg-white border border-gray-205 rounded px-2 py-0.5 text-gray-700">{emp.vehicles?.car_plate_1 || '—'}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-semibold text-gray-400 uppercase text-[9px] tracking-wider">Mobil 2:</span>
+                                      <span className="font-mono bg-white border border-gray-205 rounded px-2 py-0.5 text-gray-700">{emp.vehicles?.car_plate_2 || '—'}</span>
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
                         );
                       })}
                     </tbody>
@@ -750,6 +797,33 @@ export function AdminApp({ onLogout }: AdminAppProps) {
                   <label className="block text-[12px] font-medium text-gray-600 mb-1.5">Tanggal Bergabung</label>
                   <input type="date" value={form.joinDate} onChange={e => setForm(f => ({ ...f, joinDate: e.target.value }))}
                     className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all" />
+                </div>
+              </div>
+
+              {/* Data Kendaraan Section */}
+              <div className="pt-4 border-t border-gray-100 space-y-3">
+                <p className="text-[12.5px] font-bold text-gray-700 uppercase tracking-wider border-l-2 border-[#16A34A] pl-2">Data Kendaraan Pegawai</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[11px] font-medium text-gray-500 mb-1">Motor 1</label>
+                    <input type="text" value={form.motor_plate_1} onChange={e => setForm(f => ({ ...f, motor_plate_1: e.target.value }))} placeholder="Contoh: BL 1234 AA" maxLength={15}
+                      className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-[12px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all placeholder:text-gray-300" />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-gray-500 mb-1">Motor 2</label>
+                    <input type="text" value={form.motor_plate_2} onChange={e => setForm(f => ({ ...f, motor_plate_2: e.target.value }))} placeholder="Contoh: BL 5678 BB" maxLength={15}
+                      className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-[12px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all placeholder:text-gray-300" />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-gray-500 mb-1">Mobil 1</label>
+                    <input type="text" value={form.car_plate_1} onChange={e => setForm(f => ({ ...f, car_plate_1: e.target.value }))} placeholder="Contoh: B 9999 XX" maxLength={15}
+                      className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-[12px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all placeholder:text-gray-300" />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-gray-500 mb-1">Mobil 2</label>
+                    <input type="text" value={form.car_plate_2} onChange={e => setForm(f => ({ ...f, car_plate_2: e.target.value }))} placeholder="Contoh: B 8888 YY" maxLength={15}
+                      className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-[12px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all placeholder:text-gray-300" />
+                  </div>
                 </div>
               </div>
             </div>

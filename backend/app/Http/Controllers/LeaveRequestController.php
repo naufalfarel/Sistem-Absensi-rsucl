@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\LeaveRequest;
 use App\Models\Notification;
+use App\Support\LeaveQuotaHelper;
 use Illuminate\Http\Request;
 
 /**
@@ -15,6 +16,70 @@ use Illuminate\Http\Request;
  */
 class LeaveRequestController extends Controller
 {
+    /**
+     * GET /api/leave-requests/quota
+     *
+     * Mengambil informasi kuota cuti tahunan.
+     * - Karyawan: hanya bisa melihat kuota dirinya sendiri.
+     * - Admin: dapat melihat kuota karyawan tertentu via ?employee_id=X,
+     *          atau semua karyawan jika tidak ada query param.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function quota(Request $request)
+    {
+        $user = $request->user();
+        $now  = \Carbon\Carbon::now();
+
+        // Karyawan hanya bisa melihat kuota dirinya sendiri
+        if (!$user->isAdmin()) {
+            $employee = $user->employee;
+            if (!$employee) {
+                return response()->json(['success' => false, 'message' => 'Data karyawan tidak ditemukan.'], 404);
+            }
+            return response()->json([
+                'success' => true,
+                'data'    => [
+                    'employee_id'   => $employee->id,
+                    'employee_name' => $employee->user?->name,
+                    ...LeaveQuotaHelper::quotaInfo($employee, $now),
+                ],
+            ]);
+        }
+
+        // Admin: jika ada query param employee_id, tampilkan kuota 1 karyawan
+        if ($request->filled('employee_id')) {
+            $employee = \App\Models\Employee::with('user')->find($request->input('employee_id'));
+            if (!$employee) {
+                return response()->json(['success' => false, 'message' => 'Karyawan tidak ditemukan.'], 404);
+            }
+            return response()->json([
+                'success' => true,
+                'data'    => [
+                    'employee_id'   => $employee->id,
+                    'employee_name' => $employee->user?->name,
+                    ...LeaveQuotaHelper::quotaInfo($employee, $now),
+                ],
+            ]);
+        }
+
+        // Admin tanpa employee_id: kembalikan kuota seluruh karyawan aktif
+        $employees = \App\Models\Employee::with('user')
+            ->where('status', 'active')
+            ->get();
+
+        $result = $employees->map(function ($emp) use ($now) {
+            return [
+                'employee_id'   => $emp->id,
+                'employee_name' => $emp->user?->name,
+                ...LeaveQuotaHelper::quotaInfo($emp, $now),
+            ];
+        });
+
+        return response()->json(['success' => true, 'data' => $result]);
+    }
+
     /**
      * GET /api/leave-requests
      * 
@@ -30,7 +95,7 @@ class LeaveRequestController extends Controller
         $user = $request->user();
 
         // Siapkan query pengambilan data beserta relasi profil karyawan & reviewer (admin)
-        $query = LeaveRequest::with(['employee.user', 'employee.department', 'reviewer'])
+        $query = LeaveRequest::with(['employee.user', 'employee.department', 'reviewer', 'specialLeaveCategory'])
                              ->orderBy('created_at', 'desc');
 
         // Filter data jika user login bukan admin
@@ -64,29 +129,76 @@ class LeaveRequestController extends Controller
         }
 
         // Validasi input data pengajuan cuti
-        $data = $request->validate([
-            'type'       => 'required|in:cuti,izin,sakit',
-            'start_date' => 'required|date|after_or_equal:today',
-            'end_date'   => 'required|date|after_or_equal:start_date',
-            'reason'     => 'required|string|max:500',
-            'attachment' => 'required|string', // String file ter-encode Base64 (PDF/Gambar)
-        ]);
+        $rules = [
+            'type'                      => 'required|in:cuti,izin,sakit,cuti_khusus',
+            'start_date'                => 'required|date|after_or_equal:today',
+            'end_date'                  => 'required|date|after_or_equal:start_date',
+            'reason'                    => 'required|string|max:500',
+            'special_leave_category_id' => 'required_if:type,cuti_khusus|exists:special_leave_categories,id',
+        ];
+
+        // Lampiran wajib untuk cuti_khusus. Untuk tipe lain opsional.
+        if ($request->hasFile('attachment')) {
+            $rules['attachment'] = 'required_if:type,cuti_khusus|file|mimes:pdf,jpg,jpeg,png|max:2048';
+        } else {
+            $rules['attachment'] = 'required_if:type,cuti_khusus|string';
+        }
+
+        $messages = [
+            'attachment.required_if' => 'Dokumen pendukung wajib diupload untuk pengajuan cuti khusus.',
+            'attachment.file' => 'Dokumen pendukung harus berupa file.',
+            'attachment.mimes' => 'Format file dokumen pendukung harus berupa PDF, PNG, atau JPG/JPEG.',
+            'attachment.max' => 'Ukuran file dokumen pendukung maksimal 2MB.',
+            'special_leave_category_id.required_if' => 'Kategori cuti khusus wajib dipilih.',
+            'special_leave_category_id.exists' => 'Kategori cuti khusus tidak valid.',
+        ];
+
+        $data = $request->validate($rules, $messages);
+
+        // ── Validasi Kuota Cuti Tahunan ──────────────────────────────────────
+        // Hanya berlaku untuk pengajuan bertipe 'cuti'. Izin, sakit, dan cuti_khusus tidak dibatasi.
+        if ($data['type'] === 'cuti') {
+            $now           = \Carbon\Carbon::now();
+            $remaining     = LeaveQuotaHelper::remainingDays($employee, $now);
+            $startDate     = \Carbon\Carbon::parse($data['start_date']);
+            $endDate       = \Carbon\Carbon::parse($data['end_date']);
+            $daysRequested = $startDate->diffInDays($endDate) + 1;
+
+            if ($daysRequested > $remaining) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Sisa kuota cuti Anda hanya {$remaining} hari. Anda mengajukan {$daysRequested} hari. Silakan sesuaikan tanggal pengajuan.",
+                    'errors'  => [
+                        'quota' => ["Sisa kuota cuti Anda hanya {$remaining} hari. Anda mengajukan {$daysRequested} hari."],
+                    ],
+                ], 422);
+            }
+        }
 
         // Simpan file dokumen pendukung ke server storage
-        $attachmentUrl = $this->storeBase64Attachment(
-            $data['attachment'],
-            'attachment_leave_' . $employee->id . '_' . time()
-        );
+        $attachmentUrl = null;
+        if ($request->hasFile('attachment')) {
+            $file = $request->file('attachment');
+            $fileName = 'attachment_leave_' . $employee->id . '_' . time() . '.' . $file->getClientOriginalExtension();
+            $path = \Illuminate\Support\Facades\Storage::disk('public')->putFileAs('leave-attachments', $file, $fileName);
+            $attachmentUrl = '/storage/' . $path;
+        } else if ($request->filled('attachment')) {
+            $attachmentUrl = $this->storeBase64Attachment(
+                $request->input('attachment'),
+                'attachment_leave_' . $employee->id . '_' . time()
+            );
+        }
 
         // Buat record pengajuan berstatus 'pending'
         $lr = LeaveRequest::create([
-            'employee_id'    => $employee->id,
-            'type'           => $data['type'],
-            'start_date'     => $data['start_date'],
-            'end_date'       => $data['end_date'],
-            'reason'         => $data['reason'],
-            'attachment_url' => $attachmentUrl,
-            'status'         => 'pending',
+            'employee_id'               => $employee->id,
+            'type'                      => $data['type'],
+            'special_leave_category_id' => $data['special_leave_category_id'] ?? null,
+            'start_date'                => $data['start_date'],
+            'end_date'                  => $data['end_date'],
+            'reason'                    => $data['reason'],
+            'attachment_url'            => $attachmentUrl,
+            'status'                    => 'pending',
         ]);
 
         // Kirim notifikasi sistem ke admin jika opsi notif_leave diaktifkan
@@ -183,6 +295,28 @@ class LeaveRequestController extends Controller
 
         $data = $request->validate(['admin_note' => 'nullable|string|max:300']);
 
+        // ── Cek Kuota Cuti saat Approve (Safety-Net) ──────────────────────────────────
+        // Validasi juga dilakukan saat approve, bukan hanya saat submit.
+        // Ini mencegah edge case: karyawan punya 2 pending cuti sekaligus,
+        // keduanya lolos submit (karena pending tidak terhitung saat itu),
+        // lalu admin approve keduanya sehingga total melebihi kuota.
+        if ($newStatus === 'approved' && $lr->type === 'cuti') {
+            $employee      = $lr->employee;
+            $now           = \Carbon\Carbon::now();
+            $quota         = LeaveQuotaHelper::quotaDays();
+            // Hitung hanya approved (exclude request ini yang masih pending)
+            $alreadyUsed   = LeaveQuotaHelper::usedDays($employee, $now);
+            $daysThisReq   = \Carbon\Carbon::parse($lr->start_date)->diffInDays(\Carbon\Carbon::parse($lr->end_date)) + 1;
+
+            if (($alreadyUsed + $daysThisReq) > $quota) {
+                $remaining = max(0, $quota - $alreadyUsed);
+                return response()->json([
+                    'success' => false,
+                    'message' => "Tidak bisa menyetujui: sisa kuota cuti karyawan ini hanya {$remaining} hari, pengajuan ini membutuhkan {$daysThisReq} hari. Tolak pengajuan ini atau kurangi kuota yang sudah disetujui terlebih dahulu.",
+                ], 422);
+            }
+        }
+
         // Update status pengajuan beserta data reviewer
         $lr->update([
             'status'      => $newStatus,
@@ -203,7 +337,7 @@ class LeaveRequestController extends Controller
                         'date'        => $dateStr,
                     ],
                     [
-                        'status'             => $lr->type, // cuti, izin, sakit
+                        'status'             => $lr->type === 'cuti_khusus' ? 'cuti' : $lr->type, // cuti_khusus dipetakan sebagai 'cuti' di record absensi
                         'check_in'           => null,
                         'check_out'          => null,
                         'note'               => "Masa " . ucfirst($lr->type) . ": " . $lr->reason,
@@ -264,6 +398,55 @@ class LeaveRequestController extends Controller
     }
 
     /**
+     * DELETE /api/leave-requests/{id}/cancel
+     *
+     * Membatalkan pengajuan cuti/izin/sakit oleh karyawan sendiri.
+     *
+     * Aturan:
+     * - Hanya bisa membatalkan pengajuan MILIK SENDIRI.
+     * - Hanya bisa membatalkan yang masih berstatus 'pending'.
+     * - Pengajuan yang sudah disetujui/ditolak TIDAK bisa dibatalkan.
+     *
+     * @param Request      $request
+     * @param LeaveRequest $leaveRequest
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function cancel(Request $request, LeaveRequest $leaveRequest)
+    {
+        $user     = $request->user();
+        $employee = $user->employee;
+
+        // Pastikan karyawan hanya bisa membatalkan pengajuan miliknya sendiri
+        if (!$employee || $leaveRequest->employee_id !== $employee->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda tidak memiliki akses untuk membatalkan pengajuan ini.',
+            ], 403);
+        }
+
+        // Hanya pengajuan berstatus 'pending' yang bisa dibatalkan
+        if ($leaveRequest->status !== 'pending') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya pengajuan yang masih menunggu persetujuan yang bisa dibatalkan.',
+            ], 422);
+        }
+
+        // Hapus file lampiran dari storage jika ada
+        if ($leaveRequest->attachment_url) {
+            $path = str_replace('/storage/', '', $leaveRequest->attachment_url);
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($path);
+        }
+
+        $leaveRequest->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Pengajuan berhasil dibatalkan.',
+        ]);
+    }
+
+    /**
      * DELETE /api/leave-requests/all-processed
      * 
      * Menghapus seluruh data pengajuan cuti yang sudah selesai diproses (status: approved/rejected).
@@ -286,6 +469,7 @@ class LeaveRequestController extends Controller
         ]);
     }
 
+
     /**
      * Memformat output data pengajuan cuti/izin/sakit untuk response JSON API.
      * 
@@ -295,8 +479,13 @@ class LeaveRequestController extends Controller
     private function format(LeaveRequest $lr): array
     {
         return [
-            'id'             => $lr->id,
-            'type'           => $lr->type,
+            'id'                        => $lr->id,
+            'type'                      => $lr->type,
+            'special_leave_category_id' => $lr->special_leave_category_id,
+            'special_leave_category'    => $lr->specialLeaveCategory ? [
+                'id'   => $lr->specialLeaveCategory->id,
+                'name' => $lr->specialLeaveCategory->name,
+            ] : null,
             'start_date'     => $lr->start_date?->toDateString(),
             'end_date'       => $lr->end_date?->toDateString(),
             'days'           => $lr->days_count,

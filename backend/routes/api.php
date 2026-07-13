@@ -39,6 +39,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     // Mengubah informasi profil (termasuk email, foto profil, dan password)
     Route::put('/profile', [AuthController::class, 'updateProfile']);
+    // Mengubah data kendaraan pegawai secara mandiri
+    Route::put('/profile/vehicles', [AuthController::class, 'updateVehicles']);
 
     // ── Fitur Notifikasi (Dapat diakses admin & karyawan)
     // Mendapatkan daftar notifikasi miliknya
@@ -61,23 +63,39 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/attendance/check-in',  [AttendanceController::class, 'checkIn']);
     // Melakukan Check-out kehadiran saat selesai shift
     Route::post('/attendance/check-out', [AttendanceController::class, 'checkOut']);
+    // Memperbarui catatan lembur setelah check-out berhasil
+    Route::put('/attendance/overtime-note', [AttendanceController::class, 'updateOvertimeNote']);
 
     // ── Fitur Pengajuan Izin/Cuti
-    // Melihat daftar pengajuan izin/cuti diri sendiri (karyawan) atau seluruh karyawan (admin)
-    Route::get('/leave-requests',  [LeaveRequestController::class, 'index']);
-    // Membuat form pengajuan izin/cuti/sakit baru beserta lampirannya
-    Route::post('/leave-requests', [LeaveRequestController::class, 'store']);
+    Route::get('/leave-requests',       [LeaveRequestController::class, 'index']);
+    Route::post('/leave-requests',      [LeaveRequestController::class, 'store']);
+    Route::get('/leave-requests/quota', [LeaveRequestController::class, 'quota']);
+    Route::delete('/leave-requests/{leaveRequest}/cancel', [LeaveRequestController::class, 'cancel']);
+    
+    // Endpoint Kategori Cuti Khusus (Umum untuk Karyawan & Admin)
+    Route::get('/special-leave-categories', [\App\Http\Controllers\SpecialLeaveCategoryController::class, 'index']);
 
     // ── Fitur Jadwal Shift
-    // Mendapatkan rincian jadwal shift diri sendiri untuk hari berjalan
     Route::get('/my-schedule', [ScheduleController::class, 'mySchedule']);
 
     // ── RUTE KHUSUS ADMINISTRATOR (Hanya untuk User dengan Role 'admin') ──────
     Route::middleware(\App\Http\Middleware\EnsureIsAdmin::class)->group(function () {
+        
+        // Endpoint CRUD Kategori Cuti Khusus (Hanya Admin)
+        Route::post('/special-leave-categories', [\App\Http\Controllers\SpecialLeaveCategoryController::class, 'store']);
+        Route::put('/special-leave-categories/{id}', [\App\Http\Controllers\SpecialLeaveCategoryController::class, 'update']);
 
         // ── Dashboard / Monitoring Kehadiran
         // Memonitoring status absensi seluruh karyawan hari ini secara real-time
         Route::get('/attendance/all-today', [AttendanceController::class, 'allToday']);
+
+        // ── Fitur Pulang Cepat (Early Checkout) — Admin
+        // Daftar absensi pulang cepat (filter: ?status=pending|approved|rejected)
+        Route::get('/attendance/early-checkouts', [AttendanceController::class, 'earlyCheckouts']);
+        // Setujui laporan pulang cepat
+        Route::put('/attendance/{id}/early-checkout/approve', [AttendanceController::class, 'approveEarlyCheckout']);
+        // Tolak laporan pulang cepat (admin_note wajib)
+        Route::put('/attendance/{id}/early-checkout/reject', [AttendanceController::class, 'rejectEarlyCheckout']);
 
         // ── CRUD Karyawan
         // Mendapatkan data meta pendukung (list department/position) untuk registrasi karyawan
@@ -111,6 +129,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/reports/summary', [ReportController::class, 'summary']);
         // Mengambil rekapitulasi data absensi bulanan dalam format tabular untuk pelaporan/ekspor
         Route::get('/reports/monthly-rekap', [ReportController::class, 'monthlyRekap']);
+        // Mengekspor data plat nomor kendaraan seluruh pegawai ke file Excel (.xlsx)
+        Route::get('/reports/vehicles/export', [ReportController::class, 'exportVehicles']);
 
         // ── Pengaturan Sistem
         // Mengubah parameter pengaturan global (koordinat geofence, radius, dll)

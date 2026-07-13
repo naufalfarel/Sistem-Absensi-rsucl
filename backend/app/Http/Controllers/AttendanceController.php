@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Attendance;
 use App\Models\Employee;
 use App\Models\Setting;
+use App\Support\ScheduleRules;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
@@ -164,6 +165,13 @@ class AttendanceController extends Controller
     {
         \Illuminate\Support\Facades\Log::info('Check-in request inputs: ' . json_encode($request->all()));
         
+        $request->validate([
+            'location_note' => 'required|string|min:1|max:150',
+        ], [
+            'location_note.required' => 'Keterangan lokasi wajib diisi.',
+            'location_note.max' => 'Keterangan lokasi maksimal 150 karakter.',
+        ]);
+
         // 1. Validasi keaktifan sistem absensi secara global
         $systemActive = Setting::get('system_active', '1');
         if ($systemActive === '0') {
@@ -329,6 +337,7 @@ class AttendanceController extends Controller
             'accuracy'          => $clientAcc,
             'is_within_geofence'=> $isWithinGeofence,
             'image_check_in'    => $imageUrl,
+            'checkin_location_note' => $request->input('location_note'),
         ]);
 
         // Kirim notifikasi keterlambatan ke administrator jika statusnya terlambat
@@ -397,6 +406,14 @@ class AttendanceController extends Controller
     public function checkOut(Request $request)
     {
         \Illuminate\Support\Facades\Log::info('Check-out request inputs: ' . json_encode($request->all()));
+        
+        $request->validate([
+            'location_note' => 'required|string|min:1|max:150',
+        ], [
+            'location_note.required' => 'Keterangan lokasi wajib diisi.',
+            'location_note.max' => 'Keterangan lokasi maksimal 150 karakter.',
+        ]);
+
         $employee = $request->user()->employee;
         if (!$employee) {
             return response()->json(['success' => false, 'message' => 'Data karyawan tidak ditemukan.'], 404);
@@ -523,52 +540,85 @@ class AttendanceController extends Controller
         $closeMins = $this->timeToMins($checkoutClose);
 
         // 5. Validasi window check-out
+        // DESAIN: Pulang cepat TIDAK diblokir — pegawai selalu bisa checkout kapan saja setelah check-in.
+        // Backend hanya memblokir jika melewati BATAS AKHIR (checkout_close / overtime close).
+        // Klasifikasi pulang cepat / normal / lembur dilakukan di langkah 6 (ScheduleRules).
         if ($isOvernight) {
-            // Lintas tengah malam
-            $startMins = $this->timeToMins(isset($shiftStart) ? $shiftStart : '21:00');
-            if ($nowMins >= $startMins) {
-                // Masih di malam hari sebelum tengah malam → tombol check-out dinonaktifkan
-                return response()->json([
-                    'success' => false,
-                    'message' => "Check-out belum dibuka. Waktu check-out shift ini dibuka pukul {$checkoutOpen} WIB (hari berikutnya).",
-                ], 422);
-            }
-            if ($nowMins > $closeMins) {
+            // Shift lintas tengah malam: hanya blokir jika jam SEBELUM tengah malam (sisi malam hari pertama)
+            // karena checkout valid terjadi di sisi pagi hari berikutnya.
+            $startMins = $this->timeToMins($shiftStart ?? '21:00');
+            if ($nowMins >= $startMins && $nowMins > $closeMins) {
+                // Sudah melewati batas akhir checkout di sisi pagi
                 return response()->json([
                     'success' => false,
                     'message' => "Batas akhir check-out sudah lewat pukul {$checkoutClose} WIB.",
                 ], 422);
             }
         } else {
-            // Shift normal di hari yang sama
-            if ($nowMins < $openMins) {
-                return response()->json([
-                    'success' => false,
-                    'message' => "Check-out belum dibuka. Waktu check-out dibuka mulai pukul {$checkoutOpen} WIB.",
-                ], 422);
-            }
+            // Shift normal: hanya blokir jika MELEWATI batas akhir checkout
             if ($nowMins > $closeMins) {
                 return response()->json([
                     'success' => false,
                     'message' => "Batas akhir check-out sudah lewat pukul {$checkoutClose} WIB.",
                 ], 422);
             }
+            // Sebelum checkoutOpen → izinkan, akan diklasifikasi pulang cepat di langkah 6
         }
 
-        // 6. Update database dengan data check-out
-        $record->update([
+
+        // 6. Klasifikasi Pulang Cepat / Lembur
+        $employee->load('schedules'); // Pastikan relasi ter-load untuk ScheduleRules
+        $expectedCheckout = ScheduleRules::expectedCheckoutTime($employee, $shiftDate);
+        $earlyGrace    = (int) Setting::get('early_checkout_grace_minutes', '15');
+        $overtimeGrace = (int) Setting::get('overtime_grace_minutes', '15');
+
+        $classification = ScheduleRules::classifyCheckout($now, $expectedCheckout, $earlyGrace, $overtimeGrace);
+
+        // Validasi: jika pulang cepat, alasan WAJIB diisi
+        if ($classification['is_early'] && empty($request->input('early_checkout_reason'))) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda pulang lebih cepat dari jadwal shift. Wajib mengisi alasan pulang cepat.',
+                'requires_early_checkout_reason' => true,
+            ], 422);
+        }
+
+        // 7. Bangun data update untuk database
+        $updateData = [
             'check_out'          => $now->format('H:i:s'),
             'latitude'           => $clientLat,
             'longitude'          => $clientLng,
             'accuracy'           => $clientAcc,
             'is_within_geofence' => $isWithinGeofence,
             'image_check_out'    => $imageUrl,
-        ]);
+            'checkout_location_note' => $request->input('location_note'),
+        ];
+
+        // Data pulang cepat — dicatat saja, tidak memerlukan persetujuan
+        if ($classification['is_early']) {
+            $updateData['is_early_checkout']     = true;
+            $updateData['early_checkout_reason'] = $request->input('early_checkout_reason');
+        }
+
+        // Data lembur
+        if ($classification['is_overtime']) {
+            $updateData['is_overtime']      = true;
+            $updateData['overtime_minutes'] = $classification['overtime_minutes'];
+            if ($request->filled('overtime_note')) {
+                $updateData['overtime_note'] = $request->input('overtime_note');
+            }
+        }
+
+        // 8. Update database
+        $record->update($updateData);
 
         return response()->json([
-            'success' => true,
-            'message' => 'Check-out berhasil.',
-            'data'    => $this->formatRecord($record),
+            'success'    => true,
+            'message'    => 'Check-out berhasil.',
+            'data'       => $this->formatRecord($record),
+            'is_early_checkout' => $classification['is_early'],
+            'is_overtime'       => $classification['is_overtime'],
+            'overtime_minutes'  => $classification['overtime_minutes'],
         ]);
     }
 
@@ -786,9 +836,20 @@ class AttendanceController extends Controller
             'accuracy'           => $r->accuracy,
             'is_within_geofence' => $r->is_within_geofence,
             'note'               => $r->note,
+            'checkin_location_note'  => $r->checkin_location_note,
+            'checkout_location_note' => $r->checkout_location_note,
             'image_check_in'     => $r->image_check_in  ? url($r->image_check_in)  : null,
             'image_check_out'    => $r->image_check_out ? url($r->image_check_out) : null,
             'shift_name'         => $shiftName,
+            // ── Pulang Cepat ──────────────────────────────────────────────
+            'is_early_checkout'        => (bool) $r->is_early_checkout,
+            'early_checkout_reason'    => $r->early_checkout_reason,
+            'early_checkout_status'    => $r->early_checkout_status,
+            'early_checkout_admin_note'=> $r->early_checkout_admin_note,
+            // ── Lembur ────────────────────────────────────────────────────
+            'is_overtime'      => (bool) $r->is_overtime,
+            'overtime_minutes' => $r->overtime_minutes,
+            'overtime_note'    => $r->overtime_note,
         ];
 
         if ($withEmployee && $r->employee) {
@@ -801,5 +862,154 @@ class AttendanceController extends Controller
         }
 
         return $data;
+    }
+
+    /**
+     * GET /api/attendance/early-checkouts
+     * 
+     * Mengambil daftar absensi yang ditandai pulang cepat (is_early_checkout = true).
+     * Hanya dapat diakses oleh Administrator.
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function earlyCheckouts(Request $request)
+    {
+        $query = Attendance::with(['employee.user', 'employee.department'])
+            ->where('is_early_checkout', true)
+            ->orderBy('date', 'desc');
+
+        // Filter berdasarkan status persetujuan
+        if ($request->has('status') && in_array($request->query('status'), ['pending', 'approved', 'rejected'])) {
+            $query->where('early_checkout_status', $request->query('status'));
+        }
+
+        // Filter bulan & tahun opsional
+        if ($request->has('month') && $request->has('year')) {
+            $query->whereMonth('date', (int)$request->query('month'))
+                  ->whereYear('date', (int)$request->query('year'));
+        }
+
+        $records = $query->limit(200)->get()->map(fn($r) => $this->formatRecord($r, withEmployee: true));
+
+        return response()->json([
+            'success' => true,
+            'data'    => $records,
+        ]);
+    }
+
+    /**
+     * PUT /api/attendance/{id}/early-checkout/approve
+     * 
+     * Admin menyetujui laporan pulang cepat. Opsional: simpan catatan admin.
+     * 
+     * @param Request $request
+     * @param int $id
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function approveEarlyCheckout(Request $request, int $id)
+    {
+        $record = Attendance::findOrFail($id);
+
+        if (!$record->is_early_checkout) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Rekaman ini bukan pulang cepat.',
+            ], 422);
+        }
+
+        $record->update([
+            'early_checkout_status'     => 'approved',
+            'early_checkout_admin_note' => $request->input('admin_note'),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Pulang cepat disetujui.',
+            'data'    => $this->formatRecord($record->fresh(['employee.user', 'employee.department']), withEmployee: true),
+        ]);
+    }
+
+    /**
+     * PUT /api/attendance/{id}/early-checkout/reject
+     * 
+     * Admin menolak laporan pulang cepat. Catatan admin WAJIB diisi.
+     * 
+     * @param Request $request
+     * @param int $id
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function rejectEarlyCheckout(Request $request, int $id)
+    {
+        $request->validate([
+            'admin_note' => 'required|string|min:1|max:255',
+        ], [
+            'admin_note.required' => 'Catatan admin wajib diisi saat menolak pulang cepat.',
+        ]);
+
+        $record = Attendance::findOrFail($id);
+
+        if (!$record->is_early_checkout) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Rekaman ini bukan pulang cepat.',
+            ], 422);
+        }
+
+        $record->update([
+            'early_checkout_status'     => 'rejected',
+            'early_checkout_admin_note' => $request->input('admin_note'),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Pulang cepat ditolak.',
+            'data'    => $this->formatRecord($record->fresh(['employee.user', 'employee.department']), withEmployee: true),
+        ]);
+    }
+
+    /**
+     * PUT /api/attendance/overtime-note
+     *
+     * Memperbarui catatan lembur (overtime_note) setelah check-out berhasil.
+     */
+    public function updateOvertimeNote(Request $request)
+    {
+        $request->validate([
+            'overtime_note' => 'required|string|max:150',
+        ]);
+
+        $employee = $request->user()->employee;
+        if (!$employee) {
+            return response()->json(['success' => false, 'message' => 'Data karyawan tidak ditemukan.'], 404);
+        }
+
+        // Cari record kehadiran hari ini (atau kemarin jika overnight shift) yang is_overtime = true
+        $record = Attendance::where('employee_id', $employee->id)
+            ->where('is_overtime', true)
+            ->where(function ($query) {
+                $query->whereDate('date', today())
+                      ->orWhereDate('date', today()->subDay());
+            })
+            ->orderBy('date', 'desc')
+            ->orderBy('id', 'desc')
+            ->first();
+
+        if (!$record) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Rekaman absensi lembur tidak ditemukan atau Anda tidak terdeteksi lembur hari ini.',
+            ], 404);
+        }
+
+        $record->update([
+            'overtime_note' => $request->input('overtime_note'),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Catatan lembur berhasil diperbarui.',
+            'data'    => $this->formatRecord($record),
+        ]);
     }
 }

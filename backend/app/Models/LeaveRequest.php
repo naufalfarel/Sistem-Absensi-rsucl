@@ -15,7 +15,7 @@ class LeaveRequest extends Model
 {
     // Kolom yang dapat diisi secara massal
     protected $fillable = [
-        'employee_id', 'type', 'start_date', 'end_date',
+        'employee_id', 'type', 'special_leave_category_id', 'start_date', 'end_date',
         'reason', 'attachment_url', 'status', 'reviewed_by', 'reviewed_at', 'admin_note',
     ];
 
@@ -25,6 +25,15 @@ class LeaveRequest extends Model
         'end_date'    => 'date',
         'reviewed_at' => 'datetime',
     ];
+
+    /**
+     * Relasi ke model SpecialLeaveCategory.
+     * Pengajuan cuti khusus dikaitkan dengan satu kategori tertentu.
+     */
+    public function specialLeaveCategory()
+    {
+        return $this->belongsTo(SpecialLeaveCategory::class, 'special_leave_category_id');
+    }
 
     /**
      * Relasi ke model Employee.

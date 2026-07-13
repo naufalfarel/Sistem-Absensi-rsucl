@@ -131,5 +131,8 @@ class DatabaseSeeder extends Seeder
         foreach ($defaults as $key => $value) {
             Setting::create(['key' => $key, 'value' => $value]);
         }
+
+        // Seeder Kategori Cuti Khusus
+        $this->call(SpecialLeaveCategorySeeder::class);
     }
 }

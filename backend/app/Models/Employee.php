@@ -20,6 +20,7 @@ class Employee extends Model
     protected $fillable = [
         'user_id', 'department_id', 'position_id',
         'nip', 'phone', 'gender', 'join_date', 'status',
+        'motor_plate_1', 'motor_plate_2', 'car_plate_1', 'car_plate_2',
     ];
 
     // Cast tipe data otomatis

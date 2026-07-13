@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   User, Mail, Lock, Eye, EyeOff, CheckCircle2, Save, Shield, MapPin, Clock,
-  Bell, ToggleLeft, ToggleRight, Power, Upload, RotateCcw, AlertTriangle, ImageIcon, Trash2, Sparkles
+  Bell, ToggleLeft, ToggleRight, Power, Upload, RotateCcw, AlertTriangle, ImageIcon, Trash2, Sparkles, Calendar
 } from 'lucide-react';
 import logoImg from '../../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
 import { settingApi, profileApi } from '../../../services/api';
@@ -114,10 +114,26 @@ export function SettingsTab() {
   const [checkoutClose, setCheckoutClose]       = useState('60');
   const [satCheckoutOpen, setSatCheckoutOpen]   = useState('0');
   const [satCheckoutClose, setSatCheckoutClose] = useState('60');
+  const [earlyCheckoutGrace, setEarlyCheckoutGrace] = useState('15');
+  const [overtimeGrace, setOvertimeGrace]           = useState('15');
 
   // ── State Pengontrol Status Sistem Absensi & Modal Konfirmasi ──
   const [systemActive, setSystemActive]         = useState(true);
   const [showStatusModal, setShowStatusModal]   = useState(false);
+
+  // ── States Kuota Cuti Tahunan ──
+  const [leaveResetMonth, setLeaveResetMonth]           = useState('4');
+  const [leaveResetDay, setLeaveResetDay]               = useState('1');
+  const [annualLeaveQuotaDays, setAnnualLeaveQuotaDays] = useState('12');
+  const [quotaSaved, setQuotaSaved]                     = useState(false);
+  const [quotaError, setQuotaError]                     = useState('');
+
+  // ── States Kategori Cuti Khusus ──
+  const [categories, setCategories]                     = useState<any[]>([]);
+  const [newCategoryName, setNewCategoryName]           = useState('');
+  const [categoryError, setCategoryError]               = useState('');
+  const [categorySaved, setCategorySaved]               = useState(false);
+  const [categoryLoading, setCategoryLoading]           = useState(false);
 
   // ── States Pengendali Preview & File Logo Rumah Sakit ──
   const [logoPreview, setLogoPreview] = useState<string>(logoImg);
@@ -156,6 +172,24 @@ export function SettingsTab() {
         if (res.data.checkout_close !== undefined) setCheckoutClose(res.data.checkout_close);
         if (res.data.sat_checkout_open !== undefined) setSatCheckoutOpen(res.data.sat_checkout_open);
         if (res.data.sat_checkout_close !== undefined) setSatCheckoutClose(res.data.sat_checkout_close);
+        if (res.data.early_checkout_grace_minutes !== undefined) setEarlyCheckoutGrace(res.data.early_checkout_grace_minutes);
+        if (res.data.overtime_grace_minutes !== undefined) setOvertimeGrace(res.data.overtime_grace_minutes);
+        // Kuota Cuti
+        if (res.data.leave_reset_month) setLeaveResetMonth(res.data.leave_reset_month);
+        if (res.data.leave_reset_day) setLeaveResetDay(res.data.leave_reset_day);
+        if (res.data.annual_leave_quota_days) setAnnualLeaveQuotaDays(res.data.annual_leave_quota_days);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const { specialLeaveApi } = await import('../../../services/api');
+      const res = await specialLeaveApi.listActive();
+      if (res.success) {
+        setCategories(res.data);
       }
     } catch (err) {
       console.error(err);
@@ -169,7 +203,43 @@ export function SettingsTab() {
       setEmail(user.email);
       setUsername(user.username);
     }
+    fetchCategories();
   }, [user]);
+
+  // ── Handlers Kategori Cuti Khusus ──
+  const handleAddCategory = async () => {
+    if (!newCategoryName.trim()) return;
+    setCategoryError('');
+    setCategorySaved(false);
+    setCategoryLoading(true);
+    try {
+      const { specialLeaveApi } = await import('../../../services/api');
+      const res = await specialLeaveApi.create(newCategoryName.trim());
+      if (res.success) {
+        setNewCategoryName('');
+        setCategorySaved(true);
+        fetchCategories();
+        setTimeout(() => setCategorySaved(false), 3000);
+      }
+    } catch (err: any) {
+      setCategoryError(err?.message ?? 'Gagal menambahkan kategori.');
+    } finally {
+      setCategoryLoading(false);
+    }
+  };
+
+  const handleToggleCategory = async (id: number, catName: string, currentActive: boolean) => {
+    setCategoryError('');
+    try {
+      const { specialLeaveApi } = await import('../../../services/api');
+      const res = await specialLeaveApi.update(id, catName, !currentActive);
+      if (res.success) {
+        fetchCategories();
+      }
+    } catch (err: any) {
+      setCategoryError(err?.message ?? 'Gagal mengubah status kategori.');
+    }
+  };
 
   // ── Handlers ──
   const saveProfile = async () => {
@@ -304,6 +374,8 @@ export function SettingsTab() {
         checkout_close: checkoutClose,
         sat_checkout_open: satCheckoutOpen,
         sat_checkout_close: satCheckoutClose,
+        early_checkout_grace_minutes: earlyCheckoutGrace,
+        overtime_grace_minutes: overtimeGrace,
       });
       if (res.success) {
         setConfigSaved(true);
@@ -349,6 +421,43 @@ export function SettingsTab() {
       }
     }
   };
+
+  const handleSaveQuota = async () => {
+    setQuotaSaved(false);
+    setQuotaError('');
+    const month = parseInt(leaveResetMonth);
+    const day   = parseInt(leaveResetDay);
+    const quota = parseInt(annualLeaveQuotaDays);
+    if (isNaN(month) || month < 1 || month > 12) { setQuotaError('Bulan reset harus antara 1–12.'); return; }
+    if (isNaN(day)   || day < 1   || day > 31)   { setQuotaError('Tanggal reset harus antara 1–31.'); return; }
+    if (isNaN(quota) || quota < 1 || quota > 365) { setQuotaError('Jumlah hari kuota harus antara 1–365.'); return; }
+    try {
+      const res = await settingApi.update({
+        leave_reset_month:       leaveResetMonth,
+        leave_reset_day:         leaveResetDay,
+        annual_leave_quota_days: annualLeaveQuotaDays,
+      });
+      if (res.success) {
+        setQuotaSaved(true);
+        setTimeout(() => setQuotaSaved(false), 3000);
+      }
+    } catch (err: any) {
+      console.error(err);
+      const validationErrors = err?.data?.errors;
+      if (validationErrors) {
+        const msg = Object.values(validationErrors).flat().join(' ');
+        setQuotaError(msg);
+      } else {
+        setQuotaError(err?.message ?? 'Gagal menyimpan pengaturan kuota cuti.');
+      }
+    }
+  };
+
+  // Nama bulan dalam bahasa Indonesia
+  const monthNames = [
+    '', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+  ];
 
   // Helper to calculate preview times dynamically in frontend
   const getPreviewTime = (baseTime: string, offsetMinsStr: string, op: 'add' | 'sub' = 'add') => {
@@ -631,6 +740,159 @@ export function SettingsTab() {
           </div>
         </div>
       </div>
+
+      {/* ── Kuota Cuti Tahunan ── */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-50 flex items-center gap-2">
+          <Calendar size={15} className="text-[#16A34A]" />
+          <p className="text-[14px] font-semibold text-gray-800">Kuota Cuti Tahunan</p>
+        </div>
+        <div className="p-5 space-y-5">
+          {/* Live Preview */}
+          <div className="p-4 bg-green-50/60 rounded-2xl border border-green-100 flex items-start gap-3">
+            <div className="w-9 h-9 rounded-xl bg-[#16A34A]/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <Calendar size={16} className="text-[#16A34A]" />
+            </div>
+            <div>
+              <p className="text-[13px] font-semibold text-gray-800">
+                Reset pada <span className="text-[#16A34A]">{leaveResetDay} {monthNames[parseInt(leaveResetMonth)] ?? '?'}</span> setiap tahun
+              </p>
+              <p className="text-[11px] text-gray-500 mt-1">
+                Setiap karyawan mendapat kuota <span className="font-semibold text-gray-700">{annualLeaveQuotaDays} hari cuti</span> per tahun.
+                Sisa kuota hangus saat reset (tidak carry-over ke periode berikutnya).
+              </p>
+            </div>
+          </div>
+
+          {/* Reset Date */}
+          <div>
+            <h4 className="text-[12px] font-bold text-gray-800 mb-3 border-l-2 border-[#16A34A] pl-2 uppercase tracking-wider">Tanggal Reset Kuota</h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[11px] font-medium text-gray-500 mb-1.5">Bulan Reset</label>
+                <select
+                  value={leaveResetMonth}
+                  onChange={e => setLeaveResetMonth(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[13px] focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all bg-gray-50/50 cursor-pointer"
+                >
+                  {monthNames.slice(1).map((name, i) => (
+                    <option key={i + 1} value={String(i + 1)}>{name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-gray-500 mb-1.5">Tanggal Reset</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="31"
+                  value={leaveResetDay}
+                  onChange={e => setLeaveResetDay(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[13px] focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all bg-gray-50/50"
+                  placeholder="1"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Quota Days */}
+          <div className="pt-2 border-t border-gray-50">
+            <h4 className="text-[12px] font-bold text-gray-800 mb-3 border-l-2 border-[#16A34A] pl-2 uppercase tracking-wider">Jumlah Hari Kuota Per Tahun</h4>
+            <div className="max-w-xs">
+              <label className="block text-[11px] font-medium text-gray-500 mb-1.5">Total Hari Cuti (untuk semua karyawan)</label>
+              <input
+                type="number"
+                min="1"
+                max="365"
+                value={annualLeaveQuotaDays}
+                onChange={e => setAnnualLeaveQuotaDays(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[13px] focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all bg-gray-50/50"
+                placeholder="12"
+              />
+              <p className="text-[11px] text-gray-400 mt-1">Default: 12 hari. Berlaku untuk semua karyawan (tidak bisa dikustomisasi per-individu).</p>
+            </div>
+          </div>
+
+          {quotaError && (
+            <div className="flex items-center gap-2 bg-red-50 border border-red-100 text-red-600 text-[12px] px-3.5 py-2.5 rounded-xl">
+              <AlertTriangle size={13} className="flex-shrink-0" />
+              <span>{quotaError}</span>
+            </div>
+          )}
+          <button onClick={handleSaveQuota}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold transition-all shadow-sm ${quotaSaved ? 'bg-green-50 text-[#16A34A] border border-green-200' : 'bg-[#16A34A] text-white hover:bg-[#0d9240] shadow-green-200'}`}>
+            {quotaSaved ? <><CheckCircle2 size={14} /> Tersimpan!</> : <><Save size={14} /> Simpan Kuota Cuti</>}
+          </button>
+        </div>
+      </div>
+
+      {/* ── Kategori Cuti Khusus ── */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-50 flex items-center gap-2">
+          <Calendar size={15} className="text-[#EA580C]" />
+          <p className="text-[14px] font-semibold text-gray-800">Kategori Cuti Khusus</p>
+        </div>
+        <div className="p-5 space-y-4">
+          <p className="text-[11px] text-gray-500 leading-relaxed">
+            Daftar kategori pengajuan cuti khusus untuk karyawan. Pegawai wajib memilih salah satu kategori ini saat mengajukan cuti khusus.
+          </p>
+
+          {/* Form Tambah Kategori */}
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={newCategoryName}
+              onChange={e => setNewCategoryName(e.target.value)}
+              placeholder="Tambah kategori baru (contoh: Menikah, Studi Banding)"
+              className="flex-1 px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#EA580C] focus:ring-2 focus:ring-[#EA580C]/15 transition-all placeholder:text-gray-300"
+            />
+            <button
+              onClick={handleAddCategory}
+              disabled={categoryLoading || !newCategoryName.trim()}
+              className="px-4 py-2.5 bg-[#EA580C] hover:bg-[#d44f0b] disabled:bg-gray-100 disabled:text-gray-300 disabled:cursor-not-allowed text-white rounded-xl text-[12px] font-semibold flex items-center gap-1.5 transition-all shadow-sm shadow-orange-100"
+            >
+              {categoryLoading && <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+              Tambah
+            </button>
+          </div>
+
+          {categoryError && (
+            <div className="flex items-center gap-2 bg-red-50 border border-red-100 text-red-650 text-[11px] px-3.5 py-2 rounded-xl">
+              <AlertTriangle size={13} className="flex-shrink-0" />
+              <span>{categoryError}</span>
+            </div>
+          )}
+
+          {categorySaved && (
+            <div className="flex items-center gap-2 bg-green-50 border border-green-100 text-[#16A34A] text-[11px] px-3.5 py-2 rounded-xl">
+              <CheckCircle2 size={13} className="flex-shrink-0" />
+              <span>Kategori berhasil ditambahkan!</span>
+            </div>
+          )}
+
+          {/* Daftar Kategori */}
+          <div className="border border-gray-100 rounded-2xl overflow-hidden divide-y divide-gray-100">
+            {categories.length === 0 ? (
+              <div className="p-5 text-center text-gray-400 text-[11px]">Belum ada kategori yang ditambahkan.</div>
+            ) : (
+              categories.map((c) => (
+                <div key={c.id} className="flex items-center justify-between px-4 py-3 bg-gray-50/10 hover:bg-gray-50/30 transition-colors">
+                  <div>
+                    <span className={`text-[12px] font-semibold ${c.is_active ? 'text-gray-800' : 'text-gray-400 line-through'}`}>
+                      {c.name}
+                    </span>
+                    <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-semibold ${c.is_active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                      {c.is_active ? 'Aktif' : 'Nonaktif'}
+                    </span>
+                  </div>
+                  <Toggle value={c.is_active} onChange={() => handleToggleCategory(c.id, c.name, c.is_active)} />
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* ── Ketentuan Waktu & Jadwal Absensi ── */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-50 flex items-center gap-2">
@@ -785,6 +1047,38 @@ export function SettingsTab() {
             </div>
           </div>
 
+          {/* Section 4: Toleransi Pulang Cepat & Lembur */}
+          <div className="pt-4 border-t border-gray-50">
+            <h4 className="text-[12px] font-bold text-gray-800 mb-1 border-l-2 border-amber-400 pl-2 uppercase tracking-wider">Toleransi Pulang Cepat &amp; Lembur</h4>
+            <p className="text-[11px] text-gray-400 mb-3 pl-2">Dibandingkan terhadap jam pulang shift masing-masing pegawai (bukan jam kerja global).</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[11px] font-medium text-gray-500 mb-1.5">Toleransi Pulang Cepat (menit)</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="240"
+                  value={earlyCheckoutGrace}
+                  onChange={e => setEarlyCheckoutGrace(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[12px] focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/15 transition-all bg-gray-50/50"
+                />
+                <p className="text-[10px] text-gray-400 mt-1">Checkout sebelum jam pulang shift minus toleransi ini = ditandai <span className="font-semibold text-amber-600">Pulang Cepat</span>.</p>
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-gray-500 mb-1.5">Toleransi Lembur (menit)</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="240"
+                  value={overtimeGrace}
+                  onChange={e => setOvertimeGrace(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[12px] focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/15 transition-all bg-gray-50/50"
+                />
+                <p className="text-[10px] text-gray-400 mt-1">Checkout setelah jam pulang shift plus toleransi ini = ditandai <span className="font-semibold text-blue-600">Lembur</span> otomatis.</p>
+              </div>
+            </div>
+          </div>
+
           {configError && (
             <div className="flex items-center gap-2 bg-red-50 border border-red-100 text-red-600 text-[12px] px-3.5 py-2.5 rounded-xl mb-3.5">
               <AlertTriangle size={13} className="flex-shrink-0" />
@@ -796,6 +1090,7 @@ export function SettingsTab() {
           </button>
         </div>
       </div>
+
 
       {/* ── System config ── */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">

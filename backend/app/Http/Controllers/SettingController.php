@@ -16,24 +16,31 @@ class SettingController extends Controller
 {
     // Kunci konfigurasi yang diizinkan untuk dibaca dan diperbarui melalui API
     private const ALLOWED_KEYS = [
-        'system_active',        // Status keaktifan sistem absensi (1 = aktif, 0 = nonaktif)
-        'checkin_open',         // Menit sebelum jadwal shift dimulai untuk pembukaan check-in (misal: 0)
-        'late_limit',           // Toleransi menit keterlambatan (misal: 30)
-        'close_checkin',        // Menit penutupan check-in setelah shift dimulai (misal: 60)
-        'break_start',          // Jam mulai istirahat reguler (default "12:30")
-        'break_end',            // Jam selesai istirahat reguler (default "13:30")
-        'checkout_open',        // Menit sebelum jadwal shift berakhir untuk pembukaan check-out (misal: 0)
-        'checkout_close',       // Menit penutupan check-out setelah shift berakhir (misal: 60)
-        'sat_checkout_open',    // Pembukaan check-out hari Sabtu dalam menit
-        'sat_checkout_close',   // Penutupan check-out hari Sabtu dalam menit
-        'gps_radius',           // Radius geofence toleransi jarak dalam meter (misal: 40)
-        'hospital_lat',         // Koordinat lintang (Latitude) Rumah Sakit RSUCL
-        'hospital_lng',         // Koordinat bujur (Longitude) Rumah Sakit RSUCL
-        'logo_url',             // URL file gambar logo instansi
-        'notif_email',          // Status pengiriman notifikasi email admin (1 = ya, 0 = tidak)
-        'notif_late',           // Status notifikasi keterlambatan
-        'notif_leave',          // Status notifikasi pengajuan cuti
-        'notif_system',         // Status notifikasi aktivitas perubahan konfigurasi sistem
+        'system_active',            // Status keaktifan sistem absensi (1 = aktif, 0 = nonaktif)
+        'checkin_open',             // Menit sebelum jadwal shift dimulai untuk pembukaan check-in (misal: 0)
+        'late_limit',               // Toleransi menit keterlambatan (misal: 30)
+        'close_checkin',            // Menit penutupan check-in setelah shift dimulai (misal: 60)
+        'break_start',              // Jam mulai istirahat reguler (default "12:30")
+        'break_end',                // Jam selesai istirahat reguler (default "13:30")
+        'checkout_open',            // Menit sebelum jadwal shift berakhir untuk pembukaan check-out (misal: 0)
+        'checkout_close',           // Menit penutupan check-out setelah shift berakhir (misal: 60)
+        'sat_checkout_open',        // Pembukaan check-out hari Sabtu dalam menit
+        'sat_checkout_close',       // Penutupan check-out hari Sabtu dalam menit
+        'gps_radius',               // Radius geofence toleransi jarak dalam meter (misal: 40)
+        'hospital_lat',             // Koordinat lintang (Latitude) Rumah Sakit RSUCL
+        'hospital_lng',             // Koordinat bujur (Longitude) Rumah Sakit RSUCL
+        'logo_url',                 // URL file gambar logo instansi
+        'notif_email',              // Status pengiriman notifikasi email admin (1 = ya, 0 = tidak)
+        'notif_late',               // Status notifikasi keterlambatan
+        'notif_leave',              // Status notifikasi pengajuan cuti
+        'notif_system',             // Status notifikasi aktivitas perubahan konfigurasi sistem
+        // ── Kuota Cuti Tahunan ──
+        'leave_reset_month',        // Bulan reset kuota cuti tahunan (1-12, default: 4 = April)
+        'leave_reset_day',          // Tanggal reset kuota cuti tahunan (1-31, default: 1)
+        'annual_leave_quota_days',  // Jumlah hari kuota cuti per tahun (default: 12)
+        // ── Toleransi Pulang Cepat & Lembur ──
+        'early_checkout_grace_minutes', // Toleransi menit sebelum dianggap pulang cepat (default: 15)
+        'overtime_grace_minutes',       // Toleransi menit sebelum dianggap lembur (default: 15)
     ];
 
     /**
@@ -71,24 +78,31 @@ class SettingController extends Controller
     {
         // Validasi input parameter konfigurasi
         $request->validate([
-            'system_active'      => 'sometimes|in:0,1',
-            'checkin_open'       => 'sometimes|integer|min:0|max:1440',
-            'late_limit'         => 'sometimes|integer|min:0|max:1440',
-            'close_checkin'      => 'sometimes|integer|min:0|max:1440',
-            'break_start'        => 'sometimes|date_format:H:i',
-            'break_end'          => 'sometimes|date_format:H:i',
-            'checkout_open'      => 'sometimes|integer|min:0|max:1440',
-            'checkout_close'     => 'sometimes|integer|min:0|max:1440',
-            'sat_checkout_open'  => 'sometimes|integer|min:0|max:1440',
-            'sat_checkout_close' => 'sometimes|integer|min:0|max:1440',
-            'gps_radius'         => 'sometimes|integer|min:10|max:1000',
-            'hospital_lat'       => 'sometimes|numeric',
-            'hospital_lng'       => 'sometimes|numeric',
-            'logo_url'           => 'sometimes|string|nullable',
-            'notif_email'        => 'sometimes|in:0,1',
-            'notif_late'         => 'sometimes|in:0,1',
-            'notif_leave'        => 'sometimes|in:0,1',
-            'notif_system'       => 'sometimes|in:0,1',
+            'system_active'           => 'sometimes|in:0,1',
+            'checkin_open'            => 'sometimes|integer|min:0|max:1440',
+            'late_limit'              => 'sometimes|integer|min:0|max:1440',
+            'close_checkin'           => 'sometimes|integer|min:0|max:1440',
+            'break_start'             => 'sometimes|date_format:H:i',
+            'break_end'               => 'sometimes|date_format:H:i',
+            'checkout_open'           => 'sometimes|integer|min:0|max:1440',
+            'checkout_close'          => 'sometimes|integer|min:0|max:1440',
+            'sat_checkout_open'       => 'sometimes|integer|min:0|max:1440',
+            'sat_checkout_close'      => 'sometimes|integer|min:0|max:1440',
+            'gps_radius'              => 'sometimes|integer|min:10|max:1000',
+            'hospital_lat'            => 'sometimes|numeric',
+            'hospital_lng'            => 'sometimes|numeric',
+            'logo_url'                => 'sometimes|string|nullable',
+            'notif_email'             => 'sometimes|in:0,1',
+            'notif_late'              => 'sometimes|in:0,1',
+            'notif_leave'             => 'sometimes|in:0,1',
+            'notif_system'            => 'sometimes|in:0,1',
+            // Kuota Cuti Tahunan
+            'leave_reset_month'               => 'sometimes|integer|min:1|max:12',
+            'leave_reset_day'                 => 'sometimes|integer|min:1|max:31',
+            'annual_leave_quota_days'         => 'sometimes|integer|min:1|max:365',
+            // Toleransi Pulang Cepat & Lembur
+            'early_checkout_grace_minutes'    => 'sometimes|integer|min:0|max:480',
+            'overtime_grace_minutes'          => 'sometimes|integer|min:0|max:480',
         ]);
 
         // Proses khusus untuk upload logo instansi
@@ -197,24 +211,31 @@ class SettingController extends Controller
     private function defaults(string $key): string
     {
         return match ($key) {
-            'system_active'      => '1',
-            'checkin_open'       => '0',
-            'late_limit'         => '30',
-            'close_checkin'      => '60',
-            'break_start'        => '12:30',
-            'break_end'          => '13:30',
-            'checkout_open'      => '0',
-            'checkout_close'     => '60',
-            'sat_checkout_open'  => '0',
-            'sat_checkout_close' => '60',
-            'gps_radius'         => '40',
-            'hospital_lat'       => '5.552740480177099',
-            'hospital_lng'       => '95.33486560781716',
-            'notif_email'        => '1',
-            'notif_late'         => '1',
-            'notif_leave'        => '1',
-            'notif_system'       => '0',
-            default              => '',
+            'system_active'           => '1',
+            'checkin_open'            => '0',
+            'late_limit'              => '30',
+            'close_checkin'           => '60',
+            'break_start'             => '12:30',
+            'break_end'               => '13:30',
+            'checkout_open'           => '0',
+            'checkout_close'          => '60',
+            'sat_checkout_open'       => '0',
+            'sat_checkout_close'      => '60',
+            'gps_radius'              => '40',
+            'hospital_lat'            => '5.552740480177099',
+            'hospital_lng'            => '95.33486560781716',
+            'notif_email'             => '1',
+            'notif_late'              => '1',
+            'notif_leave'             => '1',
+            'notif_system'            => '0',
+            // Kuota Cuti Tahunan
+            'leave_reset_month'               => '4',
+            'leave_reset_day'                 => '1',
+            'annual_leave_quota_days'         => '12',
+            // Toleransi Pulang Cepat & Lembur
+            'early_checkout_grace_minutes'    => '15',
+            'overtime_grace_minutes'          => '15',
+            default                           => '',
         };
     }
 }

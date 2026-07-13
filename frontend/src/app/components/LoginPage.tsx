@@ -271,7 +271,7 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
               { step: '1', title: 'Masuk Akun', desc: 'Login dengan username & password Anda' },
               { step: '2', title: 'Izinkan Lokasi (GPS)', desc: 'Pastikan GPS perangkat aktif & izinkan akses lokasi saat diminta' },
               { step: '3', title: 'Ambil Foto Selfie', desc: 'Ambil foto selfie verifikasi wajah di area rumah sakit' },
-              { step: '4', title: 'Kirim Presensi', desc: 'Tekan tombol absen masuk/pulang sesuai jadwal dinas Anda' },
+              { step: '4', title: 'Ketik Lokasi & Kirim', desc: 'Ketik keterangan lokasi manual Anda saat ini, lalu tekan tombol absen sesuai jadwal' },
             ].map(({ step, title, desc }) => (
               <div key={step} className="bg-white/10 rounded-2xl p-4 border border-white/15 flex items-start gap-4 backdrop-blur-sm">
                 <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center font-bold text-white text-[14px] flex-shrink-0">

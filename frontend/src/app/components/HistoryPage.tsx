@@ -119,6 +119,15 @@ export function HistoryPage() {
     location: r.latitude ? 'RSUCL – Terverifikasi' : '--',
     status:   r.status,
     shift:    r.shift_name ?? 'Reguler',
+    checkinLocationNote: r.checkin_location_note,
+    checkoutLocationNote: r.checkout_location_note,
+    isEarlyCheckout: r.is_early_checkout,
+    earlyCheckoutReason: r.early_checkout_reason,
+    earlyCheckoutStatus: r.early_checkout_status,
+    earlyCheckoutAdminNote: r.early_checkout_admin_note,
+    isOvertime: r.is_overtime,
+    overtimeMinutes: r.overtime_minutes,
+    overtimeNote: r.overtime_note,
   }));
 
   const filtered = mapped.filter(r => {
@@ -374,6 +383,53 @@ export function HistoryPage() {
                   </div>
                 ))}
               </div>
+              {(record.checkinLocationNote || record.checkoutLocationNote || record.isEarlyCheckout || record.isOvertime) && (
+                <div className="px-5 py-2.5 bg-gray-50/70 border-t border-gray-50 text-[11.5px] text-gray-500 space-y-2">
+                  {/* Location Notes */}
+                  {(record.checkinLocationNote || record.checkoutLocationNote) && (
+                    <div className="space-y-1">
+                      {record.checkinLocationNote && (
+                        <div className="flex items-center gap-1.5">
+                          <MapPin size={11.5} className="text-[#16A34A] flex-shrink-0" />
+                          <span><span className="font-semibold text-gray-600">Lokasi Masuk:</span> {record.checkinLocationNote}</span>
+                        </div>
+                      )}
+                      {record.checkoutLocationNote && (
+                        <div className="flex items-center gap-1.5">
+                          <MapPin size={11.5} className="text-red-500 flex-shrink-0" />
+                          <span><span className="font-semibold text-gray-600">Lokasi Pulang:</span> {record.checkoutLocationNote}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Early Checkout Info */}
+                  {record.isEarlyCheckout && (
+                    <div className="pt-1.5 border-t border-gray-100/50 flex flex-col sm:flex-row sm:items-center gap-2">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-600 border border-amber-200 flex-shrink-0">
+                        Pulang Cepat
+                      </span>
+                      <span className="text-[11px] text-gray-600">
+                        <span className="font-semibold">Alasan:</span> {record.earlyCheckoutReason || 'Tidak diisi'}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Overtime Info */}
+                  {record.isOvertime && (
+                    <div className="pt-1.5 border-t border-gray-100/50 flex flex-col sm:flex-row sm:items-center gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-200">
+                          Lembur (+{record.overtimeMinutes} mnt)
+                        </span>
+                      </div>
+                      <div className="flex-1 text-gray-600">
+                        <span><span className="font-semibold text-gray-600">Pekerjaan Lembur:</span> {record.overtimeNote || 'Tanpa keterangan'}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}

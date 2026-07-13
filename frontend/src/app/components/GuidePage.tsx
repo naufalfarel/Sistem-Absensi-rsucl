@@ -24,6 +24,7 @@ import {
   Navigation,
   ClipboardList,
   Paperclip,
+  Car,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import logoImg from '../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
@@ -69,8 +70,9 @@ const sections: Section[] = [
       { icon: Smartphone,    title: 'Buka Menu Absensi',    desc: 'Ketuk menu "Absensi" di sidebar (desktop) atau navbar bawah (mobile). Pastikan koneksi internet dan GPS aktif.' },
       { icon: Navigation,    title: 'Izinkan Akses Lokasi',  desc: 'Saat pertama kali, browser akan meminta izin lokasi. Pilih "Izinkan" agar GPS dapat mendeteksi posisi Anda.' },
       { icon: MapPin,        title: 'Verifikasi Posisi',      desc: 'Sistem menampilkan peta dan status lokasi Anda. Pastikan status menunjukkan "Dalam Area RSUCL".' },
-      { icon: LogIn,         title: 'Tekan Tombol Check-In', desc: 'Jika lokasi sudah terverifikasi, tekan tombol "Check In". Waktu dan lokasi dicatat otomatis.' },
-      { icon: CheckCircle2,  title: 'Konfirmasi Berhasil',   desc: 'Notifikasi akan muncul menandakan check-in berhasil. Jam masuk tampil di dashboard.' },
+      { icon: FileText,      title: 'Ketik Keterangan Lokasi', desc: 'Ketik keterangan lokasi manual Anda saat ini pada kolom input (Wajib diisi, maks. 150 karakter).' },
+      { icon: LogIn,         title: 'Tekan Tombol Check-In', desc: 'Setelah wajah terverifikasi dan lokasi diisi, tekan tombol "CHECK IN". Waktu, foto, dan lokasi dicatat otomatis.' },
+      { icon: CheckCircle2,  title: 'Konfirmasi Berhasil',   desc: 'Notifikasi sukses akan muncul menandakan check-in berhasil. Rekap jam masuk tampil di halaman.' },
     ],
     tips: [
       { type: 'warning', text: 'Check-in hanya bisa dilakukan sekali per hari dalam radius yang ditentukan admin.' },
@@ -83,10 +85,11 @@ const sections: Section[] = [
     title: 'Cara Check-Out (Absen Pulang)',
     subtitle: 'Langkah melakukan absensi pulang',
     steps: [
-      { icon: Smartphone,  title: 'Buka Menu Absensi',      desc: 'Kembali ke menu "Absensi". Setelah check-in, tombol berganti menjadi "Check Out".' },
+      { icon: Smartphone,  title: 'Buka Menu Absensi',      desc: 'Kembali ke menu "Absensi". Setelah check-in, tampilan berganti ke mode check-out.' },
       { icon: MapPin,      title: 'Pastikan Dalam Area',     desc: 'Anda harus berada di dalam radius area RSUCL saat melakukan check-out, sama seperti check-in.' },
-      { icon: LogOut,      title: 'Tekan Tombol Check-Out',  desc: 'Tekan tombol "Check Out". Sistem mencatat jam kepulangan Anda.' },
-      { icon: Eye,         title: 'Lihat Ringkasan',         desc: 'Setelah check-out, dashboard menampilkan ringkasan kehadiran hari ini termasuk total jam kerja.' },
+      { icon: FileText,    title: 'Ketik Keterangan Lokasi', desc: 'Ketik keterangan lokasi manual check-out Anda (Wajib diisi, terpisah dari lokasi saat check-in).' },
+      { icon: LogOut,      title: 'Tekan Tombol Check-Out',  desc: 'Tekan tombol "CHECK OUT" untuk menyimpan jam kepulangan Anda.' },
+      { icon: Eye,         title: 'Lihat Ringkasan',         desc: 'Setelah check-out, status absensi dinyatakan selesai dan rekap total jam kerja tampil penuh.' },
     ],
     tips: [
       { type: 'success', text: 'Pastikan selalu melakukan check-out sebelum meninggalkan area kerja.' },
@@ -110,6 +113,22 @@ const sections: Section[] = [
       { type: 'info',    text: 'Ajukan cuti minimal H-3 agar ada waktu bagi atasan untuk menyetujui permohonan.' },
       { type: 'success', text: 'Dokumen pelengkap wajib dilampirkan untuk setiap pengajuan izin/cuti. Pastikan dokumen jelas dan terbaca sebelum diunggah.' },
       { type: 'warning', text: 'Permohonan tanpa dokumen pendukung tidak dapat diproses. Kuota cuti tahunan terbatas — pantau sisa cuti Anda di halaman Profil.' },
+    ],
+  },
+  {
+    id: 'vehicles',
+    icon: Car,
+    title: 'Cara Mencatat Plat Kendaraan Pegawai',
+    subtitle: 'Langkah mendaftarkan plat nomor kendaraan di halaman Profil',
+    steps: [
+      { icon: User,        title: 'Buka Menu Profil',                  desc: 'Ketuk menu "Profil" di sidebar (desktop) atau navbar bawah (mobile).' },
+      { icon: Smartphone,  title: 'Temukan Bagian Data Kendaraan',     desc: 'Scroll ke bawah hingga menemukan kartu "Data Kendaraan Pegawai".' },
+      { icon: FileText,    title: 'Input Plat Nomor Kendaraan',        desc: 'Masukkan plat nomor kendaraan Anda (maksimal 2 motor dan 2 mobil). Kolom bersifat opsional (diisi sesuai kepemilikan).' },
+      { icon: CheckCircle2,title: 'Simpan Data',                       desc: 'Tekan tombol "Simpan Data Kendaraan". Notifikasi sukses akan muncul menandakan plat kendaraan berhasil diperbarui.' },
+    ],
+    tips: [
+      { type: 'info',    text: 'Anda tidak wajib mengisi seluruh slot kendaraan. Cukup isi sesuai dengan kendaraan yang Anda bawa dinas sehari-hari.' },
+      { type: 'success', text: 'Data kendaraan yang Anda simpan akan terlaporkan ke sistem laporan admin RSUCL demi menertibkan tertib parkir rumah sakit.' },
     ],
   },
   {

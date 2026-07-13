@@ -28,14 +28,23 @@ class Attendance extends Model
         'employee_id', 'date', 'check_in', 'check_out',
         'status', 'latitude', 'longitude', 'accuracy',
         'is_within_geofence', 'note',
+        'checkin_location_note', 'checkout_location_note',
         'image_check_in', 'image_check_out',
+        // Pulang Cepat (Early Checkout)
+        'is_early_checkout', 'early_checkout_reason',
+        'early_checkout_status', 'early_checkout_admin_note',
+        // Lembur (Overtime)
+        'is_overtime', 'overtime_minutes', 'overtime_note',
     ];
 
     // Konversi tipe data otomatis oleh Eloquent
     protected $casts = [
-        'date'             => 'date',
-        'is_within_geofence' => 'boolean',
-        'accuracy'         => 'float',
+        'date'                => 'date',
+        'is_within_geofence'  => 'boolean',
+        'accuracy'            => 'float',
+        'is_early_checkout'   => 'boolean',
+        'is_overtime'         => 'boolean',
+        'overtime_minutes'    => 'integer',
     ];
 
     /**
@@ -166,6 +175,8 @@ class Attendance extends Model
                         'accuracy' => $attRecord->accuracy,
                         'is_within_geofence' => (bool)$attRecord->is_within_geofence,
                         'note' => $attRecord->note,
+                        'checkin_location_note' => $attRecord->checkin_location_note,
+                        'checkout_location_note' => $attRecord->checkout_location_note,
                         'employee' => [
                             'id' => $emp->id,
                             'name' => $emp->user?->name ?? 'Karyawan',

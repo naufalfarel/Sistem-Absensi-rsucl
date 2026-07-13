@@ -6,6 +6,8 @@ use App\Models\Attendance;
 use App\Models\Employee;
 use App\Models\LeaveRequest;
 use App\Models\Department;
+use App\Exports\VehicleExport;
+use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Http\Request;
 
 /**
@@ -81,6 +83,19 @@ class ReportController extends Controller
 
         // Hitung pengajuan cuti yang butuh persetujuan
         $pendingLeave = LeaveRequest::where('status', 'pending')->count();
+
+        // ── Statistik Pulang Cepat & Lembur (bulan berjalan) ────────────────
+        $earlyCheckoutQuery = Attendance::whereMonth('date', $month)->whereYear('date', $year)
+            ->where('is_early_checkout', true);
+        $earlyTotal    = (clone $earlyCheckoutQuery)->count();
+        $earlyPending  = (clone $earlyCheckoutQuery)->where('early_checkout_status', 'pending')->count();
+        $earlyApproved = (clone $earlyCheckoutQuery)->where('early_checkout_status', 'approved')->count();
+        $earlyRejected = (clone $earlyCheckoutQuery)->where('early_checkout_status', 'rejected')->count();
+
+        $overtimeRecords = Attendance::whereMonth('date', $month)->whereYear('date', $year)
+            ->where('is_overtime', true)->get();
+        $overtimeTotalIncidents = $overtimeRecords->count();
+        $overtimeTotalMinutes   = (int) $overtimeRecords->sum('overtime_minutes');
 
         // ── 3. Data grafik absensi harian (7 hari terakhir) ──
         // Batasi grafik agar tidak menampilkan Alpha palsu sebelum tanggal operasional sistem dimulai
@@ -186,7 +201,7 @@ class ReportController extends Controller
                     'telat'  => $todayTelat,
                     'alpha'  => $todayAlpha,
                     'cuti'   => $todayCuti,
-                    'belum'  => max(0, $todayReport->count() - ($todayHadir + $todayTelat) - $todayCuti - $todayAlpha), // karyawan terjadwal hari ini yang belum absen
+                    'belum'  => max(0, $todayReport->count() - ($todayHadir + $todayTelat) - $todayCuti - $todayAlpha),
                 ],
                 'this_month' => [
                     'hadir'  => $monthHadir,
@@ -205,7 +220,18 @@ class ReportController extends Controller
                 'monthly_trend'     => $monthlyTrend,
                 'composition'       => $composition,
                 'weekly_late'       => $weeklyLate,
-                'dept_attendance'   => $deptData
+                'dept_attendance'   => $deptData,
+                // ── Pulang Cepat & Lembur ──
+                'early_checkout_summary' => [
+                    'total'    => $earlyTotal,
+                    'pending'  => $earlyPending,
+                    'approved' => $earlyApproved,
+                    'rejected' => $earlyRejected,
+                ],
+                'overtime_summary' => [
+                    'total_incidents' => $overtimeTotalIncidents,
+                    'total_minutes'   => $overtimeTotalMinutes,
+                ],
             ],
         ]);
     }
@@ -258,16 +284,19 @@ class ReportController extends Controller
             }
 
             $rekap[] = [
-                'nip'          => $emp->nip,
-                'name'         => $emp->user?->name ?? 'Karyawan',
-                'department'   => $emp->department?->name ?? 'Umum',
-                'hadir'        => $hadir,
-                'telat'        => $telat,
-                'izin'         => $izin,
-                'sakit'        => $sakit,
-                'cuti'         => $cuti,
-                'alpha'        => $alpha,
-                'duration_min' => $totalDurationMin,
+                'nip'                 => $emp->nip,
+                'name'                => $emp->user?->name ?? 'Karyawan',
+                'department'          => $emp->department?->name ?? 'Umum',
+                'hadir'               => $hadir,
+                'telat'               => $telat,
+                'izin'                => $izin,
+                'sakit'               => $sakit,
+                'cuti'                => $cuti,
+                'alpha'               => $alpha,
+                'duration_min'        => $totalDurationMin,
+                // ── Pulang Cepat & Lembur ──
+                'early_checkout_count'=> $empRecords->where('is_early_checkout', true)->count(),
+                'overtime_minutes'    => (int) $empRecords->where('is_overtime', true)->sum('overtime_minutes'),
             ];
         }
 
@@ -275,5 +304,17 @@ class ReportController extends Controller
             'success' => true,
             'data'    => $rekap,
         ]);
+    }
+
+    /**
+     * GET /api/reports/vehicles/export
+     *
+     * Mengekspor data plat nomor kendaraan seluruh pegawai aktif/tidak aktif ke file Excel (.xlsx).
+     *
+     * @return \Symfony\Component\HttpFoundation\BinaryFileResponse
+     */
+    public function exportVehicles()
+    {
+        return Excel::download(new VehicleExport, 'Data_Kendaraan_Pegawai_RSUCL.xlsx');
     }
 }

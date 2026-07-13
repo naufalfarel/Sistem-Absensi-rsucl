@@ -6,6 +6,8 @@ use App\Models\Employee;
 use App\Models\User;
 use App\Models\Department;
 use App\Models\Position;
+use App\Http\Requests\StoreEmployeeRequest;
+use App\Http\Requests\UpdateEmployeeRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
@@ -47,21 +49,9 @@ class EmployeeController extends Controller
      * @param Request $request
      * @return \Illuminate\Http\JsonResponse
      */
-    public function store(Request $request)
+    public function store(StoreEmployeeRequest $request)
     {
-        // Validasi parameter data karyawan baru beserta keunikan email, username, NIP
-        $data = $request->validate([
-            'name'          => 'required|string|max:100',
-            'email'         => 'required|email|unique:users,email',
-            'nip'           => 'required|string|unique:users,nip|unique:employees,nip',
-            'username'      => 'required|string|unique:users,username',
-            'password'      => 'required|string|min:6',
-            'department_id' => 'required|exists:departments,id',
-            'position_id'   => 'required|exists:positions,id',
-            'phone'         => 'nullable|string|max:20',
-            'gender'        => 'nullable|in:Laki-laki,Perempuan',
-            'join_date'     => 'nullable|date',
-        ]);
+        $data = $request->validated();
 
         // 1. Buat akun User untuk login karyawan
         $user = User::create([
@@ -82,6 +72,10 @@ class EmployeeController extends Controller
             'phone'         => $data['phone'] ?? null,
             'gender'        => $data['gender'] ?? null,
             'join_date'     => $data['join_date'] ?? null,
+            'motor_plate_1' => $data['motor_plate_1'] ?? null,
+            'motor_plate_2' => $data['motor_plate_2'] ?? null,
+            'car_plate_1'   => $data['car_plate_1'] ?? null,
+            'car_plate_2'   => $data['car_plate_2'] ?? null,
         ]);
 
         $employee->load(['user', 'department', 'position']);
@@ -116,20 +110,9 @@ class EmployeeController extends Controller
      * @param Employee $employee
      * @return \Illuminate\Http\JsonResponse
      */
-    public function update(Request $request, Employee $employee)
+    public function update(UpdateEmployeeRequest $request, Employee $employee)
     {
-        // Validasi input data update (mengabaikan keunikan untuk data milik sendiri)
-        $data = $request->validate([
-            'name'          => 'sometimes|string|max:100',
-            'email'         => ['sometimes', 'email', Rule::unique('users', 'email')->ignore($employee->user_id)],
-            'department_id' => 'sometimes|exists:departments,id',
-            'position_id'   => 'sometimes|exists:positions,id',
-            'phone'         => 'nullable|string|max:20',
-            'gender'        => 'nullable|in:Laki-laki,Perempuan',
-            'join_date'     => 'nullable|date',
-            'status'        => 'sometimes|in:active,inactive',
-            'password'      => 'sometimes|string|min:6',
-        ]);
+        $data = $request->validated();
 
         // 1. Perbarui atribut user
         $userFields = array_filter([
@@ -139,15 +122,19 @@ class EmployeeController extends Controller
         ]);
         if ($userFields) $employee->user->update($userFields);
 
-        // 2. Perbarui data kepegawaian karyawan
-        $empFields = array_filter([
-            'department_id' => $data['department_id'] ?? null,
-            'position_id'   => $data['position_id'] ?? null,
-            'phone'         => $data['phone'] ?? null,
-            'gender'        => $data['gender'] ?? null,
-            'join_date'     => $data['join_date'] ?? null,
-            'status'        => $data['status'] ?? null,
-        ], fn($v) => $v !== null);
+        // 2. Perbarui data kepegawaian karyawan (termasuk kendaraan)
+        $empFields = array_merge([
+            'department_id' => $data['department_id'] ?? $employee->department_id,
+            'position_id'   => $data['position_id'] ?? $employee->position_id,
+            'phone'         => array_key_exists('phone', $data) ? $data['phone'] : $employee->phone,
+            'gender'        => array_key_exists('gender', $data) ? $data['gender'] : $employee->gender,
+            'join_date'     => array_key_exists('join_date', $data) ? $data['join_date'] : $employee->join_date,
+            'status'        => $data['status'] ?? $employee->status,
+            'motor_plate_1' => array_key_exists('motor_plate_1', $data) ? $data['motor_plate_1'] : $employee->motor_plate_1,
+            'motor_plate_2' => array_key_exists('motor_plate_2', $data) ? $data['motor_plate_2'] : $employee->motor_plate_2,
+            'car_plate_1'   => array_key_exists('car_plate_1', $data) ? $data['car_plate_1'] : $employee->car_plate_1,
+            'car_plate_2'   => array_key_exists('car_plate_2', $data) ? $data['car_plate_2'] : $employee->car_plate_2,
+        ]);
         $employee->update($empFields);
 
         $employee->load(['user', 'department', 'position']);
@@ -256,6 +243,12 @@ class EmployeeController extends Controller
                 'check_in'  => $today?->check_in,
                 'check_out' => $today?->check_out,
                 'status'    => $computedStatus,
+            ],
+            'vehicles'    => [
+                'motor_plate_1' => $e->motor_plate_1,
+                'motor_plate_2' => $e->motor_plate_2,
+                'car_plate_1'   => $e->car_plate_1,
+                'car_plate_2'   => $e->car_plate_2,
             ],
         ];
     }

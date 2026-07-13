@@ -68,6 +68,12 @@ class AuthController extends Controller
                 $userData['phone']       = $emp->phone;
                 $userData['gender']      = $emp->gender;
                 $userData['join_date']   = $emp->join_date?->toDateString();
+                $userData['vehicles']    = [
+                    'motor_plate_1' => $emp->motor_plate_1,
+                    'motor_plate_2' => $emp->motor_plate_2,
+                    'car_plate_1'   => $emp->car_plate_1,
+                    'car_plate_2'   => $emp->car_plate_2,
+                ];
             }
         }
 
@@ -114,6 +120,12 @@ class AuthController extends Controller
                 $data['phone']       = $emp->phone;
                 $data['gender']      = $emp->gender;
                 $data['join_date']   = $emp->join_date?->toDateString();
+                $data['vehicles']    = [
+                    'motor_plate_1' => $emp->motor_plate_1,
+                    'motor_plate_2' => $emp->motor_plate_2,
+                    'car_plate_1'   => $emp->car_plate_1,
+                    'car_plate_2'   => $emp->car_plate_2,
+                ];
             }
         }
 
@@ -239,6 +251,12 @@ class AuthController extends Controller
                 $data['phone']       = $emp->phone;
                 $data['gender']      = $emp->gender;
                 $data['join_date']   = $emp->join_date?->toDateString();
+                $data['vehicles']    = [
+                    'motor_plate_1' => $emp->motor_plate_1,
+                    'motor_plate_2' => $emp->motor_plate_2,
+                    'car_plate_1'   => $emp->car_plate_1,
+                    'car_plate_2'   => $emp->car_plate_2,
+                ];
             }
         }
 
@@ -288,6 +306,55 @@ class AuthController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Password berhasil diubah. Silakan masuk dengan password baru Anda.',
+        ]);
+    }
+
+    /**
+     * PUT /api/profile/vehicles
+     *
+     * Endpoint mandiri bagi karyawan untuk memperbarui plat nomor kendaraan mereka sendiri.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function updateVehicles(Request $request)
+    {
+        $user = $request->user();
+
+        // Pastikan user memiliki profil employee
+        $employee = $user->employee;
+        if (!$employee) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Profil pegawai tidak ditemukan.',
+            ], 404);
+        }
+
+        // Validasi 4 plat nomor (maks 15 karakter, semuanya opsional)
+        $data = $request->validate([
+            'motor_plate_1' => 'nullable|string|max:15',
+            'motor_plate_2' => 'nullable|string|max:15',
+            'car_plate_1'   => 'nullable|string|max:15',
+            'car_plate_2'   => 'nullable|string|max:15',
+        ]);
+
+        // Simpan pembaruan ke database
+        $employee->update([
+            'motor_plate_1' => $data['motor_plate_1'] ?? null,
+            'motor_plate_2' => $data['motor_plate_2'] ?? null,
+            'car_plate_1'   => $data['car_plate_1'] ?? null,
+            'car_plate_2'   => $data['car_plate_2'] ?? null,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Data kendaraan berhasil diperbarui.',
+            'data'    => [
+                'motor_plate_1' => $employee->motor_plate_1,
+                'motor_plate_2' => $employee->motor_plate_2,
+                'car_plate_1'   => $employee->car_plate_1,
+                'car_plate_2'   => $employee->car_plate_2,
+            ],
         ]);
     }
 }

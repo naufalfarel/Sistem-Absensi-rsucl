@@ -2,13 +2,14 @@ import { useState, useEffect } from 'react';
 import { CheckCircle2, XCircle, Clock, FileText, Trash2, Paperclip } from 'lucide-react';
 import { leaveApi, LeaveRequest } from '../../../services/api';
 
-type LeaveType = 'cuti' | 'izin' | 'sakit';
+type LeaveType = 'cuti' | 'izin' | 'sakit' | 'cuti_khusus';
 type LeaveStatus = 'pending' | 'approved' | 'rejected';
 
 const typeConfig: Record<LeaveType, { label: string; color: string; bg: string; border: string }> = {
-  cuti:  { label: 'Cuti Tahunan', color: '#7C3AED', bg: '#F5F3FF', border: '#DDD6FE' },
-  izin:  { label: 'Izin',         color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE' },
-  sakit: { label: 'Sakit',        color: '#0891B2', bg: '#ECFEFF', border: '#A5F3FC' },
+  cuti:        { label: 'Cuti Tahunan', color: '#7C3AED', bg: '#F5F3FF', border: '#DDD6FE' },
+  izin:        { label: 'Izin',         color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE' },
+  sakit:       { label: 'Sakit',        color: '#0891B2', bg: '#ECFEFF', border: '#A5F3FC' },
+  cuti_khusus: { label: 'Cuti Khusus / Diluar Tanggungan', color: '#EA580C', bg: '#FFF7ED', border: '#FFEDD5' },
 };
 
 const statusConfig: Record<LeaveStatus, { label: string; color: string; bg: string }> = {
@@ -155,8 +156,8 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
       </div>
 
       {/* Summary */}
-      <div className="grid grid-cols-3 gap-3">
-        {['cuti', 'izin', 'sakit'].map(t => {
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {['cuti', 'izin', 'sakit', 'cuti_khusus'].map(t => {
           const tc = typeConfig[t as LeaveType];
           const count = requests.filter(r => r.type === t).length;
           return (
@@ -215,13 +216,17 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
                   <div className="flex items-start gap-3 flex-1 min-w-0">
                     <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: tc.bg, border: `1.5px solid ${tc.border}` }}>
                       <span className="text-[13px] font-bold" style={{ color: tc.color }}>
-                        {req.type === 'cuti' ? 'C' : req.type === 'izin' ? 'I' : 'S'}
+                        {req.type === 'cuti' ? 'C' : req.type === 'izin' ? 'I' : req.type === 'sakit' ? 'S' : 'CK'}
                       </span>
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap mb-1">
                         <p className="text-[14px] font-semibold text-gray-900">{req.employee?.name}</p>
-                        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ color: tc.color, background: tc.bg }}>{tc.label}</span>
+                        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ color: tc.color, background: tc.bg }}>
+                          {req.type === 'cuti_khusus' && req.special_leave_category
+                            ? `Cuti Khusus (${req.special_leave_category.name})`
+                            : tc.label}
+                        </span>
                         <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ color: sc.color, background: sc.bg }}>{sc.label}</span>
                       </div>
                       <p className="text-[12px] text-gray-500 mb-1">{req.employee?.department || 'Karyawan'}</p>

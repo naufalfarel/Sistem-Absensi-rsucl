@@ -60,16 +60,18 @@ async function request<T = unknown>(
   body?: unknown,
 ): Promise<T> {
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
     Accept: 'application/json',
   };
+  if (!(body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+  }
   const token = getToken();
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
     headers,
-    body: body ? JSON.stringify(body) : undefined,
+    body: body instanceof FormData ? body : (body ? JSON.stringify(body) : undefined),
     credentials: 'include',
   });
 
@@ -128,6 +130,12 @@ export interface AuthUser {
   gender?: string;
   join_date?: string;
   profile_picture?: string | null;
+  vehicles?: {
+    motor_plate_1?: string | null;
+    motor_plate_2?: string | null;
+    car_plate_1?: string | null;
+    car_plate_2?: string | null;
+  };
 }
 
 /**
@@ -164,6 +172,14 @@ export const profileApi = {
     profile_picture?: string | null;
   }) =>
     api.put<{ success: boolean; message: string; data: AuthUser }>('/profile', data),
+  // Update data kendaraan milik sendiri oleh karyawan
+  updateVehicles: (data: {
+    motor_plate_1?: string | null;
+    motor_plate_2?: string | null;
+    car_plate_1?: string | null;
+    car_plate_2?: string | null;
+  }) =>
+    api.put<{ success: boolean; message: string; data: any }>('/profile/vehicles', data),
 };
 
 // ─────────────────────────────────────────────────────────────────────
@@ -189,6 +205,16 @@ export interface Employee {
   join_date?: string;
   status: 'active' | 'inactive';
   today_attendance?: { check_in: string; check_out: string; status: string } | null;
+  vehicles?: {
+    motor_plate_1?: string | null;
+    motor_plate_2?: string | null;
+    car_plate_1?: string | null;
+    car_plate_2?: string | null;
+  };
+  motor_plate_1?: string | null;
+  motor_plate_2?: string | null;
+  car_plate_1?: string | null;
+  car_plate_2?: string | null;
 }
 
 /**
@@ -253,10 +279,23 @@ export interface AttendanceRecord {
   accuracy: number | null;
   is_within_geofence: boolean;
   note: string | null;
+  checkin_location_note?: string | null;
+  checkout_location_note?: string | null;
   employee?: { id: number; name: string; nip: string; department: string };
   image_check_in?: string | null;
   image_check_out?: string | null;
   shift_name?: string | null;
+  
+  // Pulang Cepat (Early Checkout)
+  is_early_checkout?: boolean;
+  early_checkout_reason?: string | null;
+  early_checkout_status?: 'pending' | 'approved' | 'rejected' | null;
+  early_checkout_admin_note?: string | null;
+
+  // Lembur (Overtime)
+  is_overtime?: boolean;
+  overtime_minutes?: number | null;
+  overtime_note?: string | null;
 }
 
 /**
@@ -275,16 +314,35 @@ export const attendanceApi = {
   history:  (month?: number, year?: number) => api.get<{ success: boolean; data: AttendanceRecord[] }>(
     '/attendance/history' + (month && year ? `?month=${month}&year=${year}` : '')
   ),
-  // Mengirim absensi masuk beserta parameter geolokasi, foto wajah, dan waktu simulasi
-  checkIn:  (lat?: number, lng?: number, accuracy?: number, image?: string, simulatedTime?: string) =>
+  // Mengirim absensi masuk beserta parameter geolokasi, foto wajah, waktu simulasi, dan catatan lokasi
+  checkIn:  (lat?: number, lng?: number, accuracy?: number, image?: string, simulatedTime?: string, locationNote?: string) =>
     api.post<{ success: boolean; message: string; data: AttendanceRecord }>(
-      '/attendance/check-in', { latitude: lat, longitude: lng, accuracy, image, simulated_time: simulatedTime }
+      '/attendance/check-in', { latitude: lat, longitude: lng, accuracy, image, simulated_time: simulatedTime, location_note: locationNote }
     ),
-  // Mengirim absensi pulang beserta parameter geolokasi, foto wajah, dan waktu simulasi
-  checkOut: (lat?: number, lng?: number, accuracy?: number, image?: string, simulatedTime?: string) =>
-    api.post<{ success: boolean; message: string; data: AttendanceRecord }>(
-      '/attendance/check-out', { latitude: lat, longitude: lng, accuracy, image, simulated_time: simulatedTime }
+  // Mengirim absensi pulang beserta parameter geolokasi, foto wajah, waktu simulasi, catatan lokasi, alasan pulang cepat, dan catatan lembur
+  checkOut: (lat?: number, lng?: number, accuracy?: number, image?: string, simulatedTime?: string, locationNote?: string, earlyCheckoutReason?: string, overtimeNote?: string) =>
+    api.post<{ success: boolean; message: string; data: AttendanceRecord; is_early_checkout?: boolean; is_overtime?: boolean; overtime_minutes?: number }>(
+      '/attendance/check-out', { latitude: lat, longitude: lng, accuracy, image, simulated_time: simulatedTime, location_note: locationNote, early_checkout_reason: earlyCheckoutReason, overtime_note: overtimeNote }
     ),
+  // Ambil daftar pulang cepat untuk admin
+  earlyCheckouts: (status?: string, month?: number, year?: number) => {
+    let query = '';
+    const params: string[] = [];
+    if (status) params.push(`status=${status}`);
+    if (month) params.push(`month=${month}`);
+    if (year) params.push(`year=${year}`);
+    if (params.length > 0) query = '?' + params.join('&');
+    return api.get<{ success: boolean; data: AttendanceRecord[] }>(`/attendance/early-checkouts${query}`);
+  },
+  // Setujui pulang cepat
+  approveEarlyCheckout: (id: number, adminNote?: string) =>
+    api.put<{ success: boolean; data: AttendanceRecord }>(`/attendance/${id}/early-checkout/approve`, { admin_note: adminNote }),
+  // Tolak pulang cepat
+  rejectEarlyCheckout: (id: number, adminNote: string) =>
+    api.put<{ success: boolean; data: AttendanceRecord }>(`/attendance/${id}/early-checkout/reject`, { admin_note: adminNote }),
+  // Memperbarui catatan lembur setelah check-out berhasil
+  updateOvertimeNote: (overtimeNote: string) =>
+    api.put<{ success: boolean; message: string; data: AttendanceRecord }>('/attendance/overtime-note', { overtime_note: overtimeNote }),
 };
 
 // ─────────────────────────────────────────────────────────────────────
@@ -296,7 +354,9 @@ export const attendanceApi = {
  */
 export interface LeaveRequest {
   id: number;
-  type: 'cuti' | 'izin' | 'sakit';
+  type: 'cuti' | 'izin' | 'sakit' | 'cuti_khusus';
+  special_leave_category_id?: number;
+  special_leave_category?: { id: number; name: string } | null;
   start_date: string;
   end_date: string;
   days: number;
@@ -311,13 +371,27 @@ export interface LeaveRequest {
 }
 
 /**
+ * Interface data kuota cuti tahunan karyawan.
+ */
+export interface LeaveQuota {
+  employee_id: number;
+  employee_name?: string;
+  quota: number;        // Total hari kuota per tahun
+  used: number;         // Hari cuti yang sudah DISETUJUI (approved)
+  pending: number;      // Hari cuti yang masih MENUNGGU persetujuan
+  remaining: number;    // Sisa hari yang masih BISA diajukan (quota - committed)
+  period_start: string; // Tanggal mulai periode berjalan (YYYY-MM-DD)
+  period_label: string; // Label periode (contoh: "1 April 2026 – 31 Maret 2027")
+}
+
+/**
  * Layanan pengajuan ketidakhadiran dan peninjauan oleh admin.
  */
 export const leaveApi = {
   // Ambil daftar seluruh pengajuan cuti (admin melihat semua, karyawan melihat miliknya)
   list:    () => api.get<{ success: boolean; data: LeaveRequest[] }>('/leave-requests'),
-  // Kirim pengajuan cuti/izin/sakit baru beserta lampiran file base64
-  create:  (data: { type: string; start_date: string; end_date: string; reason: string; attachment?: string | null }) =>
+  // Kirim pengajuan cuti/izin/sakit baru beserta lampiran file base64 atau FormData
+  create:  (data: FormData | { type: string; start_date: string; end_date: string; reason: string; attachment?: string | null }) =>
     api.post<{ success: boolean; message: string; data: LeaveRequest }>('/leave-requests', data),
   // Admin menyetujui pengajuan cuti
   approve: (id: number, admin_note?: string) =>
@@ -329,6 +403,28 @@ export const leaveApi = {
   delete:  (id: number) => api.delete<{ success: boolean }>(`/leave-requests/${id}`),
   // Menghapus semua pengajuan cuti yang sudah ditinjau (approved/rejected)
   deleteAllProcessed: () => api.delete<{ success: boolean }>('/leave-requests/all-processed'),
+  // Mengambil info kuota cuti tahunan (karyawan: milik sendiri; admin: semua atau ?employee_id=X)
+  quota: (employeeId?: number) =>
+    api.get<{ success: boolean; data: LeaveQuota | LeaveQuota[] }>(
+      '/leave-requests/quota' + (employeeId ? `?employee_id=${employeeId}` : '')
+    ),
+  // Karyawan membatalkan pengajuan miliknya sendiri (hanya yang masih pending)
+  cancel: (id: number) => api.delete<{ success: boolean; message: string }>(`/leave-requests/${id}/cancel`),
+};
+
+export interface SpecialLeaveCategory {
+  id: number;
+  name: string;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export const specialLeaveApi = {
+  listActive: () => api.get<{ success: boolean; data: SpecialLeaveCategory[] }>('/special-leave-categories'),
+  create: (name: string) => api.post<{ success: boolean; message: string; data: SpecialLeaveCategory }>('/special-leave-categories', { name }),
+  update: (id: number, name: string, is_active: boolean) =>
+    api.put<{ success: boolean; message: string; data: SpecialLeaveCategory }>(`/special-leave-categories/${id}`, { name, is_active }),
 };
 
 // ─────────────────────────────────────────────────────────────────────
@@ -383,6 +479,18 @@ export interface ReportSummary {
   composition: { name: string; value: number; color: string }[];
   weekly_late: { hari: string; count: number }[];
   dept_attendance: { dept: string; persen: number }[];
+
+  // Pulang Cepat & Lembur
+  early_checkout_summary?: {
+    total: number;
+    pending: number;
+    approved: number;
+    rejected: number;
+  };
+  overtime_summary?: {
+    total_incidents: number;
+    total_minutes: number;
+  };
 }
 
 /**
@@ -399,6 +507,10 @@ export interface MonthlyRekapRecord {
   cuti: number;
   alpha: number;
   duration_min: number;
+  
+  // Pulang Cepat & Lembur
+  early_checkout_count?: number;
+  overtime_minutes?: number;
 }
 
 /**
@@ -438,6 +550,14 @@ export interface AppSettings {
   notif_late?: '0' | '1';            // Kirim notifikasi jika terlambat
   notif_leave?: '0' | '1';           // Kirim notifikasi pengajuan cuti
   notif_system?: '0' | '1';          // Kirim notifikasi broadcast sistem
+  // Kuota Cuti Tahunan
+  leave_reset_month?: string;        // Bulan reset kuota (1-12)
+  leave_reset_day?: string;          // Tanggal reset kuota (1-31)
+  annual_leave_quota_days?: string;  // Jumlah hari kuota per tahun
+
+  // Toleransi Pulang Cepat & Lembur
+  early_checkout_grace_minutes?: string;
+  overtime_grace_minutes?: string;
 }
 
 /**

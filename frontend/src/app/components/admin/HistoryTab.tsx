@@ -252,10 +252,12 @@ export function HistoryTab() {
                 { l: 'Jam Masuk', v: selected.check_in ? selected.check_in.substring(0, 5) : '--' },
                 { l: 'Jam Keluar', v: selected.check_out ? selected.check_out.substring(0, 5) : '--' },
                 { l: 'Status', v: (statusConfig[selected.status] || { label: selected.status }).label },
+                ...(selected.checkin_location_note ? [{ l: 'Lokasi Masuk', v: selected.checkin_location_note }] : []),
+                ...(selected.checkout_location_note ? [{ l: 'Lokasi Pulang', v: selected.checkout_location_note }] : []),
               ].map(({ l, v }, i) => (
                 <div key={i} className="flex justify-between">
                   <span className="text-[12px] text-gray-500">{l}</span>
-                  <span className="text-[12px] font-medium text-gray-800">{v}</span>
+                  <span className="text-[12px] font-medium text-gray-800 text-right max-w-[180px] break-words">{v}</span>
                 </div>
               ))}
             </div>
