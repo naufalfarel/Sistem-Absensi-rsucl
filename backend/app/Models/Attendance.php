@@ -35,6 +35,12 @@ class Attendance extends Model
         'early_checkout_status', 'early_checkout_admin_note',
         // Lembur (Overtime)
         'is_overtime', 'overtime_minutes', 'overtime_note',
+        // Foto, Koordinat, dan Jarak Detail
+        'checkin_photo_url', 'checkout_photo_url',
+        'checkin_latitude', 'checkin_longitude', 'checkout_latitude', 'checkout_longitude',
+        'checkin_distance_meters', 'checkout_distance_meters',
+        // Holiday Work
+        'is_holiday_work', 'holiday_id',
     ];
 
     // Konversi tipe data otomatis oleh Eloquent
@@ -45,6 +51,13 @@ class Attendance extends Model
         'is_early_checkout'   => 'boolean',
         'is_overtime'         => 'boolean',
         'overtime_minutes'    => 'integer',
+        'checkin_latitude'    => 'float',
+        'checkin_longitude'   => 'float',
+        'checkout_latitude'   => 'float',
+        'checkout_longitude'  => 'float',
+        'checkin_distance_meters'  => 'integer',
+        'checkout_distance_meters' => 'integer',
+        'is_holiday_work'     => 'boolean',
     ];
 
     /**
@@ -54,6 +67,14 @@ class Attendance extends Model
     public function employee()
     {
         return $this->belongsTo(Employee::class);
+    }
+
+    /**
+     * Relasi ke model Holiday.
+     */
+    public function holiday()
+    {
+        return $this->belongsTo(Holiday::class);
     }
 
     /**
@@ -160,6 +181,7 @@ class Attendance extends Model
                 $key = $emp->id . '_' . $dateStr;
 
                 // Kasus A: Karyawan melakukan absensi (Check-in/Check-out ada)
+                // Kasus A: Karyawan melakukan absensi (Check-in/Check-out ada)
                 if (isset($attendances[$key])) {
                     $attRecord = $attendances[$key]->first();
                     $reportRecords[] = [
@@ -186,7 +208,19 @@ class Attendance extends Model
                         ],
                         'image_check_in' => $attRecord->image_check_in,
                         'image_check_out' => $attRecord->image_check_out,
+                        
+                        // New fields
+                        'checkin_photo_url'        => $attRecord->checkin_photo_url ? url($attRecord->checkin_photo_url) : null,
+                        'checkout_photo_url'       => $attRecord->checkout_photo_url ? url($attRecord->checkout_photo_url) : null,
+                        'checkin_latitude'         => $attRecord->checkin_latitude,
+                        'checkin_longitude'        => $attRecord->checkin_longitude,
+                        'checkout_latitude'        => $attRecord->checkout_latitude,
+                        'checkout_longitude'       => $attRecord->checkout_longitude,
+                        'checkin_distance_meters'  => $attRecord->checkin_distance_meters,
+                        'checkout_distance_meters' => $attRecord->checkout_distance_meters,
+                        
                         'shift_name' => $shiftName,
+                        'shift_type' => $matchingShift ? ($matchingShift->shift_type ?? 'normal') : 'normal',
                     ];
                 } else {
                     // Kasus B: Karyawan tidak absen. Periksa apakah sedang cuti/izin/sakit
@@ -218,13 +252,35 @@ class Attendance extends Model
                             ],
                             'image_check_in' => null,
                             'image_check_out' => null,
+                            
+                            // New fields
+                            'checkin_photo_url'        => null,
+                            'checkout_photo_url'       => null,
+                            'checkin_latitude'         => null,
+                            'checkin_longitude'        => null,
+                            'checkout_latitude'        => null,
+                            'checkout_longitude'       => null,
+                            'checkin_distance_meters'  => null,
+                            'checkout_distance_meters' => null,
+
                             'shift_name' => $shiftName,
+                            'shift_type' => $matchingShift ? ($matchingShift->shift_type ?? 'normal') : 'normal',
                         ];
                     } else {
                         // Kasus C: Tidak ada absensi dan tidak ada izin.
                         // Karyawan dinyatakan Alpa jika tanggal tersebut adalah hari lalu/hari ini,
                         // dan setelah sistem absensi resmi dimulai.
                         if ($date->lte($limitDate) && $date->gte($systemStartDate)) {
+                            // Cek jika hari libur nasional
+                            $holiday = \App\Support\AttendanceRules::holidayOn($date);
+                            if ($holiday) {
+                                // Cek jika tidak ditugaskan kerja pada hari libur ini
+                                $isAssigned = \App\Support\AttendanceRules::isAssignedToWorkOnHoliday($emp, $holiday);
+                                if (!$isAssigned) {
+                                    continue; // Lewati, jangan catat sebagai alpa
+                                }
+                            }
+
                             $status = 'alpha';
                             $note = 'Tidak Hadir Tanpa Keterangan';
 
@@ -265,7 +321,19 @@ class Attendance extends Model
                                 ],
                                 'image_check_in' => null,
                                 'image_check_out' => null,
+                                
+                                // New fields
+                                'checkin_photo_url'        => null,
+                                'checkout_photo_url'       => null,
+                                'checkin_latitude'         => null,
+                                'checkin_longitude'        => null,
+                                'checkout_latitude'        => null,
+                                'checkout_longitude'       => null,
+                                'checkin_distance_meters'  => null,
+                                'checkout_distance_meters' => null,
+
                                 'shift_name' => $shiftName,
+                                'shift_type' => $matchingShift ? ($matchingShift->shift_type ?? 'normal') : 'normal',
                             ];
                         }
                     }

@@ -78,6 +78,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // ── Fitur Jadwal Shift
     Route::get('/my-schedule', [ScheduleController::class, 'mySchedule']);
 
+    // Kalender Libur (Bisa dibaca semua karyawan)
+    Route::get('/holidays', [\App\Http\Controllers\HolidayController::class, 'index']);
+
     // ── RUTE KHUSUS ADMINISTRATOR (Hanya untuk User dengan Role 'admin') ──────
     Route::middleware(\App\Http\Middleware\EnsureIsAdmin::class)->group(function () {
         
@@ -135,5 +138,16 @@ Route::middleware('auth:sanctum')->group(function () {
         // ── Pengaturan Sistem
         // Mengubah parameter pengaturan global (koordinat geofence, radius, dll)
         Route::put('/settings',  [SettingController::class, 'update']);
+
+        // CRUD Kalender Libur (Admin)
+        Route::post('/holidays', [\App\Http\Controllers\HolidayController::class, 'store']);
+        Route::post('/holidays/sync', [\App\Http\Controllers\HolidayController::class, 'sync']);
+        Route::put('/holidays/{id}', [\App\Http\Controllers\HolidayController::class, 'update']);
+        Route::delete('/holidays/{id}', [\App\Http\Controllers\HolidayController::class, 'destroy']);
+
+        // Penugasan Kerja Hari Libur (Admin)
+        Route::get('/holidays/{id}/work-assignments', [\App\Http\Controllers\HolidayWorkAssignmentController::class, 'index']);
+        Route::post('/holidays/{id}/work-assignments', [\App\Http\Controllers\HolidayWorkAssignmentController::class, 'store']);
+        Route::delete('/holidays/{id}/work-assignments/{employeeId}', [\App\Http\Controllers\HolidayWorkAssignmentController::class, 'destroy']);
     });
 });

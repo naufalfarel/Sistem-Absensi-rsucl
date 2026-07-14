@@ -97,6 +97,11 @@ class ReportController extends Controller
         $overtimeTotalIncidents = $overtimeRecords->count();
         $overtimeTotalMinutes   = (int) $overtimeRecords->sum('overtime_minutes');
 
+        // Holiday Work Summary
+        $holidayWorkRecords = Attendance::whereMonth('date', $month)->whereYear('date', $year)
+            ->where('is_holiday_work', true)->get();
+        $holidayWorkTotal = $holidayWorkRecords->count();
+
         // ── 3. Data grafik absensi harian (7 hari terakhir) ──
         // Batasi grafik agar tidak menampilkan Alpha palsu sebelum tanggal operasional sistem dimulai
         $firstAttDate = \App\Models\Attendance::orderBy('date', 'asc')->value('date');
@@ -232,6 +237,9 @@ class ReportController extends Controller
                     'total_incidents' => $overtimeTotalIncidents,
                     'total_minutes'   => $overtimeTotalMinutes,
                 ],
+                'holiday_work_summary' => [
+                    'total_days' => $holidayWorkTotal,
+                ],
             ],
         ]);
     }
@@ -297,6 +305,7 @@ class ReportController extends Controller
                 // ── Pulang Cepat & Lembur ──
                 'early_checkout_count'=> $empRecords->where('is_early_checkout', true)->count(),
                 'overtime_minutes'    => (int) $empRecords->where('is_overtime', true)->sum('overtime_minutes'),
+                'holiday_work_days'   => $empRecords->where('is_holiday_work', true)->count(),
             ];
         }
 

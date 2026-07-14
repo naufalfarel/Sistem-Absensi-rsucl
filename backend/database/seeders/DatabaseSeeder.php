@@ -134,5 +134,6 @@ class DatabaseSeeder extends Seeder
 
         // Seeder Kategori Cuti Khusus
         $this->call(SpecialLeaveCategorySeeder::class);
+        $this->call(HolidaySeeder::class);
     }
 }

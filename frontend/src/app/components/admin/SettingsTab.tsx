@@ -156,9 +156,9 @@ export function SettingsTab() {
       const res = await settingApi.get();
       if (res.success) {
         setSystemActive(res.data.system_active === '1');
-        setRadius(res.data.gps_radius);
-        if (res.data.hospital_lat) setHospLat(res.data.hospital_lat);
-        if (res.data.hospital_lng) setHospLng(res.data.hospital_lng);
+        setRadius(res.data.attendance_radius_meters || res.data.gps_radius);
+        setHospLat(res.data.hospital_latitude || res.data.hospital_lat || '5.552740480177099');
+        setHospLng(res.data.hospital_longitude || res.data.hospital_lng || '95.33486560781716');
         if (res.data.notif_email !== undefined) setNotifEmail(res.data.notif_email === '1');
         if (res.data.notif_late !== undefined) setNotifLate(res.data.notif_late === '1');
         if (res.data.notif_leave !== undefined) setNotifLeave(res.data.notif_leave === '1');
@@ -189,7 +189,14 @@ export function SettingsTab() {
       const { specialLeaveApi } = await import('../../../services/api');
       const res = await specialLeaveApi.listActive();
       if (res.success) {
-        setCategories(res.data);
+        const sorted = [...(res.data || [])].sort((a, b) => {
+          const nameA = (a.name || '').toLowerCase();
+          const nameB = (b.name || '').toLowerCase();
+          if (nameA === 'lainnya') return 1;
+          if (nameB === 'lainnya') return -1;
+          return nameA.localeCompare(nameB, 'id');
+        });
+        setCategories(sorted);
       }
     } catch (err) {
       console.error(err);
@@ -365,6 +372,9 @@ export function SettingsTab() {
         gps_radius: radius,
         hospital_lat: hospLat,
         hospital_lng: hospLng,
+        hospital_latitude: hospLat,
+        hospital_longitude: hospLng,
+        attendance_radius_meters: radius,
         checkin_open: checkinOpen,
         late_limit: lateLimit,
         close_checkin: closeCheckin,

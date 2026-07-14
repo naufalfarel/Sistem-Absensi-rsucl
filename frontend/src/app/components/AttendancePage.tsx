@@ -1,13 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   MapPin, Wifi, Navigation, Clock, CheckCircle2, AlertCircle, X,
-  Target, Lock, Coffee, Moon, Sun, Sunset, Camera, Signal,
+  Target, Lock, Coffee, Moon, Sun, Sunset, Camera, Calendar,
 } from 'lucide-react';
 import { MapContainer, TileLayer, Circle, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useAuth } from '../../context/AuthContext';
 import { attendanceApi, settingApi, scheduleApi, MyShiftSchedule } from '../../services/api';
+// ── [DEV] Simulasi Waktu — hapus baris ini saat production ──────────────
+import { SimulationPanel } from '../dev/SimulationPanel';
 
 // Fix Leaflet default marker icon broken by bundlers
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -389,6 +391,7 @@ function GPSCard({
   hospLat,
   hospLng,
   hospRadius,
+  isDinasLuar = false,
 }: {
   userLocation: { lat: number; lng: number; accuracy: number } | null;
   gpsActive: boolean;
@@ -397,6 +400,7 @@ function GPSCard({
   hospLat: number;
   hospLng: number;
   hospRadius: number;
+  isDinasLuar?: boolean;
 }) {
   // Kekuatan sinyal diukur dari akurasi GPS (di bawah 15 meter dianggap sangat bagus)
   const signalBars = gpsActive ? (userLocation && userLocation.accuracy <= 15 ? 4 : 3) : 0;
@@ -411,7 +415,7 @@ function GPSCard({
     { label: 'Longitude',      value: userLocation ? `${userLocation.lng.toFixed(7)}°` : 'Mencari...' },
     { label: 'Akurasi',        value: userLocation ? `±${userLocation.accuracy} meter` : '—' },
     { label: 'Status GPS',     value: gpsActive ? 'Aktif' : 'Mencari...' },
-    { label: 'Status',         value: inGeofence ? 'Dalam Area' : 'Luar Area' },
+    { label: 'Status',         value: isDinasLuar ? 'Dinas Luar (Bebas)' : (inGeofence ? 'Dalam Area' : 'Luar Area') },
   ];
 
   return (
@@ -489,7 +493,7 @@ function GPSCard({
         </div>
         <div className="grid grid-cols-2 gap-3">
           {gpsData.slice(3).map(({ label, value }) => {
-            const isOk = (label === 'Status' && inGeofence) || (label === 'Status GPS' && gpsActive);
+            const isOk = (label === 'Status' && (inGeofence || isDinasLuar)) || (label === 'Status GPS' && gpsActive);
             return (
               <div key={label} className={`rounded-xl p-2.5 ${isOk ? 'bg-green-50 border border-green-100' : 'bg-red-50 border border-red-100'}`}>
                 <p className="text-[9px] text-gray-400 uppercase tracking-wide mb-0.5">{label}</p>
@@ -503,11 +507,13 @@ function GPSCard({
           <Target size={13} className={inGeofence ? 'text-[#16A34A] flex-shrink-0' : 'text-red-500 flex-shrink-0'} />
           <div className="flex-1">
             <p className={`text-[11px] font-semibold ${inGeofence ? 'text-green-800' : 'text-red-800'}`}>
-              {inGeofence
-                ? `Di dalam area RS (~${Math.round(distance ?? 0)} meter)`
-                : distance !== null
-                  ? `Di luar area RS (~${Math.round(distance)} meter)`
-                  : 'Menunggu lokasi GPS...'}
+              {isDinasLuar
+                ? 'Dinas Luar: Validasi Radius GPS Dikecualikan'
+                : inGeofence
+                  ? `Di dalam area RS (~${Math.round(distance ?? 0)} meter)`
+                  : distance !== null
+                    ? `Di luar area RS (~${Math.round(distance)} meter)`
+                    : 'Menunggu lokasi GPS...'}
             </p>
             <p className={`text-[10px] ${inGeofence ? 'text-green-600' : 'text-red-600'} truncate`}>
               {userLocation ? `${userLocation.lat.toFixed(6)}, ${userLocation.lng.toFixed(6)}` : 'Memuat lokasi...'}
@@ -610,6 +616,9 @@ export function AttendancePage() {
     };
   }, []);
 
+  // [DEV] State waktu simulasi: string "HH:mm" atau null jika pakai jam real
+  const [simulatedTime, setSimulatedTime] = useState<string | null>(null);
+
   // State jam sistem yang berjalan secara realtime
   const [now, setNow]               = useState(new Date());
   
@@ -647,6 +656,9 @@ export function AttendancePage() {
 
   // Menampung data pengajuan cuti/izin/sakit yang sedang aktif hari ini (jika ada)
   const [activeLeave, setActiveLeave] = useState<{ type: string; reason: string } | null>(null);
+
+  // Menampung informasi hari libur nasional hari ini
+  const [todayHoliday, setTodayHoliday] = useState<{ name: string; is_assigned: boolean } | null>(null);
 
   // Pengendali parameter tampilan popup SuccessAnimation
   const [successAction, setSuccessAction] = useState('');
@@ -689,9 +701,9 @@ export function AttendancePage() {
           checkout_close:     d.checkout_close    ?? '60',
           sat_checkout_open:  d.sat_checkout_open  ?? '0',
           sat_checkout_close: d.sat_checkout_close ?? '60',
-          hospital_lat:       d.hospital_lat ? Number(d.hospital_lat) : 5.552740480177099,
-          hospital_lng:       d.hospital_lng ? Number(d.hospital_lng) : 95.33486560781716,
-          gps_radius:         d.gps_radius ? Number(d.gps_radius) : 40,
+          hospital_lat:       d.hospital_latitude ? Number(d.hospital_latitude) : (d.hospital_lat ? Number(d.hospital_lat) : 5.552740480177099),
+          hospital_lng:       d.hospital_longitude ? Number(d.hospital_longitude) : (d.hospital_lng ? Number(d.hospital_lng) : 95.33486560781716),
+          gps_radius:         d.attendance_radius_meters ? Number(d.attendance_radius_meters) : (d.gps_radius ? Number(d.gps_radius) : 40),
           early_checkout_grace_minutes: d.early_checkout_grace_minutes ?? '15',
           overtime_grace_minutes:       d.overtime_grace_minutes       ?? '15',
         };
@@ -788,6 +800,9 @@ export function AttendancePage() {
           if (res.active_leave) {
             setActiveLeave(res.active_leave);
           }
+          if (res.holiday) {
+            setTodayHoliday(res.holiday);
+          }
         }
       } catch (err) {
         console.error('Error fetching today record:', err);
@@ -841,14 +856,23 @@ export function AttendancePage() {
     ? getDistance(userLocation.lat, userLocation.lng, HOSP_LAT, HOSP_LNG)
     : null;
 
-  const inGeofence = distance !== null ? distance <= HOSP_RADIUS : false;
+  const isDinasLuar = todayShift?.shift_type === 'dinas_luar';
+
+  const inGeofence = isDinasLuar ? true : (distance !== null ? distance <= HOSP_RADIUS : false);
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
 
-  const current = now;
+  // [DEV] Terapkan waktu simulasi ke `current` jika aktif
+  const current = (() => {
+    if (!simulatedTime) return now;
+    const d = new Date(now);
+    const [hh, mm] = simulatedTime.split(':').map(Number);
+    d.setHours(hh, mm, 0, 0);
+    return d;
+  })();
 
   const attendanceWindow = todayShift === null ? 'no_shift' : getWindow(current, shiftSettings);
   const wc               = windowConfig[attendanceWindow];
@@ -858,7 +882,9 @@ export function AttendancePage() {
   const dateStr  = `${dayId}, ${current.getDate()} ${['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][current.getMonth()]} ${current.getFullYear()}`;
 
   const canCheckIn  = attendanceWindow === 'checkin' && !checkedIn;
-  const canCheckOut = (attendanceWindow === 'checkout' || attendanceWindow === 'working' || attendanceWindow === 'late_locked') && checkedIn && !checkedOut;
+  // canCheckOut: izinkan aksi checkout selama sudah check-in dan belum check-out,
+  // termasuk window 'ended' agar backend bisa memberikan pesan error yang tepat.
+  const canCheckOut = (attendanceWindow === 'checkout' || attendanceWindow === 'working' || attendanceWindow === 'late_locked' || attendanceWindow === 'ended') && checkedIn && !checkedOut;
 
   const faceVerified = faceStep === 'confirmed';
 
@@ -890,7 +916,10 @@ export function AttendancePage() {
   };
 
   const lockedLabel = () => {
-    if (checkedIn)                          return 'Anda sudah melakukan absen';
+    // Sudah check-in tapi belum check-out dan waktu sudah lewat
+    if (checkedIn && !checkedOut) return 'Batas Waktu Check-Out Sudah Lewat';
+    // Sudah selesai keduanya — seharusnya tidak masuk blok ini, tapi sebagai fallback
+    if (checkedIn && checkedOut)  return 'Absensi Hari Ini Selesai';
     if (attendanceWindow === 'no_shift')    return 'Tidak ada jadwal shift hari ini';
     if (attendanceWindow === 'too_early')   return `Absen Dibuka Pukul ${shiftSettings.checkin_open}`;
     if (attendanceWindow === 'late_locked') return `Batas Check-In Terlewat (${shiftSettings.close_checkin})`;
@@ -914,11 +943,28 @@ export function AttendancePage() {
       const lngVal = userLocation?.lng ?? HOSP_LNG;
       const accVal = userLocation?.accuracy ?? undefined;
       
-      const simulatedTime = undefined;
+      // [DEV] Kirim waktu simulasi ke backend jika aktif
+      const simTimeArg = simulatedTime ?? undefined;
       const earlyReasonStr = typeof earlyReason === 'string' ? earlyReason : undefined;
 
+      // Helper to convert base64 dataurl to Blob for file upload
+      const dataURLtoBlob = (dataurl: string) => {
+        const arr = dataurl.split(',');
+        const mimeMatch = arr[0].match(/:(.*?);/);
+        const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+          u8arr[n] = bstr.charCodeAt(n);
+        }
+        return new Blob([u8arr], { type: mime });
+      };
+
+      const photoFile = capturedImage ? dataURLtoBlob(capturedImage) : undefined;
+
       if (canCheckIn) {
-        const res = await attendanceApi.checkIn(latVal, lngVal, accVal, capturedImage || undefined, simulatedTime, locationNote);
+        const res = await attendanceApi.checkIn(latVal, lngVal, accVal, photoFile, simTimeArg, locationNote);
         if (res.success && res.data.check_in) {
           const t = res.data.check_in.substring(0, 5);
           setCheckInTime(t);
@@ -930,7 +976,7 @@ export function AttendancePage() {
           setLocationNote(''); // Kosongkan input setelah berhasil submit
         }
       } else if (canCheckOut) {
-        const res = await attendanceApi.checkOut(latVal, lngVal, accVal, capturedImage || undefined, simulatedTime, locationNote, earlyReasonStr || undefined);
+        const res = await attendanceApi.checkOut(latVal, lngVal, accVal, photoFile, simTimeArg, locationNote, earlyReasonStr || undefined);
         if (res.success && res.data.check_out) {
           const t = res.data.check_out.substring(0, 5);
           setCheckOutTime(t);
@@ -1011,6 +1057,14 @@ export function AttendancePage() {
     <div className="p-5 md:p-7 max-w-2xl mx-auto">
       <style>{RIPPLE_STYLE}</style>
 
+      {/* [DEV] Simulation Panel — hapus blok ini saat production */}
+      <SimulationPanel
+        onTimeChange={setSimulatedTime}
+        shiftStart={todayShift?.start_time ?? '08:00:00'}
+        shiftEnd={todayShift?.end_time ?? '17:00:00'}
+        currentSimTime={simulatedTime}
+      />
+
       {/* Header */}
       <div className="flex items-start justify-between mb-5">
         <div>
@@ -1022,6 +1076,39 @@ export function AttendancePage() {
           <p className="text-[10px] text-gray-400">WIB</p>
         </div>
       </div>
+
+      {/* Hari Libur Banner */}
+      {todayHoliday && (
+        <div className={`mb-4 rounded-2xl border p-4.5 text-[13px] leading-relaxed transition-all shadow-sm ${
+          todayHoliday.is_assigned
+            ? 'border-purple-200 bg-purple-50 text-purple-800'
+            : 'border-red-200 bg-red-50 text-red-800'
+        }`}>
+          <div className="flex items-start gap-3">
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${
+              todayHoliday.is_assigned ? 'bg-purple-100/80 text-purple-700' : 'bg-red-100/80 text-red-650'
+            }`}>
+              <Calendar size={15} />
+            </div>
+            <div>
+              <p className="font-bold text-[14px]">
+                Hari Libur Nasional: {todayHoliday.name}
+              </p>
+              <p className="mt-1 text-gray-600">
+                {todayHoliday.is_assigned ? (
+                  <span>
+                    Anda <strong className="text-purple-700">DITUGASKAN</strong> untuk piket hari ini. Aturan absensi normal berlaku dan kompensasi bonus/kerja hari libur akan otomatis terhitung.
+                  </span>
+                ) : (
+                  <span>
+                    Anda <strong className="text-red-700">TIDAK DITUGASKAN</strong> untuk masuk hari ini. Libur Anda tidak akan dianggap sebagai Alpa meskipun tidak melakukan absensi.
+                  </span>
+                )}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Info Shift Hari Ini */}
       {todayShift !== undefined && (
@@ -1166,6 +1253,7 @@ export function AttendancePage() {
         hospLat={HOSP_LAT}
         hospLng={HOSP_LNG}
         hospRadius={HOSP_RADIUS}
+        isDinasLuar={isDinasLuar}
       />
 
       {/* Rekap if checked in */}
@@ -1199,8 +1287,14 @@ export function AttendancePage() {
         {[
           { icon: Wifi,       label: 'WiFi/Jaringan', st: isOnline ? 'Terhubung' : 'Terputus', ok: isOnline },
           { icon: Navigation, label: 'GPS',           st: gpsActive ? 'Aktif' : 'Nonaktif',    ok: gpsActive },
-          { icon: Signal,     label: 'Sinyal',        st: gpsActive && userLocation ? (userLocation.accuracy <= 15 ? 'Kuat (4/4)' : 'Sedang (3/4)') : 'Mencari...', ok: gpsActive },
-          { icon: Target,     label: 'Geofence',      st: inGeofence ? 'Terverifikasi' : 'Di Luar Area', ok: inGeofence },
+          {
+            icon: Target,
+            label: 'Geofence',
+            st: isDinasLuar
+              ? 'Dinas Luar (Bebas)'
+              : (inGeofence ? 'Terverifikasi' : 'Di Luar Area'),
+            ok: isDinasLuar ? true : inGeofence
+          },
         ].map(({ icon: Icon, label, st, ok }, i) => (
           <div key={i} className="flex-1 bg-white rounded-xl border border-gray-100 p-2 flex items-center gap-1.5 shadow-sm">
             <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${ok ? 'bg-green-50' : 'bg-red-50'}`}>
@@ -1273,16 +1367,27 @@ export function AttendancePage() {
           </button>
         </div>
       ) : (
-        <div className={`w-full py-4 rounded-2xl flex items-center justify-center gap-3 border-2 cursor-not-allowed
-          ${checkedIn ? 'bg-green-50 border-green-200 text-[#16A34A]' :
-            attendanceWindow === 'break' ? 'bg-purple-50 border-purple-200 text-purple-400' :
-            attendanceWindow === 'sunday' || attendanceWindow === 'no_shift' || attendanceWindow === 'ended' ? 'bg-gray-100 border-gray-200 text-gray-400' :
-            attendanceWindow === 'too_early' ? 'bg-amber-50 border-amber-200 text-amber-400' :
-            attendanceWindow === 'late_locked' ? 'bg-red-50 border-red-200 text-red-400' :
-            'bg-blue-50 border-blue-200 text-blue-400'}`}>
-          {checkedIn ? <CheckCircle2 size={18} /> : <Lock size={18} />}
-          <span className="text-[15px] font-semibold">{lockedLabel()}</span>
-        </div>
+        // Kasus: terkunci (tidak bisa check-in atau check-out)
+        // Bedakan antara: (a) sudah check-in tapi belum check-out & waktu lewat, vs (b) status lain
+        checkedIn && !checkedOut ? (
+          <div className="w-full py-4 rounded-2xl flex flex-col items-center justify-center gap-1.5 border-2 cursor-not-allowed bg-orange-50 border-orange-300 text-orange-700">
+            <div className="flex items-center gap-2">
+              <AlertCircle size={18} />
+              <span className="text-[15px] font-semibold">Batas Waktu Check-Out Sudah Lewat</span>
+            </div>
+            <span className="text-[11px] text-orange-600">Jam Masuk: {checkInTime} · Hubungi admin jika ada kendala</span>
+          </div>
+        ) : (
+          <div className={`w-full py-4 rounded-2xl flex items-center justify-center gap-3 border-2 cursor-not-allowed
+            ${attendanceWindow === 'break' ? 'bg-purple-50 border-purple-200 text-purple-400' :
+              attendanceWindow === 'sunday' || attendanceWindow === 'no_shift' || attendanceWindow === 'ended' ? 'bg-gray-100 border-gray-200 text-gray-400' :
+              attendanceWindow === 'too_early' ? 'bg-amber-50 border-amber-200 text-amber-400' :
+              attendanceWindow === 'late_locked' ? 'bg-red-50 border-red-200 text-red-400' :
+              'bg-blue-50 border-blue-200 text-blue-400'}`}>
+            <Lock size={18} />
+            <span className="text-[15px] font-semibold">{lockedLabel()}</span>
+          </div>
+        )
       )}
 
       {/* Rules footer */}

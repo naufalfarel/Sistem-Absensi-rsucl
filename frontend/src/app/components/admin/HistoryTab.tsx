@@ -200,6 +200,12 @@ export function HistoryTab() {
                     </td>
                     <td className="px-4 py-3">
                       <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-green-50 text-green-700">{r.shift_name || 'Reguler'}</span>
+                      {r.shift_type === 'dinas_luar' && (
+                        <span className="block mt-1 text-[9px] font-bold text-purple-600 bg-purple-50 border border-purple-100 rounded-md px-1.5 py-0.5 w-max">Dinas Luar</span>
+                      )}
+                      {r.is_holiday_work && (
+                        <span className="block mt-1 text-[9px] font-bold text-red-600 bg-red-50 border border-red-100 rounded-md px-1.5 py-0.5 w-max" title={r.holiday || 'Hari Libur'}>Kerja Libur</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 font-mono text-[12px] text-gray-700">{r.check_in ? r.check_in.substring(0, 5) : '--'}</td>
                     <td className="px-4 py-3 font-mono text-[12px] text-gray-700">{r.check_out ? r.check_out.substring(0, 5) : '--'}</td>
@@ -248,9 +254,9 @@ export function HistoryTab() {
             <div className="space-y-2.5 bg-gray-50 rounded-xl p-4 mb-5">
               {[
                 { l: 'Tanggal', v: formatDate(selected.date) },
-                { l: 'Shift', v: selected.shift_name || 'Reguler' },
-                { l: 'Jam Masuk', v: selected.check_in ? selected.check_in.substring(0, 5) : '--' },
-                { l: 'Jam Keluar', v: selected.check_out ? selected.check_out.substring(0, 5) : '--' },
+                { l: 'Shift', v: (selected.shift_name || 'Reguler') + (selected.shift_type === 'dinas_luar' ? ' (Dinas Luar)' : ' (Normal)') },
+                { l: 'Jam Masuk', v: (selected.check_in ? selected.check_in.substring(0, 5) : '--') + (selected.checkin_distance_meters !== undefined && selected.checkin_distance_meters !== null ? ` (${selected.checkin_distance_meters}m dari RSUCL)` : '') },
+                { l: 'Jam Keluar', v: (selected.check_out ? selected.check_out.substring(0, 5) : '--') + (selected.checkout_distance_meters !== undefined && selected.checkout_distance_meters !== null ? ` (${selected.checkout_distance_meters}m dari RSUCL)` : '') },
                 { l: 'Status', v: (statusConfig[selected.status] || { label: selected.status }).label },
                 ...(selected.checkin_location_note ? [{ l: 'Lokasi Masuk', v: selected.checkin_location_note }] : []),
                 ...(selected.checkout_location_note ? [{ l: 'Lokasi Pulang', v: selected.checkout_location_note }] : []),
@@ -263,20 +269,20 @@ export function HistoryTab() {
             </div>
 
             {/* Selfie Photo display if available */}
-            {(selected.image_check_in || selected.image_check_out) && (
+            {(selected.checkin_photo_url || selected.image_check_in || selected.checkout_photo_url || selected.image_check_out) && (
               <div className="mb-5 space-y-2.5">
                 <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Foto Selfie Absensi</p>
                 <div className="flex gap-2">
-                  {selected.image_check_in && (
+                  {(selected.checkin_photo_url || selected.image_check_in) && (
                     <div className="flex-1 text-center bg-gray-50 rounded-xl p-2 border border-gray-100 shadow-sm">
                       <p className="text-[9px] font-bold text-gray-400 mb-1.5 uppercase">Selfie Masuk</p>
-                      <img src={selected.image_check_in} alt="Check In Selfie" className="w-full aspect-square object-cover rounded-lg border" />
+                      <img src={selected.checkin_photo_url || selected.image_check_in || undefined} alt="Check In Selfie" className="w-full aspect-square object-cover rounded-lg border" />
                     </div>
                   )}
-                  {selected.image_check_out && (
+                  {(selected.checkout_photo_url || selected.image_check_out) && (
                     <div className="flex-1 text-center bg-gray-50 rounded-xl p-2 border border-gray-100 shadow-sm">
                       <p className="text-[9px] font-bold text-gray-400 mb-1.5 uppercase">Selfie Pulang</p>
-                      <img src={selected.image_check_out} alt="Check Out Selfie" className="w-full aspect-square object-cover rounded-lg border" />
+                      <img src={selected.checkout_photo_url || selected.image_check_out || undefined} alt="Check Out Selfie" className="w-full aspect-square object-cover rounded-lg border" />
                     </div>
                   )}
                 </div>

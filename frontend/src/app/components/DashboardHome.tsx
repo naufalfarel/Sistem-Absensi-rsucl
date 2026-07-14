@@ -38,6 +38,7 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
   
   // State data absensi hari ini yang ditarik dari API
   const [todayRecord, setTodayRecord] = useState<AttendanceRecord | null>(null);
+  const [todayHoliday, setTodayHoliday] = useState<{ name: string; is_assigned: boolean } | null>(null);
   
   // State notifikasi dan jumlah notifikasi yang belum dibaca
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -83,6 +84,9 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
 
       if (attendRes.status === 'fulfilled' && attendRes.value.success) {
         setTodayRecord(attendRes.value.data);
+        if (attendRes.value.holiday) {
+          setTodayHoliday(attendRes.value.holiday);
+        }
       }
       if (notifRes.status === 'fulfilled' && notifRes.value.success) {
         setNotifications(notifRes.value.data.notifications.slice(0, 3));
@@ -109,9 +113,9 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
   useEffect(() => {
     settingApi.get().then(res => {
       if (res.success && res.data) {
-        const lat = parseFloat(res.data.hospital_lat);
-        const lng = parseFloat(res.data.hospital_lng);
-        const rad = parseFloat(res.data.gps_radius);
+        const lat = parseFloat(res.data.hospital_latitude || res.data.hospital_lat);
+        const lng = parseFloat(res.data.hospital_longitude || res.data.hospital_lng);
+        const rad = parseFloat(res.data.attendance_radius_meters || res.data.gps_radius);
         if (!isNaN(lat)) setHospLat(lat);
         if (!isNaN(lng)) setHospLng(lng);
         if (!isNaN(rad) && rad > 0) setHospRadius(rad);
@@ -320,6 +324,39 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
           <div className="text-[12px] text-gray-400 mt-0.5">Waktu Indonesia Barat</div>
         </div>
       </div>
+
+      {/* Hari Libur Banner */}
+      {todayHoliday && (
+        <div className={`mb-5 rounded-2xl border p-4.5 text-[13px] leading-relaxed transition-all shadow-sm ${
+          todayHoliday.is_assigned
+            ? 'border-purple-200 bg-purple-50 text-purple-800'
+            : 'border-red-200 bg-red-50 text-red-800'
+        }`}>
+          <div className="flex items-start gap-3">
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${
+              todayHoliday.is_assigned ? 'bg-purple-100/80 text-purple-700' : 'bg-red-100/80 text-red-655'
+            }`}>
+              <Calendar size={15} />
+            </div>
+            <div>
+              <p className="font-bold text-[14px]">
+                Hari Libur Nasional: {todayHoliday.name}
+              </p>
+              <p className="mt-1 text-gray-600">
+                {todayHoliday.is_assigned ? (
+                  <span>
+                    Anda <strong className="text-purple-700">DITUGASKAN</strong> untuk piket hari ini. Aturan absensi normal berlaku dan kompensasi bonus/kerja hari libur akan otomatis terhitung.
+                  </span>
+                ) : (
+                  <span>
+                    Anda <strong className="text-red-700">TIDAK DITUGASKAN</strong> untuk masuk hari ini. Libur Anda tidak akan dianggap sebagai Alpa meskipun tidak melakukan absensi.
+                  </span>
+                )}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stat Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">

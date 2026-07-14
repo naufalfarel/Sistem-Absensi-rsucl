@@ -32,6 +32,7 @@ function AddShiftModal({ onClose, onAdd }: { onClose: () => void; onAdd: (s: Shi
   const [end, setEnd]         = useState('15:00');
   const [icon, setIcon]       = useState<IconKey>('sun');
   const [colorId, setColorId] = useState('amber');
+  const [shiftType, setShiftType] = useState<'normal' | 'dinas_luar'>('normal');
 
   const preset = COLOR_PRESETS.find(c => c.id === colorId)!;
   const IconComp = ICON_MAP[icon].component;
@@ -45,7 +46,8 @@ function AddShiftModal({ onClose, onAdd }: { onClose: () => void; onAdd: (s: Shi
         end_time: end,
         color: preset.color,
         icon,
-      });
+        shift_type: shiftType,
+      } as any);
       if (res.success) {
         onAdd(res.data);
         onClose();
@@ -122,6 +124,19 @@ function AddShiftModal({ onClose, onAdd }: { onClose: () => void; onAdd: (s: Shi
               <input type="time" value={end} onChange={e => setEnd(e.target.value)}
                 className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-[13px] font-mono bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all" />
             </div>
+          </div>
+
+          {/* Tipe Shift */}
+          <div>
+            <label className="block text-[12px] font-semibold text-gray-700 mb-1.5">Tipe Shift</label>
+            <select
+              value={shiftType}
+              onChange={e => setShiftType(e.target.value as 'normal' | 'dinas_luar')}
+              className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all cursor-pointer"
+            >
+              <option value="normal">Normal (GPS Wajib)</option>
+              <option value="dinas_luar">Dinas Luar (GPS Opsional)</option>
+            </select>
           </div>
 
           {/* Icon Picker */}
@@ -350,6 +365,7 @@ export function ScheduleTab() {
   const [editName, setEditName]       = useState('');
   const [editStart, setEditStart]     = useState('');
   const [editEnd, setEditEnd]         = useState('');
+  const [editShiftType, setEditShiftType] = useState<'normal' | 'dinas_luar'>('normal');
   
   // Id shift yang dibuka daftar detail karyawannya
   const [expandedShift, setExpandedShift] = useState<number | null>(null);
@@ -412,11 +428,12 @@ export function ScheduleTab() {
     setEditName(shift.name);
     setEditStart(shift.start_time.substring(0, 5));
     setEditEnd(shift.end_time.substring(0, 5));
+    setEditShiftType(shift.shift_type ?? 'normal');
   };
 
   const saveEdit  = async (id: number)   => {
     try {
-      const res = await scheduleApi.update(id, { name: editName, start_time: editStart, end_time: editEnd });
+      const res = await scheduleApi.update(id, { name: editName, start_time: editStart, end_time: editEnd, shift_type: editShiftType } as any);
       if (res.success) {
         setShifts(prev => prev.map(s => s.id === id ? res.data : s));
         setEditingId(null);
@@ -521,7 +538,12 @@ export function ScheduleTab() {
                     <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: pr.bg, border: `1.5px solid ${pr.border}` }}>
                       <IconComp size={17} style={{ color: shift.color }} />
                     </div>
-                    <p className="text-[14px] font-semibold text-gray-800">{shift.name}</p>
+                    <div>
+                      <p className="text-[14px] font-semibold text-gray-800 leading-tight">{shift.name}</p>
+                      <span className={`inline-block mt-0.5 text-[9px] font-semibold px-2 py-0.5 rounded-full ${shift.shift_type === 'dinas_luar' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'}`}>
+                        {shift.shift_type === 'dinas_luar' ? 'Dinas Luar' : 'Normal'}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-1">
@@ -572,6 +594,14 @@ export function ScheduleTab() {
                         <input type="time" value={editEnd} onChange={e => setEditEnd(e.target.value)}
                           className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[13px] font-mono bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all" />
                       </div>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-gray-400 mb-1">Tipe Shift</label>
+                      <select value={editShiftType} onChange={e => setEditShiftType(e.target.value as 'normal' | 'dinas_luar')}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all cursor-pointer">
+                        <option value="normal">Normal (GPS Wajib)</option>
+                        <option value="dinas_luar">Dinas Luar (GPS Opsional)</option>
+                      </select>
                     </div>
                   </div>
                 ) : (

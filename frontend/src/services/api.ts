@@ -284,7 +284,19 @@ export interface AttendanceRecord {
   employee?: { id: number; name: string; nip: string; department: string };
   image_check_in?: string | null;
   image_check_out?: string | null;
+  
+  // New photo and GPS columns
+  checkin_photo_url?: string | null;
+  checkout_photo_url?: string | null;
+  checkin_latitude?: number | null;
+  checkin_longitude?: number | null;
+  checkout_latitude?: number | null;
+  checkout_longitude?: number | null;
+  checkin_distance_meters?: number | null;
+  checkout_distance_meters?: number | null;
+
   shift_name?: string | null;
+  shift_type?: 'normal' | 'dinas_luar';
   
   // Pulang Cepat (Early Checkout)
   is_early_checkout?: boolean;
@@ -296,6 +308,10 @@ export interface AttendanceRecord {
   is_overtime?: boolean;
   overtime_minutes?: number | null;
   overtime_note?: string | null;
+
+  // Holiday Work
+  is_holiday_work?: boolean;
+  holiday?: string | null;
 }
 
 /**
@@ -307,6 +323,7 @@ export const attendanceApi = {
     success: boolean;
     data: AttendanceRecord | null;
     active_leave?: { type: 'cuti' | 'izin' | 'sakit'; reason: string } | null;
+    holiday?: { name: string; is_assigned: boolean } | null;
   }>('/attendance/today'),
   // Ambil semua daftar hadir hari ini (untuk dashboard admin)
   allToday: () => api.get<{ success: boolean; data: AttendanceRecord[] }>('/attendance/all-today'),
@@ -315,15 +332,29 @@ export const attendanceApi = {
     '/attendance/history' + (month && year ? `?month=${month}&year=${year}` : '')
   ),
   // Mengirim absensi masuk beserta parameter geolokasi, foto wajah, waktu simulasi, dan catatan lokasi
-  checkIn:  (lat?: number, lng?: number, accuracy?: number, image?: string, simulatedTime?: string, locationNote?: string) =>
-    api.post<{ success: boolean; message: string; data: AttendanceRecord }>(
-      '/attendance/check-in', { latitude: lat, longitude: lng, accuracy, image, simulated_time: simulatedTime, location_note: locationNote }
-    ),
+  checkIn:  (lat?: number, lng?: number, accuracy?: number, photo?: File | Blob, simulatedTime?: string, locationNote?: string) => {
+    const formData = new FormData();
+    if (lat !== undefined && lat !== null) formData.append('latitude', String(lat));
+    if (lng !== undefined && lng !== null) formData.append('longitude', String(lng));
+    if (accuracy !== undefined && accuracy !== null) formData.append('accuracy', String(accuracy));
+    if (photo) formData.append('photo', photo);
+    if (simulatedTime) formData.append('simulated_time', simulatedTime);
+    if (locationNote) formData.append('location_note', locationNote);
+    return api.post<{ success: boolean; message: string; data: AttendanceRecord }>('/attendance/check-in', formData);
+  },
   // Mengirim absensi pulang beserta parameter geolokasi, foto wajah, waktu simulasi, catatan lokasi, alasan pulang cepat, dan catatan lembur
-  checkOut: (lat?: number, lng?: number, accuracy?: number, image?: string, simulatedTime?: string, locationNote?: string, earlyCheckoutReason?: string, overtimeNote?: string) =>
-    api.post<{ success: boolean; message: string; data: AttendanceRecord; is_early_checkout?: boolean; is_overtime?: boolean; overtime_minutes?: number }>(
-      '/attendance/check-out', { latitude: lat, longitude: lng, accuracy, image, simulated_time: simulatedTime, location_note: locationNote, early_checkout_reason: earlyCheckoutReason, overtime_note: overtimeNote }
-    ),
+  checkOut: (lat?: number, lng?: number, accuracy?: number, photo?: File | Blob, simulatedTime?: string, locationNote?: string, earlyCheckoutReason?: string, overtimeNote?: string) => {
+    const formData = new FormData();
+    if (lat !== undefined && lat !== null) formData.append('latitude', String(lat));
+    if (lng !== undefined && lng !== null) formData.append('longitude', String(lng));
+    if (accuracy !== undefined && accuracy !== null) formData.append('accuracy', String(accuracy));
+    if (photo) formData.append('photo', photo);
+    if (simulatedTime) formData.append('simulated_time', simulatedTime);
+    if (locationNote) formData.append('location_note', locationNote);
+    if (earlyCheckoutReason) formData.append('early_checkout_reason', earlyCheckoutReason);
+    if (overtimeNote) formData.append('overtime_note', overtimeNote);
+    return api.post<{ success: boolean; message: string; data: AttendanceRecord; is_early_checkout?: boolean; is_overtime?: boolean; overtime_minutes?: number }>('/attendance/check-out', formData);
+  },
   // Ambil daftar pulang cepat untuk admin
   earlyCheckouts: (status?: string, month?: number, year?: number) => {
     let query = '';
@@ -511,6 +542,9 @@ export interface MonthlyRekapRecord {
   // Pulang Cepat & Lembur
   early_checkout_count?: number;
   overtime_minutes?: number;
+
+  // Kerja Hari Libur
+  holiday_work_days?: number;
 }
 
 /**
@@ -545,6 +579,9 @@ export interface AppSettings {
   gps_radius: string;                // Radius geofence (meter)
   hospital_lat: string;              // Koordinat latitude RSUCL
   hospital_lng: string;              // Koordinat longitude RSUCL
+  hospital_latitude?: string;
+  hospital_longitude?: string;
+  attendance_radius_meters?: string;
   logo_url?: string;                 // URL logo kustom rumah sakit
   notif_email?: '0' | '1';           // Kirim notifikasi via email
   notif_late?: '0' | '1';            // Kirim notifikasi jika terlambat
@@ -584,6 +621,7 @@ export interface ShiftSchedule {
   end_time: string;
   color: string;
   icon: string;
+  shift_type?: 'normal' | 'dinas_luar';
   employees_count?: number;
   employees?: Array<{
     id: number;
@@ -620,6 +658,7 @@ export interface MyShiftSchedule {
   end_time: string;
   color: string;
   icon: string;
+  shift_type?: 'normal' | 'dinas_luar';
 }
 
 /**
@@ -643,6 +682,69 @@ export const scheduleApi = {
     api.post<{ success: boolean; message: string }>('/employee-schedules/assign', { employee_id, day_of_week, schedule_id }),
   // Ambil info shift kerja yang berlaku untuk diri sendiri hari ini
   mySchedule: () => api.get<{ success: boolean; data: MyShiftSchedule | null; saturday_shift?: MyShiftSchedule | null; day: string }>('/my-schedule'),
+};
+
+// ─────────────────────────────────────────────────────────────────────
+// Kalender Libur & Penugasan Kerja Hari Libur (holidays)
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Interface data Hari Libur Nasional.
+ */
+export interface Holiday {
+  id: number;
+  date: string; // YYYY-MM-DD
+  name: string;
+  assignments_count?: number;
+}
+
+/**
+ * Interface data penugasan kerja pada hari libur.
+ */
+export interface HolidayWorkAssignment {
+  id: number;
+  employee_id: number;
+  employee_name: string;
+  nip: string;
+  department: string;
+  position: string;
+  note?: string | null;
+  assigned_by_name?: string | null;
+  created_at: string;
+}
+
+/**
+ * Layanan API CRUD Hari Libur dan Penugasan Kerja Hari Libur.
+ */
+export const holidayApi = {
+  // Ambil daftar hari libur (bisa difilter tahun)
+  list: (year?: number) =>
+    api.get<{ success: boolean; data: Holiday[] }>('/holidays' + (year ? `?year=${year}` : '')),
+  // Tambah hari libur baru (admin)
+  create: (data: { date: string; name: string }) =>
+    api.post<{ success: boolean; message: string; data: Holiday }>('/holidays', data),
+  // Sinkronisasi otomatis dari internet (admin)
+  sync: (year: number) =>
+    api.post<{ success: boolean; message: string }>('/holidays/sync', { year }),
+  // Edit hari libur (admin)
+  update: (id: number, data: { date: string; name: string }) =>
+    api.put<{ success: boolean; message: string; data: Holiday }>(`/holidays/${id}`, data),
+  // Hapus hari libur (admin)
+  delete: (id: number) =>
+    api.delete<{ success: boolean; message: string }>(`/holidays/${id}`),
+
+  // Ambil daftar penugasan kerja hari libur tertentu (admin)
+  listAssignments: (holidayId: number) =>
+    api.get<{ success: boolean; data: HolidayWorkAssignment[] }>(`/holidays/${holidayId}/work-assignments`),
+  // Tambah penugasan kerja hari libur (admin)
+  assign: (holidayId: number, employeeIds: number[], note?: string) =>
+    api.post<{ success: boolean; message: string; data: any }>(`/holidays/${holidayId}/work-assignments`, {
+      employee_ids: employeeIds,
+      note,
+    }),
+  // Hapus penugasan kerja hari libur (admin)
+  unassign: (holidayId: number, employeeId: number) =>
+    api.delete<{ success: boolean; message: string }>(`/holidays/${holidayId}/work-assignments/${employeeId}`),
 };
 
 

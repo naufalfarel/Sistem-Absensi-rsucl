@@ -18,6 +18,7 @@ import { ReportsTab } from './admin/ReportsTab';
 import { NotificationsTab } from './admin/NotificationsTab';
 import { SettingsTab } from './admin/SettingsTab';
 import { DepartmentsTab } from './admin/DepartmentsTab';
+import { HolidaysTab } from './admin/HolidaysTab';
 import { employeeApi, Employee, reportApi, ReportSummary, notificationApi } from '../../services/api';
 
 const sidebarItems = [
@@ -27,6 +28,7 @@ const sidebarItems = [
   { id: 'attendance',    icon: ClipboardList,    label: 'Absensi' },
   { id: 'history',       icon: History,          label: 'Riwayat' },
   { id: 'schedule',      icon: CalendarDays,     label: 'Jadwal Shift' },
+  { id: 'holidays',      icon: CalendarDays,     label: 'Kalender Libur' },
   { id: 'leave',         icon: FileText,         label: 'Pengajuan Cuti', badge: 0 },
   { id: 'reports',       icon: BarChart3,        label: 'Laporan' },
   { id: 'notifications', icon: Bell,             label: 'Notifikasi', badge: 0 },
@@ -687,6 +689,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
           {activeTab === 'notifications' && <NotificationsTab onUpdateCount={fetchUnreadNotificationsCount} />}
           {activeTab === 'settings' && <SettingsTab />}
           {activeTab === 'departments' && <DepartmentsTab onRefreshDepartments={loadData} />}
+          {activeTab === 'holidays' && <HolidaysTab />}
         </div>
       </div>
 

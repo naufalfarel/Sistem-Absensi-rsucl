@@ -269,7 +269,14 @@ export function ProfilePage({ onLogout, initialSection, initialOpenModal, onRese
       const { specialLeaveApi } = await import('../../services/api');
       const res = await specialLeaveApi.listActive();
       if (res.success) {
-        setCategories(res.data);
+        const sorted = [...(res.data || [])].sort((a, b) => {
+          const nameA = (a.name || '').toLowerCase();
+          const nameB = (b.name || '').toLowerCase();
+          if (nameA === 'lainnya') return 1;
+          if (nameB === 'lainnya') return -1;
+          return nameA.localeCompare(nameB, 'id');
+        });
+        setCategories(sorted);
       }
     } catch (err) {
       console.error('Gagal mengambil kategori cuti khusus:', err);

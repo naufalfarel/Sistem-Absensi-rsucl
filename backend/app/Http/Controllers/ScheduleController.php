@@ -3,6 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Schedule;
+use App\Http\Requests\StoreScheduleRequest;
+use App\Http\Requests\UpdateScheduleRequest;
+use App\Http\Resources\ScheduleResource;
 use Illuminate\Http\Request;
 
 class ScheduleController extends Controller
@@ -25,7 +28,7 @@ class ScheduleController extends Controller
             $schedule->setAttribute('employees_count', $uniqueCount);
         });
 
-        return response()->json(['success' => true, 'data' => $schedules]);
+        return response()->json(['success' => true, 'data' => ScheduleResource::collection($schedules)]);
     }
 
     /**
@@ -33,29 +36,21 @@ class ScheduleController extends Controller
      * 
      * Membuat master jadwal shift baru (misal: Shift Sore, Jam masuk 14:00 s.d 21:00).
      * 
-     * @param Request $request
+     * @param StoreScheduleRequest $request
      * @return \Illuminate\Http\JsonResponse
      */
-    public function store(Request $request)
+    public function store(StoreScheduleRequest $request)
     {
         // Validasi input data shift baru
-        $data = $request->validate([
-            'name'       => 'required|string|max:50',
-            'start_time' => 'required|date_format:H:i',
-            'end_time'   => 'required|date_format:H:i',
-            'color'      => 'required|string|max:10',
-            'icon'       => 'required|string|max:20',
-        ]);
+        $data = $request->validated();
 
         // Buat jadwal shift di database
         $schedule = Schedule::create($data);
-        $schedule->setAttribute('employees_count', 0);
-        $schedule->setAttribute('employees', []);
 
         return response()->json([
             'success' => true,
             'message' => 'Jadwal shift berhasil dibuat.',
-            'data'    => $schedule,
+            'data'    => new ScheduleResource($schedule),
         ], 201);
     }
 
@@ -64,29 +59,25 @@ class ScheduleController extends Controller
      * 
      * Memperbarui data detail master jadwal shift yang sudah ada.
      * 
-     * @param Request $request
+     * @param UpdateScheduleRequest $request
      * @param Schedule $schedule
      * @return \Illuminate\Http\JsonResponse
      */
-    public function update(Request $request, Schedule $schedule)
+    public function update(UpdateScheduleRequest $request, Schedule $schedule)
     {
         // Validasi payload perubahan data shift
-        $data = $request->validate([
-            'name'       => 'sometimes|string|max:50',
-            'start_time' => 'sometimes|date_format:H:i',
-            'end_time'   => 'sometimes|date_format:H:i',
-            'color'      => 'sometimes|string|max:10',
-            'icon'       => 'sometimes|string|max:20',
-        ]);
+        $data = $request->validated();
 
         $schedule->update($data);
 
         // Load relasi terbaru dan hitung ulang jumlah karyawan terkait
         $schedule->load(['employees.user', 'employees.department']);
-        $uniqueCount = $schedule->employees->unique('id')->count();
-        $schedule->setAttribute('employees_count', $uniqueCount);
 
-        return response()->json(['success' => true, 'message' => 'Jadwal shift berhasil diperbarui.', 'data' => $schedule]);
+        return response()->json([
+            'success' => true,
+            'message' => 'Jadwal shift berhasil diperbarui.',
+            'data'    => new ScheduleResource($schedule)
+        ]);
     }
 
     /**
@@ -189,6 +180,7 @@ class ScheduleController extends Controller
                 'end_time'   => $todaySchedule->end_time,
                 'color'      => $todaySchedule->color,
                 'icon'       => $todaySchedule->icon,
+                'shift_type' => $todaySchedule->shift_type ?? 'normal',
             ];
         }
 
@@ -201,6 +193,7 @@ class ScheduleController extends Controller
                 'end_time'   => $saturdaySchedule->end_time,
                 'color'      => $saturdaySchedule->color,
                 'icon'       => $saturdaySchedule->icon,
+                'shift_type' => $saturdaySchedule->shift_type ?? 'normal',
             ];
         }
 

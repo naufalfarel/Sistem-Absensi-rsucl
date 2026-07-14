@@ -216,8 +216,16 @@ class EmployeeController extends Controller
                 $shiftStartCarbon = \Carbon\Carbon::today('Asia/Jakarta')->setTimeFromTimeString($shiftStart);
                 $closeLimitCarbon = $shiftStartCarbon->copy()->addMinutes($closeCheckinOffset);
                 
+                // Cek jika hari libur nasional
+                $holiday = \App\Support\AttendanceRules::holidayOn(\Carbon\Carbon::today('Asia/Jakarta'));
+                $isAssigned = $holiday ? \App\Support\AttendanceRules::isAssignedToWorkOnHoliday($e, $holiday) : false;
+
                 if ($now->gt($closeLimitCarbon)) {
-                    $computedStatus = 'alpha';
+                    if ($holiday && !$isAssigned) {
+                        $computedStatus = 'belum_hadir';
+                    } else {
+                        $computedStatus = 'alpha';
+                    }
                 } else {
                     $computedStatus = 'belum_hadir';
                 }

@@ -41,6 +41,10 @@ class SettingController extends Controller
         // ── Toleransi Pulang Cepat & Lembur ──
         'early_checkout_grace_minutes', // Toleransi menit sebelum dianggap pulang cepat (default: 15)
         'overtime_grace_minutes',       // Toleransi menit sebelum dianggap lembur (default: 15)
+        // ── GPS Wajib (Baru) ──
+        'hospital_latitude',
+        'hospital_longitude',
+        'attendance_radius_meters',
     ];
 
     /**
@@ -103,6 +107,10 @@ class SettingController extends Controller
             // Toleransi Pulang Cepat & Lembur
             'early_checkout_grace_minutes'    => 'sometimes|integer|min:0|max:480',
             'overtime_grace_minutes'          => 'sometimes|integer|min:0|max:480',
+            // GPS Wajib (Baru)
+            'hospital_latitude'               => 'sometimes|numeric',
+            'hospital_longitude'              => 'sometimes|numeric',
+            'attendance_radius_meters'        => 'sometimes|integer|min:10|max:1000',
         ]);
 
         // Proses khusus untuk upload logo instansi
@@ -224,6 +232,9 @@ class SettingController extends Controller
             'gps_radius'              => '40',
             'hospital_lat'            => '5.552740480177099',
             'hospital_lng'            => '95.33486560781716',
+            'hospital_latitude'       => '5.552740480177099',
+            'hospital_longitude'      => '95.33486560781716',
+            'attendance_radius_meters'=> '100',
             'notif_email'             => '1',
             'notif_late'              => '1',
             'notif_leave'             => '1',

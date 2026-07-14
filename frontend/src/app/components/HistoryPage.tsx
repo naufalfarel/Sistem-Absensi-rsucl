@@ -116,7 +116,9 @@ export function HistoryPage() {
     checkIn:  r.check_in  ? r.check_in.substring(0, 5)  : '--',
     checkOut: r.check_out ? r.check_out.substring(0, 5) : '--',
     duration: getDurationStr(r.duration_min),
-    location: r.latitude ? 'RSUCL – Terverifikasi' : '--',
+    location: r.shift_type === 'dinas_luar'
+      ? 'Dinas Luar'
+      : (r.is_within_geofence ? 'RSUCL – Terverifikasi' : (r.check_in || r.check_out ? 'Luar Area Geofence' : '--')),
     status:   r.status,
     shift:    r.shift_name ?? 'Reguler',
     checkinLocationNote: r.checkin_location_note,
@@ -128,6 +130,13 @@ export function HistoryPage() {
     isOvertime: r.is_overtime,
     overtimeMinutes: r.overtime_minutes,
     overtimeNote: r.overtime_note,
+    checkinPhotoUrl: r.checkin_photo_url || r.image_check_in,
+    checkoutPhotoUrl: r.checkout_photo_url || r.image_check_out,
+    checkinDistance: r.checkin_distance_meters,
+    checkoutDistance: r.checkout_distance_meters,
+    shiftType: r.shift_type ?? 'normal',
+    isHolidayWork: r.is_holiday_work,
+    holiday: r.holiday,
   }));
 
   const filtered = mapped.filter(r => {
@@ -362,6 +371,12 @@ export function HistoryPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-[11px] text-gray-400">Shift {record.shift}</span>
+                  {record.shiftType === 'dinas_luar' && (
+                    <span className="text-[9px] font-semibold px-2 py-0.5 bg-purple-100 text-purple-700 rounded-md">Dinas Luar</span>
+                  )}
+                  {record.isHolidayWork && (
+                    <span className="text-[9px] font-semibold px-2 py-0.5 bg-red-50 text-red-650 border border-red-150 rounded-md" title={record.holiday || 'Hari Libur'}>Kerja Hari Libur</span>
+                  )}
                   <span
                     className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full uppercase"
                     style={{ color: sc.color, background: sc.bg }}
@@ -389,15 +404,39 @@ export function HistoryPage() {
                   {(record.checkinLocationNote || record.checkoutLocationNote) && (
                     <div className="space-y-1">
                       {record.checkinLocationNote && (
-                        <div className="flex items-center gap-1.5">
-                          <MapPin size={11.5} className="text-[#16A34A] flex-shrink-0" />
-                          <span><span className="font-semibold text-gray-600">Lokasi Masuk:</span> {record.checkinLocationNote}</span>
+                        <div className="flex items-center justify-between flex-wrap gap-2 py-1">
+                          <div className="flex items-center gap-1.5">
+                            <MapPin size={11.5} className="text-[#16A34A] flex-shrink-0" />
+                            <span>
+                              <span className="font-semibold text-gray-600">Lokasi Masuk:</span> {record.checkinLocationNote}
+                              {record.checkinDistance !== undefined && record.checkinDistance !== null && (
+                                <span className="text-gray-400 ml-1.5">({record.checkinDistance}m dari RSUCL)</span>
+                              )}
+                            </span>
+                          </div>
+                          {record.checkinPhotoUrl && (
+                            <a href={record.checkinPhotoUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[10.5px] text-[#16A34A] font-medium hover:underline">
+                              📸 Lihat Foto
+                            </a>
+                          )}
                         </div>
                       )}
                       {record.checkoutLocationNote && (
-                        <div className="flex items-center gap-1.5">
-                          <MapPin size={11.5} className="text-red-500 flex-shrink-0" />
-                          <span><span className="font-semibold text-gray-600">Lokasi Pulang:</span> {record.checkoutLocationNote}</span>
+                        <div className="flex items-center justify-between flex-wrap gap-2 py-1 border-t border-gray-100/50">
+                          <div className="flex items-center gap-1.5">
+                            <MapPin size={11.5} className="text-red-500 flex-shrink-0" />
+                            <span>
+                              <span className="font-semibold text-gray-600">Lokasi Pulang:</span> {record.checkoutLocationNote}
+                              {record.checkoutDistance !== undefined && record.checkoutDistance !== null && (
+                                <span className="text-gray-400 ml-1.5">({record.checkoutDistance}m dari RSUCL)</span>
+                              )}
+                            </span>
+                          </div>
+                          {record.checkoutPhotoUrl && (
+                            <a href={record.checkoutPhotoUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-red-500 font-medium hover:underline">
+                              📸 Lihat Foto
+                            </a>
+                          )}
                         </div>
                       )}
                     </div>

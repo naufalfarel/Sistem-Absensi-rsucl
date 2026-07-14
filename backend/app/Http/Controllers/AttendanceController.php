@@ -6,6 +6,10 @@ use App\Models\Attendance;
 use App\Models\Employee;
 use App\Models\Setting;
 use App\Support\ScheduleRules;
+use App\Support\AttendanceRules;
+use App\Http\Requests\CheckInRequest;
+use App\Http\Requests\CheckOutRequest;
+use App\Http\Resources\AttendanceResource;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
@@ -56,10 +60,20 @@ class AttendanceController extends Controller
             ];
         }
 
+        $holiday = AttendanceRules::holidayOn(Carbon::today('Asia/Jakarta'));
+        $holidayData = null;
+        if ($holiday) {
+            $holidayData = [
+                'name' => $holiday->name,
+                'is_assigned' => AttendanceRules::isAssignedToWorkOnHoliday($employee, $holiday),
+            ];
+        }
+
         return response()->json([
             'success' => true,
-            'data'    => $record ? $this->formatRecord($record) : null,
+            'data'    => $record ? new AttendanceResource($record) : null,
             'active_leave' => $leaveData,
+            'holiday' => $holidayData,
         ]);
     }
 
@@ -112,9 +126,18 @@ class AttendanceController extends Controller
                     $shiftStartCarbon = Carbon::today('Asia/Jakarta')->setTimeFromTimeString($shiftStart);
                     $closeLimitCarbon = $shiftStartCarbon->copy()->addMinutes($closeCheckinOffset);
 
+                    // Cek jika hari libur nasional
+                    $holiday = AttendanceRules::holidayOn(Carbon::today('Asia/Jakarta'));
+                    $isAssigned = $holiday ? AttendanceRules::isAssignedToWorkOnHoliday($emp, $holiday) : false;
+
                     if ($now->gt($closeLimitCarbon)) {
-                        $status = 'alpha';
-                        $note = 'Tidak Hadir Tanpa Keterangan';
+                        if ($holiday && !$isAssigned) {
+                            $status = 'belum_hadir';
+                            $note = 'Hari Libur (Tidak Wajib)';
+                        } else {
+                            $status = 'alpha';
+                            $note = 'Tidak Hadir Tanpa Keterangan';
+                        }
                     } else {
                         $status = 'belum_hadir';
                         $note = 'Belum Absen Masuk';
@@ -161,16 +184,11 @@ class AttendanceController extends Controller
      * @param Request $request
      * @return \Illuminate\Http\JsonResponse
      */
-    public function checkIn(Request $request)
+    public function checkIn(CheckInRequest $request)
     {
         \Illuminate\Support\Facades\Log::info('Check-in request inputs: ' . json_encode($request->all()));
         
-        $request->validate([
-            'location_note' => 'required|string|min:1|max:150',
-        ], [
-            'location_note.required' => 'Keterangan lokasi wajib diisi.',
-            'location_note.max' => 'Keterangan lokasi maksimal 150 karakter.',
-        ]);
+        $validated = $request->validated();
 
         // 1. Validasi keaktifan sistem absensi secara global
         $systemActive = Setting::get('system_active', '1');
@@ -234,38 +252,7 @@ class AttendanceController extends Controller
             }
         }
 
-        // 4. Validasi Geofence (menggunakan rumus Matematika Haversine)
-        $hospLat    = (float) Setting::get('hospital_lat',  '5.552740480177099');
-        $hospLng    = (float) Setting::get('hospital_lng',  '95.33486560781716');
-        $hospRadius = (float) Setting::get('gps_radius',    '40'); // Radius default 40 meter
-
-        $clientLat  = $request->input('latitude');
-        $clientLng  = $request->input('longitude');
-        $clientAcc  = $request->input('accuracy');
-
-        $isWithinGeofence = false;
-        if ($clientLat !== null && $clientLng !== null) {
-            $distance = $this->haversine((float)$clientLat, (float)$clientLng, $hospLat, $hospLng);
-            $isWithinGeofence = ($distance <= $hospRadius);
-
-            if (!$isWithinGeofence) {
-                return response()->json([
-                    'success' => false,
-                    'message' => sprintf(
-                        'Check-in ditolak: Anda berada %.0f meter dari RSUCL. Maksimal radius adalah %.0f meter. Pastikan Anda berada di dalam area rumah sakit.',
-                        $distance,
-                        $hospRadius
-                    ),
-                ], 422);
-            }
-        } else {
-            return response()->json([
-                'success' => false,
-                'message' => 'Koordinat GPS diperlukan untuk melakukan check-in. Aktifkan GPS pada perangkat Anda.',
-            ], 422);
-        }
-
-        // 5. Tentukan waktu check-in (mendukung simulasi)
+        // 4. Tentukan waktu check-in (mendukung simulasi)
         $now = Carbon::now('Asia/Jakarta');
         if ($request->has('simulated_time')) {
             $simTime = $request->input('simulated_time');
@@ -284,6 +271,45 @@ class AttendanceController extends Controller
                 'success' => false,
                 'message' => 'Check-in ditolak: Hari ini adalah hari libur Anda (tidak ada jadwal shift).',
             ], 422);
+        }
+
+        // Tentukan tipe shift harian
+        $shiftType = AttendanceRules::shiftTypeFor($employee, $now);
+
+        // 5. Validasi Geofence (menggunakan rumus Matematika Haversine)
+        $clientLat  = $request->input('latitude');
+        $clientLng  = $request->input('longitude');
+        $clientAcc  = $request->input('accuracy');
+
+        $isWithinGeofence = false;
+        $distance = null;
+
+        if ($clientLat !== null && $clientLng !== null) {
+            $refLat  = (float) Setting::get('hospital_latitude',  '5.552740480177099');
+            $refLng  = (float) Setting::get('hospital_longitude',  '95.33486560781716');
+            $distance = AttendanceRules::haversineDistanceMeters((float)$clientLat, (float)$clientLng, $refLat, $refLng);
+            $isWithinGeofence = ($distance <= (float) Setting::get('attendance_radius_meters', '100'));
+        }
+
+        if ($shiftType !== 'dinas_luar') {
+            if ($clientLat === null || $clientLng === null) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Koordinat GPS diperlukan untuk melakukan check-in. Aktifkan GPS pada perangkat Anda.',
+                ], 422);
+            }
+
+            if (!$isWithinGeofence) {
+                \Illuminate\Support\Facades\Log::warning(sprintf(
+                    'Check-in ditolak karena berada %.0f meter dari RSUCL (di luar radius wajib).',
+                    $distance
+                ));
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Anda berada di luar radius lokasi absensi yang diizinkan.',
+                ], 422);
+            }
         }
 
         // 6. Evaluasi batas waktu check-in berdasarkan konfigurasi shift
@@ -320,25 +346,38 @@ class AttendanceController extends Controller
         $lateMins = $this->timeToMins($lateLimit);
         $status   = ($nowMins <= $lateMins) ? 'hadir' : 'telat';
 
-        // Simpan foto selfie check-in jika terlampir
-        $imageUrl = null;
-        if ($request->has('image')) {
-            $imageUrl = $this->storeBase64Image($request->input('image'), 'selfie_in_' . $employee->id . '_' . time());
+        // Simpan file foto check-in wajib
+        $photoUrl = null;
+        if ($request->hasFile('photo')) {
+            $path = $request->file('photo')->store('attendance-photos', 'public');
+            $photoUrl = '/storage/' . $path;
         }
 
         // 7. Simpan absensi baru ke database
         $record = Attendance::create([
-            'employee_id'       => $employee->id,
-            'date'              => today()->toDateString(),
-            'check_in'          => $now->format('H:i:s'),
-            'status'            => $status,
-            'latitude'          => $clientLat,
-            'longitude'         => $clientLng,
-            'accuracy'          => $clientAcc,
-            'is_within_geofence'=> $isWithinGeofence,
-            'image_check_in'    => $imageUrl,
-            'checkin_location_note' => $request->input('location_note'),
+            'employee_id'             => $employee->id,
+            'date'                    => today()->toDateString(),
+            'check_in'                => $now->format('H:i:s'),
+            'status'                  => $status,
+            'latitude'                => $clientLat,
+            'longitude'               => $clientLng,
+            'accuracy'                => $clientAcc,
+            'is_within_geofence'      => $isWithinGeofence,
+            'checkin_photo_url'       => $photoUrl,
+            'image_check_in'          => $photoUrl, // backward compatibility
+            'checkin_latitude'        => $clientLat,
+            'checkin_longitude'       => $clientLng,
+            'checkin_distance_meters' => $distance !== null ? (int)round($distance) : null,
+            'checkin_location_note'   => $request->input('location_note'),
         ]);
+
+        $holiday = AttendanceRules::holidayOn(Carbon::parse($record->date));
+        if ($holiday) {
+            $record->update([
+                'is_holiday_work' => true,
+                'holiday_id' => $holiday->id,
+            ]);
+        }
 
         // Kirim notifikasi keterlambatan ke administrator jika statusnya terlambat
         if ($status === 'telat') {
@@ -388,7 +427,7 @@ class AttendanceController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Check-in berhasil.',
-            'data'    => $this->formatRecord($record),
+            'data'    => new AttendanceResource($record),
         ]);
     }
 
@@ -403,16 +442,11 @@ class AttendanceController extends Controller
      * @param Request $request
      * @return \Illuminate\Http\JsonResponse
      */
-    public function checkOut(Request $request)
+    public function checkOut(CheckOutRequest $request)
     {
         \Illuminate\Support\Facades\Log::info('Check-out request inputs: ' . json_encode($request->all()));
         
-        $request->validate([
-            'location_note' => 'required|string|min:1|max:150',
-        ], [
-            'location_note.required' => 'Keterangan lokasi wajib diisi.',
-            'location_note.max' => 'Keterangan lokasi maksimal 150 karakter.',
-        ]);
+        $validated = $request->validated();
 
         $employee = $request->user()->employee;
         if (!$employee) {
@@ -457,41 +491,54 @@ class AttendanceController extends Controller
             ], 422);
         }
 
-        // 3. Validasi Geofence (Haversine)
-        $hospLat    = (float) Setting::get('hospital_lat',  '5.552740480177099');
-        $hospLng    = (float) Setting::get('hospital_lng',  '95.33486560781716');
-        $hospRadius = (float) Setting::get('gps_radius',    '40');
+        // Gunakan tanggal dari record check-in asli untuk validasi shift
+        $shiftDate = Carbon::parse($record->date);
+        $todayShift = $this->getEmployeeTodayShift($employee, $shiftDate);
 
+        if (!$todayShift) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Check-out ditolak: Tidak ada jadwal shift yang terasosiasi dengan absensi ini.',
+            ], 422);
+        }
+
+        // Tentukan tipe shift harian
+        $shiftType = AttendanceRules::shiftTypeFor($employee, $shiftDate);
+
+        // 3. Validasi Geofence (Haversine)
         $clientLat  = $request->input('latitude');
         $clientLng  = $request->input('longitude');
         $clientAcc  = $request->input('accuracy');
 
         $isWithinGeofence = false;
-        if ($clientLat !== null && $clientLng !== null) {
-            $distance = $this->haversine((float)$clientLat, (float)$clientLng, $hospLat, $hospLng);
-            $isWithinGeofence = ($distance <= $hospRadius);
+        $distance = null;
 
-            if (!$isWithinGeofence) {
-                return response()->json([
-                    'success' => false,
-                    'message' => sprintf(
-                        'Check-out ditolak: Anda berada %.0f meter dari RSUCL. Maksimal radius adalah %.0f meter. Pastikan Anda berada di dalam area rumah sakit.',
-                        $distance,
-                        $hospRadius
-                    ),
-                ], 422);
-            }
-        } else {
-            return response()->json([
-                'success' => false,
-                'message' => 'Koordinat GPS diperlukan untuk melakukan check-out. Aktifkan GPS pada perangkat Anda.',
-            ], 422);
+        if ($clientLat !== null && $clientLng !== null) {
+            $refLat  = (float) Setting::get('hospital_latitude',  '5.552740480177099');
+            $refLng  = (float) Setting::get('hospital_longitude',  '95.33486560781716');
+            $distance = AttendanceRules::haversineDistanceMeters((float)$clientLat, (float)$clientLng, $refLat, $refLng);
+            $isWithinGeofence = ($distance <= (float) Setting::get('attendance_radius_meters', '100'));
         }
 
-        // Simpan foto selfie check-out jika terlampir
-        $imageUrl = null;
-        if ($request->has('image')) {
-            $imageUrl = $this->storeBase64Image($request->input('image'), 'selfie_out_' . $employee->id . '_' . time());
+        if ($shiftType !== 'dinas_luar') {
+            if ($clientLat === null || $clientLng === null) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Koordinat GPS diperlukan untuk melakukan check-out. Aktifkan GPS pada perangkat Anda.',
+                ], 422);
+            }
+
+            if (!$isWithinGeofence) {
+                \Illuminate\Support\Facades\Log::warning(sprintf(
+                    'Check-out ditolak karena berada %.0f meter dari RSUCL (di luar radius wajib).',
+                    $distance
+                ));
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Anda berada di luar radius lokasi absensi yang diizinkan.',
+                ], 422);
+            }
         }
 
         // Tentukan waktu check-out (mendukung simulasi)
@@ -506,22 +553,11 @@ class AttendanceController extends Controller
             } catch (\Exception $e) {}
         }
 
-        // Gunakan tanggal dari record check-in asli untuk validasi shift
-        $shiftDate = Carbon::parse($record->date);
-        $todayShift = $this->getEmployeeTodayShift($employee, $shiftDate);
-
-        if (!$todayShift) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Check-out ditolak: Tidak ada jadwal shift yang terasosiasi dengan absensi ini.',
-            ], 422);
-        }
-
         $shiftStart    = substr($todayShift->start_time, 0, 5);
         $shiftEnd      = substr($todayShift->end_time,   0, 5);
 
         // 4. Hitung parameter batas pembukaan & penutupan check-out (Diferensiasi Hari Sabtu vs Hari Biasa)
-        $isSaturday = \Carbon\Carbon::parse($record->date)->dayOfWeek === \Carbon\Carbon::SATURDAY;
+        $isSaturday = Carbon::parse($record->date)->dayOfWeek === Carbon::SATURDAY;
         if ($isSaturday) {
             $satOpenOffset  = (int) Setting::get('sat_checkout_open', '0');
             $satCloseOffset = (int) Setting::get('sat_checkout_close', '60');
@@ -540,31 +576,22 @@ class AttendanceController extends Controller
         $closeMins = $this->timeToMins($checkoutClose);
 
         // 5. Validasi window check-out
-        // DESAIN: Pulang cepat TIDAK diblokir — pegawai selalu bisa checkout kapan saja setelah check-in.
-        // Backend hanya memblokir jika melewati BATAS AKHIR (checkout_close / overtime close).
-        // Klasifikasi pulang cepat / normal / lembur dilakukan di langkah 6 (ScheduleRules).
         if ($isOvernight) {
-            // Shift lintas tengah malam: hanya blokir jika jam SEBELUM tengah malam (sisi malam hari pertama)
-            // karena checkout valid terjadi di sisi pagi hari berikutnya.
             $startMins = $this->timeToMins($shiftStart ?? '21:00');
             if ($nowMins >= $startMins && $nowMins > $closeMins) {
-                // Sudah melewati batas akhir checkout di sisi pagi
                 return response()->json([
                     'success' => false,
                     'message' => "Batas akhir check-out sudah lewat pukul {$checkoutClose} WIB.",
                 ], 422);
             }
         } else {
-            // Shift normal: hanya blokir jika MELEWATI batas akhir checkout
             if ($nowMins > $closeMins) {
                 return response()->json([
                     'success' => false,
                     'message' => "Batas akhir check-out sudah lewat pukul {$checkoutClose} WIB.",
                 ], 422);
             }
-            // Sebelum checkoutOpen → izinkan, akan diklasifikasi pulang cepat di langkah 6
         }
-
 
         // 6. Klasifikasi Pulang Cepat / Lembur
         $employee->load('schedules'); // Pastikan relasi ter-load untuk ScheduleRules
@@ -583,15 +610,26 @@ class AttendanceController extends Controller
             ], 422);
         }
 
+        // Simpan file foto check-out wajib
+        $photoUrl = null;
+        if ($request->hasFile('photo')) {
+            $path = $request->file('photo')->store('attendance-photos', 'public');
+            $photoUrl = '/storage/' . $path;
+        }
+
         // 7. Bangun data update untuk database
         $updateData = [
-            'check_out'          => $now->format('H:i:s'),
-            'latitude'           => $clientLat,
-            'longitude'          => $clientLng,
-            'accuracy'           => $clientAcc,
-            'is_within_geofence' => $isWithinGeofence,
-            'image_check_out'    => $imageUrl,
-            'checkout_location_note' => $request->input('location_note'),
+            'check_out'                => $now->format('H:i:s'),
+            'latitude'                 => $clientLat,
+            'longitude'                => $clientLng,
+            'accuracy'                 => $clientAcc,
+            'is_within_geofence'       => $isWithinGeofence,
+            'checkout_photo_url'       => $photoUrl,
+            'image_check_out'          => $photoUrl, // backward compatibility
+            'checkout_latitude'        => $clientLat,
+            'checkout_longitude'       => $clientLng,
+            'checkout_distance_meters' => $distance !== null ? (int)round($distance) : null,
+            'checkout_location_note'   => $request->input('location_note'),
         ];
 
         // Data pulang cepat — dicatat saja, tidak memerlukan persetujuan
@@ -615,7 +653,7 @@ class AttendanceController extends Controller
         return response()->json([
             'success'    => true,
             'message'    => 'Check-out berhasil.',
-            'data'       => $this->formatRecord($record),
+            'data'       => new AttendanceResource($record),
             'is_early_checkout' => $classification['is_early'],
             'is_overtime'       => $classification['is_overtime'],
             'overtime_minutes'  => $classification['overtime_minutes'],
@@ -671,7 +709,7 @@ class AttendanceController extends Controller
             \Illuminate\Support\Facades\Log::info("User is admin. No employee filter applied to history query.");
         }
 
-        $records = $query->get()->map(fn($r) => $this->formatRecord($r, withEmployee: $user->isAdmin()));
+        $records = AttendanceResource::collection($query->get());
         \Illuminate\Support\Facades\Log::info('Query records count returned: ' . count($records));
 
         return response()->json(['success' => true, 'data' => $records]);
@@ -890,7 +928,7 @@ class AttendanceController extends Controller
                   ->whereYear('date', (int)$request->query('year'));
         }
 
-        $records = $query->limit(200)->get()->map(fn($r) => $this->formatRecord($r, withEmployee: true));
+        $records = AttendanceResource::collection($query->limit(200)->get());
 
         return response()->json([
             'success' => true,
@@ -926,7 +964,7 @@ class AttendanceController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Pulang cepat disetujui.',
-            'data'    => $this->formatRecord($record->fresh(['employee.user', 'employee.department']), withEmployee: true),
+            'data'    => new AttendanceResource($record->fresh(['employee.user', 'employee.department'])),
         ]);
     }
 
@@ -964,7 +1002,7 @@ class AttendanceController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Pulang cepat ditolak.',
-            'data'    => $this->formatRecord($record->fresh(['employee.user', 'employee.department']), withEmployee: true),
+            'data'    => new AttendanceResource($record->fresh(['employee.user', 'employee.department'])),
         ]);
     }
 
@@ -1009,7 +1047,7 @@ class AttendanceController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Catatan lembur berhasil diperbarui.',
-            'data'    => $this->formatRecord($record),
+            'data'    => new AttendanceResource($record),
         ]);
     }
 }

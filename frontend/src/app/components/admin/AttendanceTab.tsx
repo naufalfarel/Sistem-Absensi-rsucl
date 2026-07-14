@@ -15,6 +15,13 @@ interface MappedAttendance {
   imageCheckOut?: string | null;
   checkinLocationNote?: string | null;
   checkoutLocationNote?: string | null;
+  checkinPhotoUrl?: string | null;
+  checkoutPhotoUrl?: string | null;
+  checkinDistance?: number | null;
+  checkoutDistance?: number | null;
+  shiftType?: 'normal' | 'dinas_luar';
+  isHolidayWork?: boolean;
+  holiday?: string | null;
 }
 
 const statusMap: Record<string, { label: string; color: string; bg: string; icon: typeof CheckCircle2; border: string }> = {
@@ -88,10 +95,17 @@ export function AttendanceTab() {
             checkOut: r.check_out ? r.check_out.substring(0, 5) : null,
             status: statusKey,
             pos: 'Staff',
-            imageCheckIn: r.image_check_in,
-            imageCheckOut: r.image_check_out,
+            imageCheckIn: r.checkin_photo_url || r.image_check_in,
+            imageCheckOut: r.checkout_photo_url || r.image_check_out,
             checkinLocationNote: r.checkin_location_note,
             checkoutLocationNote: r.checkout_location_note,
+            checkinPhotoUrl: r.checkin_photo_url || r.image_check_in,
+            checkoutPhotoUrl: r.checkout_photo_url || r.image_check_out,
+            checkinDistance: r.checkin_distance_meters,
+            checkoutDistance: r.checkout_distance_meters,
+            shiftType: r.shift_type ?? 'normal',
+            isHolidayWork: r.is_holiday_work,
+            holiday: r.holiday,
           };
         });
         setRecords(mapped);
@@ -217,6 +231,12 @@ export function AttendanceTab() {
                         <td className="px-4 py-3.5 text-[13px] text-gray-600">{emp.dept}</td>
                         <td className="px-4 py-3.5">
                           <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full bg-green-50 text-green-700`}>{emp.shift}</span>
+                          {emp.shiftType === 'dinas_luar' && (
+                            <span className="block mt-1 text-[9px] font-bold text-purple-600 bg-purple-50 border border-purple-100 rounded-md px-1.5 py-0.5 w-max">Dinas Luar</span>
+                          )}
+                          {emp.isHolidayWork && (
+                            <span className="block mt-1 text-[9px] font-bold text-red-600 bg-red-50 border border-red-100 rounded-md px-1.5 py-0.5 w-max" title={emp.holiday || 'Hari Libur'}>Kerja Libur</span>
+                          )}
                         </td>
                         <td className="px-4 py-3.5 font-mono text-[13px] text-gray-700">{emp.checkIn}</td>
                         <td className="px-4 py-3.5 font-mono text-[13px] text-gray-700">
@@ -267,9 +287,9 @@ export function AttendanceTab() {
             </div>
             <div className="space-y-2.5 bg-gray-50 rounded-xl p-4 mb-5">
                {[
-                { l: 'Shift', v: selected.shift },
-                { l: 'Jam Masuk', v: selected.checkIn },
-                { l: 'Jam Keluar', v: selected.checkOut || 'Belum checkout' },
+                { l: 'Shift', v: selected.shift + (selected.shiftType === 'dinas_luar' ? ' (Dinas Luar)' : ' (Normal)') },
+                { l: 'Jam Masuk', v: selected.checkIn + (selected.checkinDistance !== undefined && selected.checkinDistance !== null ? ` (${selected.checkinDistance}m dari RSUCL)` : '') },
+                { l: 'Jam Keluar', v: (selected.checkOut || 'Belum checkout') + (selected.checkoutDistance !== undefined && selected.checkoutDistance !== null ? ` (${selected.checkoutDistance}m dari RSUCL)` : '') },
                 { l: 'Status', v: statusMap[selected.status].label },
                 ...(selected.checkinLocationNote ? [{ l: 'Lokasi Masuk', v: selected.checkinLocationNote }] : []),
                 ...(selected.checkoutLocationNote ? [{ l: 'Lokasi Pulang', v: selected.checkoutLocationNote }] : []),

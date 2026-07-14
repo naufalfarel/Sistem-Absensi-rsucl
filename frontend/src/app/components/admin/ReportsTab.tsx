@@ -307,6 +307,7 @@ export function ReportsTab() {
             <td class="center">${r.alpha} d</td>
             <td class="center">${r.early_checkout_count ?? 0} d</td>
             <td class="center">${r.overtime_minutes ?? 0} m</td>
+            <td class="center">${r.holiday_work_days ?? 0} d</td>
             <td class="center bold">${dur}</td>
           </tr>`;
         });
@@ -319,7 +320,7 @@ export function ReportsTab() {
             </tr>
             <tr style="height:18px;"><td colspan="9" class="header-rs">RUMAH SAKIT UMUM CEMPAKA LIMA</td></tr>
             <tr style="height:16px;"><td colspan="9" class="header-period">${periodStr}${deptLabelText}</td></tr>
-            <tr style="height:3px;"><td colspan="12" class="separator">&nbsp;</td></tr>
+            <tr style="height:3px;"><td colspan="13" class="separator">&nbsp;</td></tr>
           </table>
           <table>
             <thead><tr>
@@ -327,7 +328,7 @@ export function ReportsTab() {
               <th>NIP</th><th>Nama Karyawan</th>
               <th>Hadir (Hari)</th><th>Terlambat (Hari)</th>
               <th>Izin (Hari)</th><th>Sakit (Hari)</th><th>Cuti (Hari)</th>
-              <th>Alpha (Hari)</th><th>Plg Cepat (Hari)</th><th>Lembur (menit)</th><th>Total Durasi Kerja</th>
+              <th>Alpha (Hari)</th><th>Plg Cepat (Hari)</th><th>Lembur (menit)</th><th>Kerja Libur (Hari)</th><th>Total Durasi Kerja</th>
             </tr></thead>
             <tbody>${bodyRows}</tbody>
           </table>`;
@@ -490,6 +491,7 @@ export function ReportsTab() {
             <th style="text-align: center; width: 55px;">Alpha</th>
             <th style="text-align: center; width: 70px;">Plg Cepat</th>
             <th style="text-align: center; width: 70px;">Lembur (m)</th>
+            <th style="text-align: center; width: 70px;">Kerja Libur</th>
             <th style="text-align: center; width: 80px;">Total Jam</th>
           </tr>
         `;
@@ -508,7 +510,7 @@ export function ReportsTab() {
           if (deptName !== lastDept) {
             deptRow = `
               <tr style="background-color: #E5E7EB; font-weight: bold; font-size: 11px;">
-                <td colspan="12" style="padding: 8px; border-bottom: 1px solid #E5E7EB; border-right: 1px solid #E5E7EB; text-transform: uppercase; color: #374151;">
+                <td colspan="13" style="padding: 8px; border-bottom: 1px solid #E5E7EB; border-right: 1px solid #E5E7EB; text-transform: uppercase; color: #374151;">
                   ${deptName}
                 </td>
               </tr>
@@ -529,6 +531,7 @@ export function ReportsTab() {
               <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${r.alpha} d</td>
               <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${r.early_checkout_count ?? 0} d</td>
               <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${r.overtime_minutes ?? 0} m</td>
+              <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${r.holiday_work_days ?? 0} d</td>
               <td style="padding: 8px; text-align: center; font-weight: bold;">${r.duration_min ? `${Math.floor(r.duration_min / 60)}j ${r.duration_min % 60}m` : '0j'}</td>
             </tr>
           `;
