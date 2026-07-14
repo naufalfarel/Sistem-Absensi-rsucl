@@ -17,13 +17,18 @@ class LeaveRequest extends Model
     protected $fillable = [
         'employee_id', 'type', 'special_leave_category_id', 'start_date', 'end_date',
         'reason', 'attachment_url', 'status', 'reviewed_by', 'reviewed_at', 'admin_note',
+        'actual_end_date', 'shortened_by', 'shortened_at', 'shortened_reason',
+        'cancelled_by', 'cancelled_at', 'cancellation_reason',
     ];
 
     // Cast tipe data otomatis
     protected $casts = [
-        'start_date'  => 'date',
-        'end_date'    => 'date',
-        'reviewed_at' => 'datetime',
+        'start_date'      => 'date',
+        'end_date'        => 'date',
+        'actual_end_date' => 'date',
+        'reviewed_at'     => 'datetime',
+        'shortened_at'    => 'datetime',
+        'cancelled_at'    => 'datetime',
     ];
 
     /**
@@ -53,6 +58,23 @@ class LeaveRequest extends Model
         return $this->belongsTo(User::class, 'reviewed_by');
     }
 
+    /**
+     * Accessor untuk tanggal selesai cuti aktual/efektif.
+     */
+    public function getEffectiveEndDateAttribute()
+    {
+        return $this->actual_end_date ?? $this->end_date;
+    }
+
+    /**
+     * Accessor untuk menghitung jumlah hari pengajuan cuti/izin berdasarkan tanggal efektif.
+     */
+    public function getDaysAttribute(): int
+    {
+        if (!$this->start_date || !$this->effective_end_date) return 0;
+        return $this->start_date->diffInDays($this->effective_end_date) + 1;
+    }
+
     /** 
      * Accessor untuk menghitung jumlah hari pengajuan cuti/izin secara inklusif.
      * 
@@ -60,6 +82,6 @@ class LeaveRequest extends Model
      */
     public function getDaysCountAttribute(): int
     {
-        return $this->start_date->diffInDays($this->end_date) + 1;
+        return $this->days;
     }
 }

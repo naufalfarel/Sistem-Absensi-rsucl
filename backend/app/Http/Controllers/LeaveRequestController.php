@@ -471,6 +471,186 @@ class LeaveRequestController extends Controller
 
 
     /**
+     * PUT /api/leave-requests/{id}/cancel
+     *
+     * Cancel an approved or pending leave request (Admin only).
+     */
+    public function cancelApprovedOrPending(Request $request, $id)
+    {
+        if (!$request->user()->isAdmin()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
+        }
+
+        $request->validate([
+            'cancellation_reason' => 'required|string|max:255',
+        ]);
+
+        $lr = LeaveRequest::findOrFail($id);
+
+        if (!in_array($lr->status, ['approved', 'pending'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya pengajuan berstatus pending atau approved yang dapat dibatalkan.',
+            ], 422);
+        }
+
+        $wasApproved = $lr->status === 'approved';
+
+        $lr->update([
+            'status' => 'cancelled',
+            'cancelled_by' => $request->user()->id,
+            'cancelled_at' => now(),
+            'cancellation_reason' => $request->input('cancellation_reason'),
+        ]);
+
+        // If it was approved, delete the generated attendance records
+        if ($wasApproved) {
+            \App\Models\Attendance::where('employee_id', $lr->employee_id)
+                ->whereBetween('date', [$lr->start_date->toDateString(), $lr->end_date->toDateString()])
+                ->whereIn('status', ['cuti', 'izin', 'sakit'])
+                ->delete();
+        }
+
+        // Send notification to employee
+        Notification::create([
+            'user_id' => $lr->employee->user_id,
+            'title'   => 'Pengajuan Cuti Dibatalkan Admin ❌',
+            'body'    => 'Pengajuan ' . $lr->type . ' Anda untuk tanggal ' . $lr->start_date->toDateString() . ' s/d ' . $lr->end_date->toDateString() . ' telah dibatalkan oleh admin. Alasan: ' . $request->input('cancellation_reason'),
+            'type'    => 'leave',
+            'data'    => ['leave_request_id' => $lr->id],
+        ]);
+
+        $lr->load(['employee.user', 'employee.department', 'reviewer']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Pengajuan cuti berhasil dibatalkan.',
+            'data'    => $this->format($lr),
+        ]);
+    }
+
+    /**
+     * PUT /api/leave-requests/{id}/shorten
+     *
+     * Shorten an approved leave request (Admin only).
+     */
+    public function shortenApproved(Request $request, $id)
+    {
+        if (!$request->user()->isAdmin()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
+        }
+
+        $request->validate([
+            'actual_end_date'  => 'required|date',
+            'shortened_reason' => 'required|string|max:255',
+        ]);
+
+        $lr = LeaveRequest::findOrFail($id);
+
+        if ($lr->status !== 'approved') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya pengajuan cuti yang telah disetujui (approved) yang dapat dipersingkat.',
+            ], 422);
+        }
+
+        $actualEnd = \Carbon\Carbon::parse($request->input('actual_end_date'));
+        $start = \Carbon\Carbon::parse($lr->start_date);
+        $originalEnd = \Carbon\Carbon::parse($lr->end_date);
+
+        if ($actualEnd->lt($start)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Tanggal efektif selesai harus setelah atau sama dengan tanggal mulai cuti.',
+            ], 422);
+        }
+
+        if ($actualEnd->gte($originalEnd)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Tanggal efektif harus lebih awal dari tanggal selesai yang diajukan, gunakan pembatalan kalau memang tidak dipersingkat.',
+            ], 422);
+        }
+
+        $lr->update([
+            'actual_end_date'  => $actualEnd->toDateString(),
+            'shortened_by'     => $request->user()->id,
+            'shortened_at'     => now(),
+            'shortened_reason' => $request->input('shortened_reason'),
+        ]);
+
+        // Clean up pseudo attendance records outside the shortened range
+        $startToDelete = $actualEnd->copy()->addDay()->toDateString();
+        \App\Models\Attendance::where('employee_id', $lr->employee_id)
+            ->whereBetween('date', [$startToDelete, $originalEnd->toDateString()])
+            ->whereIn('status', ['cuti', 'izin', 'sakit'])
+            ->delete();
+
+        // Send notification to employee
+        Notification::create([
+            'user_id' => $lr->employee->user_id,
+            'title'   => 'Pengajuan Cuti Dipersingkat ⏱️',
+            'body'    => 'Cuti ' . $lr->type . ' Anda (' . $lr->start_date->toDateString() . ' s/d ' . $lr->end_date->toDateString() . ') telah disesuaikan menjadi selesai pada ' . $actualEnd->toDateString() . ' oleh admin. Alasan: ' . $request->input('shortened_reason') . '. Sisa kuota cuti Anda diperbarui.',
+            'type'    => 'leave',
+            'data'    => ['leave_request_id' => $lr->id],
+        ]);
+
+        $lr->load(['employee.user', 'employee.department', 'reviewer']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Pengajuan cuti berhasil dipersingkat.',
+            'data'    => $this->format($lr),
+        ]);
+    }
+
+    /**
+     * GET /api/leave-requests/possible-early-returns
+     *
+     * Detect employees who check-in during approved leaves (Admin only).
+     */
+    public function possibleEarlyReturns(Request $request)
+    {
+        if (!$request->user()->isAdmin()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
+        }
+
+        $possibleReturns = LeaveRequest::where('status', 'approved')
+            ->whereNull('actual_end_date')
+            ->whereDate('start_date', '<=', today()->toDateString())
+            ->whereHas('employee.attendances', function($q) {
+                $q->whereColumn('date', '>=', 'leave_requests.start_date')
+                  ->whereColumn('date', '<=', 'leave_requests.end_date')
+                  ->whereNotNull('check_in')
+                  ->whereNotIn('status', ['cuti', 'izin', 'sakit']);
+            })
+            ->with(['employee.user', 'employee.department'])
+            ->get();
+
+        $result = $possibleReturns->map(function($leave) {
+            $checkInDates = \App\Models\Attendance::where('employee_id', $leave->employee_id)
+                ->whereDate('date', '>=', $leave->start_date->toDateString())
+                ->whereDate('date', '<=', $leave->end_date->toDateString())
+                ->whereNotNull('check_in')
+                ->whereNotIn('status', ['cuti', 'izin', 'sakit'])
+                ->pluck('date')
+                ->map(fn($d) => $d->toDateString())
+                ->toArray();
+
+            return [
+                'leave_request' => $this->format($leave),
+                'detected_dates' => $checkInDates,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data'    => $result,
+        ]);
+    }
+
+
+    /**
      * Memformat output data pengajuan cuti/izin/sakit untuk response JSON API.
      * 
      * @param LeaveRequest $lr
@@ -486,22 +666,28 @@ class LeaveRequestController extends Controller
                 'id'   => $lr->specialLeaveCategory->id,
                 'name' => $lr->specialLeaveCategory->name,
             ] : null,
-            'start_date'     => $lr->start_date?->toDateString(),
-            'end_date'       => $lr->end_date?->toDateString(),
-            'days'           => $lr->days_count,
-            'reason'         => $lr->reason,
-            'attachment_url' => $lr->attachment_url ? url($lr->attachment_url) : null,
-            'status'         => $lr->status,
-            'admin_note'     => $lr->admin_note,
-            'reviewed_at'    => $lr->reviewed_at?->toDateTimeString(),
-            'created_at'     => $lr->created_at?->toDateTimeString(),
-            'employee'       => [
+            'start_date'         => $lr->start_date?->toDateString(),
+            'end_date'           => $lr->end_date?->toDateString(),
+            'actual_end_date'    => $lr->actual_end_date?->toDateString(),
+            'effective_end_date' => $lr->effective_end_date?->toDateString(),
+            'shortened_reason'   => $lr->shortened_reason,
+            'shortened_at'       => $lr->shortened_at?->toDateTimeString(),
+            'cancellation_reason'=> $lr->cancellation_reason,
+            'cancelled_at'       => $lr->cancelled_at?->toDateTimeString(),
+            'days'               => $lr->days_count,
+            'reason'             => $lr->reason,
+            'attachment_url'     => $lr->attachment_url ? url($lr->attachment_url) : null,
+            'status'             => $lr->status,
+            'admin_note'         => $lr->admin_note,
+            'reviewed_at'        => $lr->reviewed_at?->toDateTimeString(),
+            'created_at'         => $lr->created_at?->toDateTimeString(),
+            'employee'           => [
                 'id'         => $lr->employee?->id,
                 'name'       => $lr->employee?->user?->name,
                 'nip'        => $lr->employee?->nip,
                 'department' => $lr->employee?->department?->name,
             ],
-            'reviewer'       => $lr->reviewer ? ['name' => $lr->reviewer->name] : null,
+            'reviewer'           => $lr->reviewer ? ['name' => $lr->reviewer->name] : null,
         ];
     }
 

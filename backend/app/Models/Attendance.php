@@ -35,6 +35,8 @@ class Attendance extends Model
         'early_checkout_status', 'early_checkout_admin_note',
         // Lembur (Overtime)
         'is_overtime', 'overtime_minutes', 'overtime_note',
+        // New Overtime System
+        'jam_pulang_normal', 'is_lembur', 'durasi_lembur_menit', 'keterangan_lembur', 'status_approval_lembur',
         // Foto, Koordinat, dan Jarak Detail
         'checkin_photo_url', 'checkout_photo_url',
         'checkin_latitude', 'checkin_longitude', 'checkout_latitude', 'checkout_longitude',
@@ -51,6 +53,8 @@ class Attendance extends Model
         'is_early_checkout'   => 'boolean',
         'is_overtime'         => 'boolean',
         'overtime_minutes'    => 'integer',
+        'is_lembur'           => 'boolean',
+        'durasi_lembur_menit' => 'integer',
         'checkin_latitude'    => 'float',
         'checkin_longitude'   => 'float',
         'checkout_latitude'   => 'float',
@@ -126,13 +130,15 @@ class Attendance extends Model
 
         // 4. Ambil data pengajuan cuti/izin yang disetujui (status: approved) pada rentang bulan tersebut
         $leaveRequestsQuery = LeaveRequest::where('status', 'approved')
-            ->where(function($q) use ($startDate, $endDate) {
-                $q->whereBetween('start_date', [$startDate->toDateString(), $endDate->toDateString()])
-                  ->orWhereBetween('end_date', [$startDate->toDateString(), $endDate->toDateString()])
-                  ->orWhere(function($q2) use ($startDate, $endDate) {
-                      $q2->where('start_date', '<=', $startDate->toDateString())
-                         ->where('end_date', '>=', $endDate->toDateString());
-                  });
+            ->whereDate('start_date', '<=', $endDate->toDateString())
+            ->where(function($q) use ($startDate) {
+                $q->where(function($q2) use ($startDate) {
+                    $q2->whereNull('actual_end_date')
+                       ->whereDate('end_date', '>=', $startDate->toDateString());
+                })->orWhere(function($q2) use ($startDate) {
+                    $q2->whereNotNull('actual_end_date')
+                       ->whereDate('actual_end_date', '>=', $startDate->toDateString());
+                });
             });
         if ($employeeId) {
             $leaveRequestsQuery->where('employee_id', $employeeId);
@@ -219,6 +225,13 @@ class Attendance extends Model
                         'checkin_distance_meters'  => $attRecord->checkin_distance_meters,
                         'checkout_distance_meters' => $attRecord->checkout_distance_meters,
                         
+                        // Overtime fields
+                        'jam_pulang_normal'        => $attRecord->jam_pulang_normal,
+                        'is_lembur'                => (bool)$attRecord->is_lembur,
+                        'durasi_lembur_menit'      => $attRecord->durasi_lembur_menit,
+                        'keterangan_lembur'        => $attRecord->keterangan_lembur,
+                        'status_approval_lembur'   => $attRecord->status_approval_lembur,
+                        
                         'shift_name' => $shiftName,
                         'shift_type' => $matchingShift ? ($matchingShift->shift_type ?? 'normal') : 'normal',
                     ];
@@ -226,7 +239,7 @@ class Attendance extends Model
                     // Kasus B: Karyawan tidak absen. Periksa apakah sedang cuti/izin/sakit
                     $empLeaves = $leaveRequests->get($emp->id, collect());
                     $matchingLeave = $empLeaves->first(function($leave) use ($dateStr) {
-                        return $dateStr >= $leave->start_date && $dateStr <= $leave->end_date;
+                        return $dateStr >= $leave->start_date->toDateString() && $dateStr <= $leave->effective_end_date->toDateString();
                     });
 
                     if ($matchingLeave) {

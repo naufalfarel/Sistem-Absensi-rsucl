@@ -30,9 +30,17 @@ class HolidaySyncer
             }
             
             $count = 0;
+            $blocklist = [
+                '2026-02-15', // Isra Mikraj salah/ganda (Correct is 16 Jan 2026)
+                '2026-01-29', // Imlek 2025 ganda
+                '2026-05-13', // Waisak ganda
+            ];
             foreach ($data as $dateStr => $details) {
                 // Filter berdasarkan tahun
                 if (str_starts_with($dateStr, (string)$year)) {
+                    if (in_array($dateStr, $blocklist)) {
+                        continue;
+                    }
                     $isHoliday = $details['holiday'] ?? false;
                     if ($isHoliday) {
                         $name = $details['summary'][0] ?? 'Hari Libur';

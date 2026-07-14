@@ -15,7 +15,7 @@ interface ProfilePageProps {
 }
 
 type LeaveType = 'cuti' | 'izin' | 'sakit' | 'cuti_khusus';
-type LeaveStatus = 'pending' | 'approved' | 'rejected';
+type LeaveStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
 
 const typeConfig: Record<LeaveType, { label: string; color: string; bg: string; border: string }> = {
   cuti:        { label: 'Cuti Tahunan', color: '#7C3AED', bg: '#F5F3FF', border: '#DDD6FE' },
@@ -25,9 +25,10 @@ const typeConfig: Record<LeaveType, { label: string; color: string; bg: string; 
 };
 
 const statusConfig: Record<LeaveStatus, { label: string; color: string; bg: string; icon: typeof CheckCircle2 }> = {
-  pending:  { label: 'Menunggu',  color: '#D97706', bg: '#FEF3C7', icon: Clock },
-  approved: { label: 'Disetujui', color: '#16A34A', bg: '#DCFCE7', icon: CheckCircle2 },
-  rejected: { label: 'Ditolak',   color: '#DC2626', bg: '#FEE2E2', icon: XCircle },
+  pending:   { label: 'Menunggu',   color: '#D97706', bg: '#FEF3C7', icon: Clock },
+  approved:  { label: 'Disetujui',  color: '#16A34A', bg: '#DCFCE7', icon: CheckCircle2 },
+  rejected:  { label: 'Ditolak',    color: '#DC2626', bg: '#FEE2E2', icon: XCircle },
+  cancelled: { label: 'Dibatalkan', color: '#6B7280', bg: '#F3F4F6', icon: XCircle },
 };
 
 const months = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
@@ -874,15 +875,32 @@ export function ProfilePage({ onLogout, initialSection, initialOpenModal, onRese
                         <p className="text-[12px] font-semibold text-gray-800 mt-0.5">{formatDate(req.start_date)}</p>
                       </div>
                       <div className="bg-gray-50 rounded-xl px-3 py-2">
-                        <p className="text-[10px] text-gray-400">Tanggal Selesai</p>
-                        <p className="text-[12px] font-semibold text-gray-800 mt-0.5">{formatDate(req.end_date)}</p>
+                        <p className="text-[10px] text-gray-400">
+                          {req.actual_end_date ? 'Selesai (Dipersingkat)' : 'Tanggal Selesai'}
+                        </p>
+                        <p className="text-[12px] font-semibold text-gray-800 mt-0.5">
+                          {req.actual_end_date ? formatDate(req.actual_end_date) : formatDate(req.end_date)}
+                        </p>
                       </div>
                     </div>
+
+                    {req.actual_end_date && (
+                      <div className="bg-amber-50 border border-amber-100 rounded-xl px-3 py-2 mb-3 text-[11px] text-amber-800">
+                        <span className="font-semibold">Masa cuti diperpendek admin:</span> selesai {formatDate(req.actual_end_date)} (semula {formatDate(req.end_date)}).
+                        {req.shortened_reason && <p className="mt-1 italic text-amber-900 font-medium">Alasan: "{req.shortened_reason}"</p>}
+                      </div>
+                    )}
+
+                    {req.status === 'cancelled' && req.cancellation_reason && (
+                      <div className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 mb-3 text-[11px] text-gray-600">
+                        <span className="font-semibold">Alasan dibatalkan:</span> "{req.cancellation_reason}"
+                      </div>
+                    )}
 
                      <div className="flex items-center justify-between">
                       <p className="text-[12px] text-gray-500 italic flex-1 mr-3">"{req.reason}"</p>
                       <span className="text-[11px] font-medium text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full flex-shrink-0">
-                        {req.days} hari
+                        {req.days} hari efektif
                       </span>
                     </div>
 

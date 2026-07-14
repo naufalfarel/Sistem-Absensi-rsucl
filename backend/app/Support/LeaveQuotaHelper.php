@@ -196,9 +196,7 @@ class LeaveQuotaHelper
 
         $total = 0;
         foreach ($leaveRequests as $lr) {
-            $start  = Carbon::parse($lr->start_date);
-            $end    = Carbon::parse($lr->end_date);
-            $total += $start->diffInDays($end) + 1;
+            $total += $lr->days;
         }
 
         return $total;

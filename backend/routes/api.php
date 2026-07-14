@@ -92,6 +92,10 @@ Route::middleware('auth:sanctum')->group(function () {
         // Memonitoring status absensi seluruh karyawan hari ini secara real-time
         Route::get('/attendance/all-today', [AttendanceController::class, 'allToday']);
 
+        // ── Riwayat Kehadiran (Admin)
+        Route::get('/attendance', [AttendanceController::class, 'adminAttendanceHistory']);
+        Route::get('/attendance/status-summary', [AttendanceController::class, 'adminStatusSummary']);
+
         // ── Fitur Pulang Cepat (Early Checkout) — Admin
         // Daftar absensi pulang cepat (filter: ?status=pending|approved|rejected)
         Route::get('/attendance/early-checkouts', [AttendanceController::class, 'earlyCheckouts']);
@@ -99,6 +103,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/attendance/{id}/early-checkout/approve', [AttendanceController::class, 'approveEarlyCheckout']);
         // Tolak laporan pulang cepat (admin_note wajib)
         Route::put('/attendance/{id}/early-checkout/reject', [AttendanceController::class, 'rejectEarlyCheckout']);
+
+        // Daftar absensi lembur (filter: ?status=pending|disetujui|ditolak)
+        Route::get('/attendance/overtime', [AttendanceController::class, 'overtimeList']);
+        // Setujui/tolak laporan lembur
+        Route::put('/attendance/{id}/overtime/approve', [AttendanceController::class, 'approveOvertime']);
+        Route::put('/attendance/{id}/overtime/reject', [AttendanceController::class, 'rejectOvertime']);
 
         // ── CRUD Karyawan
         // Mendapatkan data meta pendukung (list department/position) untuk registrasi karyawan
@@ -114,6 +124,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/leave-requests/{leaveRequest}/approve', [LeaveRequestController::class, 'approve']);
         // Menolak pengajuan cuti/izin karyawan disertai alasan penolakan
         Route::put('/leave-requests/{leaveRequest}/reject',  [LeaveRequestController::class, 'reject']);
+        // Batalkan pengajuan cuti yang sudah disetujui atau pending
+        Route::put('/leave-requests/{id}/cancel', [LeaveRequestController::class, 'cancelApprovedOrPending']);
+        // Persingkat pengajuan cuti yang sudah disetujui
+        Route::put('/leave-requests/{id}/shorten', [LeaveRequestController::class, 'shortenApproved']);
+        // Deteksi kemungkinan pegawai kembali lebih awal dari cuti
+        Route::get('/leave-requests/possible-early-returns', [LeaveRequestController::class, 'possibleEarlyReturns']);
         // Menghapus massal pengajuan cuti yang sudah berstatus 'approved' atau 'rejected'
         Route::delete('/leave-requests/all-processed',       [LeaveRequestController::class, 'destroyAll']);
         // Menghapus satu data pengajuan cuti tertentu

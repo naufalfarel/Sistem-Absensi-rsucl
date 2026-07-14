@@ -49,7 +49,15 @@ class AttendanceController extends Controller
         $activeLeave = \App\Models\LeaveRequest::where('employee_id', $employee->id)
             ->where('status', 'approved')
             ->where('start_date', '<=', $todayStr)
-            ->where('end_date', '>=', $todayStr)
+            ->where(function($q) use ($todayStr) {
+                $q->where(function($q2) use ($todayStr) {
+                    $q2->whereNull('actual_end_date')
+                       ->whereDate('end_date', '>=', $todayStr);
+                })->orWhere(function($q2) use ($todayStr) {
+                    $q2->whereNotNull('actual_end_date')
+                       ->whereDate('actual_end_date', '>=', $todayStr);
+                });
+            })
             ->first();
 
         $leaveData = null;
@@ -165,6 +173,7 @@ class AttendanceController extends Controller
                         'nip'        => $emp->nip,
                         'department' => $emp->department?->name ?? 'Umum',
                         'position'   => $emp->position?->name ?? 'Staff',
+                        'profile_picture' => $emp->user?->profile_picture ? url($emp->user->profile_picture) : null,
                     ]
                 ];
             }
@@ -204,26 +213,7 @@ class AttendanceController extends Controller
             return response()->json(['success' => false, 'message' => 'Data karyawan tidak ditemukan.'], 404);
         }
 
-        // 2. Validasi apakah karyawan bersangkutan sedang cuti/izin/sakit yang disetujui hari ini
-        $todayStr = today()->toDateString();
-        $activeLeave = \App\Models\LeaveRequest::where('employee_id', $employee->id)
-            ->where('status', 'approved')
-            ->where('start_date', '<=', $todayStr)
-            ->where('end_date', '>=', $todayStr)
-            ->first();
-
-        if ($activeLeave) {
-            $typeName = 'Cuti';
-            if ($activeLeave->type === 'izin') {
-                $typeName = 'Izin';
-            } elseif ($activeLeave->type === 'sakit') {
-                $typeName = 'Sakit';
-            }
-            return response()->json([
-                'success' => false,
-                'message' => "Check-in ditolak: Anda sedang dalam masa {$typeName} yang telah disetujui untuk hari ini.",
-            ], 422);
-        }
+        // 2. Validasi apakah karyawan bersangkutan sedang cuti/izin/sakit yang disetujui hari ini (diperbolehkan check-in untuk deteksi lapor masuk lebih awal)
 
         // 3. Validasi absensi ganda pada hari yang sama
         $existing = Attendance::where('employee_id', $employee->id)
@@ -576,22 +566,8 @@ class AttendanceController extends Controller
         $closeMins = $this->timeToMins($checkoutClose);
 
         // 5. Validasi window check-out
-        if ($isOvernight) {
-            $startMins = $this->timeToMins($shiftStart ?? '21:00');
-            if ($nowMins >= $startMins && $nowMins > $closeMins) {
-                return response()->json([
-                    'success' => false,
-                    'message' => "Batas akhir check-out sudah lewat pukul {$checkoutClose} WIB.",
-                ], 422);
-            }
-        } else {
-            if ($nowMins > $closeMins) {
-                return response()->json([
-                    'success' => false,
-                    'message' => "Batas akhir check-out sudah lewat pukul {$checkoutClose} WIB.",
-                ], 422);
-            }
-        }
+        // Batas akhir checkout dihapus agar karyawan tetap bisa checkout terlambat (lembur)
+        // dan keterangannya tersimpan ke database untuk diproses persetujuannya oleh admin.
 
         // 6. Klasifikasi Pulang Cepat / Lembur
         $employee->load('schedules'); // Pastikan relasi ter-load untuk ScheduleRules
@@ -638,13 +614,42 @@ class AttendanceController extends Controller
             $updateData['early_checkout_reason'] = $request->input('early_checkout_reason');
         }
 
-        // Data lembur
-        if ($classification['is_overtime']) {
-            $updateData['is_overtime']      = true;
-            $updateData['overtime_minutes'] = $classification['overtime_minutes'];
-            if ($request->filled('overtime_note')) {
-                $updateData['overtime_note'] = $request->input('overtime_note');
+        // Data lembur (Sistem Baru & Lama Berdampingan untuk Kompatibilitas)
+        $attendanceService = new \App\Services\AttendanceService();
+        $overtimeCalc = $attendanceService->hitungStatusLembur($employee, $now, $shiftDate);
+
+        if ($overtimeCalc['is_lembur']) {
+            if (empty($request->input('keterangan_lembur'))) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Alasan lembur wajib diisi karena Anda terdeteksi lembur.',
+                    'requires_keterangan_lembur' => true,
+                    'overtime_info' => [
+                        'durasi_lembur_menit' => $overtimeCalc['durasi_lembur_menit'],
+                        'jam_pulang_normal' => $overtimeCalc['jam_pulang_normal'],
+                        'jam_checkout' => $now->format('H:i:s')
+                    ]
+                ], 422);
             }
+
+            // Simpan ke kolom baru
+            $updateData['jam_pulang_normal']      = $overtimeCalc['jam_pulang_normal'];
+            $updateData['is_lembur']              = true;
+            $updateData['durasi_lembur_menit']    = $overtimeCalc['durasi_lembur_menit'];
+            $updateData['keterangan_lembur']      = $request->input('keterangan_lembur');
+            $updateData['status_approval_lembur'] = 'pending';
+
+            // Sinkronkan ke kolom legacy demi kompatibilitas backward
+            $updateData['is_overtime']            = true;
+            $updateData['overtime_minutes']       = $overtimeCalc['durasi_lembur_menit'];
+            $updateData['overtime_note']          = $request->input('keterangan_lembur');
+        } else {
+            // Set data lembur kosong jika tidak lembur
+            $updateData['jam_pulang_normal']      = $overtimeCalc['jam_pulang_normal'];
+            $updateData['is_lembur']              = false;
+            $updateData['durasi_lembur_menit']    = 0;
+            $updateData['keterangan_lembur']      = null;
+            $updateData['status_approval_lembur'] = null;
         }
 
         // 8. Update database
@@ -655,8 +660,8 @@ class AttendanceController extends Controller
             'message'    => 'Check-out berhasil.',
             'data'       => new AttendanceResource($record),
             'is_early_checkout' => $classification['is_early'],
-            'is_overtime'       => $classification['is_overtime'],
-            'overtime_minutes'  => $classification['overtime_minutes'],
+            'is_overtime'       => $overtimeCalc['is_lembur'],
+            'overtime_minutes'  => $overtimeCalc['durasi_lembur_menit'],
         ]);
     }
 
@@ -896,6 +901,7 @@ class AttendanceController extends Controller
                 'name'       => $r->employee->user?->name,
                 'nip'        => $r->employee->nip,
                 'department' => $r->employee->department?->name,
+                'profile_picture' => $r->employee->user?->profile_picture ? url($r->employee->user->profile_picture) : null,
             ];
         }
 
@@ -1048,6 +1054,519 @@ class AttendanceController extends Controller
             'success' => true,
             'message' => 'Catatan lembur berhasil diperbarui.',
             'data'    => new AttendanceResource($record),
+        ]);
+    }
+
+    /**
+     * GET /api/attendance
+     *
+     * Get paginated history of employees attendance and leave period rows.
+     */
+    public function adminAttendanceHistory(Request $request)
+    {
+        $rows = $this->getHistoryRows($request);
+
+        // Filter by status if provided
+        if ($request->filled('status')) {
+            $statuses = (array)$request->input('status');
+            $rows = array_filter($rows, function($row) use ($statuses) {
+                return in_array($row['status'], $statuses);
+            });
+            $rows = array_values($rows); // reset array keys
+        }
+
+        // Manual pagination
+        $currentPage = \Illuminate\Pagination\LengthAwarePaginator::resolveCurrentPage() ?: 1;
+        $perPage = (int)$request->query('per_page', 20);
+        if ($perPage < 1) $perPage = 20;
+        if ($perPage > 100) $perPage = 100;
+
+        $col = collect($rows);
+        $currentPageResults = $col->slice(($currentPage - 1) * $perPage, $perPage)->values();
+
+        $paginated = new \Illuminate\Pagination\LengthAwarePaginator(
+            $currentPageResults,
+            $col->count(),
+            $perPage,
+            $currentPage,
+            ['path' => \Illuminate\Pagination\LengthAwarePaginator::resolveCurrentPath()]
+        );
+
+        return response()->json([
+            'success' => true,
+            'data'    => $paginated->items(),
+            'meta'    => [
+                'current_page' => $paginated->currentPage(),
+                'last_page'    => $paginated->lastPage(),
+                'per_page'     => $paginated->perPage(),
+                'total'        => $paginated->total(),
+            ]
+        ]);
+    }
+
+    /**
+     * GET /api/attendance/status-summary
+     *
+     * Get attendance counts/summary for the active filters.
+     */
+    public function adminStatusSummary(Request $request)
+    {
+        $rows = $this->getHistoryRows($request);
+
+        $hadir = 0;
+        $telat = 0;
+        $alpha = 0;
+        $cuti = 0;
+
+        foreach ($rows as $row) {
+            $status = $row['status'];
+            if ($status === 'hadir') {
+                $hadir++;
+            } elseif ($status === 'telat') {
+                $telat++;
+            } elseif ($status === 'alpha' || $status === 'belum_hadir') {
+                $alpha++;
+            } elseif (in_array($status, ['izin', 'sakit', 'cuti', 'cuti_khusus'])) {
+                $cuti++;
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'data'    => [
+                'hadir'     => $hadir,
+                'terlambat' => $telat,
+                'alpha'     => $alpha,
+                'cuti'      => $cuti,
+            ]
+        ]);
+    }
+
+    /**
+     * Helper to get attendance and leave period rows based on request filters.
+     * Before status filtering and pagination.
+     */
+    private function getHistoryRows(Request $request): array
+    {
+        $dateFrom = $request->query('date_from');
+        $dateTo   = $request->query('date_to');
+        
+        $isRangeMode = !empty($dateFrom) && !empty($dateTo);
+        
+        // 1. Get active employees matching search and department filters
+        $empQuery = \App\Models\Employee::where('status', 'active')
+            ->with(['user', 'department', 'position', 'schedules']);
+
+        if ($request->filled('search')) {
+            $search = $request->query('search');
+            $empQuery->where(function($q) use ($search) {
+                $q->where('nip', 'like', "%{$search}%")
+                  ->orWhereHas('user', function($uq) use ($search) {
+                      $uq->where('name', 'like', "%{$search}%");
+                  })
+                  ->orWhereHas('department', function($dq) use ($search) {
+                      $dq->where('name', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        if ($request->filled('department_id')) {
+            $empQuery->where('department_id', $request->query('department_id'));
+        }
+
+        $employees = $empQuery->get();
+        $employeeIds = $employees->pluck('id')->toArray();
+
+        $rows = [];
+        $dayMap = [
+            0 => 'Minggu', 1 => 'Senin', 2 => 'Selasa',
+            3 => 'Rabu',   4 => 'Kamis', 5 => 'Jumat', 6 => 'Sabtu',
+        ];
+
+        if (!$isRangeMode) {
+            // Mode Harian (Single Date)
+            $targetDate = $request->query('date', today('Asia/Jakarta')->toDateString());
+            $carbonDate = Carbon::parse($targetDate);
+            $dayName = $dayMap[$carbonDate->dayOfWeek];
+
+            // Fetch attendances for this single date
+            $attendances = Attendance::whereIn('employee_id', $employeeIds)
+                ->whereDate('date', $targetDate)
+                ->with(['holiday'])
+                ->get()
+                ->keyBy('employee_id');
+
+            // Fetch approved leaves overlapping this single date
+            $leaves = \App\Models\LeaveRequest::where('status', 'approved')
+                ->whereIn('employee_id', $employeeIds)
+                ->whereDate('start_date', '<=', $targetDate)
+                ->where(function($q) use ($targetDate) {
+                    $q->where(function($q2) use ($targetDate) {
+                        $q2->whereNull('actual_end_date')
+                           ->whereDate('end_date', '>=', $targetDate);
+                    })->orWhere(function($q2) use ($targetDate) {
+                        $q2->whereNotNull('actual_end_date')
+                           ->whereDate('actual_end_date', '>=', $targetDate);
+                    });
+                })
+                ->with(['specialLeaveCategory'])
+                ->get()
+                ->keyBy('employee_id');
+
+            $holiday = AttendanceRules::holidayOn($carbonDate);
+            
+            // For Alpha/Belum Hadir calculation limits
+            $firstAttDate = Attendance::orderBy('date', 'asc')->value('date');
+            $systemStartDate = $firstAttDate ? Carbon::parse($firstAttDate)->startOfDay() : today('Asia/Jakarta');
+            $today = Carbon::today('Asia/Jakarta');
+            $limitDate = $carbonDate->gt($today) ? $today : $carbonDate;
+
+            foreach ($employees as $emp) {
+                $matchingShift = $emp->schedules->first(function($s) use ($dayName) {
+                    return $s->pivot->day_of_week === $dayName;
+                });
+                
+                $hasShift = !empty($matchingShift);
+
+                if ($attendances->has($emp->id)) {
+                    $att = $attendances->get($emp->id);
+                    $rows[] = $this->formatRowFromAttendance($att, $emp, $matchingShift);
+                } elseif ($leaves->has($emp->id)) {
+                    $leave = $leaves->get($emp->id);
+                    $rows[] = $this->formatRowFromLeave($leave, $emp, $targetDate, $matchingShift, 'daily');
+                } else {
+                    if (!$hasShift) {
+                        continue;
+                    }
+
+                    if ($holiday) {
+                        $isAssigned = AttendanceRules::isAssignedToWorkOnHoliday($emp, $holiday);
+                        if (!$isAssigned) {
+                            continue;
+                        }
+                    }
+
+                    if ($carbonDate->lte($limitDate) && $carbonDate->gte($systemStartDate)) {
+                        $status = 'alpha';
+                        $note = 'Tidak Hadir Tanpa Keterangan' . ($holiday ? ' (Mangkir Penugasan)' : '');
+
+                        if ($carbonDate->isToday() && $matchingShift) {
+                            $now = Carbon::now('Asia/Jakarta');
+                            $shiftStart = $matchingShift->start_time;
+                            $closeCheckinOffset = (int) Setting::get('close_checkin', '60');
+                            $shiftStartCarbon = Carbon::today('Asia/Jakarta')->setTimeFromTimeString($shiftStart);
+                            $closeLimitCarbon = $shiftStartCarbon->copy()->addMinutes($closeCheckinOffset);
+
+                            if ($now->lte($closeLimitCarbon)) {
+                                $status = 'belum_hadir';
+                                $note = 'Belum Absen Masuk';
+                            }
+                        }
+
+                        $rows[] = $this->formatRowForAbsent($emp, $targetDate, $status, $note, $matchingShift);
+                    }
+                }
+            }
+        } else {
+            // Mode Rentang Tanggal
+            // Fetch attendances in range
+            $attendances = Attendance::whereIn('employee_id', $employeeIds)
+                ->whereBetween('date', [$dateFrom, $dateTo])
+                ->with(['holiday'])
+                ->get();
+
+            // Fetch approved leaves overlapping range
+            $leaves = \App\Models\LeaveRequest::where('status', 'approved')
+                ->whereIn('employee_id', $employeeIds)
+                ->whereDate('start_date', '<=', $dateTo)
+                ->where(function($q) use ($dateFrom) {
+                    $q->where(function($q2) use ($dateFrom) {
+                        $q2->whereNull('actual_end_date')
+                           ->whereDate('end_date', '>=', $dateFrom);
+                    })->orWhere(function($q2) use ($dateFrom) {
+                        $q2->whereNotNull('actual_end_date')
+                           ->whereDate('actual_end_date', '>=', $dateFrom);
+                    });
+                })
+                ->with(['specialLeaveCategory'])
+                ->get();
+
+            foreach ($attendances as $att) {
+                $emp = $employees->firstWhere('id', $att->employee_id);
+                if (!$emp) continue;
+                
+                $dayName = $dayMap[$att->date->dayOfWeek];
+                $matchingShift = $emp->schedules->first(function($s) use ($dayName) {
+                    return $s->pivot->day_of_week === $dayName;
+                });
+                
+                $rows[] = $this->formatRowFromAttendance($att, $emp, $matchingShift);
+            }
+
+            foreach ($leaves as $leave) {
+                $emp = $employees->firstWhere('id', $leave->employee_id);
+                if (!$emp) continue;
+
+                $startDateCarbon = Carbon::parse($leave->start_date);
+                $dayName = $dayMap[$startDateCarbon->dayOfWeek];
+                $matchingShift = $emp->schedules->first(function($s) use ($dayName) {
+                    return $s->pivot->day_of_week === $dayName;
+                });
+
+                // Row type: leave_period
+                $rows[] = $this->formatRowFromLeave($leave, $emp, $leave->start_date, $matchingShift, 'leave_period');
+            }
+        }
+
+        // Sort: date DESC, name A-Z
+        usort($rows, function($a, $b) {
+            $dateA = $a['row_type'] === 'leave_period' ? $a['start_date'] : $a['date'];
+            $dateB = $b['row_type'] === 'leave_period' ? $b['start_date'] : $b['date'];
+
+            $dateComp = strcmp($dateB, $dateA);
+            if ($dateComp !== 0) {
+                return $dateComp;
+            }
+
+            return strcmp($a['employee']['name'], $b['employee']['name']);
+        });
+
+        return $rows;
+    }
+
+    private function formatRowFromAttendance($att, $emp, $matchingShift)
+    {
+        return [
+            'id' => $att->id,
+            'employee_id' => $emp->id,
+            'date' => $att->date ? $att->date->toDateString() : null,
+            'check_in' => $att->check_in,
+            'check_out' => $att->check_out,
+            'status' => $att->status,
+            'duration_min' => $att->duration_minutes,
+            'latitude' => $att->latitude,
+            'longitude' => $att->longitude,
+            'accuracy' => $att->accuracy,
+            'is_within_geofence' => (bool)$att->is_within_geofence,
+            'note' => $att->note,
+            'checkin_location_note' => $att->checkin_location_note,
+            'checkout_location_note' => $att->checkout_location_note,
+            'checkin_photo_url' => $att->checkin_photo_url ? url($att->checkin_photo_url) : null,
+            'checkout_photo_url' => $att->checkout_photo_url ? url($att->checkout_photo_url) : null,
+            'image_check_in' => $att->image_check_in ? url($att->image_check_in) : null,
+            'image_check_out' => $att->image_check_out ? url($att->image_check_out) : null,
+            'checkin_latitude' => $att->checkin_latitude,
+            'checkin_longitude' => $att->checkin_longitude,
+            'checkout_latitude' => $att->checkout_latitude,
+            'checkout_longitude' => $att->checkout_longitude,
+            'checkin_distance_meters' => $att->checkin_distance_meters,
+            'checkout_distance_meters' => $att->checkout_distance_meters,
+            'shift_name' => $matchingShift ? $matchingShift->name : 'Reguler',
+            'shift_type' => $matchingShift ? ($matchingShift->shift_type ?? 'normal') : 'normal',
+            'is_holiday_work' => (bool)$att->is_holiday_work,
+            'holiday' => $att->relationLoaded('holiday') && $att->holiday ? $att->holiday->name : ($att->holiday ? $att->holiday->name : null),
+            'row_type' => 'daily',
+            'employee' => [
+                'id' => $emp->id,
+                'name' => $emp->user?->name,
+                'nip' => $emp->nip,
+                'department' => $emp->department?->name,
+                'position' => $emp->position?->name,
+                'profile_picture' => $emp->user?->profile_picture ? url($emp->user->profile_picture) : null,
+            ],
+        ];
+    }
+
+    private function formatRowFromLeave($leave, $emp, $date, $matchingShift, $rowType)
+    {
+        return [
+            'id' => 'leave_' . $leave->id,
+            'employee_id' => $emp->id,
+            'date' => $date,
+            'start_date' => $leave->start_date ? $leave->start_date->toDateString() : null,
+            'end_date' => $leave->end_date ? $leave->end_date->toDateString() : null,
+            'days' => $leave->days_count,
+            'check_in' => null,
+            'check_out' => null,
+            'status' => $leave->type, // cuti, izin, sakit, cuti_khusus
+            'duration_min' => null,
+            'latitude' => null,
+            'longitude' => null,
+            'accuracy' => null,
+            'is_within_geofence' => false,
+            'note' => $leave->reason,
+            'checkin_location_note' => null,
+            'checkout_location_note' => null,
+            'checkin_photo_url' => null,
+            'checkout_photo_url' => null,
+            'image_check_in' => null,
+            'image_check_out' => null,
+            'checkin_latitude' => null,
+            'checkin_longitude' => null,
+            'checkout_latitude' => null,
+            'checkout_longitude' => null,
+            'checkin_distance_meters' => null,
+            'checkout_distance_meters' => null,
+            'shift_name' => $matchingShift ? $matchingShift->name : 'Reguler',
+            'shift_type' => $matchingShift ? ($matchingShift->shift_type ?? 'normal') : 'normal',
+            'is_holiday_work' => false,
+            'holiday' => null,
+            'row_type' => $rowType,
+            'employee' => [
+                'id' => $emp->id,
+                'name' => $emp->user?->name,
+                'nip' => $emp->nip,
+                'department' => $emp->department?->name,
+                'position' => $emp->position?->name,
+                'profile_picture' => $emp->user?->profile_picture ? url($emp->user->profile_picture) : null,
+            ],
+        ];
+    }
+
+    private function formatRowForAbsent($emp, $date, $status, $note, $matchingShift)
+    {
+        return [
+            'id' => null,
+            'employee_id' => $emp->id,
+            'date' => $date,
+            'check_in' => null,
+            'check_out' => null,
+            'status' => $status,
+            'duration_min' => null,
+            'latitude' => null,
+            'longitude' => null,
+            'accuracy' => null,
+            'is_within_geofence' => false,
+            'note' => $note,
+            'checkin_location_note' => null,
+            'checkout_location_note' => null,
+            'checkin_photo_url' => null,
+            'checkout_photo_url' => null,
+            'image_check_in' => null,
+            'image_check_out' => null,
+            'checkin_latitude' => null,
+            'checkin_longitude' => null,
+            'checkout_latitude' => null,
+            'checkout_longitude' => null,
+            'checkin_distance_meters' => null,
+            'checkout_distance_meters' => null,
+            'shift_name' => $matchingShift ? $matchingShift->name : 'Reguler',
+            'shift_type' => $matchingShift ? ($matchingShift->shift_type ?? 'normal') : 'normal',
+            'is_holiday_work' => false,
+            'holiday' => null,
+            'row_type' => 'daily',
+            'employee' => [
+                'id' => $emp->id,
+                'name' => $emp->user?->name,
+                'nip' => $emp->nip,
+                'department' => $emp->department?->name,
+                'position' => $emp->position?->name,
+                'profile_picture' => $emp->user?->profile_picture ? url($emp->user->profile_picture) : null,
+            ],
+        ];
+    }
+
+    /**
+     * GET /api/attendance/overtime
+     * 
+     * Mengambil daftar absensi yang memiliki pengajuan lembur (is_lembur = true).
+     * Hanya dapat diakses oleh Administrator.
+     */
+    public function overtimeList(Request $request)
+    {
+        $query = Attendance::with(['employee.user', 'employee.department'])
+            ->where('is_lembur', true)
+            ->orderBy('date', 'desc');
+
+        // Filter status_approval_lembur: pending, disetujui, ditolak
+        if ($request->has('status') && in_array($request->query('status'), ['pending', 'disetujui', 'ditolak'])) {
+            $query->where('status_approval_lembur', $request->query('status'));
+        }
+
+        // Filter bulan & tahun opsional
+        if ($request->has('month') && $request->has('year')) {
+            $query->whereMonth('date', (int)$request->query('month'))
+                  ->whereYear('date', (int)$request->query('year'));
+        }
+
+        $records = AttendanceResource::collection($query->limit(200)->get());
+
+        return response()->json([
+            'success' => true,
+            'data'    => $records,
+        ]);
+    }
+
+    /**
+     * PUT /api/attendance/{id}/overtime/approve
+     * 
+     * Admin menyetujui lembur karyawan.
+     */
+    public function approveOvertime(Request $request, int $id)
+    {
+        $record = Attendance::findOrFail($id);
+
+        if (!$record->is_lembur) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Rekaman ini tidak terdeteksi lembur.',
+            ], 422);
+        }
+
+        $record->update([
+            'status_approval_lembur' => 'disetujui',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Lembur disetujui.',
+            'data'    => new AttendanceResource($record->fresh(['employee.user', 'employee.department'])),
+        ]);
+    }
+
+    /**
+     * PUT /api/attendance/{id}/overtime/reject
+     * 
+     * Admin menolak lembur karyawan.
+     */
+    public function rejectOvertime(Request $request, int $id)
+    {
+        $record = Attendance::findOrFail($id);
+
+        if (!$record->is_lembur) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Rekaman ini tidak terdeteksi lembur.',
+            ], 422);
+        }
+
+        // Jika ditolak admin, maka jam pulangnya ditolak (di-null-kan)
+        $record->update([
+            'check_out'                => null,
+            'checkout_photo_url'       => null,
+            'image_check_out'          => null,
+            'checkout_latitude'        => null,
+            'checkout_longitude'       => null,
+            'checkout_distance_meters' => null,
+            'checkout_location_note'   => null,
+            'duration_minutes'         => null,
+            
+            // Kolom lembur baru
+            'is_lembur'                => false,
+            'durasi_lembur_menit'      => 0,
+            'keterangan_lembur'        => null,
+            'status_approval_lembur'   => 'ditolak',
+
+            // Kolom lembur legacy
+            'is_overtime'              => false,
+            'overtime_minutes'         => 0,
+            'overtime_note'            => null,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Lembur ditolak dan jam pulang dibatalkan.',
+            'data'    => new AttendanceResource($record->fresh(['employee.user', 'employee.department'])),
         ]);
     }
 }

@@ -239,6 +239,7 @@ class EmployeeController extends Controller
             'email'       => $e->user?->email,
             'nip'         => $e->nip,
             'username'    => $e->user?->username,
+            'profile_picture' => $e->user?->profile_picture ? url($e->user->profile_picture) : null,
             'department'  => $e->department?->name,
             'department_id' => $e->department_id,
             'position'    => $e->position?->name,

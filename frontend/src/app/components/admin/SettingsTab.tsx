@@ -632,7 +632,11 @@ export function SettingsTab() {
         <div className="p-5">
           <div className="flex items-center gap-4 mb-5 p-3.5 bg-gray-50 rounded-2xl border border-gray-100">
             <div className="w-14 h-14 rounded-2xl bg-white border border-gray-100 shadow-sm flex items-center justify-center overflow-hidden flex-shrink-0">
-              <span className="text-lg font-bold text-[#16A34A]">{(name || 'U').charAt(0)}</span>
+              {user?.profile_picture ? (
+                <img src={user.profile_picture} alt={name} className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-lg font-bold text-[#16A34A]">{(name || 'U').charAt(0)}</span>
+              )}
             </div>
             <div>
               <p className="text-[14px] font-semibold text-gray-800">{name}</p>

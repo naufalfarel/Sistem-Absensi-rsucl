@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, CheckCircle2, Clock, AlertTriangle, XCircle, Coffee, CalendarOff, Eye } from 'lucide-react';
+import { Search, CheckCircle2, Clock, AlertTriangle, XCircle, Coffee, CalendarOff, Eye, X } from 'lucide-react';
 import { attendanceApi, AttendanceRecord } from '../../../services/api';
 
 interface MappedAttendance {
@@ -22,6 +22,11 @@ interface MappedAttendance {
   shiftType?: 'normal' | 'dinas_luar';
   isHolidayWork?: boolean;
   holiday?: string | null;
+  profile_picture?: string | null;
+  is_lembur?: boolean;
+  durasi_lembur_menit?: number | null;
+  keterangan_lembur?: string | null;
+  status_approval_lembur?: 'pending' | 'disetujui' | 'ditolak' | null;
 }
 
 const statusMap: Record<string, { label: string; color: string; bg: string; icon: typeof CheckCircle2; border: string }> = {
@@ -65,6 +70,9 @@ export function AttendanceTab() {
   
   // Indikator memproses/loading data dari server
   const [loading, setLoading] = useState(false);
+
+  // State untuk preview pas foto besar
+  const [previewPhoto, setPreviewPhoto] = useState<{ url: string; name: string } | null>(null);
   const loadTodayRecords = async () => {
     setLoading(true);
     try {
@@ -106,6 +114,11 @@ export function AttendanceTab() {
             shiftType: r.shift_type ?? 'normal',
             isHolidayWork: r.is_holiday_work,
             holiday: r.holiday,
+            profile_picture: r.employee?.profile_picture,
+            is_lembur: r.is_lembur,
+            durasi_lembur_menit: r.durasi_lembur_menit,
+            keterangan_lembur: r.keterangan_lembur,
+            status_approval_lembur: r.status_approval_lembur,
           };
         });
         setRecords(mapped);
@@ -217,10 +230,22 @@ export function AttendanceTab() {
                       <tr key={emp.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                         <td className="px-4 py-3.5">
                           <div className="flex items-center gap-2.5">
-                            <div className="w-8 h-8 rounded-xl bg-gray-50 flex items-center justify-center flex-shrink-0" style={{ background: sc.bg }}>
-                              <span className="text-[11px] font-bold" style={{ color: sc.color }}>
-                                {emp.name.replace(/^(dr\.|Ns\.|Dr\.)\s*/i, '').charAt(0)}
-                              </span>
+                            <div 
+                              onClick={() => {
+                                if (emp.profile_picture) {
+                                  setPreviewPhoto({ url: emp.profile_picture, name: emp.name });
+                                }
+                              }}
+                              className={`w-8 h-8 rounded-xl bg-gray-50 flex items-center justify-center flex-shrink-0 overflow-hidden border border-gray-100 ${emp.profile_picture ? 'cursor-zoom-in hover:scale-105 active:scale-95 transition-all' : ''}`}
+                              style={{ background: sc.bg }}
+                            >
+                              {emp.profile_picture ? (
+                                <img src={emp.profile_picture} alt={emp.name} className="w-full h-full object-cover" />
+                              ) : (
+                                <span className="text-[11px] font-bold" style={{ color: sc.color }}>
+                                  {emp.name.replace(/^(dr\.|Ns\.|Dr\.)\s*/i, '').charAt(0)}
+                                </span>
+                              )}
                             </div>
                             <div>
                               <p className="text-[13px] font-medium text-gray-800">{emp.name}</p>
@@ -275,10 +300,22 @@ export function AttendanceTab() {
           <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setSelected(null)} />
           <div className="relative bg-white rounded-2xl p-6 shadow-2xl w-full max-w-sm">
             <div className="flex items-center gap-3 mb-5">
-              <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: statusMap[selected.status].bg }}>
-                <span className="text-lg font-bold" style={{ color: statusMap[selected.status].color }}>
-                  {selected.name.replace(/^(dr\.|Ns\.|Dr\.)\s*/i, '').charAt(0)}
-                </span>
+              <div 
+                onClick={() => {
+                  if (selected.profile_picture) {
+                    setPreviewPhoto({ url: selected.profile_picture, name: selected.name });
+                  }
+                }}
+                className={`w-12 h-12 rounded-2xl flex items-center justify-center overflow-hidden border border-gray-100 ${selected.profile_picture ? 'cursor-zoom-in hover:scale-105 active:scale-95 transition-all' : ''}`}
+                style={{ background: statusMap[selected.status].bg }}
+              >
+                {selected.profile_picture ? (
+                  <img src={selected.profile_picture} alt={selected.name} className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-lg font-bold" style={{ color: statusMap[selected.status].color }}>
+                    {selected.name.replace(/^(dr\.|Ns\.|Dr\.)\s*/i, '').charAt(0)}
+                  </span>
+                )}
               </div>
               <div>
                 <p className="text-[14px] font-semibold text-gray-900">{selected.name}</p>
@@ -322,7 +359,97 @@ export function AttendanceTab() {
               </div>
             )}
 
+            {/* Overtime Info & Action Panel */}
+            {selected.is_lembur && (
+              <div className="mb-5 p-3.5 bg-orange-50 border border-orange-200 rounded-xl space-y-2 text-left">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-orange-600 font-semibold text-[12px]">
+                    <Clock size={13} />
+                    <span>Lembur (+{selected.durasi_lembur_menit} mnt)</span>
+                  </div>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    selected.status_approval_lembur === 'disetujui' ? 'bg-green-100 text-green-700' :
+                    selected.status_approval_lembur === 'ditolak' ? 'bg-red-100 text-red-650' :
+                    'bg-orange-100 text-orange-700'
+                  }`}>
+                    {selected.status_approval_lembur === 'disetujui' ? 'Disetujui' :
+                     selected.status_approval_lembur === 'ditolak' ? 'Ditolak' : 'Menunggu'}
+                  </span>
+                </div>
+                <p className="text-[11.5px] text-gray-600">
+                  <span className="font-semibold">Pekerjaan Lembur:</span> {selected.keterangan_lembur || '-'}
+                </p>
+                {selected.status_approval_lembur === 'pending' && (
+                  <div className="flex gap-2 pt-2 border-t border-orange-200/50 mt-1">
+                    <button
+                      onClick={async () => {
+                        if (!selected.id) return;
+                        try {
+                          await attendanceApi.approveOvertime(selected.id);
+                          alert('Lembur berhasil disetujui.');
+                          setSelected(null);
+                          loadTodayRecords();
+                        } catch (err: any) {
+                          alert(err?.message ?? 'Gagal menyetujui lembur.');
+                        }
+                      }}
+                      className="flex-1 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-lg text-[11px] font-semibold transition-colors"
+                    >
+                      Setujui
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!selected.id) return;
+                        try {
+                          await attendanceApi.rejectOvertime(selected.id);
+                          alert('Lembur ditolak dan jam pulang dibatalkan.');
+                          setSelected(null);
+                          loadTodayRecords();
+                        } catch (err: any) {
+                          alert(err?.message ?? 'Gagal menolak lembur.');
+                        }
+                      }}
+                      className="flex-1 py-1.5 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-lg text-[11px] font-semibold transition-colors"
+                    >
+                      Tolak
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             <button onClick={() => setSelected(null)} className="w-full py-2.5 bg-gray-100 rounded-xl text-[13px] font-medium text-gray-600 hover:bg-gray-200 transition-colors">Tutup</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── LIGHTBOX PHOTO PREVIEW MODAL ── */}
+      {previewPhoto && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => setPreviewPhoto(null)} />
+          <div className="relative max-w-sm w-full bg-white rounded-3xl overflow-hidden shadow-2xl animate-fade-in flex flex-col items-center">
+            {/* Header/Close button */}
+            <div className="absolute top-4 right-4 z-10">
+              <button 
+                onClick={() => setPreviewPhoto(null)} 
+                className="w-9 h-9 rounded-full bg-black/40 hover:bg-black/60 flex items-center justify-center text-white transition-all focus:outline-none"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            {/* Image Wrapper */}
+            <div className="p-3 w-full bg-gray-50 flex justify-center items-center">
+              <img 
+                src={previewPhoto.url} 
+                alt={previewPhoto.name} 
+                className="max-h-[60vh] max-w-full rounded-2xl object-contain shadow-sm border border-gray-100" 
+              />
+            </div>
+            {/* Caption */}
+            <div className="px-6 py-4.5 bg-white w-full text-center border-t border-gray-50">
+              <p className="text-[14px] font-bold text-gray-900 leading-tight">{previewPhoto.name}</p>
+              <p className="text-[11px] text-gray-400 mt-1 font-medium">Foto Profil Karyawan RSUCL</p>
+            </div>
           </div>
         </div>
       )}

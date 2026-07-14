@@ -57,7 +57,15 @@ class MarkAbsentEmployees extends Command
             $hasLeave = LeaveRequest::where('employee_id', $emp->id)
                 ->where('status', 'approved')
                 ->whereDate('start_date', '<=', $dateStr)
-                ->whereDate('end_date', '>=', $dateStr)
+                ->where(function($q) use ($dateStr) {
+                    $q->where(function($q2) use ($dateStr) {
+                        $q2->whereNull('actual_end_date')
+                           ->whereDate('end_date', '>=', $dateStr);
+                    })->orWhere(function($q2) use ($dateStr) {
+                        $q2->whereNotNull('actual_end_date')
+                           ->whereDate('actual_end_date', '>=', $dateStr);
+                    });
+                })
                 ->exists();
             if ($hasLeave) {
                 continue;

@@ -215,6 +215,7 @@ export interface Employee {
   motor_plate_2?: string | null;
   car_plate_1?: string | null;
   car_plate_2?: string | null;
+  profile_picture?: string | null;
 }
 
 /**
@@ -281,7 +282,7 @@ export interface AttendanceRecord {
   note: string | null;
   checkin_location_note?: string | null;
   checkout_location_note?: string | null;
-  employee?: { id: number; name: string; nip: string; department: string };
+  employee?: { id: number; name: string; nip: string; department: string; profile_picture?: string | null };
   image_check_in?: string | null;
   image_check_out?: string | null;
   
@@ -309,9 +310,21 @@ export interface AttendanceRecord {
   overtime_minutes?: number | null;
   overtime_note?: string | null;
 
+  // New Overtime System
+  jam_pulang_normal?: string | null;
+  is_lembur?: boolean;
+  durasi_lembur_menit?: number | null;
+  keterangan_lembur?: string | null;
+  status_approval_lembur?: 'pending' | 'disetujui' | 'ditolak' | null;
+
   // Holiday Work
   is_holiday_work?: boolean;
   holiday?: string | null;
+
+  row_type?: 'daily' | 'leave_period';
+  start_date?: string;
+  end_date?: string;
+  days?: number;
 }
 
 /**
@@ -343,7 +356,7 @@ export const attendanceApi = {
     return api.post<{ success: boolean; message: string; data: AttendanceRecord }>('/attendance/check-in', formData);
   },
   // Mengirim absensi pulang beserta parameter geolokasi, foto wajah, waktu simulasi, catatan lokasi, alasan pulang cepat, dan catatan lembur
-  checkOut: (lat?: number, lng?: number, accuracy?: number, photo?: File | Blob, simulatedTime?: string, locationNote?: string, earlyCheckoutReason?: string, overtimeNote?: string) => {
+  checkOut: (lat?: number, lng?: number, accuracy?: number, photo?: File | Blob, simulatedTime?: string, locationNote?: string, earlyCheckoutReason?: string, overtimeNote?: string, keteranganLembur?: string) => {
     const formData = new FormData();
     if (lat !== undefined && lat !== null) formData.append('latitude', String(lat));
     if (lng !== undefined && lng !== null) formData.append('longitude', String(lng));
@@ -353,6 +366,7 @@ export const attendanceApi = {
     if (locationNote) formData.append('location_note', locationNote);
     if (earlyCheckoutReason) formData.append('early_checkout_reason', earlyCheckoutReason);
     if (overtimeNote) formData.append('overtime_note', overtimeNote);
+    if (keteranganLembur) formData.append('keterangan_lembur', keteranganLembur);
     return api.post<{ success: boolean; message: string; data: AttendanceRecord; is_early_checkout?: boolean; is_overtime?: boolean; overtime_minutes?: number }>('/attendance/check-out', formData);
   },
   // Ambil daftar pulang cepat untuk admin
@@ -374,6 +388,69 @@ export const attendanceApi = {
   // Memperbarui catatan lembur setelah check-out berhasil
   updateOvertimeNote: (overtimeNote: string) =>
     api.put<{ success: boolean; message: string; data: AttendanceRecord }>('/attendance/overtime-note', { overtime_note: overtimeNote }),
+  // Ambil daftar lembur untuk admin
+  overtimeList: (status?: string, month?: number, year?: number) => {
+    let query = '';
+    const params: string[] = [];
+    if (status) params.push(`status=${status}`);
+    if (month) params.push(`month=${month}`);
+    if (year) params.push(`year=${year}`);
+    if (params.length > 0) query = '?' + params.join('&');
+    return api.get<{ success: boolean; data: AttendanceRecord[] }>(`/attendance/overtime${query}`);
+  },
+  // Setujui lembur
+  approveOvertime: (id: number) =>
+    api.put<{ success: boolean; data: AttendanceRecord }>(`/attendance/${id}/overtime/approve`, {}),
+  // Tolak lembur
+  rejectOvertime: (id: number) =>
+    api.put<{ success: boolean; data: AttendanceRecord }>(`/attendance/${id}/overtime/reject`, {}),
+
+  historyAdmin: (params: {
+    date?: string;
+    date_from?: string;
+    date_to?: string;
+    search?: string;
+    department_id?: string;
+    status?: string[];
+    page?: number;
+    per_page?: number;
+  }) => {
+    const query = new URLSearchParams();
+    if (params.date) query.append('date', params.date);
+    if (params.date_from) query.append('date_from', params.date_from);
+    if (params.date_to) query.append('date_to', params.date_to);
+    if (params.search) query.append('search', params.search);
+    if (params.department_id) query.append('department_id', params.department_id);
+    if (params.page) query.append('page', String(params.page));
+    if (params.per_page) query.append('per_page', String(params.per_page));
+    if (params.status && params.status.length > 0) {
+      params.status.forEach(s => query.append('status[]', s));
+    }
+    return api.get<{
+      success: boolean;
+      data: AttendanceRecord[];
+      meta?: { current_page: number; last_page: number; per_page: number; total: number };
+    }>(`/attendance?${query.toString()}`);
+  },
+
+  statusSummary: (params: {
+    date?: string;
+    date_from?: string;
+    date_to?: string;
+    search?: string;
+    department_id?: string;
+  }) => {
+    const query = new URLSearchParams();
+    if (params.date) query.append('date', params.date);
+    if (params.date_from) query.append('date_from', params.date_from);
+    if (params.date_to) query.append('date_to', params.date_to);
+    if (params.search) query.append('search', params.search);
+    if (params.department_id) query.append('department_id', params.department_id);
+    return api.get<{
+      success: boolean;
+      data: { hadir: number; terlambat: number; alpha: number; cuti: number };
+    }>(`/attendance/status-summary?${query.toString()}`);
+  },
 };
 
 // ─────────────────────────────────────────────────────────────────────
@@ -393,9 +470,15 @@ export interface LeaveRequest {
   days: number;
   reason: string;
   attachment_url?: string | null;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
   admin_note?: string;
   reviewed_at?: string;
+  actual_end_date?: string | null;
+  effective_end_date?: string | null;
+  shortened_reason?: string | null;
+  shortened_at?: string | null;
+  cancellation_reason?: string | null;
+  cancelled_at?: string | null;
   created_at: string;
   employee: { id: number; name: string; nip: string; department: string };
   reviewer?: { name: string } | null;
@@ -441,6 +524,15 @@ export const leaveApi = {
     ),
   // Karyawan membatalkan pengajuan miliknya sendiri (hanya yang masih pending)
   cancel: (id: number) => api.delete<{ success: boolean; message: string }>(`/leave-requests/${id}/cancel`),
+  // Admin membatalkan pengajuan cuti (approved atau pending)
+  cancelAdmin: (id: number, cancellation_reason: string) =>
+    api.put<{ success: boolean; data: LeaveRequest }>(`/leave-requests/${id}/cancel`, { cancellation_reason }),
+  // Admin mempersingkat pengajuan cuti (approved)
+  shortenAdmin: (id: number, actual_end_date: string, shortened_reason: string) =>
+    api.put<{ success: boolean; data: LeaveRequest }>(`/leave-requests/${id}/shorten`, { actual_end_date, shortened_reason }),
+  // Admin mendeteksi kemungkinan pegawai kembali lebih awal
+  possibleEarlyReturns: () =>
+    api.get<{ success: boolean; data: Array<{ leave_request: LeaveRequest; detected_dates: string[] }> }>('/leave-requests/possible-early-returns'),
 };
 
 export interface SpecialLeaveCategory {

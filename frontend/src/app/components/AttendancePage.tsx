@@ -632,9 +632,7 @@ export function AttendancePage() {
   const [locationNote, setLocationNote] = useState('');
 
   // Status overtime (lembur)
-  const [showOvertimeModal, setShowOvertimeModal] = useState(false);
-  const [overtimeNote, setOvertimeNote] = useState('');
-  const [overtimeMinutesCalculated, setOvertimeMinutesCalculated] = useState(0);
+  const [keteranganLembur, setKeteranganLembur] = useState('');
 
   // Alasan pulang cepat (early checkout)
   const [earlyCheckoutReason, setEarlyCheckoutReason] = useState('');
@@ -915,6 +913,21 @@ export function AttendancePage() {
     return current < threshold;
   };
 
+  const checkIfOvertime = () => {
+    if (!canCheckOut) return false;
+    const expected = getExpectedCheckoutTime();
+    const grace = parseInt(shiftSettings.overtime_grace_minutes || '15') || 0;
+    const threshold = new Date(expected.getTime() + grace * 60 * 1000);
+    return current > threshold;
+  };
+
+  const getOvertimeDurationMins = () => {
+    if (!canCheckOut) return 0;
+    const expected = getExpectedCheckoutTime();
+    const diffMs = current.getTime() - expected.getTime();
+    return Math.max(0, Math.floor(diffMs / 60000));
+  };
+
   const lockedLabel = () => {
     // Sudah check-in tapi belum check-out dan waktu sudah lewat
     if (checkedIn && !checkedOut) return 'Batas Waktu Check-Out Sudah Lewat';
@@ -976,26 +989,34 @@ export function AttendancePage() {
           setLocationNote(''); // Kosongkan input setelah berhasil submit
         }
       } else if (canCheckOut) {
-        const res = await attendanceApi.checkOut(latVal, lngVal, accVal, photoFile, simTimeArg, locationNote, earlyReasonStr || undefined);
+        const res = await attendanceApi.checkOut(
+          latVal, lngVal, accVal, photoFile, simTimeArg, locationNote,
+          earlyReasonStr || undefined,
+          undefined,
+          keteranganLembur.trim() || undefined
+        );
         if (res.success && res.data.check_out) {
           const t = res.data.check_out.substring(0, 5);
           setCheckOutTime(t);
           setCheckedOut(true);
           setShowModal(false);
-          
-          if (res.is_overtime) {
-            setOvertimeMinutesCalculated(res.overtime_minutes || 0);
-            setShowOvertimeModal(true);
-          } else {
-            setSuccessAction('Check-Out');
-            setSuccessTime(t);
-            setShowSuccess(true);
-          }
-          setLocationNote(''); // Kosongkan input setelah berhasil submit
+          setSuccessAction('Check-Out');
+          setSuccessTime(t);
+          setShowSuccess(true);
+          setLocationNote('');
+          setKeteranganLembur('');
         }
       }
     } catch (err: any) {
-      alert(err?.message ?? 'Gagal melakukan absensi.');
+      // Backend menolak karena lembur tapi keterangan belum diisi
+      const data = (err as any)?.data;
+      if (data?.requires_keterangan_lembur) {
+        // Jangan tutup modal, biarkan user isi alasan lembur
+        // Scroll ke textarea jika ada
+        alert('Anda terdeteksi lembur. Mohon isi alasan lembur sebelum checkout.');
+      } else {
+        alert(err?.message ?? 'Gagal melakukan absensi.');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -1464,15 +1485,46 @@ export function AttendancePage() {
                   />
                 </div>
               )}
+
+              {canCheckOut && checkIfOvertime() && (
+                <div className="pt-2 border-t border-orange-200 mt-2">
+                  <div className="flex items-center gap-2 mb-2 px-3 py-2 bg-orange-50 rounded-xl border border-orange-200">
+                    <Clock size={13} className="text-orange-500 flex-shrink-0" />
+                    <div>
+                      <p className="text-[11px] font-semibold text-orange-700">Terdeteksi Lembur</p>
+                      <p className="text-[10px] text-orange-600">{getOvertimeDurationMins()} menit melebihi jam pulang normal</p>
+                    </div>
+                  </div>
+                  <label className="block text-[11px] font-medium text-orange-600 mb-1">Alasan Lembur <span className="text-red-500">*</span></label>
+                  <textarea
+                    value={keteranganLembur}
+                    onChange={(e) => setKeteranganLembur(e.target.value)}
+                    placeholder="Contoh: Menyelesaikan laporan rekam medis pasien IGD..."
+                    rows={2}
+                    className="w-full px-3 py-2 border border-orange-200 rounded-xl text-[12px] bg-white focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500/25 placeholder:text-gray-400 resize-none"
+                  />
+                </div>
+              )}
             </div>
             <div className="flex gap-2">
               <button onClick={() => setShowModal(false)} className="flex-1 py-3 border border-gray-200 rounded-xl text-[14px] font-medium text-gray-600 hover:bg-gray-50 transition-colors">Batal</button>
               <button
                 onClick={() => confirmAction(earlyCheckoutReason)}
-                disabled={submitting || !locationNote.trim() || (canCheckOut && checkIfEarlyCheckout() && !earlyCheckoutReason.trim())}
+                disabled={
+                  submitting ||
+                  !locationNote.trim() ||
+                  (canCheckOut && checkIfEarlyCheckout() && !earlyCheckoutReason.trim()) ||
+                  (canCheckOut && checkIfOvertime() && !keteranganLembur.trim())
+                }
                 className={`flex-1 py-3 rounded-xl text-[14px] font-semibold text-white transition-all ${
                   canCheckIn ? 'bg-[#16A34A] hover:bg-[#0d9240]' : 'bg-red-500 hover:bg-red-600'
-                } ${submitting || !locationNote.trim() || (canCheckOut && checkIfEarlyCheckout() && !earlyCheckoutReason.trim()) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                } ${
+                  submitting ||
+                  !locationNote.trim() ||
+                  (canCheckOut && checkIfEarlyCheckout() && !earlyCheckoutReason.trim()) ||
+                  (canCheckOut && checkIfOvertime() && !keteranganLembur.trim())
+                    ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
               >
                 {submitting ? 'Memproses...' : 'Ya, Konfirmasi'}
               </button>
@@ -1481,68 +1533,8 @@ export function AttendancePage() {
         </div>
       )}
 
-      {/* Overtime Modal */}
-      {showOvertimeModal && (
-        <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center">
-          <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
-          <div className="relative bg-white rounded-t-3xl sm:rounded-2xl w-full sm:max-w-sm p-6 shadow-2xl mx-0 sm:mx-4">
-            <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4 mx-auto bg-orange-50">
-              <Clock size={28} className="text-orange-500" />
-            </div>
-            <h3 className="text-[16px] font-semibold text-gray-900 text-center mb-1">
-              Keterangan Lembur
-            </h3>
-            <p className="text-[13px] text-gray-500 text-center mb-4">
-              Anda terdeteksi lembur selama <strong className="text-orange-600">{overtimeMinutesCalculated} menit</strong>.
-            </p>
-            
-            <div className="space-y-2 mb-5">
-              <label className="block text-[12px] font-medium text-gray-600">Penyebab Lembur (Akibat Apa) <span className="text-red-500">*</span></label>
-              <textarea
-                value={overtimeNote}
-                onChange={(e) => setOvertimeNote(e.target.value)}
-                placeholder="Contoh: Menyelesaikan laporan rekam medis pasien IGD, atau operasi darurat..."
-                rows={3}
-                className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/15 transition-all resize-none placeholder:text-gray-350"
-              />
-            </div>
-            
-            <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  setShowOvertimeModal(false);
-                  setSuccessAction('Check-Out');
-                  setSuccessTime(checkOutTime || new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }));
-                  setShowSuccess(true);
-                }}
-                className="flex-1 py-3 border border-gray-200 rounded-xl text-[13px] font-medium text-gray-500 hover:bg-gray-50 transition-colors"
-              >
-                Lewati
-              </button>
-              <button
-                onClick={async () => {
-                  if (!overtimeNote.trim()) return;
-                  try {
-                    await attendanceApi.updateOvertimeNote(overtimeNote);
-                    setShowOvertimeModal(false);
-                    setSuccessAction('Check-Out (Lembur)');
-                    setSuccessTime(checkOutTime || new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }));
-                    setShowSuccess(true);
-                  } catch (err: any) {
-                    alert(err?.message ?? 'Gagal menyimpan catatan lembur.');
-                  }
-                }}
-                disabled={!overtimeNote.trim()}
-                className={`flex-1 py-3 rounded-xl text-[13px] font-semibold text-white bg-orange-500 hover:bg-orange-600 transition-all ${
-                  !overtimeNote.trim() ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-              >
-                Simpan
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
+
 
       {/* Success Animation */}
       {showSuccess && (

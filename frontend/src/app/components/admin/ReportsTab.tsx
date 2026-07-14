@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { FileText, Download, Users, Calendar, Clock, AlertTriangle, ChevronDown } from 'lucide-react';
+import { FileText, Download, Users, Calendar, Clock, AlertTriangle, ChevronDown, CheckCircle2, X } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { reportApi, ReportSummary, attendanceApi, departmentApi, getToken } from '../../../services/api';
+import { reportApi, ReportSummary, attendanceApi, AttendanceRecord, departmentApi, getToken } from '../../../services/api';
 import logoImg from '../../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
 import rsLogoImg from '../../../imports/rsucl_wide_logo.png';
 import { useAuth } from '../../../context/AuthContext';
@@ -45,6 +45,11 @@ export function ReportsTab() {
   
   // Menampung daftar departemen untuk dropdown filter
   const [departments, setDepartments] = useState<{ id: number; name: string }[]>([]);
+
+  // State untuk daftar lembur pending
+  const [overtimePending, setOvertimePending] = useState<AttendanceRecord[]>([]);
+  const [loadingOvertime, setLoadingOvertime] = useState(false);
+  const [overtimeProcessing, setOvertimeProcessing] = useState<number | null>(null);
 
   /**
    * Mengambil data base64 dari file gambar URL (digunakan untuk menyematkan logo resmi pada file PDF).
@@ -171,7 +176,7 @@ export function ReportsTab() {
       const periodStr = `Dari ${startDayStr} s/d ${endDayStr}`;
 
       const triggerDownload = (html: string, filename: string) => {
-        const blob = new Blob(['\uFEFF' + html], { type: 'application/octet-stream' });
+        const blob = new Blob(['\uFEFF' + html], { type: 'application/vnd.ms-excel;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
@@ -196,14 +201,14 @@ export function ReportsTab() {
           <style>
             body { font-family: Calibri, Arial, sans-serif; }
             table { border-collapse: collapse; }
-            .header-title { font-size: 12pt; font-weight: bold; color: #111827; text-align: right; vertical-align: bottom; border: none; padding: 2px 4px; }
-            .header-rs    { font-size: 9pt;  font-weight: bold; color: #374151; text-align: right; vertical-align: middle; border: none; padding: 2px 4px; }
-            .header-period{ font-size: 8pt;  color: #6B7280; text-align: right; vertical-align: top;    border: none; padding: 2px 4px; }
-            .logo-cell    { border: none; vertical-align: middle; padding: 4px; width: 160px; }
+            .header-title { font-size: 13pt; font-weight: bold; color: #111827; text-align: right; vertical-align: bottom; border: none; padding: 2px 4px; }
+            .header-rs    { font-size: 10pt; font-weight: bold; color: #374151; text-align: right; vertical-align: middle; border: none; padding: 2px 4px; }
+            .header-period{ font-size: 9pt;  color: #6B7280; text-align: right; vertical-align: top;    border: none; padding: 2px 4px; }
+            .logo-cell    { border: none; vertical-align: middle; padding: 4px; width: 140px; }
             .separator    { height: 3px; border: none; border-bottom: 2px solid #000000; padding: 0; font-size: 1px; mso-height-source: userset; }
-            th { background-color: #16A34A; color: #FFFFFF; font-weight: bold; font-size: 9pt; text-align: center; vertical-align: middle; border: 1px solid #A7C4A0; padding: 4px 5px; }
-            td { font-size: 9pt; border: 1px solid #D1D5DB; vertical-align: middle; padding: 3px 5px; color: #1F2937; }
-            .dept-row td { background-color: #E5E7EB; font-weight: bold; color: #374151; font-size: 9pt; border: 1px solid #C4C9D4; }
+            th { background-color: #F3F4F6; color: #1F2937; font-weight: bold; font-size: 10pt; text-align: center; vertical-align: middle; border: 1px solid #000000; padding: 6px 8px; }
+            td { font-size: 10pt; border: 1px solid #000000; vertical-align: middle; padding: 5px 8px; color: #1F2937; }
+            .dept-row td { background-color: #E5E7EB; font-weight: bold; color: #374151; font-size: 10pt; border: 1px solid #000000; text-align: left; padding: 6px 8px; }
             .center { text-align: center; }
             .bold   { font-weight: bold; }
           </style>
@@ -211,8 +216,7 @@ export function ReportsTab() {
         <body>${bodyHtml}</body>
         </html>`;
 
-      // Use HTML width/height attributes (not CSS) so WPS Office/Excel actually respects the size
-      // rsucl_wide_logo.png natural size is 980x381 → at width=140, height=54
+      // Use HTML width/height attributes so WPS Office respects the size
       const logoImg = base64Logo
         ? `<img src="${base64Logo}" width="140" height="54" style="display:block;" />`
         : '<span style="font-size:11pt;font-weight:bold;color:#16A34A;">RSUCL</span>';
@@ -228,23 +232,32 @@ export function ReportsTab() {
           ? res.data.filter(r => r.employee?.department === selectedDepartment)
           : res.data;
 
+        // Sort by department name (A-Z), then employee name (A-Z)
+        const sortedData = [...filteredData].sort((a, b) => {
+          const deptA = a.employee?.department ?? 'UMUM';
+          const deptB = b.employee?.department ?? 'UMUM';
+          const deptComp = deptA.localeCompare(deptB);
+          if (deptComp !== 0) return deptComp;
+          const nameA = a.employee?.name ?? '';
+          const nameB = b.employee?.name ?? '';
+          return nameA.localeCompare(nameB);
+        });
+
         let bodyRows = '';
-        let lastKey = '';
+        let lastDept = '';
         let rowNum = 1;
-        filteredData.forEach(r => {
-          const dateStr = r.date || '--';
+        sortedData.forEach(r => {
           const dept = r.employee?.department ?? 'UMUM';
-          const key = `${dateStr}|${dept}`;
-          if (key !== lastKey) {
-            bodyRows += `<tr class="dept-row"><td colspan="9">${dept.toUpperCase()} (${dateStr})</td></tr>`;
-            lastKey = key;
+          if (dept !== lastDept) {
+            bodyRows += `<tr class="dept-row"><td colspan="9">${dept}</td></tr>`;
+            lastDept = dept;
           }
           const dur = r.duration_min ? `${Math.floor(r.duration_min / 60)}j ${r.duration_min % 60}m` : '--';
           bodyRows += `<tr>
             <td class="center">${rowNum++}</td>
-            <td>${dateStr}</td>
-            <td x:str>${r.employee?.nip ?? '--'}</td>
+            <td class="center" style="mso-number-format:'\\@';" x:str>${r.employee?.nip ?? '--'}</td>
             <td class="bold">${r.employee?.name ?? 'Karyawan'}</td>
+            <td class="center">${r.date || '--'}</td>
             <td>${dept}</td>
             <td class="center">${r.check_in ?? '--'}</td>
             <td class="center">${r.check_out ?? '--'}</td>
@@ -266,8 +279,14 @@ export function ReportsTab() {
           <table>
             <thead><tr>
               <th style="width:40px">No</th>
-              <th>Tanggal</th><th>NIP</th><th>Nama Karyawan</th><th>Departemen</th>
-              <th>Jam Masuk</th><th>Jam Keluar</th><th>Durasi Kerja</th><th>Status Kehadiran</th>
+              <th>NIP</th>
+              <th>Nama</th>
+              <th>Tanggal</th>
+              <th>Departemen</th>
+              <th>Jam Masuk</th>
+              <th>Jam Keluar</th>
+              <th>Durasi Kerja</th>
+              <th>Status Kehadiran</th>
             </tr></thead>
             <tbody>${bodyRows}</tbody>
           </table>`;
@@ -285,19 +304,30 @@ export function ReportsTab() {
           ? res.data.filter(r => r.department === selectedDepartment)
           : res.data;
 
+        // Sort by department name (A-Z), then employee name (A-Z)
+        const sortedData = [...filteredData].sort((a, b) => {
+          const deptA = a.department ?? 'UMUM';
+          const deptB = b.department ?? 'UMUM';
+          const deptComp = deptA.localeCompare(deptB);
+          if (deptComp !== 0) return deptComp;
+          const nameA = a.name ?? '';
+          const nameB = b.name ?? '';
+          return nameA.localeCompare(nameB);
+        });
+
         let bodyRows = '';
         let lastDept = '';
         let rowNum = 1;
-        filteredData.forEach(r => {
+        sortedData.forEach(r => {
           const dept = r.department ?? 'UMUM';
           if (dept !== lastDept) {
-            bodyRows += `<tr class="dept-row"><td colspan="12">${dept}</td></tr>`;
+            bodyRows += `<tr class="dept-row"><td colspan="10">${dept}</td></tr>`;
             lastDept = dept;
           }
           const dur = r.duration_min ? `${Math.floor(r.duration_min / 60)}j ${r.duration_min % 60}m` : '0j 0m';
           bodyRows += `<tr>
             <td class="center">${rowNum++}</td>
-            <td x:str>${r.nip}</td>
+            <td class="center" style="mso-number-format:'\\@';" x:str>${r.nip}</td>
             <td class="bold">${r.name}</td>
             <td class="center">${r.hadir} d</td>
             <td class="center">${r.telat} d</td>
@@ -305,9 +335,6 @@ export function ReportsTab() {
             <td class="center">${r.sakit} d</td>
             <td class="center">${r.cuti} d</td>
             <td class="center">${r.alpha} d</td>
-            <td class="center">${r.early_checkout_count ?? 0} d</td>
-            <td class="center">${r.overtime_minutes ?? 0} m</td>
-            <td class="center">${r.holiday_work_days ?? 0} d</td>
             <td class="center bold">${dur}</td>
           </tr>`;
         });
@@ -316,19 +343,24 @@ export function ReportsTab() {
           <table style="border:none;margin-bottom:8px;border-collapse:collapse;">
             <tr style="height:22px;">
               <td rowspan="3" colspan="3" class="logo-cell">${logoImg}</td>
-              <td colspan="9" class="header-title">DATA ABSENSI KARYAWAN</td>
+              <td colspan="7" class="header-title">DATA ABSENSI KARYAWAN</td>
             </tr>
-            <tr style="height:18px;"><td colspan="9" class="header-rs">RUMAH SAKIT UMUM CEMPAKA LIMA</td></tr>
-            <tr style="height:16px;"><td colspan="9" class="header-period">${periodStr}${deptLabelText}</td></tr>
-            <tr style="height:3px;"><td colspan="13" class="separator">&nbsp;</td></tr>
+            <tr style="height:18px;"><td colspan="7" class="header-rs">RUMAH SAKIT UMUM CEMPAKA LIMA</td></tr>
+            <tr style="height:16px;"><td colspan="7" class="header-period">${periodStr}${deptLabelText}</td></tr>
+            <tr style="height:3px;"><td colspan="10" class="separator">&nbsp;</td></tr>
           </table>
           <table>
             <thead><tr>
               <th style="width:40px">No</th>
-              <th>NIP</th><th>Nama Karyawan</th>
-              <th>Hadir (Hari)</th><th>Terlambat (Hari)</th>
-              <th>Izin (Hari)</th><th>Sakit (Hari)</th><th>Cuti (Hari)</th>
-              <th>Alpha (Hari)</th><th>Plg Cepat (Hari)</th><th>Lembur (menit)</th><th>Kerja Libur (Hari)</th><th>Total Durasi Kerja</th>
+              <th>NIP</th>
+              <th>Nama</th>
+              <th>Hadir (Hari)</th>
+              <th>Terlambat (Hari)</th>
+              <th>Izin (Hari)</th>
+              <th>Sakit (Hari)</th>
+              <th>Cuti (Hari)</th>
+              <th>Alpha (Hari)</th>
+              <th>Total Durasi Kerja</th>
             </tr></thead>
             <tbody>${bodyRows}</tbody>
           </table>`;
@@ -642,7 +674,44 @@ export function ReportsTab() {
       }
     };
     fetchDepts();
+    loadOvertimePending();
   }, []);
+
+  const loadOvertimePending = async () => {
+    setLoadingOvertime(true);
+    try {
+      const res = await attendanceApi.overtimeList('pending');
+      if (res.success) setOvertimePending(res.data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingOvertime(false);
+    }
+  };
+
+  const handleApproveOvertime = async (id: number) => {
+    setOvertimeProcessing(id);
+    try {
+      await attendanceApi.approveOvertime(id);
+      setOvertimePending(prev => prev.filter(r => r.id !== id));
+    } catch (err: any) {
+      alert(err?.message ?? 'Gagal menyetujui lembur.');
+    } finally {
+      setOvertimeProcessing(null);
+    }
+  };
+
+  const handleRejectOvertime = async (id: number) => {
+    setOvertimeProcessing(id);
+    try {
+      await attendanceApi.rejectOvertime(id);
+      setOvertimePending(prev => prev.filter(r => r.id !== id));
+    } catch (err: any) {
+      alert(err?.message ?? 'Gagal menolak lembur.');
+    } finally {
+      setOvertimeProcessing(null);
+    }
+  };
 
   const totalEmp = summary?.total_employees ?? 0;
   const getMonthlyAttendanceRate = () => {
@@ -950,6 +1019,75 @@ export function ReportsTab() {
             <div className="text-center py-10 text-[12px] text-gray-400">Tidak ada data departemen/bagian</div>
           )}
         </div>
+      </div>
+        {/* Overtime Approval Section */}
+      <div className="bg-white rounded-2xl border border-orange-100 shadow-sm p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-orange-50">
+              <Clock size={15} className="text-orange-500" />
+            </div>
+            <div>
+              <p className="text-[14px] font-semibold text-gray-800">Persetujuan Lembur</p>
+              <p className="text-[11px] text-gray-400">Lembur karyawan menunggu persetujuan admin</p>
+            </div>
+          </div>
+          <button
+            onClick={loadOvertimePending}
+            disabled={loadingOvertime}
+            className="text-[11px] text-orange-600 hover:text-orange-700 font-medium disabled:opacity-50"
+          >
+            {loadingOvertime ? 'Memuat...' : 'Refresh'}
+          </button>
+        </div>
+
+        {loadingOvertime ? (
+          <div className="text-center py-8 text-gray-400 text-[12px] animate-pulse">Memuat data lembur...</div>
+        ) : overtimePending.length === 0 ? (
+          <div className="text-center py-10">
+            <CheckCircle2 size={28} className="text-green-400 mx-auto mb-2" />
+            <p className="text-[12px] font-semibold text-gray-600">Tidak ada lembur yang menunggu persetujuan</p>
+            <p className="text-[11px] text-gray-400 mt-1">Semua lembur sudah diproses</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {overtimePending.map(r => (
+              <div key={r.id} className="flex items-start gap-4 p-3.5 bg-orange-50/60 border border-orange-100 rounded-xl">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-[13px] font-semibold text-gray-800">{r.employee?.name ?? 'Karyawan'}</p>
+                    <span className="text-[10px] text-gray-400">{r.employee?.nip}</span>
+                    <span className="text-[10px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-semibold">
+                      {r.durasi_lembur_menit ?? 0} menit lembur
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-gray-500 mt-0.5">
+                    📅 {r.date} &nbsp;·&nbsp; ⏰ Jam pulang normal: {r.jam_pulang_normal?.substring(0,5) ?? '--'} &nbsp;·&nbsp; Checkout: {r.check_out?.substring(0,5) ?? '--'}
+                  </p>
+                  <p className="text-[11px] text-gray-600 mt-1 bg-white/70 px-2.5 py-1.5 rounded-lg border border-orange-100/70">
+                    💬 <span className="font-medium">Alasan:</span> {r.keterangan_lembur ?? '-'}
+                  </p>
+                </div>
+                <div className="flex flex-col gap-1.5 flex-shrink-0">
+                  <button
+                    onClick={() => handleApproveOvertime(r.id)}
+                    disabled={overtimeProcessing === r.id}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-50"
+                  >
+                    <CheckCircle2 size={11} /> Setujui
+                  </button>
+                  <button
+                    onClick={() => handleRejectOvertime(r.id)}
+                    disabled={overtimeProcessing === r.id}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-50"
+                  >
+                    <X size={11} /> Tolak
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

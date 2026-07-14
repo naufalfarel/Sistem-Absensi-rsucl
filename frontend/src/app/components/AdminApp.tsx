@@ -117,6 +117,9 @@ export function AdminApp({ onLogout }: AdminAppProps) {
   // Jumlah notifikasi sistem admin yang belum dibaca
   const [unreadNotifications, setUnreadNotifications] = useState(0);
 
+  // State untuk preview pas foto besar
+  const [previewPhoto, setPreviewPhoto] = useState<{ url: string; name: string } | null>(null);
+
   /**
    * Mengambil jumlah notifikasi admin belum dibaca dari API.
    */
@@ -592,8 +595,20 @@ export function AdminApp({ onLogout }: AdminAppProps) {
                             >
                               <td className="px-4 py-3.5">
                                 <div className="flex items-center gap-2.5">
-                                  <div className="w-8 h-8 rounded-xl bg-[#16A34A]/10 flex items-center justify-center flex-shrink-0">
-                                    <span className="text-[#16A34A] text-[11px] font-bold">{emp.name.replace(/^(dr\.|Ns\.|Dr\.)\s*/i, '').charAt(0)}</span>
+                                  <div 
+                                    onClick={(e) => {
+                                      if (emp.profile_picture) {
+                                        e.stopPropagation();
+                                        setPreviewPhoto({ url: emp.profile_picture, name: emp.name });
+                                      }
+                                    }}
+                                    className={`w-8 h-8 rounded-xl bg-[#16A34A]/10 flex items-center justify-center flex-shrink-0 overflow-hidden border border-gray-100 ${emp.profile_picture ? 'cursor-zoom-in hover:scale-105 active:scale-95 transition-all' : ''}`}
+                                  >
+                                    {emp.profile_picture ? (
+                                      <img src={emp.profile_picture} alt={emp.name} className="w-full h-full object-cover" />
+                                    ) : (
+                                      <span className="text-[#16A34A] text-[11px] font-bold">{emp.name.replace(/^(dr\.|Ns\.|Dr\.)\s*/i, '').charAt(0)}</span>
+                                    )}
                                   </div>
                                   <div>
                                     <p className="text-[13px] font-medium text-gray-800">{emp.name}</p>
@@ -859,6 +874,37 @@ export function AdminApp({ onLogout }: AdminAppProps) {
             <div className="flex gap-2">
               <button onClick={closeModal} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-[13px] font-medium text-gray-600 hover:bg-gray-50 transition-colors">Batal</button>
               <button onClick={handleDelete} className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 rounded-xl text-[13px] font-semibold text-white transition-colors">Ya, Hapus</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── LIGHTBOX PHOTO PREVIEW MODAL ── */}
+      {previewPhoto && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => setPreviewPhoto(null)} />
+          <div className="relative max-w-sm w-full bg-white rounded-3xl overflow-hidden shadow-2xl animate-fade-in flex flex-col items-center">
+            {/* Header/Close button */}
+            <div className="absolute top-4 right-4 z-10">
+              <button 
+                onClick={() => setPreviewPhoto(null)} 
+                className="w-9 h-9 rounded-full bg-black/40 hover:bg-black/60 flex items-center justify-center text-white transition-all focus:outline-none"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            {/* Image Wrapper */}
+            <div className="p-3 w-full bg-gray-50 flex justify-center items-center">
+              <img 
+                src={previewPhoto.url} 
+                alt={previewPhoto.name} 
+                className="max-h-[60vh] max-w-full rounded-2xl object-contain shadow-sm border border-gray-100" 
+              />
+            </div>
+            {/* Caption */}
+            <div className="px-6 py-4.5 bg-white w-full text-center border-t border-gray-50">
+              <p className="text-[14px] font-bold text-gray-900 leading-tight">{previewPhoto.name}</p>
+              <p className="text-[11px] text-gray-400 mt-1 font-medium">Foto Profil Karyawan RSUCL</p>
             </div>
           </div>
         </div>

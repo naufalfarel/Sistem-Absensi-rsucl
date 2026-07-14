@@ -84,6 +84,13 @@ class AttendanceResource extends JsonResource
             'overtime_minutes' => $this->overtime_minutes,
             'overtime_note'    => $this->overtime_note,
 
+            // New Overtime System
+            'jam_pulang_normal'        => $this->jam_pulang_normal,
+            'is_lembur'                => (bool)$this->is_lembur,
+            'durasi_lembur_menit'      => $this->durasi_lembur_menit,
+            'keterangan_lembur'        => $this->keterangan_lembur,
+            'status_approval_lembur'   => $this->status_approval_lembur,
+
             // Holiday Work
             'is_holiday_work'  => (bool)$this->is_holiday_work,
             'holiday'          => $this->relationLoaded('holiday') && $this->holiday ? $this->holiday->name : ($this->holiday ? $this->holiday->name : null),
@@ -95,6 +102,7 @@ class AttendanceResource extends JsonResource
                 'name'       => $this->employee->user?->name,
                 'nip'        => $this->employee->nip,
                 'department' => $this->employee->department?->name,
+                'profile_picture' => $this->employee->user?->profile_picture ? url($this->employee->user->profile_picture) : null,
             ];
         }
 
