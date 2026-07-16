@@ -98,8 +98,19 @@ class LeaveRequestController extends Controller
         $query = LeaveRequest::with(['employee.user', 'employee.department', 'reviewer', 'specialLeaveCategory'])
                              ->orderBy('created_at', 'desc');
 
-        // Filter data jika user login bukan admin
-        if (!$user->isAdmin()) {
+        if ($user->isAdmin()) {
+            // Admin melihat semua pengajuan — tidak ada filter tambahan
+        } elseif ($user->isPjBagian()) {
+            // PJ Bagian hanya melihat pengajuan dari pegawai di departemennya
+            // (termasuk miliknya sendiri — dia boleh lihat, tapi tidak boleh approve miliknya)
+            if (!$user->pj_bagian_department_id) {
+                return response()->json(['success' => false, 'message' => 'PJ Bagian belum ditugaskan ke departemen.'], 422);
+            }
+            $query->whereHas('employee', function ($q) use ($user) {
+                $q->where('department_id', $user->pj_bagian_department_id);
+            });
+        } else {
+            // Karyawan biasa: hanya lihat milik sendiri
             $employee = $user->employee;
             if (!$employee) {
                 return response()->json(['success' => false, 'message' => 'Data karyawan tidak ditemukan.'], 404);
@@ -201,19 +212,41 @@ class LeaveRequestController extends Controller
             'status'                    => 'pending',
         ]);
 
-        // Kirim notifikasi sistem ke admin jika opsi notif_leave diaktifkan
+        // Kirim notifikasi sistem ke PJ Bagian departemen karyawan (jika ada),
+        // atau ke admin jika departemen tidak memiliki PJ Bagian.
         $notifLeave = \App\Models\Setting::get('notif_leave', '1');
         if ($notifLeave !== '0') {
-            $admins = \App\Models\User::where('role', 'admin')->get();
-            foreach ($admins as $admin) {
+            // Cari PJ Bagian yang bertanggung jawab atas departemen karyawan ini
+            $pjBagian = null;
+            if ($employee->department_id) {
+                $pjBagian = \App\Models\User::where('role', 'pj_bagian')
+                    ->where('pj_bagian_department_id', $employee->department_id)
+                    ->first();
+            }
+
+            // Jika ada PJ Bagian DAN pengajuan bukan milik PJ itu sendiri, notif ke PJ
+            if ($pjBagian && $pjBagian->id !== $request->user()->id) {
                 Notification::create([
-                    'user_id' => $admin->id,
+                    'user_id' => $pjBagian->id,
                     'title'   => 'Pengajuan ' . ucfirst($data['type']) . ' Baru',
                     'body'    => ($employee->user?->name ?? 'Karyawan') . ' mengajukan ' . $data['type'] .
                                  ' dari ' . $data['start_date'] . ' s/d ' . $data['end_date'] . '.',
                     'type'    => 'leave',
                     'data'    => ['leave_request_id' => $lr->id],
                 ]);
+            } else {
+                // Tidak ada PJ Bagian (atau pengajuan milik PJ sendiri) → notif ke admin
+                $admins = \App\Models\User::where('role', 'admin')->get();
+                foreach ($admins as $admin) {
+                    Notification::create([
+                        'user_id' => $admin->id,
+                        'title'   => 'Pengajuan ' . ucfirst($data['type']) . ' Baru',
+                        'body'    => ($employee->user?->name ?? 'Karyawan') . ' mengajukan ' . $data['type'] .
+                                     ' dari ' . $data['start_date'] . ' s/d ' . $data['end_date'] . '.',
+                        'type'    => 'leave',
+                        'data'    => ['leave_request_id' => $lr->id],
+                    ]);
+                }
             }
         }
 
@@ -285,6 +318,27 @@ class LeaveRequestController extends Controller
      */
     private function review(Request $request, LeaveRequest $lr, string $newStatus)
     {
+        $user = $request->user();
+
+        // ── Guard khusus PJ Bagian ──────────────────────────────────────────
+        if ($user->isPjBagian()) {
+            // PJ Bagian tidak boleh approve/reject pengajuan miliknya sendiri
+            if ($lr->employee && $lr->employee->user_id === $user->id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Anda tidak dapat memproses pengajuan cuti milik sendiri.',
+                ], 403);
+            }
+
+            // PJ Bagian hanya boleh proses pengajuan dari departemennya
+            if ($lr->employee?->department_id !== $user->pj_bagian_department_id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Anda hanya dapat memproses pengajuan dari departemen yang Anda awasi.',
+                ], 403);
+            }
+        }
+
         // Cegah pemrosesan ulang data yang sudah disetujui/ditolak
         if ($lr->status !== 'pending') {
             return response()->json([

@@ -130,9 +130,19 @@ class AttendanceController extends Controller
                     // Evaluasi apakah batas waktu check-in sudah terlewati
                     $now = Carbon::now('Asia/Jakarta');
                     $shiftStart = $schedule->start_time; // "HH:mm:ss"
-                    $closeCheckinOffset = (int) Setting::get('close_checkin', '60');
+                    $resolvedCloseTime = $schedule->checkin_window_end_time;
+                    if (empty($resolvedCloseTime)) {
+                        $startCarbon = Carbon::parse($schedule->start_time);
+                        $endCarbon = Carbon::parse($schedule->end_time);
+                        if ($endCarbon->lt($startCarbon)) {
+                            $endCarbon->addDay();
+                        }
+                        $duration = $startCarbon->diffInMinutes($endCarbon);
+                        $half = (int) ($duration / 2);
+                        $resolvedCloseTime = $startCarbon->copy()->addMinutes($half)->format('H:i:s');
+                    }
                     $shiftStartCarbon = Carbon::today('Asia/Jakarta')->setTimeFromTimeString($shiftStart);
-                    $closeLimitCarbon = $shiftStartCarbon->copy()->addMinutes($closeCheckinOffset);
+                    $closeLimitCarbon = Carbon::today('Asia/Jakarta')->setTimeFromTimeString($resolvedCloseTime);
 
                     // Cek jika hari libur nasional
                     $holiday = AttendanceRules::holidayOn(Carbon::today('Asia/Jakarta'));
@@ -216,11 +226,18 @@ class AttendanceController extends Controller
         // 2. Validasi apakah karyawan bersangkutan sedang cuti/izin/sakit yang disetujui hari ini (diperbolehkan check-in untuk deteksi lapor masuk lebih awal)
 
         // 3. Validasi absensi ganda pada hari yang sama
-        $existing = Attendance::where('employee_id', $employee->id)
+        $existing = Attendance::withTrashed()
+                              ->where('employee_id', $employee->id)
                               ->where('date', today()->toDateString())
                               ->first();
 
         if ($existing) {
+            if ($existing->trashed()) {
+                $existing->restore();
+                $existing->status = 'alpha';
+                $existing->save();
+            }
+
             if (in_array($existing->status, ['sakit', 'izin', 'cuti'])) {
                 $typeName = $existing->status === 'sakit' ? 'Sakit' : ($existing->status === 'izin' ? 'Izin' : 'Cuti');
                 return response()->json([
@@ -426,14 +443,21 @@ class AttendanceController extends Controller
         // 7. Simpan absensi baru ke database secara aman dengan transaksi & locking untuk mencegah race condition
         $today = today()->toDateString();
         try {
-            $record = \DB::transaction(function () use ($employee, $today, $request, $status, $clientLat, $clientLng, $clientAcc, $isWithinGeofence, $photoUrl, $distance, $now) {
+            $record = \DB::transaction(function () use ($employee, $today, $request, $status, $clientLat, $clientLng, $clientAcc, $isWithinGeofence, $photoUrl, $distance, $now, $punctuality, $effectiveCheckinTime) {
                 // Kunci baris untuk mencegah race condition
-                $lockedExisting = Attendance::where('employee_id', $employee->id)
+                $lockedExisting = Attendance::withTrashed()
+                                            ->where('employee_id', $employee->id)
                                             ->where('date', $today)
                                             ->lockForUpdate()
                                             ->first();
 
                 if ($lockedExisting) {
+                    if ($lockedExisting->trashed()) {
+                        $lockedExisting->restore();
+                        $lockedExisting->status = 'alpha';
+                        $lockedExisting->save();
+                    }
+
                     if (in_array($lockedExisting->status, ['sakit', 'izin', 'cuti'])) {
                         $typeName = $lockedExisting->status === 'sakit' ? 'Sakit' : ($lockedExisting->status === 'izin' ? 'Izin' : 'Cuti');
                         throw new \Exception("Check-in ditolak: Anda sedang dalam masa {$typeName} untuk hari ini.", 422);
@@ -477,8 +501,12 @@ class AttendanceController extends Controller
                 }
             });
         } catch (\Illuminate\Database\QueryException $e) {
+            \Log::error('Check-in QueryException: ' . $e->getMessage(), [
+                'code' => $e->getCode(),
+                'errorInfo' => $e->errorInfo,
+            ]);
             // Tangkap duplikasi entry jika constraint unique terpicu
-            if ($e->getCode() == '23000' || str_contains($e->getMessage(), '1062')) {
+            if (isset($e->errorInfo[1]) && $e->errorInfo[1] == 1062) {
                 $dup = Attendance::where('employee_id', $employee->id)
                                  ->where('date', $today)
                                  ->first();
@@ -489,7 +517,11 @@ class AttendanceController extends Controller
                     'errors'  => null,
                 ], 409);
             }
-            throw $e;
+            return response()->json([
+                'success' => false,
+                'message' => 'Terjadi kesalahan database saat menyimpan absensi.',
+                'error_detail' => $e->getMessage()
+            ], 500);
         } catch (\Exception $e) {
             $code = $e->getCode();
             if ($code === 409) {
@@ -793,7 +825,7 @@ class AttendanceController extends Controller
 
         $message = 'Check-out berhasil.';
         if ($overtimeCalc['is_lembur']) {
-            $message = 'Check-out berhasil. Anda melewati jam shift yang dijadwalkan.';
+            $message = 'Check-out berhasil. Kamu melewati batas jam checkout (tetapi tetap dapat absen pulang).';
         }
 
         return response()->json([
@@ -835,6 +867,24 @@ class AttendanceController extends Controller
             }
 
             $records = Attendance::getMonthlyReportData($month, $year, $employeeId);
+            if ($user->role === 'employee') {
+                foreach ($records as &$record) {
+                    unset(
+                        $record['is_overtime'],
+                        $record['overtime_minutes'],
+                        $record['overtime_note'],
+                        $record['overtime_status'],
+                        $record['overtime_reviewed_by'],
+                        $record['overtime_reviewed_at'],
+                        $record['overtime_admin_note'],
+                        $record['jam_pulang_normal'],
+                        $record['is_lembur'],
+                        $record['durasi_lembur_menit'],
+                        $record['keterangan_lembur'],
+                        $record['status_approval_lembur']
+                    );
+                }
+            }
             \Illuminate\Support\Facades\Log::info('Monthly records count returned: ' . count($records));
             return response()->json(['success' => true, 'data' => $records]);
         }
@@ -1513,9 +1563,19 @@ class AttendanceController extends Controller
                         if ($carbonDate->isToday() && $matchingShift) {
                             $now = Carbon::now('Asia/Jakarta');
                             $shiftStart = $matchingShift->start_time;
-                            $closeCheckinOffset = (int) Setting::get('close_checkin', '60');
+                            $resolvedCloseTime = $matchingShift->checkin_window_end_time;
+                            if (empty($resolvedCloseTime)) {
+                                $startCarbon = Carbon::parse($matchingShift->start_time);
+                                $endCarbon = Carbon::parse($matchingShift->end_time);
+                                if ($endCarbon->lt($startCarbon)) {
+                                    $endCarbon->addDay();
+                                }
+                                $duration = $startCarbon->diffInMinutes($endCarbon);
+                                $half = (int) ($duration / 2);
+                                $resolvedCloseTime = $startCarbon->copy()->addMinutes($half)->format('H:i:s');
+                            }
                             $shiftStartCarbon = Carbon::today('Asia/Jakarta')->setTimeFromTimeString($shiftStart);
-                            $closeLimitCarbon = $shiftStartCarbon->copy()->addMinutes($closeCheckinOffset);
+                            $closeLimitCarbon = Carbon::today('Asia/Jakarta')->setTimeFromTimeString($resolvedCloseTime);
 
                             if ($now->lte($closeLimitCarbon)) {
                                 $status = 'belum_hadir';

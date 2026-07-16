@@ -17,7 +17,7 @@ use Illuminate\Validation\Rule;
  * 
  * Mengelola fungsi CRUD data profil kepegawaian (karyawan/employee).
  * Menghubungkan pembuatan/update profile karyawan dengan data akun user (otentikasi).
- * Hanya dapat diakses oleh administrator.
+ * Hanya dapat diakses oleh administrator (kecuali listPjBagian yang bisa dibaca semua).
  */
 class EmployeeController extends Controller
 {
@@ -26,16 +26,17 @@ class EmployeeController extends Controller
      * 
      * Mengambil daftar seluruh karyawan aktif/tidak aktif beserta relasi user, departemen, jabatan,
      * serta status absensi hari ini.
-     * 
-     * @param Request $request
-     * @return \Illuminate\Http\JsonResponse
      */
     public function index(Request $request)
     {
-        // Ambil seluruh karyawan beserta relasi terkait
-        $employees = Employee::with(['user', 'department', 'position', 'todayAttendance'])
-            ->get()
-            ->map(fn($e) => $this->formatEmployee($e));
+        $user = $request->user();
+        $query = Employee::with(['user', 'department', 'position', 'todayAttendance']);
+
+        if ($user->role === 'pj_bagian') {
+            $query->where('department_id', $user->pj_bagian_department_id);
+        }
+
+        $employees = $query->get()->map(fn($e) => $this->formatEmployee($e));
 
         return response()->json(['success' => true, 'data' => $employees]);
     }
@@ -43,17 +44,12 @@ class EmployeeController extends Controller
     /**
      * POST /api/employees
      * 
-     * Mendaftarkan karyawan baru.
-     * Langkah ini sekaligus membuat akun user untuk otentikasi serta data profil karyawan.
-     * 
-     * @param Request $request
-     * @return \Illuminate\Http\JsonResponse
+     * Mendaftarkan karyawan baru. Sekaligus membuat akun user untuk otentikasi.
      */
     public function store(StoreEmployeeRequest $request)
     {
         $data = $request->validated();
 
-        // 1. Buat akun User untuk login karyawan
         $user = User::create([
             'name'     => $data['name'],
             'email'    => $data['email'],
@@ -63,7 +59,6 @@ class EmployeeController extends Controller
             'username' => $data['username'],
         ]);
 
-        // 2. Buat profil karyawan yang terelasi ke akun user tersebut
         $employee = Employee::create([
             'user_id'       => $user->id,
             'department_id' => $data['department_id'],
@@ -89,11 +84,6 @@ class EmployeeController extends Controller
 
     /**
      * GET /api/employees/{id}
-     * 
-     * Mengambil profil lengkap satu karyawan berdasarkan ID.
-     * 
-     * @param Employee $employee
-     * @return \Illuminate\Http\JsonResponse
      */
     public function show(Employee $employee)
     {
@@ -103,18 +93,11 @@ class EmployeeController extends Controller
 
     /**
      * PUT /api/employees/{id}
-     * 
-     * Memperbarui informasi profil karyawan serta akun usernya.
-     * 
-     * @param Request $request
-     * @param Employee $employee
-     * @return \Illuminate\Http\JsonResponse
      */
     public function update(UpdateEmployeeRequest $request, Employee $employee)
     {
         $data = $request->validated();
 
-        // 1. Perbarui atribut user
         $userFields = array_filter([
             'name'     => $data['name'] ?? null,
             'email'    => $data['email'] ?? null,
@@ -122,7 +105,6 @@ class EmployeeController extends Controller
         ]);
         if ($userFields) $employee->user->update($userFields);
 
-        // 2. Perbarui data kepegawaian karyawan (termasuk kendaraan)
         $empFields = array_merge([
             'department_id' => $data['department_id'] ?? $employee->department_id,
             'position_id'   => $data['position_id'] ?? $employee->position_id,
@@ -147,11 +129,6 @@ class EmployeeController extends Controller
 
     /**
      * DELETE /api/employees/{id}
-     * 
-     * Menghapus karyawan dari sistem (mendukung soft-delete sesuai trait SoftDeletes di model Employee).
-     * 
-     * @param Employee $employee
-     * @return \Illuminate\Http\JsonResponse
      */
     public function destroy(Employee $employee)
     {
@@ -162,9 +139,7 @@ class EmployeeController extends Controller
     /**
      * GET /api/employees/meta
      * 
-     * Mengambil list departemen dan jabatan untuk mempermudah pengisian opsi dropdown pada form admin.
-     * 
-     * @return \Illuminate\Http\JsonResponse
+     * Mengambil list departemen dan jabatan untuk dropdown form admin.
      */
     public function meta()
     {
@@ -177,11 +152,150 @@ class EmployeeController extends Controller
         ]);
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // PJ BAGIAN MANAGEMENT
+    // ─────────────────────────────────────────────────────────────────────────
+
     /**
-     * Memformat output JSON karyawan agar konsisten dan mempermudah frontend.
+     * GET /api/employees/pj-bagian
      * 
-     * @param Employee $e
-     * @return array
+     * Mengambil daftar semua user yang berstatus PJ Bagian beserta departemen yang mereka awasi.
+     */
+    public function listPjBagian()
+    {
+        $pjList = User::where('role', 'pj_bagian')
+            ->with(['pjBagianDepartment', 'employee.position'])
+            ->get()
+            ->map(function ($u) {
+                return [
+                    'user_id'                 => $u->id,
+                    'employee_id'             => $u->employee?->id,
+                    'name'                    => $u->name,
+                    'nip'                     => $u->nip,
+                    'email'                   => $u->email,
+                    'username'                => $u->username,
+                    'profile_picture'         => $u->profile_picture ? url($u->profile_picture) : null,
+                    'position'                => $u->employee?->position?->name,
+                    'pj_bagian_department_id' => $u->pj_bagian_department_id,
+                    'pj_bagian_department'    => $u->pjBagianDepartment?->name,
+                ];
+            });
+
+        return response()->json(['success' => true, 'data' => $pjList]);
+    }
+
+    /**
+     * PUT /api/employees/{id}/assign-pj-bagian
+     * 
+     * Menugaskan karyawan sebagai PJ Bagian untuk departemen tertentu.
+     * Jika departemen sudah punya PJ Bagian aktif, PJ lama otomatis dinonaktifkan.
+     */
+    public function assignPjBagian(Request $request, Employee $employee)
+    {
+        $data = $request->validate([
+            'department_id' => 'required|exists:departments,id',
+        ]);
+
+        $departmentId = $data['department_id'];
+        $targetUser   = $employee->user;
+
+        if (!$targetUser) {
+            return response()->json(['success' => false, 'message' => 'Akun user karyawan tidak ditemukan.'], 404);
+        }
+
+        // Cek & nonaktifkan PJ Bagian lama pada departemen yang sama
+        $existingPj = User::where('role', 'pj_bagian')
+            ->where('pj_bagian_department_id', $departmentId)
+            ->where('id', '!=', $targetUser->id)
+            ->first();
+
+        if ($existingPj) {
+            $existingPj->update([
+                'role'                    => 'employee',
+                'pj_bagian_department_id' => null,
+            ]);
+            \App\Models\Notification::create([
+                'user_id' => $existingPj->id,
+                'title'   => 'Status PJ Bagian Dicabut',
+                'body'    => 'Peran Penanggung Jawab Bagian Anda telah dialihkan ke pegawai lain oleh Administrator.',
+                'type'    => 'system',
+                'data'    => [],
+            ]);
+        }
+
+        // Tugaskan sebagai PJ Bagian
+        $targetUser->update([
+            'role'                    => 'pj_bagian',
+            'pj_bagian_department_id' => $departmentId,
+        ]);
+
+        $department = Department::find($departmentId);
+
+        \App\Models\Notification::create([
+            'user_id' => $targetUser->id,
+            'title'   => 'Anda Ditugaskan sebagai PJ Bagian 🏥',
+            'body'    => 'Anda kini menjadi Penanggung Jawab Bagian untuk departemen ' . ($department?->name ?? '') . '.',
+            'type'    => 'system',
+            'data'    => ['department_id' => $departmentId],
+        ]);
+
+        $targetUser->load('pjBagianDepartment');
+
+        return response()->json([
+            'success' => true,
+            'message' => $targetUser->name . ' berhasil ditugaskan sebagai PJ Bagian untuk departemen ' . ($department?->name ?? '') . '.',
+            'data'    => [
+                'user_id'                 => $targetUser->id,
+                'name'                    => $targetUser->name,
+                'role'                    => $targetUser->role,
+                'pj_bagian_department_id' => $targetUser->pj_bagian_department_id,
+                'pj_bagian_department'    => $targetUser->pjBagianDepartment?->name,
+            ],
+        ]);
+    }
+
+    /**
+     * PUT /api/employees/{id}/revoke-pj-bagian
+     * 
+     * Mencabut status PJ Bagian dari karyawan — role dikembalikan ke 'employee'.
+     */
+    public function revokePjBagian(Employee $employee)
+    {
+        $targetUser = $employee->user;
+
+        if (!$targetUser) {
+            return response()->json(['success' => false, 'message' => 'Akun user karyawan tidak ditemukan.'], 404);
+        }
+
+        if ($targetUser->role !== 'pj_bagian') {
+            return response()->json(['success' => false, 'message' => 'Karyawan ini bukan PJ Bagian.'], 422);
+        }
+
+        $targetUser->update([
+            'role'                    => 'employee',
+            'pj_bagian_department_id' => null,
+        ]);
+
+        \App\Models\Notification::create([
+            'user_id' => $targetUser->id,
+            'title'   => 'Status PJ Bagian Dicabut',
+            'body'    => 'Peran Penanggung Jawab Bagian Anda telah dicabut oleh Administrator.',
+            'type'    => 'system',
+            'data'    => [],
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => $targetUser->name . ' berhasil dicabut dari status PJ Bagian.',
+        ]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // PRIVATE HELPERS
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Memformat output JSON karyawan agar konsisten.
      */
     private function formatEmployee(Employee $e): array
     {
@@ -193,40 +307,40 @@ class EmployeeController extends Controller
         ];
         $todayName = $dayMap[\Carbon\Carbon::today('Asia/Jakarta')->dayOfWeek];
 
-        // Eager loaded schedules check
         if ($e->relationLoaded('schedules')) {
-            $schedule = $e->schedules->first(function($s) use ($todayName) {
-                return $s->pivot->day_of_week === $todayName;
-            });
+            $schedule = $e->schedules->first(fn($s) => $s->pivot->day_of_week === $todayName);
         } else {
             $schedule = $e->schedules()->wherePivot('day_of_week', $todayName)->first();
         }
 
         $computedStatus = null;
         if ($today) {
-            $isIncomplete = \App\Support\AttendanceRules::isAttendanceIncomplete($today, $e);
+            $isIncomplete   = \App\Support\AttendanceRules::isAttendanceIncomplete($today, $e);
             $computedStatus = $isIncomplete ? 'tidak_lengkap' : $today->status;
         } else {
             if (!$schedule) {
                 $computedStatus = 'tidak_ada_shift';
             } else {
-                $now = \Carbon\Carbon::now('Asia/Jakarta');
-                $shiftStart = $schedule->start_time; // "HH:mm:ss"
-                $closeCheckinOffset = (int) \App\Models\Setting::get('close_checkin', '60');
-                
-                $shiftStartCarbon = \Carbon\Carbon::today('Asia/Jakarta')->setTimeFromTimeString($shiftStart);
-                $closeLimitCarbon = $shiftStartCarbon->copy()->addMinutes($closeCheckinOffset);
-                
-                // Cek jika hari libur nasional
-                $holiday = \App\Support\AttendanceRules::holidayOn(\Carbon\Carbon::today('Asia/Jakarta'));
-                $isAssigned = $holiday ? \App\Support\AttendanceRules::isAssignedToWorkOnHoliday($e, $holiday) : false;
+                $now                = \Carbon\Carbon::now('Asia/Jakarta');
+                $shiftStart         = $schedule->start_time;
+                $resolvedCloseTime = $schedule->checkin_window_end_time;
+                if (empty($resolvedCloseTime)) {
+                    $startCarbon = \Carbon\Carbon::parse($schedule->start_time);
+                    $endCarbon = \Carbon\Carbon::parse($schedule->end_time);
+                    if ($endCarbon->lt($startCarbon)) {
+                        $endCarbon->addDay();
+                    }
+                    $duration = $startCarbon->diffInMinutes($endCarbon);
+                    $half = (int) ($duration / 2);
+                    $resolvedCloseTime = $startCarbon->copy()->addMinutes($half)->format('H:i:s');
+                }
+                $shiftStartCarbon   = \Carbon\Carbon::today('Asia/Jakarta')->setTimeFromTimeString($shiftStart);
+                $closeLimitCarbon   = \Carbon\Carbon::today('Asia/Jakarta')->setTimeFromTimeString($resolvedCloseTime);
+                $holiday            = \App\Support\AttendanceRules::holidayOn(\Carbon\Carbon::today('Asia/Jakarta'));
+                $isAssigned         = $holiday ? \App\Support\AttendanceRules::isAssignedToWorkOnHoliday($e, $holiday) : false;
 
                 if ($now->gt($closeLimitCarbon)) {
-                    if ($holiday && !$isAssigned) {
-                        $computedStatus = 'belum_hadir';
-                    } else {
-                        $computedStatus = 'alpha';
-                    }
+                    $computedStatus = ($holiday && !$isAssigned) ? 'belum_hadir' : 'alpha';
                 } else {
                     $computedStatus = 'belum_hadir';
                 }
@@ -234,27 +348,28 @@ class EmployeeController extends Controller
         }
 
         return [
-            'id'          => $e->id,
-            'user_id'     => $e->user_id,
-            'name'        => $e->user?->name,
-            'email'       => $e->user?->email,
-            'nip'         => $e->nip,
-            'username'    => $e->user?->username,
-            'profile_picture' => $e->user?->profile_picture ? url($e->user->profile_picture) : null,
-            'department'  => $e->department?->name,
-            'department_id' => $e->department_id,
-            'position'    => $e->position?->name,
-            'position_id' => $e->position_id,
-            'phone'       => $e->phone,
-            'gender'      => $e->gender,
-            'join_date'   => $e->join_date?->toDateString(),
-            'status'      => $e->status,
+            'id'               => $e->id,
+            'user_id'          => $e->user_id,
+            'name'             => $e->user?->name,
+            'email'            => $e->user?->email,
+            'nip'              => $e->nip,
+            'username'         => $e->user?->username,
+            'role'             => $e->user?->role,
+            'profile_picture'  => $e->user?->profile_picture ? url($e->user->profile_picture) : null,
+            'department'       => $e->department?->name,
+            'department_id'    => $e->department_id,
+            'position'         => $e->position?->name,
+            'position_id'      => $e->position_id,
+            'phone'            => $e->phone,
+            'gender'           => $e->gender,
+            'join_date'        => $e->join_date?->toDateString(),
+            'status'           => $e->status,
             'today_attendance' => [
                 'check_in'  => $today?->check_in,
                 'check_out' => $today?->check_out,
                 'status'    => $computedStatus,
             ],
-            'vehicles'    => [
+            'vehicles' => [
                 'motor_plate_1' => $e->motor_plate_1,
                 'motor_plate_2' => $e->motor_plate_2,
                 'car_plate_1'   => $e->car_plate_1,

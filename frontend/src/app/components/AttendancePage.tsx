@@ -112,19 +112,11 @@ function getWindow(now: Date, s: ShiftSettings = DEFAULT_SHIFT): AttendanceWindo
   const checkoutCls  = parseMins(s.checkout_close);
 
   if (s.isOvernight) {
-    // Shift lintas tengah malam (mis. Malam 21:00–07:00)
-    // Sebelum jam mulai: too_early
-    // Jam mulai hingga tutup check-in: checkin
-    // Tutup check-in hingga tengah malam: late_locked
-    // Tengah malam hingga jam selesai shift: late_locked atau checkout
-    // Jam selesai shift hingga close_checkout: checkout
     if (mins >= openMins) {
-      // Sisi malam: sebelum tengah malam
       if (mins < openMins)  return 'too_early';
       if (mins <= closeMins) return 'checkin';
-      return 'late_locked'; // menunggu tengah malam untuk checkout
+      return 'late_locked';
     } else {
-      // Sisi pagi: setelah tengah malam (mis. 00:00–08:00)
       if (mins <= checkoutCls) return 'checkout';
       return 'ended';
     }
@@ -132,17 +124,10 @@ function getWindow(now: Date, s: ShiftSettings = DEFAULT_SHIFT): AttendanceWindo
 
   // Shift normal (tidak lintas tengah malam)
   if (day >= 1 && day <= 5) {
-    if (mins <  openMins)    return 'too_early';
+    if (mins < openMins)     return 'too_early';
     if (mins <= closeMins)   return 'checkin';
-    // Break hanya aktif jika waktunya berada di dalam rentang shift
-    if (breakSt > closeMins && breakEn <= checkoutOpen) {
-      if (mins < breakSt)   return 'late_locked';
-      if (mins < breakEn)   return 'break';
-      if (mins < checkoutOpen) return 'working';
-    } else {
-      // Break tidak relevan untuk shift ini → langsung ke working/checkout
-      if (mins < checkoutOpen) return 'late_locked';
-    }
+    if (mins < breakEn)      return 'break';
+    if (mins < checkoutOpen) return 'working';
     if (mins <= checkoutCls) return 'checkout';
     return 'ended';
   }
@@ -745,8 +730,20 @@ export function AttendancePage() {
       const openHHmm  = subMins(startHHmm, checkinOpenOffset);
       // Batas telat       = mulai + lateLimitOffset menit
       const lateHHmm  = addMins(startHHmm, lateLimitOffset);
-      // Tutup check-in    = mulai + closeCheckinOffset menit
-      const closeHHmm = addMins(startHHmm, closeCheckinOffset);
+      // Tutup check-in    = checkin_window_end_time jika ada, atau setengah durasi shift
+      let closeHHmm = '';
+      if (shift && shift.checkin_window_end_time) {
+        closeHHmm = shift.checkin_window_end_time.substring(0, 5);
+      } else {
+        // Fallback: setengah durasi shift
+        const startM = parseMins(startHHmm);
+        let endM = parseMins(endHHmm);
+        if (endM < startM) {
+          endM += 1440; // overnight
+        }
+        const halfDuration = Math.floor((endM - startM) / 2);
+        closeHHmm = addMins(startHHmm, halfDuration);
+      }
 
       // Checkout = jam selesai shift - checkoutOpenOffset; batas = selesai + checkoutCloseOffset
       const checkoutOpenHHmm  = subMins(endHHmm, checkoutOpenOffset);
@@ -1560,7 +1557,7 @@ export function AttendancePage() {
                   <div className="flex items-center gap-2 px-3 py-2 bg-gray-55 rounded-xl border border-gray-150">
                     <Clock size={13} className="text-gray-400 flex-shrink-0" />
                     <p className="text-[10.5px] text-gray-500 leading-normal font-medium">
-                      Anda checkout melewati jam shift yang dijadwalkan.
+                      Kamu melewati batas jam checkout (tetapi tetap dapat absen pulang).
                     </p>
                   </div>
                 </div>

@@ -58,7 +58,14 @@ class AuthController extends Controller
             'profile_picture' => $user->profile_picture ? url($user->profile_picture) : null,
         ];
 
-        // Jika user bukan admin (berarti karyawan/employee), sertakan info jabatan dan departemen
+        // Sertakan info departemen yang diawasi jika PJ Bagian
+        if ($user->isPjBagian()) {
+            $user->load('pjBagianDepartment');
+            $userData['pj_bagian_department_id'] = $user->pj_bagian_department_id;
+            $userData['pj_bagian_department']    = $user->pjBagianDepartment?->name;
+        }
+
+        // Jika user bukan admin, sertakan info jabatan dan departemen (berlaku untuk employee & pj_bagian)
         if (!$user->isAdmin()) {
             $emp = $user->employee()->with(['department', 'position'])->first();
             if ($emp) {
@@ -110,7 +117,14 @@ class AuthController extends Controller
             'profile_picture' => $user->profile_picture ? url($user->profile_picture) : null,
         ];
 
-        // Lampirkan data kepegawaian jika role-nya adalah employee
+        // Sertakan info departemen yang diawasi jika PJ Bagian
+        if ($user->isPjBagian()) {
+            $user->load('pjBagianDepartment');
+            $data['pj_bagian_department_id'] = $user->pj_bagian_department_id;
+            $data['pj_bagian_department']    = $user->pjBagianDepartment?->name;
+        }
+
+        // Lampirkan data kepegawaian jika bukan admin (employee & pj_bagian)
         if (!$user->isAdmin()) {
             $emp = $user->employee()->with(['department', 'position'])->first();
             if ($emp) {

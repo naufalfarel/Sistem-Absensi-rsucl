@@ -120,9 +120,11 @@ export interface AuthUser {
   id: number;
   name: string;
   email: string;
-  role: 'admin' | 'employee';
+  role: 'admin' | 'employee' | 'pj_bagian';
   nip: string;
   username: string;
+  pj_bagian_department_id?: number;
+  pj_bagian_department?: string;
   employee_id?: number;
   department?: string;
   position?: string;
@@ -196,6 +198,7 @@ export interface Employee {
   email: string;
   nip: string;
   username: string;
+  role?: string;
   department: string;
   department_id: number;
   position: string;
@@ -1008,5 +1011,83 @@ export const overtimeApi = {
     }>(`/overtime-requests/${id}/reject`, { admin_note: adminNote });
   },
 };
+
+// ─────────────────────────────────────────────────────────────────────
+// Usulan Shift (Shift Proposals)
+// ─────────────────────────────────────────────────────────────────────
+export interface ShiftProposal {
+  id: number;
+  employee: {
+    id: number;
+    name: string;
+    nip: string;
+    department: string;
+  };
+  schedule: {
+    id: number;
+    name: string;
+    start_time: string;
+    end_time: string;
+  } | null;
+  day_of_week: string;
+  proposed_by: { id: number; name: string } | null;
+  status: 'pending' | 'approved' | 'rejected';
+  admin_note?: string | null;
+  reviewed_by: { id: number; name: string } | null;
+  reviewed_at?: string | null;
+  created_at: string;
+}
+
+export const shiftProposalApi = {
+  list: (params?: { status?: string; department_id?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.status) query.append('status', params.status);
+    if (params?.department_id) query.append('department_id', params.department_id);
+    return api.get<{ success: boolean; data: ShiftProposal[] }>(`/shift-assignment-proposals?${query.toString()}`);
+  },
+
+  create: (data: { employee_id: number; schedule_id: number | null; day_of_week: string }) => {
+    return api.post<{ success: boolean; message: string; data: ShiftProposal }>('/shift-assignment-proposals', data);
+  },
+
+  approve: (id: number, adminNote?: string) => {
+    return api.put<{ success: boolean; message: string; data: ShiftProposal }>(`/shift-assignment-proposals/${id}/approve`, { admin_note: adminNote });
+  },
+
+  reject: (id: number, adminNote: string) => {
+    return api.put<{ success: boolean; message: string; data: ShiftProposal }>(`/shift-assignment-proposals/${id}/reject`, { admin_note: adminNote });
+  },
+};
+
+// ─────────────────────────────────────────────────────────────────────
+// Pengelolaan PJ Bagian (Admin Only)
+// ─────────────────────────────────────────────────────────────────────
+export interface PjBagianUser {
+  user_id: number;
+  employee_id?: number;
+  name: string;
+  nip: string;
+  email: string;
+  username: string;
+  profile_picture?: string | null;
+  position?: string;
+  pj_bagian_department_id: number;
+  pj_bagian_department: string;
+}
+
+export const pjBagianApi = {
+  list: () => {
+    return api.get<{ success: boolean; data: PjBagianUser[] }>('/employees/pj-bagian');
+  },
+
+  assign: (employeeId: number, departmentId: number) => {
+    return api.put<{ success: boolean; message: string; data: any }>(`/employees/${employeeId}/assign-pj-bagian`, { department_id: departmentId });
+  },
+
+  revoke: (employeeId: number) => {
+    return api.put<{ success: boolean; message: string }>(`/employees/${employeeId}/revoke-pj-bagian`, {});
+  },
+};
+
 
 

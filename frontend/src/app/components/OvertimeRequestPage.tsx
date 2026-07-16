@@ -96,9 +96,9 @@ export function OvertimeRequestPage() {
 
   const getStatusBadge = (status: 'pending' | 'approved' | 'rejected') => {
     const config = {
-      pending:  { label: 'Menunggu',   color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE', icon: Clock },
-      approved: { label: 'Disetujui',  color: '#1D4ED8', bg: '#E0E7FF', border: '#C7D2FE', icon: CheckCircle2 },
-      rejected: { label: 'Ditolak',    color: '#475569', bg: '#F1F5F9', border: '#E2E8F0', icon: XCircle },
+      pending:  { label: 'Menunggu',   color: '#D97706', bg: '#FFFBEB', border: '#FDE68A', icon: Clock },
+      approved: { label: 'Disetujui',  color: '#16A34A', bg: '#F0FDF4', border: '#BBF7D0', icon: CheckCircle2 },
+      rejected: { label: 'Ditolak',    color: '#DC2626', bg: '#FEE2E2', border: '#FECACA', icon: XCircle },
     };
     const c = config[status] || config.pending;
     return (
@@ -126,7 +126,7 @@ export function OvertimeRequestPage() {
         {!showForm && (
           <button
             onClick={() => { setShowForm(true); setErrorMsg(null); setSuccessMsg(null); }}
-            className="flex items-center gap-1.5 px-4 py-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-xl text-[12.5px] font-bold shadow-md transition-all active:scale-95"
+            className="flex items-center gap-1.5 px-4 py-2 bg-[#16A34A] hover:bg-[#15803D] text-white rounded-xl text-[12.5px] font-bold shadow-md transition-all active:scale-95"
           >
             <Plus size={15} />
             Ajukan Lembur
@@ -146,7 +146,7 @@ export function OvertimeRequestPage() {
         <div className="bg-white rounded-3xl border border-gray-100 shadow-xl overflow-hidden p-6 animate-fade-in">
           <div className="flex items-center justify-between pb-4 border-b border-gray-150 mb-5">
             <h3 className="text-[14px] font-bold text-gray-900 flex items-center gap-2">
-              <FileText size={16} className="text-[#2563EB]" />
+              <FileText size={16} className="text-[#16A34A]" />
               Formulir Pengajuan Lembur Baru
             </h3>
             <button
@@ -158,6 +158,16 @@ export function OvertimeRequestPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="flex items-start gap-2.5 p-4 bg-green-50 border border-green-200 text-green-850 rounded-2xl text-[12px] font-medium leading-relaxed">
+              <AlertCircle size={16} className="mt-0.5 text-[#16A34A] flex-shrink-0" />
+              <div>
+                <p className="font-bold text-green-900">Penting Sebelum Mengajukan Lembur</p>
+                <p className="mt-0.5 text-green-700">
+                  Pastikan kamu absen sesuai dengan jam kamu masuk dan pulang dari rumah sakit, jangan sengaja memperlama jam pulang agar dianggap lembur.
+                </p>
+              </div>
+            </div>
+
             {errorMsg && (
               <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-100 text-red-650 rounded-xl text-[12px] font-medium">
                 <AlertCircle size={15} className="mt-0.5 flex-shrink-0" />
@@ -175,7 +185,7 @@ export function OvertimeRequestPage() {
                     required
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
-                    className="w-full pl-3 pr-3 py-2.5 border border-gray-200 rounded-xl text-[12.5px] bg-gray-50 focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/25 font-medium text-gray-800"
+                    className="w-full pl-3 pr-3 py-2.5 border border-gray-200 rounded-xl text-[12.5px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-1 focus:ring-[#16A34A]/25 font-medium text-gray-800"
                   />
                 </div>
               </div>
@@ -192,7 +202,7 @@ export function OvertimeRequestPage() {
                     placeholder="Contoh: Ruang Farmasi Rawat Inap, Ruang IT Lantai 3..."
                     value={locationNote}
                     onChange={(e) => setLocationNote(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-[12.5px] bg-gray-50 focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/25 placeholder:text-gray-350 font-medium text-gray-800"
+                    className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-[12.5px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-1 focus:ring-[#16A34A]/25 placeholder:text-gray-350 font-medium text-gray-800"
                   />
                 </div>
               </div>
@@ -208,7 +218,7 @@ export function OvertimeRequestPage() {
                 placeholder="Jelaskan secara rinci kegiatan lembur yang dilakukan..."
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
-                className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-[12.5px] bg-gray-50 focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/25 placeholder:text-gray-350 resize-none font-medium text-gray-800"
+                className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-[12.5px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-1 focus:ring-[#16A34A]/25 placeholder:text-gray-350 resize-none font-medium text-gray-800"
               />
               <div className="flex justify-end text-[9.5px] text-gray-400 font-medium">
                 {reason.length}/1000 karakter
@@ -230,9 +240,9 @@ export function OvertimeRequestPage() {
               {!photoPreview ? (
                 <div 
                   onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-gray-250 hover:border-[#2563EB]/40 rounded-2xl p-6 text-center cursor-pointer bg-gray-50 transition-all flex flex-col items-center justify-center gap-2 group"
+                  className="border-2 border-dashed border-gray-250 hover:border-[#16A34A]/40 rounded-2xl p-6 text-center cursor-pointer bg-gray-50 transition-all flex flex-col items-center justify-center gap-2 group"
                 >
-                  <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-gray-400 group-hover:text-[#2563EB] shadow-sm transition-colors border border-gray-100">
+                  <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-gray-400 group-hover:text-[#16A34A] shadow-sm transition-colors border border-gray-100">
                     <Upload size={18} />
                   </div>
                   <div>
@@ -268,7 +278,7 @@ export function OvertimeRequestPage() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="flex-1 py-3 bg-[#2563EB] hover:bg-[#1D4ED8] disabled:bg-gray-300 text-white rounded-xl text-[13px] font-bold shadow-md transition-all disabled:cursor-not-allowed"
+                className="flex-1 py-3 bg-[#16A34A] hover:bg-[#15803D] disabled:bg-gray-300 text-white rounded-xl text-[13px] font-bold shadow-md transition-all disabled:cursor-not-allowed"
               >
                 {submitting ? 'Mengirim...' : 'Kirim Pengajuan'}
               </button>
@@ -299,7 +309,7 @@ export function OvertimeRequestPage() {
               <div key={r.id} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm hover:shadow-md transition-shadow">
                 <div className="flex flex-wrap items-start justify-between gap-2 border-b border-gray-50 pb-2.5">
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-[#2563EB]">
+                    <div className="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center text-[#16A34A]">
                       <Calendar size={15} />
                     </div>
                     <div>
@@ -324,7 +334,7 @@ export function OvertimeRequestPage() {
                       </div>
                     )}
                     {r.status === 'approved' && r.admin_note && (
-                      <div className="mt-2 bg-indigo-50/50 border border-indigo-100/50 p-2.5 rounded-xl text-[11px] text-indigo-700 leading-normal font-medium">
+                      <div className="mt-2 bg-green-50/50 border border-green-100/50 p-2.5 rounded-xl text-[11px] text-green-700 leading-normal font-medium">
                         <strong>Catatan Admin:</strong> {r.admin_note}
                       </div>
                     )}

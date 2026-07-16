@@ -564,16 +564,16 @@ export function HistoryTab() {
 
             {/* Overtime Info & Action Panel */}
             {selected.is_lembur && (
-              <div className="mb-5 p-3.5 bg-orange-50 border border-orange-200 rounded-xl space-y-2 text-left">
+              <div className="mb-5 p-3.5 bg-blue-50 border border-blue-200 rounded-xl space-y-2 text-left">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-orange-600 font-semibold text-[12px]">
-                    <Clock size={13} />
+                  <div className="flex items-center gap-1.5 text-blue-600 font-semibold text-[12px]">
+                    <Clock size={13} className="text-blue-500" />
                     <span>Lembur (+{selected.durasi_lembur_menit} mnt)</span>
                   </div>
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                     selected.status_approval_lembur === 'disetujui' ? 'bg-green-100 text-green-700' :
                     selected.status_approval_lembur === 'ditolak' ? 'bg-red-100 text-red-650' :
-                    'bg-orange-100 text-orange-700'
+                    'bg-blue-100 text-blue-700'
                   }`}>
                     {selected.status_approval_lembur === 'disetujui' ? 'Disetujui' :
                      selected.status_approval_lembur === 'ditolak' ? 'Ditolak' : 'Menunggu'}
@@ -583,7 +583,7 @@ export function HistoryTab() {
                   <span className="font-semibold">Pekerjaan Lembur:</span> {selected.keterangan_lembur || '-'}
                 </p>
                 {selected.status_approval_lembur === 'pending' && (
-                  <div className="flex gap-2 pt-2 border-t border-orange-200/50 mt-1">
+                  <div className="flex gap-2 pt-2 border-t border-blue-200/50 mt-1">
                     <button
                       onClick={async () => {
                         if (!selected.id) return;

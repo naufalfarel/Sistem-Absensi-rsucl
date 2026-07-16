@@ -27,8 +27,16 @@ class OvertimeRequestController extends Controller
                 return response()->json(['success' => false, 'message' => 'Profil pegawai tidak ditemukan.'], 404);
             }
             $query->where('employee_id', $employee->id);
+        } elseif ($user->isPjBagian()) {
+            // PJ Bagian: hanya lihat lembur dari departemennya
+            if (!$user->pj_bagian_department_id) {
+                return response()->json(['success' => false, 'message' => 'PJ Bagian belum ditugaskan ke departemen.'], 422);
+            }
+            $query->whereHas('employee', function ($q) use ($user) {
+                $q->where('department_id', $user->pj_bagian_department_id);
+            });
         } else {
-            // Admin Filters
+            // Admin: bisa filter tambahan
             if ($request->filled('status') && $request->status !== 'all') {
                 $query->where('status', $request->status);
             }
@@ -163,6 +171,35 @@ class OvertimeRequestController extends Controller
             'status'        => 'pending',
         ]);
 
+        // Kirim notifikasi ke PJ Bagian departemen karyawan (jika ada), atau ke admin
+        $pjBagian = null;
+        if ($employee->department_id) {
+            $pjBagian = \App\Models\User::where('role', 'pj_bagian')
+                ->where('pj_bagian_department_id', $employee->department_id)
+                ->first();
+        }
+
+        if ($pjBagian && $pjBagian->id !== $request->user()->id) {
+            \App\Models\Notification::create([
+                'user_id' => $pjBagian->id,
+                'title'   => 'Pengajuan Lembur Baru',
+                'body'    => ($employee->user?->name ?? 'Karyawan') . ' mengajukan lembur untuk tanggal ' . $dateStr . '.',
+                'type'    => 'overtime',
+                'data'    => ['overtime_request_id' => $overtimeRequest->id],
+            ]);
+        } else {
+            $admins = \App\Models\User::where('role', 'admin')->get();
+            foreach ($admins as $admin) {
+                \App\Models\Notification::create([
+                    'user_id' => $admin->id,
+                    'title'   => 'Pengajuan Lembur Baru',
+                    'body'    => ($employee->user?->name ?? 'Karyawan') . ' mengajukan lembur untuk tanggal ' . $dateStr . '.',
+                    'type'    => 'overtime',
+                    'data'    => ['overtime_request_id' => $overtimeRequest->id],
+                ]);
+            }
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Pengajuan lembur berhasil dikirim.',
@@ -187,7 +224,18 @@ class OvertimeRequestController extends Controller
      */
     public function approve(UpdateOvertimeRequestStatusRequest $request, $id)
     {
-        $overtimeRequest = OvertimeRequest::findOrFail($id);
+        $user = $request->user();
+        $overtimeRequest = OvertimeRequest::with('employee')->findOrFail($id);
+
+        // Guard PJ Bagian
+        if ($user->isPjBagian()) {
+            if ($overtimeRequest->employee?->user_id === $user->id) {
+                return response()->json(['success' => false, 'message' => 'Anda tidak dapat memproses pengajuan lembur milik sendiri.'], 403);
+            }
+            if ($overtimeRequest->employee?->department_id !== $user->pj_bagian_department_id) {
+                return response()->json(['success' => false, 'message' => 'Anda hanya dapat memproses pengajuan dari departemen yang Anda awasi.'], 403);
+            }
+        }
 
         if ($overtimeRequest->status !== 'pending') {
             return response()->json([
@@ -199,7 +247,7 @@ class OvertimeRequestController extends Controller
         $overtimeRequest->update([
             'status'      => 'approved',
             'admin_note'  => $request->input('admin_note'),
-            'reviewed_by' => $request->user()->id,
+            'reviewed_by' => $user->id,
             'reviewed_at' => now(),
         ]);
 
@@ -224,7 +272,18 @@ class OvertimeRequestController extends Controller
      */
     public function reject(UpdateOvertimeRequestStatusRequest $request, $id)
     {
-        $overtimeRequest = OvertimeRequest::findOrFail($id);
+        $user = $request->user();
+        $overtimeRequest = OvertimeRequest::with('employee')->findOrFail($id);
+
+        // Guard PJ Bagian
+        if ($user->isPjBagian()) {
+            if ($overtimeRequest->employee?->user_id === $user->id) {
+                return response()->json(['success' => false, 'message' => 'Anda tidak dapat memproses pengajuan lembur milik sendiri.'], 403);
+            }
+            if ($overtimeRequest->employee?->department_id !== $user->pj_bagian_department_id) {
+                return response()->json(['success' => false, 'message' => 'Anda hanya dapat memproses pengajuan dari departemen yang Anda awasi.'], 403);
+            }
+        }
 
         if ($overtimeRequest->status !== 'pending') {
             return response()->json([
@@ -236,7 +295,7 @@ class OvertimeRequestController extends Controller
         $overtimeRequest->update([
             'status'      => 'rejected',
             'admin_note'  => $request->input('admin_note'),
-            'reviewed_by' => $request->user()->id,
+            'reviewed_by' => $user->id,
             'reviewed_at' => now(),
         ]);
 

@@ -158,10 +158,16 @@ class ScheduleController extends Controller
      * 
      * @return \Illuminate\Http\JsonResponse
      */
-    public function getEmployeeSchedules()
+    public function getEmployeeSchedules(Request $request)
     {
-        // Ambil data seluruh karyawan aktif beserta jadwal pivotnya
-        $employees = \App\Models\Employee::with(['user', 'schedules'])->where('status', 'active')->get();
+        $user = $request->user();
+        $query = \App\Models\Employee::with(['user', 'schedules'])->where('status', 'active');
+
+        if ($user->role === 'pj_bagian') {
+            $query->where('department_id', $user->pj_bagian_department_id);
+        }
+
+        $employees = $query->get();
         
         // Format pemetaan hari kerja per karyawan
         $data = $employees->map(function ($emp) {
@@ -282,6 +288,10 @@ class ScheduleController extends Controller
 
         $emp = \App\Models\Employee::findOrFail($data['employee_id']);
 
+        if ($request->user()->role === 'pj_bagian' && $emp->department_id !== $request->user()->pj_bagian_department_id) {
+            return response()->json(['success' => false, 'message' => 'Anda hanya dapat mengatur jadwal staf di departemen Anda.'], 403);
+        }
+
         // Hapus penugasan shift lama pegawai pada hari kerja yang sama (jika ada)
         \Illuminate\Support\Facades\DB::table('employee_schedule')
             ->where('employee_id', $emp->id)
@@ -298,12 +308,14 @@ class ScheduleController extends Controller
             }
         }
 
+        $updater = $request->user()->role === 'pj_bagian' ? 'Penanggung Jawab Bagian' : 'Administrator';
+
         // Kirim notifikasi sistem secara langsung ke user pegawai yang bersangkutan
         // untuk menginformasikan perubahan/penugasan shift barunya.
         \App\Models\Notification::create([
             'user_id' => $emp->user_id,
             'title'   => 'Jadwal Shift Diperbarui',
-            'body'    => 'Jadwal dinas Anda untuk hari ' . $data['day_of_week'] . ' telah diperbarui menjadi "' . $scheduleName . '" oleh Administrator.',
+            'body'    => 'Jadwal dinas Anda untuk hari ' . $data['day_of_week'] . ' telah diperbarui menjadi "' . $scheduleName . '" oleh ' . $updater . '.',
             'type'    => 'system',
             'data'    => ['employee_id' => $emp->id, 'day_of_week' => $data['day_of_week']],
         ]);
@@ -330,6 +342,10 @@ class ScheduleController extends Controller
             'schedule_id'   => 'nullable|exists:schedules,id',
         ]);
 
+        if ($request->user()->role === 'pj_bagian' && (int)$data['department_id'] !== (int)$request->user()->pj_bagian_department_id) {
+            return response()->json(['success' => false, 'message' => 'Anda hanya dapat mengatur jadwal departemen Anda sendiri.'], 403);
+        }
+
         $employees = \App\Models\Employee::where('department_id', $data['department_id'])
             ->where('status', 'active')
             ->get();
@@ -341,6 +357,8 @@ class ScheduleController extends Controller
                 $scheduleName = $scheduleObj->name;
             }
         }
+
+        $updater = $request->user()->role === 'pj_bagian' ? 'Penanggung Jawab Bagian' : 'Administrator';
 
         foreach ($employees as $emp) {
             // Hapus penugasan shift lama pegawai pada hari kerja yang sama
@@ -357,7 +375,7 @@ class ScheduleController extends Controller
             \App\Models\Notification::create([
                 'user_id' => $emp->user_id,
                 'title'   => 'Jadwal Shift Diperbarui',
-                'body'    => 'Jadwal dinas Anda untuk hari ' . $data['day_of_week'] . ' telah diperbarui menjadi "' . $scheduleName . '" oleh Administrator.',
+                'body'    => 'Jadwal dinas Anda untuk hari ' . $data['day_of_week'] . ' telah diperbarui menjadi "' . $scheduleName . '" oleh ' . $updater . '.',
                 'type'    => 'system',
                 'data'    => ['employee_id' => $emp->id, 'day_of_week' => $data['day_of_week']],
             ]);

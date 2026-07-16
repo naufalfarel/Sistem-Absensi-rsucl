@@ -9,6 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import { LoginPage } from './components/LoginPage';
 import { EmployeeApp } from './components/EmployeeApp';
 import { AdminApp } from './components/AdminApp';
+import { PJBagianApp } from './components/PJBagianApp';
 import logoImg from '../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
 
 export default function App() {
@@ -42,6 +43,12 @@ export default function App() {
     if (user.role === 'admin') {
       return <AdminApp onLogout={logout} />;
     }
+    
+    // Pengguna adalah PJ Bagian (Penanggung Jawab Bagian)
+    if (user.role === 'pj_bagian') {
+      return <PJBagianApp onLogout={logout} user={user} />;
+    }
+
     // Pengguna adalah karyawan (Employee)
     // Menyesuaikan objek data profil agar kompatibel dengan properti EmployeeApp
     const empProps = {

@@ -87,8 +87,32 @@ Route::middleware('auth:sanctum')->group(function () {
     // Kalender Libur (Bisa dibaca semua karyawan)
     Route::get('/holidays', [\App\Http\Controllers\HolidayController::class, 'index']);
 
+    // ── RUTE BERSAMA ADMINISTRATOR & PJ BAGIAN (Akses dengan role 'admin' atau 'pj_bagian') ──────
+    Route::middleware('pj_or_admin')->group(function () {
+        // Persetujuan Cuti (Leave Requests)
+        Route::put('/leave-requests/{leaveRequest}/approve', [LeaveRequestController::class, 'approve']);
+        Route::put('/leave-requests/{leaveRequest}/reject',  [LeaveRequestController::class, 'reject']);
+
+        // Persetujuan Lembur Baru (Overtime Requests)
+        Route::put('/overtime-requests/{id}/approve', [\App\Http\Controllers\Api\OvertimeRequestController::class, 'approve']);
+        Route::put('/overtime-requests/{id}/reject', [\App\Http\Controllers\Api\OvertimeRequestController::class, 'reject']);
+
+        // Usulan Shift (Shift Assignment Proposals)
+        Route::get('/shift-assignment-proposals', [\App\Http\Controllers\ShiftAssignmentProposalController::class, 'index']);
+        Route::post('/shift-assignment-proposals', [\App\Http\Controllers\ShiftAssignmentProposalController::class, 'store']);
+
+        // Shared Read-Only Lists
+        Route::get('/employees', [EmployeeController::class, 'index']);
+        Route::get('/schedules', [ScheduleController::class, 'index']);
+
+        // Shift scheduling and management
+        Route::get('/employee-schedules', [ScheduleController::class, 'getEmployeeSchedules']);
+        Route::post('/employee-schedules/assign', [ScheduleController::class, 'assignEmployeeSchedule']);
+        Route::post('/employee-schedules/assign-department', [ScheduleController::class, 'assignDepartmentSchedule']);
+    });
+
     // ── RUTE KHUSUS ADMINISTRATOR (Hanya untuk User dengan Role 'admin') ──────
-    Route::middleware(\App\Http\Middleware\EnsureIsAdmin::class)->group(function () {
+    Route::middleware('admin')->group(function () {
         
         // Endpoint CRUD Kategori Cuti Khusus (Hanya Admin)
         Route::post('/special-leave-categories', [\App\Http\Controllers\SpecialLeaveCategoryController::class, 'store']);
@@ -115,26 +139,25 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/attendance/overtimes/summary', [AttendanceController::class, 'overtimesSummary']);
         // Setujui/tolak laporan lembur
         Route::put('/attendance/{id}/overtime/approve', [AttendanceController::class, 'approveOvertime']);
+        // Tolak laporan lembur (admin_note wajib)
         Route::put('/attendance/{id}/overtime/reject', [AttendanceController::class, 'rejectOvertime']);
-
-        // Persetujuan Lembur Baru (Overtime Requests)
-        Route::put('/overtime-requests/{id}/approve', [\App\Http\Controllers\Api\OvertimeRequestController::class, 'approve']);
-        Route::put('/overtime-requests/{id}/reject', [\App\Http\Controllers\Api\OvertimeRequestController::class, 'reject']);
 
         // ── CRUD Karyawan
         // Mendapatkan data meta pendukung (list department/position) untuk registrasi karyawan
         Route::get('/employees/meta',   [EmployeeController::class, 'meta']);
+        
+        // Pengelolaan PJ Bagian (Admin Only)
+        Route::get('/employees/pj-bagian', [EmployeeController::class, 'listPjBagian']);
+        Route::put('/employees/{employee}/assign-pj-bagian', [EmployeeController::class, 'assignPjBagian']);
+        Route::put('/employees/{employee}/revoke-pj-bagian', [EmployeeController::class, 'revokePjBagian']);
+
         // API Resource standar untuk CRUD data Karyawan
-        Route::apiResource('/employees', EmployeeController::class);
+        Route::apiResource('/employees', EmployeeController::class)->except(['index']);
 
         // ── CRUD Departemen / Bagian Unit Kerja
         Route::apiResource('/departments', \App\Http\Controllers\DepartmentController::class);
 
         // ── Verifikasi Pengajuan Izin/Cuti
-        // Menyetujui pengajuan cuti/izin karyawan
-        Route::put('/leave-requests/{leaveRequest}/approve', [LeaveRequestController::class, 'approve']);
-        // Menolak pengajuan cuti/izin karyawan disertai alasan penolakan
-        Route::put('/leave-requests/{leaveRequest}/reject',  [LeaveRequestController::class, 'reject']);
         // Batalkan pengajuan cuti yang sudah disetujui atau pending
         Route::put('/leave-requests/{id}/cancel', [LeaveRequestController::class, 'cancelApprovedOrPending']);
         // Persingkat pengajuan cuti yang sudah disetujui
@@ -146,15 +169,13 @@ Route::middleware('auth:sanctum')->group(function () {
         // Menghapus satu data pengajuan cuti tertentu
         Route::delete('/leave-requests/{leaveRequest}',       [LeaveRequestController::class, 'destroy']);
 
-        // ── Manajemen Shift Kerja & Penugasan Jadwal
-        // Mengambil daftar relasi shift karyawan
-        Route::get('/employee-schedules', [ScheduleController::class, 'getEmployeeSchedules']);
-        // Menugaskan/memetakan jadwal shift mingguan ke karyawan tertentu
-        Route::post('/employee-schedules/assign', [ScheduleController::class, 'assignEmployeeSchedule']);
-        // Menugaskan/memetakan jadwal shift mingguan ke seluruh karyawan dalam satu departemen sekaligus
-        Route::post('/employee-schedules/assign-department', [ScheduleController::class, 'assignDepartmentSchedule']);
+        // Persetujuan Usulan Shift (Shift Assignment Proposals - Admin Only)
+        Route::put('/shift-assignment-proposals/{id}/approve', [\App\Http\Controllers\ShiftAssignmentProposalController::class, 'approve']);
+        Route::put('/shift-assignment-proposals/{id}/reject', [\App\Http\Controllers\ShiftAssignmentProposalController::class, 'reject']);
+
+
         // API Resource standar untuk CRUD data Shift (Schedules) kecuali endpoint Detail (show)
-        Route::apiResource('/schedules', ScheduleController::class)->except(['show']);
+        Route::apiResource('/schedules', ScheduleController::class)->except(['show', 'index']);
 
         // ── Fitur Pelaporan
         // Mengambil summary data statistik absensi (misal jumlah hadir, sakit, alpa) untuk dashboard admin

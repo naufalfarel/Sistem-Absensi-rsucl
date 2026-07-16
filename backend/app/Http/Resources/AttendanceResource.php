@@ -63,6 +63,13 @@ class AttendanceResource extends JsonResource
         $isIncomplete = \App\Support\AttendanceRules::isAttendanceIncomplete($this->resource, $this->employee);
         $displayStatus = $isIncomplete ? 'tidak_lengkap' : $this->status;
 
+        // Jika absensi tidak lengkap (hanya masuk, belum pulang, shift sudah berakhir),
+        // sembunyikan data checkout dan durasi agar tampil '--' di frontend
+        if ($isIncomplete) {
+            $checkOut    = null;
+            $durationMin = null;
+        }
+
         $data = [
             'id'                 => $this->id,
             'date'               => $this->date ? Carbon::parse($this->date)->toDateString() : null,

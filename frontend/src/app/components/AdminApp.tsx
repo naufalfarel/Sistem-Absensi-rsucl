@@ -20,21 +20,25 @@ import { NotificationsTab } from './admin/NotificationsTab';
 import { SettingsTab } from './admin/SettingsTab';
 import { DepartmentsTab } from './admin/DepartmentsTab';
 import { HolidaysTab } from './admin/HolidaysTab';
+import { PJBagianTab } from './admin/PJBagianTab';
+import { ShiftProposalTab } from './admin/ShiftProposalTab';
 import { employeeApi, Employee, reportApi, ReportSummary, notificationApi } from '../../services/api';
 
 const sidebarItems = [
-  { id: 'dashboard',     icon: LayoutDashboard, label: 'Dashboard' },
-  { id: 'employees',     icon: Users,            label: 'Data Pegawai' },
-  { id: 'departments',   icon: Building2,        label: 'Departemen/Bagian' },
-  { id: 'attendance',    icon: ClipboardList,    label: 'Absensi' },
-  { id: 'history',       icon: History,          label: 'Riwayat' },
-  { id: 'schedule',      icon: CalendarDays,     label: 'Jadwal Shift' },
-  { id: 'holidays',      icon: CalendarDays,     label: 'Kalender Libur' },
-  { id: 'leave',         icon: FileText,         label: 'Pengajuan Cuti', badge: 0 },
-  { id: 'overtime',      icon: Clock,            label: 'Lembur' },
-  { id: 'reports',       icon: BarChart3,        label: 'Laporan' },
-  { id: 'notifications', icon: Bell,             label: 'Notifikasi', badge: 0 },
-  { id: 'settings',      icon: Settings,         label: 'Pengaturan' },
+  { id: 'dashboard',       icon: LayoutDashboard, label: 'Dashboard' },
+  { id: 'employees',       icon: Users,            label: 'Data Pegawai' },
+  { id: 'departments',     icon: Building2,        label: 'Departemen/Bagian' },
+  { id: 'pj_bagian',       icon: UserCheck,        label: 'PJ Bagian' },
+  { id: 'attendance',      icon: ClipboardList,    label: 'Absensi' },
+  { id: 'history',         icon: History,          label: 'Riwayat' },
+  { id: 'schedule',        icon: CalendarDays,     label: 'Jadwal Shift' },
+  { id: 'shift_proposals', icon: Clock,            label: 'Usulan Shift' },
+  { id: 'holidays',        icon: CalendarDays,     label: 'Kalender Libur' },
+  { id: 'leave',           icon: FileText,         label: 'Pengajuan Cuti', badge: 0 },
+  { id: 'overtime',        icon: Clock,            label: 'Lembur' },
+  { id: 'reports',         icon: BarChart3,        label: 'Laporan' },
+  { id: 'notifications',   icon: Bell,             label: 'Notifikasi', badge: 0 },
+  { id: 'settings',        icon: Settings,         label: 'Pengaturan' },
 ];
 
 const statusColors: Record<string, { color: string; bg: string }> = {
@@ -708,6 +712,8 @@ export function AdminApp({ onLogout }: AdminAppProps) {
           {activeTab === 'settings' && <SettingsTab />}
           {activeTab === 'departments' && <DepartmentsTab onRefreshDepartments={loadData} />}
           {activeTab === 'holidays' && <HolidaysTab />}
+          {activeTab === 'pj_bagian' && <PJBagianTab />}
+          {activeTab === 'shift_proposals' && <ShiftProposalTab />}
         </div>
       </div>
 

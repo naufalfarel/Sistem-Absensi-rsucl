@@ -217,6 +217,15 @@ class Attendance extends Model
                         }
                     }
 
+                    $isIncomplete = \App\Support\AttendanceRules::isAttendanceIncomplete($attRecord, $emp);
+                    $displayStatus = $isIncomplete ? 'tidak_lengkap' : $attRecord->status;
+
+                    // Jika absensi tidak lengkap, sembunyikan checkout dan durasi
+                    if ($isIncomplete) {
+                        $checkOut    = null;
+                        $durationMin = null;
+                    }
+
                     $reportRecords[] = [
                         'id' => $attRecord->id,
                         'employee_id' => $emp->id,
@@ -224,6 +233,7 @@ class Attendance extends Model
                         'check_in' => $attRecord->check_in,
                         'check_out' => $checkOut,
                         'status' => $attRecord->status,
+                        'display_status' => $displayStatus,
                         'checkin_punctuality' => $attRecord->checkin_punctuality,
                         'effective_checkin_time' => $attRecord->effective_checkin_time,
                         'duration_min' => $durationMin,
@@ -333,9 +343,19 @@ class Attendance extends Model
                                 if ($matchingShift) {
                                     $now = Carbon::now('Asia/Jakarta');
                                     $shiftStart = $matchingShift->start_time; // "HH:mm:ss"
-                                    $closeCheckinOffset = (int) \App\Models\Setting::get('close_checkin', '60');
+                                    $resolvedCloseTime = $matchingShift->checkin_window_end_time;
+                                    if (empty($resolvedCloseTime)) {
+                                        $startCarbon = Carbon::parse($matchingShift->start_time);
+                                        $endCarbon = Carbon::parse($matchingShift->end_time);
+                                        if ($endCarbon->lt($startCarbon)) {
+                                            $endCarbon->addDay();
+                                        }
+                                        $duration = $startCarbon->diffInMinutes($endCarbon);
+                                        $half = (int) ($duration / 2);
+                                        $resolvedCloseTime = $startCarbon->copy()->addMinutes($half)->format('H:i:s');
+                                    }
                                     $shiftStartCarbon = Carbon::today('Asia/Jakarta')->setTimeFromTimeString($shiftStart);
-                                    $closeLimitCarbon = $shiftStartCarbon->copy()->addMinutes($closeCheckinOffset);
+                                    $closeLimitCarbon = Carbon::today('Asia/Jakarta')->setTimeFromTimeString($resolvedCloseTime);
 
                                     if ($now->lte($closeLimitCarbon)) {
                                         $status = 'belum_hadir';
