@@ -22,6 +22,22 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->render(function (\Illuminate\Database\QueryException $e, Request $request) {
+            if ($request->is('api/*')) {
+                \Illuminate\Support\Facades\Log::error('QueryException caught globally: ' . $e->getMessage(), [
+                    'sql' => $e->getSql(),
+                    'bindings' => $e->getBindings(),
+                    'code' => $e->getCode(),
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Terjadi kesalahan saat menyimpan data. Silakan coba lagi atau hubungi admin.',
+                    'errors'  => null,
+                ], 500);
+            }
+        });
+
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*'),
         );

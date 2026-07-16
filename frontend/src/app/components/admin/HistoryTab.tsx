@@ -3,14 +3,15 @@ import { Search, Calendar, ChevronDown, Eye, X, Filter, Clock } from 'lucide-rea
 import { attendanceApi, departmentApi, AttendanceRecord, DepartmentModel } from '../../../services/api';
 
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
-  hadir:       { label: 'Hadir',        color: '#16A34A', bg: '#DCFCE7' },
-  telat:       { label: 'Terlambat',    color: '#D97706', bg: '#FEF3C7' },
-  alpha:       { label: 'Alpha',        color: '#DC2626', bg: '#FEE2E2' },
-  belum_hadir: { label: 'Belum Hadir',  color: '#6B7280', bg: '#F3F4F6' },
-  izin:        { label: 'Izin',         color: '#2563EB', bg: '#DBEAFE' },
-  sakit:       { label: 'Sakit',        color: '#EA580C', bg: '#FFF7ED' },
-  cuti:        { label: 'Cuti',         color: '#7C3AED', bg: '#F5F3FF' },
-  cuti_khusus: { label: 'Cuti Khusus',  color: '#7C3AED', bg: '#F5F3FF' },
+  hadir:         { label: 'Hadir',         color: '#16A34A', bg: '#DCFCE7' },
+  telat:         { label: 'Terlambat',     color: '#D97706', bg: '#FEF3C7' },
+  alpha:         { label: 'Alpha',         color: '#DC2626', bg: '#FEE2E2' },
+  belum_hadir:   { label: 'Belum Hadir',   color: '#6B7280', bg: '#F3F4F6' },
+  izin:          { label: 'Izin',          color: '#2563EB', bg: '#DBEAFE' },
+  sakit:         { label: 'Sakit',         color: '#EA580C', bg: '#FFF7ED' },
+  cuti:          { label: 'Cuti',          color: '#7C3AED', bg: '#F5F3FF' },
+  cuti_khusus:   { label: 'Cuti Khusus',   color: '#7C3AED', bg: '#F5F3FF' },
+  tidak_lengkap: { label: 'Tidak Lengkap', color: '#4B5563', bg: '#F3F4F6' },
 };
 
 /**
@@ -58,7 +59,8 @@ export function HistoryTab() {
     hadir: 0,
     terlambat: 0,
     alpha: 0,
-    cuti: 0
+    cuti: 0,
+    tidak_lengkap: 0
   });
 
   // Load departments on mount
@@ -176,9 +178,12 @@ export function HistoryTab() {
         nextFilter = ['telat'];
         break;
       case 2:
-        nextFilter = ['alpha', 'belum_hadir'];
+        nextFilter = ['tidak_lengkap'];
         break;
       case 3:
+        nextFilter = ['alpha', 'belum_hadir'];
+        break;
+      case 4:
         nextFilter = ['izin', 'sakit', 'cuti', 'cuti_khusus'];
         break;
     }
@@ -199,8 +204,10 @@ export function HistoryTab() {
       case 1:
         return statusFilter.includes('telat') && statusFilter.length === 1;
       case 2:
-        return statusFilter.includes('alpha') && statusFilter.includes('belum_hadir') && statusFilter.length === 2;
+        return statusFilter.includes('tidak_lengkap') && statusFilter.length === 1;
       case 3:
+        return statusFilter.includes('alpha') && statusFilter.includes('belum_hadir') && statusFilter.length === 2;
+      case 4:
         return statusFilter.includes('cuti') && statusFilter.includes('izin') && statusFilter.length === 4;
       default:
         return false;
@@ -217,10 +224,11 @@ export function HistoryTab() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {[
           { label: 'Total Hadir', value: summary.hadir, color: '#16A34A' },
           { label: 'Terlambat', value: summary.terlambat, color: '#D97706' },
+          { label: 'Tidak Lengkap', value: (summary as any).tidak_lengkap || 0, color: '#4B5563' },
           { label: 'Alpha', value: summary.alpha, color: '#DC2626' },
           { label: 'Cuti/Izin/Sakit', value: summary.cuti, color: '#7C3AED' },
         ].map((s, i) => {
@@ -324,6 +332,7 @@ export function HistoryTab() {
             <option value="all">Semua Status</option>
             <option value="hadir">Hadir</option>
             <option value="telat">Terlambat</option>
+            <option value="tidak_lengkap">Tidak Lengkap</option>
             <option value="alpha,belum_hadir">Alpha / Belum Hadir</option>
             <option value="izin,sakit,cuti,cuti_khusus">Cuti / Izin / Sakit</option>
           </select>
@@ -379,7 +388,16 @@ export function HistoryTab() {
                 ))
               )}
               {!loading && records.map((r, i) => {
-                const sc = statusConfig[r.status] || { label: r.status, color: '#6B7280', bg: '#F3F4F6' };
+                let sc = statusConfig[r.display_status || r.status] || statusConfig[r.status] || { label: r.status, color: '#6B7280', bg: '#F3F4F6' };
+                if (r.display_status !== 'tidak_lengkap' && (r.status === 'hadir' || r.status === 'telat')) {
+                  if (r.checkin_punctuality === 'tepat_waktu') {
+                    sc = { label: 'Tepat Waktu', color: '#16A34A', bg: '#DCFCE7' };
+                  } else if (r.checkin_punctuality === 'toleransi') {
+                    sc = { label: 'Toleransi', color: '#D97706', bg: '#FEF3C7' };
+                  } else if (r.checkin_punctuality === 'terlambat') {
+                    sc = { label: 'Terlambat', color: '#DC2626', bg: '#FEE2E2' };
+                  }
+                }
                 const isLeavePeriod = r.row_type === 'leave_period';
                 return (
                   <tr key={i} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
@@ -491,7 +509,7 @@ export function HistoryTab() {
                 {selected.employee?.profile_picture ? (
                   <img src={selected.employee.profile_picture} alt={selected.employee.name} className="w-full h-full object-cover" />
                 ) : (
-                  <span className="text-lg font-bold" style={{ color: (statusConfig[selected.status] || { color: '#6B7280' }).color }}>
+                  <span className="text-lg font-bold" style={{ color: (statusConfig[selected.display_status || selected.status] || { color: '#6B7280' }).color }}>
                     {(selected.employee?.name ?? 'K').replace(/^(dr\.|Ns\.|Dr\.)\s*/i, '').charAt(0)}
                   </span>
                 )}
@@ -508,8 +526,12 @@ export function HistoryTab() {
                 { l: 'Shift', v: (selected.shift_name || 'Reguler') + (selected.shift_type === 'dinas_luar' ? ' (Dinas Luar)' : ' (Normal)') },
                 { l: 'Jam Masuk', v: (selected.check_in ? selected.check_in.substring(0, 5) : '--') + (selected.checkin_distance_meters !== undefined && selected.checkin_distance_meters !== null ? ` (${selected.checkin_distance_meters}m dari RSUCL)` : '') },
                 { l: 'Jam Keluar', v: (selected.check_out ? selected.check_out.substring(0, 5) : '--') + (selected.checkout_distance_meters !== undefined && selected.checkout_distance_meters !== null ? ` (${selected.checkout_distance_meters}m dari RSUCL)` : '') },
-                { l: 'Status', v: (statusConfig[selected.status] || { label: selected.status }).label },
-                ...(selected.checkin_location_note ? [{ l: 'Lokasi Masuk', v: selected.checkin_location_note }] : []),
+                { l: 'Status', v: selected.display_status === 'tidak_lengkap'
+                    ? 'Tidak Lengkap'
+                    : ((selected.status === 'hadir' || selected.status === 'telat') && selected.checkin_punctuality
+                        ? (selected.checkin_punctuality === 'tepat_waktu' ? 'Tepat Waktu' : (selected.checkin_punctuality === 'toleransi' ? 'Toleransi' : 'Terlambat'))
+                        : (statusConfig[selected.status] || { label: selected.status }).label) },
+                ...(selected.checkin_location_note ? [{ l: 'Posisi', v: selected.checkin_location_note }] : []),
                 ...(selected.checkout_location_note ? [{ l: 'Lokasi Pulang', v: selected.checkout_location_note }] : []),
               ].map(({ l, v }, i) => (
                 <div key={i} className="flex justify-between">
@@ -581,9 +603,15 @@ export function HistoryTab() {
                     <button
                       onClick={async () => {
                         if (!selected.id) return;
+                        const reason = window.prompt('Masukkan alasan penolakan lembur:');
+                        if (reason === null) return;
+                        if (!reason.trim()) {
+                          alert('Alasan penolakan wajib diisi.');
+                          return;
+                        }
                         try {
-                          await attendanceApi.rejectOvertime(selected.id);
-                          alert('Lembur ditolak dan jam pulang dibatalkan.');
+                          await attendanceApi.rejectOvertime(selected.id, reason);
+                          alert('Lembur ditolak.');
                           setSelected(null);
                           loadData();
                         } catch (err: any) {

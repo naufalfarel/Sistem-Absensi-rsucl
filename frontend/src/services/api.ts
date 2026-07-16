@@ -274,6 +274,9 @@ export interface AttendanceRecord {
   check_in: string | null;
   check_out: string | null;
   status: 'hadir' | 'telat' | 'izin' | 'sakit' | 'cuti' | 'alpha';
+  display_status?: string | null;
+  checkin_punctuality?: 'tepat_waktu' | 'toleransi' | 'terlambat' | null;
+  effective_checkin_time?: string | null;
   duration_min: number | null;
   latitude: number | null;
   longitude: number | null;
@@ -309,6 +312,9 @@ export interface AttendanceRecord {
   is_overtime?: boolean;
   overtime_minutes?: number | null;
   overtime_note?: string | null;
+  overtime_status?: 'pending' | 'approved' | 'rejected' | null;
+  overtime_admin_note?: string | null;
+  overtime_reviewed_by?: string | null;
 
   // New Overtime System
   jam_pulang_normal?: string | null;
@@ -388,7 +394,7 @@ export const attendanceApi = {
   // Memperbarui catatan lembur setelah check-out berhasil
   updateOvertimeNote: (overtimeNote: string) =>
     api.put<{ success: boolean; message: string; data: AttendanceRecord }>('/attendance/overtime-note', { overtime_note: overtimeNote }),
-  // Ambil daftar lembur untuk admin
+  // Ambil daftar lembur untuk admin (legacy wrapper)
   overtimeList: (status?: string, month?: number, year?: number) => {
     let query = '';
     const params: string[] = [];
@@ -396,14 +402,57 @@ export const attendanceApi = {
     if (month) params.push(`month=${month}`);
     if (year) params.push(`year=${year}`);
     if (params.length > 0) query = '?' + params.join('&');
-    return api.get<{ success: boolean; data: AttendanceRecord[] }>(`/attendance/overtime${query}`);
+    return api.get<{ success: boolean; data: AttendanceRecord[] }>(`/attendance/overtimes${query}`);
+  },
+  // Ambil daftar lembur terpaginasi (admin)
+  overtimes: (params: {
+    status?: string;
+    date_from?: string;
+    date_to?: string;
+    search?: string;
+    department_id?: string;
+    page?: number;
+    per_page?: number;
+  }) => {
+    const query = new URLSearchParams();
+    if (params.status) query.append('status', params.status);
+    if (params.date_from) query.append('date_from', params.date_from);
+    if (params.date_to) query.append('date_to', params.date_to);
+    if (params.search) query.append('search', params.search);
+    if (params.department_id) query.append('department_id', params.department_id);
+    if (params.page) query.append('page', String(params.page));
+    if (params.per_page) query.append('per_page', String(params.per_page));
+    return api.get<{
+      success: boolean;
+      data: AttendanceRecord[];
+      meta?: { current_page: number; last_page: number; per_page: number; total: number };
+    }>(`/attendance/overtimes?${query.toString()}`);
+  },
+  // Ambil ringkasan statistik lembur (admin)
+  overtimesSummary: (params: {
+    status?: string;
+    date_from?: string;
+    date_to?: string;
+    search?: string;
+    department_id?: string;
+  }) => {
+    const query = new URLSearchParams();
+    if (params.status) query.append('status', params.status);
+    if (params.date_from) query.append('date_from', params.date_from);
+    if (params.date_to) query.append('date_to', params.date_to);
+    if (params.search) query.append('search', params.search);
+    if (params.department_id) query.append('department_id', params.department_id);
+    return api.get<{
+      success: boolean;
+      data: { pending: number; approved: number; rejected: number; total_minutes: number; total_hours: number };
+    }>(`/attendance/overtimes/summary?${query.toString()}`);
   },
   // Setujui lembur
-  approveOvertime: (id: number) =>
-    api.put<{ success: boolean; data: AttendanceRecord }>(`/attendance/${id}/overtime/approve`, {}),
+  approveOvertime: (id: number, adminNote?: string) =>
+    api.put<{ success: boolean; data: AttendanceRecord }>(`/attendance/${id}/overtime/approve`, { overtime_admin_note: adminNote }),
   // Tolak lembur
-  rejectOvertime: (id: number) =>
-    api.put<{ success: boolean; data: AttendanceRecord }>(`/attendance/${id}/overtime/reject`, {}),
+  rejectOvertime: (id: number, adminNote: string) =>
+    api.put<{ success: boolean; data: AttendanceRecord }>(`/attendance/${id}/overtime/reject`, { overtime_admin_note: adminNote }),
 
   historyAdmin: (params: {
     date?: string;
@@ -448,7 +497,7 @@ export const attendanceApi = {
     if (params.department_id) query.append('department_id', params.department_id);
     return api.get<{
       success: boolean;
-      data: { hadir: number; terlambat: number; alpha: number; cuti: number };
+      data: { hadir: number; terlambat: number; alpha: number; cuti: number; tidak_lengkap: number };
     }>(`/attendance/status-summary?${query.toString()}`);
   },
 };
@@ -687,6 +736,8 @@ export interface AppSettings {
   // Toleransi Pulang Cepat & Lembur
   early_checkout_grace_minutes?: string;
   overtime_grace_minutes?: string;
+  checkin_tolerance_minutes?: string;
+  early_checkin_window_minutes?: string;
 }
 
 /**
@@ -708,13 +759,16 @@ export const settingApi = {
  */
 export interface ShiftSchedule {
   id: number;
+  parent_id?: number | null;
   name: string;
   start_time: string;
   end_time: string;
+  checkin_window_end_time?: string | null;
   color: string;
   icon: string;
   shift_type?: 'normal' | 'dinas_luar';
   employees_count?: number;
+  children?: ShiftSchedule[];
   employees?: Array<{
     id: number;
     nip: string;
@@ -748,6 +802,7 @@ export interface MyShiftSchedule {
   name: string;
   start_time: string; // "HH:mm:ss" atau "HH:mm"
   end_time: string;
+  checkin_window_end_time?: string | null;
   color: string;
   icon: string;
   shift_type?: 'normal' | 'dinas_luar';
@@ -772,6 +827,9 @@ export const scheduleApi = {
   // Tugaskan shift tertentu ke karyawan untuk hari tertentu
   assignEmployeeSchedule: (employee_id: number, day_of_week: string, schedule_id: number | null) =>
     api.post<{ success: boolean; message: string }>('/employee-schedules/assign', { employee_id, day_of_week, schedule_id }),
+  // Tugaskan shift ke seluruh departemen sekaligus
+  assignDepartmentSchedule: (department_id: number, day_of_week: string, schedule_id: number | null) =>
+    api.post<{ success: boolean; message: string }>('/employee-schedules/assign-department', { department_id, day_of_week, schedule_id }),
   // Ambil info shift kerja yang berlaku untuk diri sendiri hari ini
   mySchedule: () => api.get<{ success: boolean; data: MyShiftSchedule | null; saturday_shift?: MyShiftSchedule | null; day: string }>('/my-schedule'),
 };
@@ -837,6 +895,118 @@ export const holidayApi = {
   // Hapus penugasan kerja hari libur (admin)
   unassign: (holidayId: number, employeeId: number) =>
     api.delete<{ success: boolean; message: string }>(`/holidays/${holidayId}/work-assignments/${employeeId}`),
+};
+
+// ─────────────────────────────────────────────────────────────────────
+// Pengajuan Lembur (Overtime Requests)
+// ─────────────────────────────────────────────────────────────────────
+export interface OvertimeRequest {
+  id: number;
+  employee_id: number;
+  employee?: {
+    id: number;
+    name: string;
+    nip: string;
+    department?: string;
+  } | null;
+  date: string;
+  reason: string;
+  photo_url: string | null;
+  location_note: string;
+  status: 'pending' | 'approved' | 'rejected';
+  admin_note: string | null;
+  reviewed_by: number | null;
+  reviewed_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  system_checkout_data?: {
+    check_in: string | null;
+    check_out: string | null;
+    is_overtime: boolean;
+    overtime_minutes: number;
+  } | null;
+}
+
+export const overtimeApi = {
+  list: (params: {
+    status?: string;
+    date_from?: string;
+    date_to?: string;
+    department_id?: string;
+    search?: string;
+    page?: number;
+    per_page?: number;
+  }) => {
+    const query = new URLSearchParams();
+    if (params.status) query.append('status', params.status);
+    if (params.date_from) query.append('date_from', params.date_from);
+    if (params.date_to) query.append('date_to', params.date_to);
+    if (params.department_id) query.append('department_id', params.department_id);
+    if (params.search) query.append('search', params.search);
+    if (params.page) query.append('page', params.page.toString());
+    if (params.per_page) query.append('per_page', params.per_page.toString());
+
+    return api.get<{
+      success: boolean;
+      data: OvertimeRequest[];
+      meta?: { current_page: number; last_page: number; per_page: number; total: number };
+    }>(`/overtime-requests?${query.toString()}`);
+  },
+
+  create: (formData: FormData) => {
+    return api.post<{
+      success: boolean;
+      message: string;
+      data: OvertimeRequest;
+    }>('/overtime-requests', formData);
+  },
+
+  show: (id: number) => {
+    return api.get<{
+      success: boolean;
+      data: OvertimeRequest;
+    }>(`/overtime-requests/${id}`);
+  },
+
+  overtimesSummary: (params: {
+    date_from?: string;
+    date_to?: string;
+    department_id?: string;
+    search?: string;
+  }) => {
+    const query = new URLSearchParams();
+    if (params.date_from) query.append('date_from', params.date_from);
+    if (params.date_to) query.append('date_to', params.date_to);
+    if (params.department_id) query.append('department_id', params.department_id);
+    if (params.search) query.append('search', params.search);
+
+    return api.get<{
+      success: boolean;
+      data: {
+        pending: number;
+        approved: number;
+        rejected: number;
+        total_minutes: number;
+        total_hours: number;
+      };
+    }>(`/overtime-requests/summary?${query.toString()}`);
+  },
+
+  approve: (id: number, adminNote?: string) => {
+    return api.put<{
+      success: boolean;
+      message: string;
+      data: OvertimeRequest;
+    }>(`/overtime-requests/${id}/approve`, { admin_note: adminNote });
+  },
+
+  reject: (id: number, adminNote: string) => {
+    return api.put<{
+      success: boolean;
+      message: string;
+      data: OvertimeRequest;
+    }>(`/overtime-requests/${id}/reject`, { admin_note: adminNote });
+  },
 };
 
 

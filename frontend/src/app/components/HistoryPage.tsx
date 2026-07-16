@@ -11,9 +11,10 @@ const statusConfig: Record<string, { label: string; color: string; bg: string }>
   izin:   { label: 'Izin',      color: '#2563EB', bg: '#DBEAFE' },
   sakit:  { label: 'Sakit',     color: '#EA580C', bg: '#FFF7ED' },
   cuti:   { label: 'Cuti',      color: '#7C3AED', bg: '#F5F3FF' },
+  tidak_lengkap: { label: 'Tidak Lengkap', color: '#4B5563', bg: '#F3F4F6' },
 };
 
-const statusFilters = ['Semua', 'Hadir', 'Terlambat', 'Izin/Sakit'];
+const statusFilters = ['Semua', 'Hadir', 'Terlambat', 'Tidak Lengkap', 'Izin/Sakit'];
 
 /* ─── Range Filter Types ─────────────────────────────────────── */
 type RangeMode = '7d' | '1m' | '3m' | 'custom';
@@ -120,6 +121,7 @@ export function HistoryPage() {
       ? 'Dinas Luar'
       : (r.is_within_geofence ? 'RSUCL – Terverifikasi' : (r.check_in || r.check_out ? 'Luar Area Geofence' : '--')),
     status:   r.status,
+    display_status: r.display_status,
     shift:    r.shift_name ?? 'Reguler',
     checkinLocationNote: r.checkin_location_note,
     checkoutLocationNote: r.checkout_location_note,
@@ -130,6 +132,8 @@ export function HistoryPage() {
     isOvertime: r.is_overtime,
     overtimeMinutes: r.overtime_minutes,
     overtimeNote: r.overtime_note,
+    overtimeStatus: r.overtime_status,
+    overtimeAdminNote: r.overtime_admin_note,
     checkinPhotoUrl: r.checkin_photo_url || r.image_check_in,
     checkoutPhotoUrl: r.checkout_photo_url || r.image_check_out,
     checkinDistance: r.checkin_distance_meters,
@@ -137,6 +141,7 @@ export function HistoryPage() {
     shiftType: r.shift_type ?? 'normal',
     isHolidayWork: r.is_holiday_work,
     holiday: r.holiday,
+    checkin_punctuality: r.checkin_punctuality,
   }));
 
   const filtered = mapped.filter(r => {
@@ -144,14 +149,16 @@ export function HistoryPage() {
     const matchSearch = r.date.toLowerCase().includes(q) || r.status.toLowerCase().includes(q);
     if (activeStatus === 'Hadir')     return matchSearch && r.status === 'hadir';
     if (activeStatus === 'Terlambat') return matchSearch && r.status === 'telat';
+    if (activeStatus === 'Tidak Lengkap') return matchSearch && r.display_status === 'tidak_lengkap';
     if (activeStatus === 'Izin/Sakit') return matchSearch && ['izin','sakit','cuti'].includes(r.status);
     return matchSearch;
   });
 
   // Stats from range-filtered records
   const totalDays    = rangeFiltered.length;
-  const hadirCount   = rangeFiltered.filter(r => r.status === 'hadir' || r.status === 'telat').length;
-  const telatCount   = rangeFiltered.filter(r => r.status === 'telat').length;
+  const hadirCount   = rangeFiltered.filter(r => r.display_status !== 'tidak_lengkap' && (r.status === 'hadir' || r.status === 'telat')).length;
+  const telatCount   = rangeFiltered.filter(r => r.display_status !== 'tidak_lengkap' && r.status === 'telat').length;
+  const tidakLengkapCount = rangeFiltered.filter(r => r.display_status === 'tidak_lengkap').length;
   const alphaCount   = rangeFiltered.filter(r => r.status === 'alpha').length;
   const izinCount    = rangeFiltered.filter(r => ['izin','sakit','cuti'].includes(r.status)).length;
 
@@ -159,6 +166,7 @@ export function HistoryPage() {
   const chartData = [
     { name: 'Hadir',     value: hadirCount },
     { name: 'Terlambat', value: telatCount },
+    { name: 'Tidak Lengkap', value: tidakLengkapCount },
     { name: 'Alpha',     value: alphaCount },
     { name: 'Izin/Sakit', value: izinCount },
   ];
@@ -237,10 +245,11 @@ export function HistoryPage() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
         {[
           { label: 'Hari Hadir',   value: String(hadirCount), total: ' hari', color: '#16A34A', bg: '#F0FDF4' },
           { label: 'Terlambat',    value: String(telatCount), total: ' hari', color: '#D97706', bg: '#FFFBEB' },
+          { label: 'Tidak Lengkap', value: String(tidakLengkapCount), total: ' hari', color: '#4B5563', bg: '#F3F4F6' },
           { label: 'Alpha',        value: String(alphaCount), total: ' hari', color: '#DC2626', bg: '#FFF5F5' },
           { label: 'Izin / Sakit', value: String(izinCount),  total: ' hari', color: '#2563EB', bg: '#DBEAFE' },
         ].map((s, i) => (
@@ -299,7 +308,7 @@ export function HistoryPage() {
                 label={{ position: 'top', fontSize: 10, fill: '#9CA3AF', formatter: (v: number) => v > 0 ? String(v) : '' }}
               >
                 {chartData.map((_entry, i) => {
-                  const colors = ['#16A34A', '#FBBF24', '#F87171', '#60A5FA'];
+                  const colors = ['#16A34A', '#FBBF24', '#4B5563', '#F87171', '#60A5FA'];
                   return <Cell key={`cell-${i}`} fill={colors[i]} />;
                 })}
               </Bar>
@@ -314,7 +323,7 @@ export function HistoryPage() {
 
       {/* Status Filter & Search */}
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
-        <div className="flex gap-1.5 bg-white rounded-xl border border-gray-100 p-1 shadow-sm">
+        <div className="flex gap-1.5 bg-white rounded-xl border border-gray-100 p-1 shadow-sm overflow-x-auto scrollbar-hide">
           {statusFilters.map(f => (
             <button
               key={f}
@@ -361,7 +370,16 @@ export function HistoryPage() {
           <div className="text-center py-8 text-gray-400 text-[12px]">Memuat data riwayat...</div>
         )}
         {filtered.map((record, i) => {
-          const sc = statusConfig[record.status] || { label: record.status.toUpperCase(), color: '#6B7280', bg: '#F3F4F6' };
+          let sc = statusConfig[record.display_status || record.status] || statusConfig[record.status] || { label: record.status.toUpperCase(), color: '#6B7280', bg: '#F3F4F6' };
+          if (record.display_status !== 'tidak_lengkap' && (record.status === 'hadir' || record.status === 'telat')) {
+            if (record.checkin_punctuality === 'tepat_waktu') {
+              sc = { label: 'Tepat Waktu', color: '#16A34A', bg: '#DCFCE7' };
+            } else if (record.checkin_punctuality === 'toleransi') {
+              sc = { label: 'Toleransi', color: '#D97706', bg: '#FEF3C7' };
+            } else if (record.checkin_punctuality === 'terlambat') {
+              sc = { label: 'Terlambat', color: '#DC2626', bg: '#FEE2E2' };
+            }
+          }
           return (
             <div key={i} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
               <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-50">
@@ -398,7 +416,7 @@ export function HistoryPage() {
                   </div>
                 ))}
               </div>
-              {(record.checkinLocationNote || record.checkoutLocationNote || record.isEarlyCheckout || record.isOvertime) && (
+              {(record.checkinLocationNote || record.checkoutLocationNote || record.isEarlyCheckout) && (
                 <div className="px-5 py-2.5 bg-gray-50/70 border-t border-gray-50 text-[11.5px] text-gray-500 space-y-2">
                   {/* Location Notes */}
                   {(record.checkinLocationNote || record.checkoutLocationNote) && (
@@ -410,7 +428,7 @@ export function HistoryPage() {
                             <span>
                               <span className="font-semibold text-gray-600">Lokasi Masuk:</span> {record.checkinLocationNote}
                               {record.checkinDistance !== undefined && record.checkinDistance !== null && (
-                                <span className="text-gray-400 ml-1.5">({record.checkinDistance}m dari RSUCL)</span>
+                                <span className="text-[10px] text-gray-400 font-mono ml-1">({record.checkinDistance}m)</span>
                               )}
                             </span>
                           </div>
@@ -428,7 +446,7 @@ export function HistoryPage() {
                             <span>
                               <span className="font-semibold text-gray-600">Lokasi Pulang:</span> {record.checkoutLocationNote}
                               {record.checkoutDistance !== undefined && record.checkoutDistance !== null && (
-                                <span className="text-gray-400 ml-1.5">({record.checkoutDistance}m dari RSUCL)</span>
+                                <span className="text-[10px] text-gray-400 font-mono ml-1">({record.checkoutDistance}m)</span>
                               )}
                             </span>
                           </div>
@@ -451,20 +469,6 @@ export function HistoryPage() {
                       <span className="text-[11px] text-gray-600">
                         <span className="font-semibold">Alasan:</span> {record.earlyCheckoutReason || 'Tidak diisi'}
                       </span>
-                    </div>
-                  )}
-
-                  {/* Overtime Info */}
-                  {record.isOvertime && (
-                    <div className="pt-1.5 border-t border-gray-100/50 flex flex-col sm:flex-row sm:items-center gap-2">
-                      <div className="flex items-center gap-1.5">
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-200">
-                          Lembur (+{record.overtimeMinutes} mnt)
-                        </span>
-                      </div>
-                      <div className="flex-1 text-gray-600">
-                        <span><span className="font-semibold text-gray-600">Pekerjaan Lembur:</span> {record.overtimeNote || 'Tanpa keterangan'}</span>
-                      </div>
                     </div>
                   )}
                 </div>

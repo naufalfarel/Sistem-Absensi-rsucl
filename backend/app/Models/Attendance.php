@@ -35,6 +35,7 @@ class Attendance extends Model
         'early_checkout_status', 'early_checkout_admin_note',
         // Lembur (Overtime)
         'is_overtime', 'overtime_minutes', 'overtime_note',
+        'overtime_status', 'overtime_reviewed_by', 'overtime_reviewed_at', 'overtime_admin_note',
         // New Overtime System
         'jam_pulang_normal', 'is_lembur', 'durasi_lembur_menit', 'keterangan_lembur', 'status_approval_lembur',
         // Foto, Koordinat, dan Jarak Detail
@@ -62,6 +63,7 @@ class Attendance extends Model
         'checkin_distance_meters'  => 'integer',
         'checkout_distance_meters' => 'integer',
         'is_holiday_work'     => 'boolean',
+        'overtime_reviewed_at' => 'datetime',
     ];
 
     /**
@@ -82,6 +84,14 @@ class Attendance extends Model
     }
 
     /**
+     * Relasi ke model User (Admin yang menyetujui/menolak lembur).
+     */
+    public function overtimeReviewedBy()
+    {
+        return $this->belongsTo(User::class, 'overtime_reviewed_by');
+    }
+
+    /**
      * Accessor untuk menghitung durasi kerja karyawan dalam menit.
      * Dihitung berdasarkan selisih waktu check-in dan check-out.
      * 
@@ -89,8 +99,9 @@ class Attendance extends Model
      */
     public function getDurationMinutesAttribute(): ?int
     {
-        if (!$this->check_in || !$this->check_out) return null;
-        $in  = strtotime($this->check_in);
+        $checkInTime = $this->effective_checkin_time ?: $this->check_in;
+        if (!$checkInTime || !$this->check_out) return null;
+        $in  = strtotime($checkInTime);
         $out = strtotime($this->check_out);
         return (int) round(($out - $in) / 60);
     }
@@ -190,14 +201,32 @@ class Attendance extends Model
                 // Kasus A: Karyawan melakukan absensi (Check-in/Check-out ada)
                 if (isset($attendances[$key])) {
                     $attRecord = $attendances[$key]->first();
+                    
+                    $checkOut = $attRecord->check_out;
+                    $durationMin = $attRecord->duration_minutes;
+                    if ($attRecord->overtime_status === 'rejected' && $attRecord->jam_pulang_normal) {
+                        $checkOut = $attRecord->jam_pulang_normal;
+                        if ($attRecord->check_in) {
+                            $inSec = strtotime($attRecord->check_in);
+                            $outSec = strtotime($attRecord->jam_pulang_normal);
+                            if ($outSec < $inSec) {
+                                $outSec += 86400; // overnight shift
+                            }
+                            $durationMin = (int) round(($outSec - $inSec) / 60);
+                            if ($durationMin < 0) $durationMin = 0;
+                        }
+                    }
+
                     $reportRecords[] = [
                         'id' => $attRecord->id,
                         'employee_id' => $emp->id,
                         'date' => $dateStr,
                         'check_in' => $attRecord->check_in,
-                        'check_out' => $attRecord->check_out,
+                        'check_out' => $checkOut,
                         'status' => $attRecord->status,
-                        'duration_min' => $attRecord->duration_minutes,
+                        'checkin_punctuality' => $attRecord->checkin_punctuality,
+                        'effective_checkin_time' => $attRecord->effective_checkin_time,
+                        'duration_min' => $durationMin,
                         'latitude' => $attRecord->latitude,
                         'longitude' => $attRecord->longitude,
                         'accuracy' => $attRecord->accuracy,
@@ -231,6 +260,9 @@ class Attendance extends Model
                         'durasi_lembur_menit'      => $attRecord->durasi_lembur_menit,
                         'keterangan_lembur'        => $attRecord->keterangan_lembur,
                         'status_approval_lembur'   => $attRecord->status_approval_lembur,
+                        'is_overtime'              => (bool)$attRecord->is_overtime,
+                        'overtime_minutes'         => $attRecord->overtime_minutes,
+                        'overtime_status'          => $attRecord->overtime_status,
                         
                         'shift_name' => $shiftName,
                         'shift_type' => $matchingShift ? ($matchingShift->shift_type ?? 'normal') : 'normal',

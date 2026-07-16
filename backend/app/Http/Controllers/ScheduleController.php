@@ -20,13 +20,9 @@ class ScheduleController extends Controller
      */
     public function index()
     {
-        $schedules = Schedule::with(['employees.user', 'employees.department'])->get();
-        
-        // Tambahkan atribut custom 'employees_count' untuk menghitung pegawai unik
-        $schedules->each(function ($schedule) {
-            $uniqueCount = $schedule->employees->unique('id')->count();
-            $schedule->setAttribute('employees_count', $uniqueCount);
-        });
+        $schedules = Schedule::whereNull('parent_id')
+            ->with(['children.employees.user', 'children.employees.department'])
+            ->get();
 
         return response()->json(['success' => true, 'data' => ScheduleResource::collection($schedules)]);
     }
@@ -46,6 +42,24 @@ class ScheduleController extends Controller
 
         // Buat jadwal shift di database
         $schedule = Schedule::create($data);
+
+        // Jika ini adalah parent template (parent_id = null) dan start_time & end_time disediakan,
+        // buat child sub-shift (variant) pertama secara otomatis dengan jam yang sama agar langsung bisa ditugaskan
+        if (!isset($data['parent_id']) || $data['parent_id'] === null) {
+            if (isset($data['start_time']) && isset($data['end_time'])) {
+                Schedule::create([
+                    'parent_id'  => $schedule->id,
+                    'name'       => 'Normal (' . substr($data['start_time'], 0, 5) . '–' . substr($data['end_time'], 0, 5) . ')',
+                    'start_time' => $data['start_time'],
+                    'end_time'   => $data['end_time'],
+                    'color'      => $data['color'] ?? '#16A34A',
+                    'icon'       => $data['icon'] ?? 'sun',
+                    'shift_type' => $data['shift_type'] ?? 'normal',
+                ]);
+            }
+        }
+
+        $schedule->load('children');
 
         return response()->json([
             'success' => true,
@@ -68,10 +82,52 @@ class ScheduleController extends Controller
         // Validasi payload perubahan data shift
         $data = $request->validated();
 
-        $schedule->update($data);
+        // Update properties parent
+        $schedule->update(\Illuminate\Support\Arr::except($data, ['children']));
+
+        // Proses sinkronisasi child sub-shifts jika dikirimkan
+        if ($request->has('children')) {
+            $inputChildren = $data['children'] ?? [];
+            $keepIds = [];
+
+            foreach ($inputChildren as $childData) {
+                // Formatting times: ensure HH:mm:ss format
+                $start = strlen($childData['start_time']) === 5 ? $childData['start_time'] . ':00' : $childData['start_time'];
+                $end = strlen($childData['end_time']) === 5 ? $childData['end_time'] . ':00' : $childData['end_time'];
+
+                if (isset($childData['id']) && $childData['id']) {
+                    // Update child yang ada
+                    $child = Schedule::findOrFail($childData['id']);
+                    $child->update([
+                        'name'       => $childData['name'],
+                        'start_time' => $start,
+                        'end_time'   => $end,
+                        'color'      => $schedule->color,
+                        'icon'       => $schedule->icon,
+                        'shift_type' => $schedule->shift_type,
+                    ]);
+                    $keepIds[] = $child->id;
+                } else {
+                    // Buat child baru
+                    $newChild = Schedule::create([
+                        'parent_id'  => $schedule->id,
+                        'name'       => $childData['name'],
+                        'start_time' => $start,
+                        'end_time'   => $end,
+                        'color'      => $schedule->color,
+                        'icon'       => $schedule->icon,
+                        'shift_type' => $schedule->shift_type,
+                    ]);
+                    $keepIds[] = $newChild->id;
+                }
+            }
+
+            // Hapus child sub-shift lama yang tidak dikirimkan lagi
+            $schedule->children()->whereNotIn('id', $keepIds)->delete();
+        }
 
         // Load relasi terbaru dan hitung ulang jumlah karyawan terkait
-        $schedule->load(['employees.user', 'employees.department']);
+        $schedule->load(['children.employees.user', 'children.employees.department']);
 
         return response()->json([
             'success' => true,
@@ -255,6 +311,61 @@ class ScheduleController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Jadwal karyawan berhasil diperbarui.'
+        ]);
+    }
+
+    /**
+     * POST /api/employee-schedules/assign-department
+     * 
+     * Menugaskan atau memperbarui jadwal shift seluruh pegawai dalam satu departemen sekaligus.
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function assignDepartmentSchedule(Request $request)
+    {
+        $data = $request->validate([
+            'department_id' => 'required|exists:departments,id',
+            'day_of_week'   => 'required|string|in:Senin,Selasa,Rabu,Kamis,Jumat,Sabtu,Minggu',
+            'schedule_id'   => 'nullable|exists:schedules,id',
+        ]);
+
+        $employees = \App\Models\Employee::where('department_id', $data['department_id'])
+            ->where('status', 'active')
+            ->get();
+
+        $scheduleName = 'Libur (Tidak Ada Shift)';
+        if ($data['schedule_id']) {
+            $scheduleObj = \App\Models\Schedule::find($data['schedule_id']);
+            if ($scheduleObj) {
+                $scheduleName = $scheduleObj->name;
+            }
+        }
+
+        foreach ($employees as $emp) {
+            // Hapus penugasan shift lama pegawai pada hari kerja yang sama
+            \Illuminate\Support\Facades\DB::table('employee_schedule')
+                ->where('employee_id', $emp->id)
+                ->where('day_of_week', $data['day_of_week'])
+                ->delete();
+
+            if ($data['schedule_id']) {
+                $emp->schedules()->attach($data['schedule_id'], ['day_of_week' => $data['day_of_week']]);
+            }
+
+            // Kirim notifikasi sistem secara langsung ke user pegawai
+            \App\Models\Notification::create([
+                'user_id' => $emp->user_id,
+                'title'   => 'Jadwal Shift Diperbarui',
+                'body'    => 'Jadwal dinas Anda untuk hari ' . $data['day_of_week'] . ' telah diperbarui menjadi "' . $scheduleName . '" oleh Administrator.',
+                'type'    => 'system',
+                'data'    => ['employee_id' => $emp->id, 'day_of_week' => $data['day_of_week']],
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Jadwal departemen berhasil diperbarui.'
         ]);
     }
 }

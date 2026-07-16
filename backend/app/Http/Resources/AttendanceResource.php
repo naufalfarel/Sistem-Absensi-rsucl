@@ -43,13 +43,36 @@ class AttendanceResource extends JsonResource
             }
         }
 
+        $checkOut = $this->check_out;
+        $durationMin = $this->duration_minutes ?? null;
+
+        if ($this->overtime_status === 'rejected' && $this->jam_pulang_normal) {
+            $checkOut = $this->jam_pulang_normal;
+            $checkInTime = $this->effective_checkin_time ?: $this->check_in;
+            if ($checkInTime) {
+                $inSec = strtotime($checkInTime);
+                $outSec = strtotime($this->jam_pulang_normal);
+                if ($outSec < $inSec) {
+                    $outSec += 86400; // overnight shift
+                }
+                $durationMin = (int) round(($outSec - $inSec) / 60);
+                if ($durationMin < 0) $durationMin = 0;
+            }
+        }
+
+        $isIncomplete = \App\Support\AttendanceRules::isAttendanceIncomplete($this->resource, $this->employee);
+        $displayStatus = $isIncomplete ? 'tidak_lengkap' : $this->status;
+
         $data = [
             'id'                 => $this->id,
             'date'               => $this->date ? Carbon::parse($this->date)->toDateString() : null,
             'check_in'           => $this->check_in,
-            'check_out'          => $this->check_out,
+            'check_out'          => $checkOut,
             'status'             => $this->status,
-            'duration_min'       => $this->duration_minutes ?? null,
+            'display_status'     => $displayStatus,
+            'checkin_punctuality'      => $this->checkin_punctuality,
+            'effective_checkin_time'   => $this->effective_checkin_time,
+            'duration_min'       => $durationMin,
             'latitude'           => $this->latitude,
             'longitude'          => $this->longitude,
             'accuracy'           => $this->accuracy,
@@ -83,6 +106,10 @@ class AttendanceResource extends JsonResource
             'is_overtime'      => (bool)$this->is_overtime,
             'overtime_minutes' => $this->overtime_minutes,
             'overtime_note'    => $this->overtime_note,
+            'overtime_status'  => $this->overtime_status,
+            'overtime_reviewed_by' => $this->overtimeReviewedBy?->name,
+            'overtime_reviewed_at' => $this->overtime_reviewed_at ? $this->overtime_reviewed_at->toDateTimeString() : null,
+            'overtime_admin_note'  => $this->overtime_admin_note,
 
             // New Overtime System
             'jam_pulang_normal'        => $this->jam_pulang_normal,
@@ -104,6 +131,24 @@ class AttendanceResource extends JsonResource
                 'department' => $this->employee->department?->name,
                 'profile_picture' => $this->employee->user?->profile_picture ? url($this->employee->user->profile_picture) : null,
             ];
+        }
+
+        $user = $request->user();
+        if ($user && $user->role === 'employee') {
+            unset(
+                $data['is_overtime'],
+                $data['overtime_minutes'],
+                $data['overtime_note'],
+                $data['overtime_status'],
+                $data['overtime_reviewed_by'],
+                $data['overtime_reviewed_at'],
+                $data['overtime_admin_note'],
+                $data['jam_pulang_normal'],
+                $data['is_lembur'],
+                $data['durasi_lembur_menit'],
+                $data['keterangan_lembur'],
+                $data['status_approval_lembur']
+            );
         }
 
         return $data;

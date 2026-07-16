@@ -72,6 +72,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/leave-requests/quota', [LeaveRequestController::class, 'quota']);
     Route::delete('/leave-requests/{leaveRequest}/cancel', [LeaveRequestController::class, 'cancel']);
     
+    // ── Fitur Pengajuan Lembur
+    Route::get('/overtime-requests', [\App\Http\Controllers\Api\OvertimeRequestController::class, 'index']);
+    Route::get('/overtime-requests/summary', [\App\Http\Controllers\Api\OvertimeRequestController::class, 'summary']);
+    Route::post('/overtime-requests', [\App\Http\Controllers\Api\OvertimeRequestController::class, 'store']);
+    Route::get('/overtime-requests/{id}', [\App\Http\Controllers\Api\OvertimeRequestController::class, 'show']);
+    
     // Endpoint Kategori Cuti Khusus (Umum untuk Karyawan & Admin)
     Route::get('/special-leave-categories', [\App\Http\Controllers\SpecialLeaveCategoryController::class, 'index']);
 
@@ -104,11 +110,16 @@ Route::middleware('auth:sanctum')->group(function () {
         // Tolak laporan pulang cepat (admin_note wajib)
         Route::put('/attendance/{id}/early-checkout/reject', [AttendanceController::class, 'rejectEarlyCheckout']);
 
-        // Daftar absensi lembur (filter: ?status=pending|disetujui|ditolak)
-        Route::get('/attendance/overtime', [AttendanceController::class, 'overtimeList']);
+        // Daftar absensi lembur (admin)
+        Route::get('/attendance/overtimes', [AttendanceController::class, 'overtimes']);
+        Route::get('/attendance/overtimes/summary', [AttendanceController::class, 'overtimesSummary']);
         // Setujui/tolak laporan lembur
         Route::put('/attendance/{id}/overtime/approve', [AttendanceController::class, 'approveOvertime']);
         Route::put('/attendance/{id}/overtime/reject', [AttendanceController::class, 'rejectOvertime']);
+
+        // Persetujuan Lembur Baru (Overtime Requests)
+        Route::put('/overtime-requests/{id}/approve', [\App\Http\Controllers\Api\OvertimeRequestController::class, 'approve']);
+        Route::put('/overtime-requests/{id}/reject', [\App\Http\Controllers\Api\OvertimeRequestController::class, 'reject']);
 
         // ── CRUD Karyawan
         // Mendapatkan data meta pendukung (list department/position) untuk registrasi karyawan
@@ -140,6 +151,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/employee-schedules', [ScheduleController::class, 'getEmployeeSchedules']);
         // Menugaskan/memetakan jadwal shift mingguan ke karyawan tertentu
         Route::post('/employee-schedules/assign', [ScheduleController::class, 'assignEmployeeSchedule']);
+        // Menugaskan/memetakan jadwal shift mingguan ke seluruh karyawan dalam satu departemen sekaligus
+        Route::post('/employee-schedules/assign-department', [ScheduleController::class, 'assignDepartmentSchedule']);
         // API Resource standar untuk CRUD data Shift (Schedules) kecuali endpoint Detail (show)
         Route::apiResource('/schedules', ScheduleController::class)->except(['show']);
 

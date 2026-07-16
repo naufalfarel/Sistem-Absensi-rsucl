@@ -233,11 +233,13 @@ class AttendanceController extends Controller
                 // Mendukung mode simulasi waktu untuk keperluan testing di frontend/development
                 if ($request->has('simulated_time')) {
                     $existing->delete();
+                    $existing = null;
                 } else {
                     return response()->json([
                         'success' => false,
-                        'message' => 'Anda sudah melakukan check-in hari ini pada pukul ' . $existing->check_in . '.',
-                    ], 422);
+                        'message' => 'Anda sudah melakukan check-in hari ini pukul ' . substr($existing->check_in, 0, 5) . '.',
+                        'errors' => null,
+                    ], 409);
                 }
             }
         }
@@ -255,12 +257,30 @@ class AttendanceController extends Controller
         }
 
         // Pastikan karyawan memiliki jadwal shift dinas hari ini
-        $todayShift = $this->getEmployeeTodayShift($employee, $now);
+        $todayShift = AttendanceRules::resolveShiftFor($employee, $now);
+        $isFallback = false;
+
         if (!$todayShift) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Check-in ditolak: Hari ini adalah hari libur Anda (tidak ada jadwal shift).',
-            ], 422);
+            $openTime = Setting::get('checkin_open_time', '08:00:00');
+            $lateTime = Setting::get('checkin_late_after_time', '08:30:00');
+            $closeTime = Setting::get('checkin_close_time', '09:00:00');
+
+            $todayShift = new \App\Models\Schedule();
+            $todayShift->name = 'Jadwal Reguler Fallback';
+            $todayShift->start_time = $lateTime;
+            $todayShift->end_time = '17:00:00';
+            $todayShift->checkin_window_end_time = $closeTime;
+            $isFallback = true;
+
+            // Cek jika tombol check-in ditekan sebelum waktu buka
+            $nowStr = $now->format('H:i:s');
+            if ($nowStr < $openTime) {
+                $openStr = substr($openTime, 0, 5);
+                return response()->json([
+                    'success' => false,
+                    'message' => "Check-in belum dibuka. Waktu check-in dibuka mulai pukul {$openStr} WIB.",
+                ], 422);
+            }
         }
 
         // Tentukan tipe shift harian
@@ -278,7 +298,7 @@ class AttendanceController extends Controller
             $refLat  = (float) Setting::get('hospital_latitude',  '5.552740480177099');
             $refLng  = (float) Setting::get('hospital_longitude',  '95.33486560781716');
             $distance = AttendanceRules::haversineDistanceMeters((float)$clientLat, (float)$clientLng, $refLat, $refLng);
-            $isWithinGeofence = ($distance <= (float) Setting::get('attendance_radius_meters', '100'));
+            $isWithinGeofence = ($distance <= (float) Setting::get('attendance_radius_meters', '10'));
         }
 
         if ($shiftType !== 'dinas_luar') {
@@ -303,38 +323,98 @@ class AttendanceController extends Controller
         }
 
         // 6. Evaluasi batas waktu check-in berdasarkan konfigurasi shift
-        $shiftStart = substr($todayShift->start_time, 0, 5); // Format: "HH:mm"
+        $shiftStartCarbon = null;
+        $windowEnd = null;
+        $toleranceMinutes = $isFallback ? 0 : (int) Setting::get('checkin_tolerance_minutes', '10');
+        $earlyCheckinWindowOffset = (int) Setting::get('early_checkin_window_minutes', '150');
 
-        $checkinOpenOffset  = (int) Setting::get('checkin_open', '0'); // Menit sebelum shift dimulai absensi dibuka
-        $lateLimitOffset    = (int) Setting::get('late_limit', '30');  // Menit toleransi keterlambatan
-        $closeCheckinOffset = (int) Setting::get('close_checkin', '60'); // Menit penutupan akses check-in
+        if (!$isFallback) {
+            // Cek jika check-in dipanggil terlalu awal
+            $todayCandidateStart = $now->copy()->setTimeFromTimeString($todayShift->start_time);
+            $todayCandidateOpen = $todayCandidateStart->copy()->subMinutes($earlyCheckinWindowOffset);
 
-        $openLimit  = ($checkinOpenOffset > 0) ? $this->subMins($shiftStart, $checkinOpenOffset) : $shiftStart;
-        $lateLimit  = $this->addMins($shiftStart, $lateLimitOffset);
-        $closeLimit = $this->addMins($shiftStart, $closeCheckinOffset);
+            if ($now->lt($todayCandidateOpen)) {
+                $openStr = $todayCandidateOpen->format('H:i');
+                return response()->json([
+                    'success' => false,
+                    'message' => "Check-in belum dibuka. Waktu check-in dibuka mulai pukul {$openStr} WIB.",
+                ], 422);
+            }
+        }
 
-        $nowMins   = $now->hour * 60 + $now->minute;
+        if ($isFallback) {
+            $shiftStartCarbon = $now->copy()->setTimeFromTimeString($todayShift->start_time);
+            $windowEnd = $now->copy()->setTimeFromTimeString($todayShift->checkin_window_end_time);
+        } else {
+            // Evaluasi pencocokan rentang tanggal check-in (kemarin, hari ini, besok)
+            $possibleDates = [$now->copy()->subDay(), $now->copy(), $now->copy()->addDay()];
+            
+            foreach ($possibleDates as $pDate) {
+                $candidateStart = $pDate->copy()->setTimeFromTimeString($todayShift->start_time);
+                $candidateOpen = $candidateStart->copy()->subMinutes($earlyCheckinWindowOffset);
+                
+                // Cari close limit
+                $resolvedCloseTime = $todayShift->checkin_window_end_time;
+                if (empty($resolvedCloseTime)) {
+                    $s = Carbon::parse($todayShift->start_time);
+                    $e = Carbon::parse($todayShift->end_time);
+                    if ($e->lt($s)) {
+                        $e->addDay();
+                    }
+                    $duration = $s->diffInMinutes($e);
+                    $half = (int) ($duration / 2);
+                    $resolvedCloseTime = $s->copy()->addMinutes($half)->format('H:i:s');
+                }
+                
+                $candidateEnd = $candidateStart->copy()->setTimeFromTimeString($resolvedCloseTime);
+                if ($candidateEnd->lt($candidateStart)) {
+                    $candidateEnd->addDay();
+                }
+                
+                if ($now->timestamp >= $candidateOpen->timestamp && $now->timestamp <= $candidateEnd->timestamp) {
+                    $shiftStartCarbon = $candidateStart;
+                    $windowEnd = $candidateEnd;
+                    break;
+                }
+            }
+        }
 
-        // Cek jika tombol check-in ditekan sebelum waktu buka
-        if ($nowMins < $this->timeToMins($openLimit)) {
+        // Jika tidak ada kandidat tanggal/waktu yang cocok
+        if (!$shiftStartCarbon || !$windowEnd) {
+            // Tentukan info penutupan terformat
+            $resolvedCloseTime = $todayShift->checkin_window_end_time;
+            if (empty($resolvedCloseTime)) {
+                $s = Carbon::parse($todayShift->start_time);
+                $e = Carbon::parse($todayShift->end_time);
+                if ($e->lt($s)) {
+                    $e->addDay();
+                }
+                $duration = $s->diffInMinutes($e);
+                $half = (int) ($duration / 2);
+                $resolvedCloseTime = $s->copy()->addMinutes($half)->format('H:i:s');
+            }
+            $closeStr = substr($resolvedCloseTime, 0, 5);
+
             return response()->json([
                 'success' => false,
-                'message' => "Check-in belum dibuka. Waktu check-in dibuka mulai pukul {$openLimit} WIB.",
+                'message' => "Jendela absen untuk shift Anda [{$todayShift->name}] sudah ditutup pukul {$closeStr} WIB.",
             ], 422);
         }
 
-        // Cek jika batas check-in sudah ditutup
-        $closeMins = $this->timeToMins($closeLimit);
-        if ($nowMins > $closeMins) {
+        // Jalankan klasifikasi check-in menggunakan helper baru
+        $classification = AttendanceRules::classifyCheckin($now, $shiftStartCarbon, $windowEnd, $toleranceMinutes);
+
+        if ($classification['status'] === 'closed') {
+            $closeStr = $windowEnd->format('H:i');
             return response()->json([
                 'success' => false,
-                'message' => "Batas check-in sudah tutup pukul {$closeLimit} WIB.",
+                'message' => "Jendela absen untuk shift Anda [{$todayShift->name}] sudah ditutup pukul {$closeStr} WIB.",
             ], 422);
         }
 
-        // Tentukan apakah status absensinya 'hadir' (tepat waktu) atau 'telat'
-        $lateMins = $this->timeToMins($lateLimit);
-        $status   = ($nowMins <= $lateMins) ? 'hadir' : 'telat';
+        $status = $classification['status']; // 'hadir' atau 'telat'
+        $punctuality = $classification['punctuality']; // 'tepat_waktu', 'toleransi', 'terlambat'
+        $effectiveCheckinTime = $classification['effective_checkin_time'];
 
         // Simpan file foto check-in wajib
         $photoUrl = null;
@@ -343,23 +423,90 @@ class AttendanceController extends Controller
             $photoUrl = '/storage/' . $path;
         }
 
-        // 7. Simpan absensi baru ke database
-        $record = Attendance::create([
-            'employee_id'             => $employee->id,
-            'date'                    => today()->toDateString(),
-            'check_in'                => $now->format('H:i:s'),
-            'status'                  => $status,
-            'latitude'                => $clientLat,
-            'longitude'               => $clientLng,
-            'accuracy'                => $clientAcc,
-            'is_within_geofence'      => $isWithinGeofence,
-            'checkin_photo_url'       => $photoUrl,
-            'image_check_in'          => $photoUrl, // backward compatibility
-            'checkin_latitude'        => $clientLat,
-            'checkin_longitude'       => $clientLng,
-            'checkin_distance_meters' => $distance !== null ? (int)round($distance) : null,
-            'checkin_location_note'   => $request->input('location_note'),
-        ]);
+        // 7. Simpan absensi baru ke database secara aman dengan transaksi & locking untuk mencegah race condition
+        $today = today()->toDateString();
+        try {
+            $record = \DB::transaction(function () use ($employee, $today, $request, $status, $clientLat, $clientLng, $clientAcc, $isWithinGeofence, $photoUrl, $distance, $now) {
+                // Kunci baris untuk mencegah race condition
+                $lockedExisting = Attendance::where('employee_id', $employee->id)
+                                            ->where('date', $today)
+                                            ->lockForUpdate()
+                                            ->first();
+
+                if ($lockedExisting) {
+                    if (in_array($lockedExisting->status, ['sakit', 'izin', 'cuti'])) {
+                        $typeName = $lockedExisting->status === 'sakit' ? 'Sakit' : ($lockedExisting->status === 'izin' ? 'Izin' : 'Cuti');
+                        throw new \Exception("Check-in ditolak: Anda sedang dalam masa {$typeName} untuk hari ini.", 422);
+                    }
+
+                    if ($lockedExisting->check_in) {
+                        if ($request->has('simulated_time')) {
+                            $lockedExisting->delete();
+                            $lockedExisting = null;
+                        } else {
+                            $timeStr = substr($lockedExisting->check_in, 0, 5);
+                            throw new \Exception("Anda sudah melakukan check-in hari ini pukul {$timeStr}.", 409);
+                        }
+                    }
+                }
+
+                $attendanceData = [
+                    'check_in'                => $now->format('H:i:s'),
+                    'status'                  => $status,
+                    'checkin_punctuality'     => $punctuality,
+                    'effective_checkin_time'  => $effectiveCheckinTime,
+                    'latitude'                => $clientLat,
+                    'longitude'               => $clientLng,
+                    'accuracy'                => $clientAcc,
+                    'is_within_geofence'      => $isWithinGeofence,
+                    'checkin_photo_url'       => $photoUrl,
+                    'image_check_in'          => $photoUrl, // backward compatibility
+                    'checkin_latitude'        => $clientLat,
+                    'checkin_longitude'       => $clientLng,
+                    'checkin_distance_meters' => $distance !== null ? (int)round($distance) : null,
+                    'checkin_location_note'   => $request->input('location_note'),
+                ];
+
+                if ($lockedExisting) {
+                    $lockedExisting->update($attendanceData);
+                    return $lockedExisting;
+                } else {
+                    $attendanceData['employee_id'] = $employee->id;
+                    $attendanceData['date']        = $today;
+                    return Attendance::create($attendanceData);
+                }
+            });
+        } catch (\Illuminate\Database\QueryException $e) {
+            // Tangkap duplikasi entry jika constraint unique terpicu
+            if ($e->getCode() == '23000' || str_contains($e->getMessage(), '1062')) {
+                $dup = Attendance::where('employee_id', $employee->id)
+                                 ->where('date', $today)
+                                 ->first();
+                $timeStr = $dup && $dup->check_in ? substr($dup->check_in, 0, 5) : '--:--';
+                return response()->json([
+                    'success' => false,
+                    'message' => "Anda sudah melakukan check-in hari ini pukul {$timeStr}.",
+                    'errors'  => null,
+                ], 409);
+            }
+            throw $e;
+        } catch (\Exception $e) {
+            $code = $e->getCode();
+            if ($code === 409) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                    'errors'  => null,
+                ], 409);
+            }
+            if ($code === 422) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                ], 422);
+            }
+            throw $e;
+        }
 
         $holiday = AttendanceRules::holidayOn(Carbon::parse($record->date));
         if ($holiday) {
@@ -619,30 +766,18 @@ class AttendanceController extends Controller
         $overtimeCalc = $attendanceService->hitungStatusLembur($employee, $now, $shiftDate);
 
         if ($overtimeCalc['is_lembur']) {
-            if (empty($request->input('keterangan_lembur'))) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Alasan lembur wajib diisi karena Anda terdeteksi lembur.',
-                    'requires_keterangan_lembur' => true,
-                    'overtime_info' => [
-                        'durasi_lembur_menit' => $overtimeCalc['durasi_lembur_menit'],
-                        'jam_pulang_normal' => $overtimeCalc['jam_pulang_normal'],
-                        'jam_checkout' => $now->format('H:i:s')
-                    ]
-                ], 422);
-            }
-
-            // Simpan ke kolom baru
+            // Simpan ke kolom baru (internal detection)
             $updateData['jam_pulang_normal']      = $overtimeCalc['jam_pulang_normal'];
             $updateData['is_lembur']              = true;
             $updateData['durasi_lembur_menit']    = $overtimeCalc['durasi_lembur_menit'];
-            $updateData['keterangan_lembur']      = $request->input('keterangan_lembur');
-            $updateData['status_approval_lembur'] = 'pending';
+            $updateData['keterangan_lembur']      = null;
+            $updateData['status_approval_lembur'] = null; // New system uses OvertimeRequest for approval flow
 
             // Sinkronkan ke kolom legacy demi kompatibilitas backward
             $updateData['is_overtime']            = true;
             $updateData['overtime_minutes']       = $overtimeCalc['durasi_lembur_menit'];
-            $updateData['overtime_note']          = $request->input('keterangan_lembur');
+            $updateData['overtime_note']          = null;
+            $updateData['overtime_status']        = null;
         } else {
             // Set data lembur kosong jika tidak lembur
             $updateData['jam_pulang_normal']      = $overtimeCalc['jam_pulang_normal'];
@@ -650,14 +785,20 @@ class AttendanceController extends Controller
             $updateData['durasi_lembur_menit']    = 0;
             $updateData['keterangan_lembur']      = null;
             $updateData['status_approval_lembur'] = null;
+            $updateData['overtime_status']        = null;
         }
 
         // 8. Update database
         $record->update($updateData);
 
+        $message = 'Check-out berhasil.';
+        if ($overtimeCalc['is_lembur']) {
+            $message = 'Check-out berhasil. Anda melewati jam shift yang dijadwalkan.';
+        }
+
         return response()->json([
             'success'    => true,
-            'message'    => 'Check-out berhasil.',
+            'message'    => $message,
             'data'       => new AttendanceResource($record),
             'is_early_checkout' => $classification['is_early'],
             'is_overtime'       => $overtimeCalc['is_lembur'],
@@ -778,7 +919,115 @@ class AttendanceController extends Controller
             3 => 'Rabu',   4 => 'Kamis', 5 => 'Jumat', 6 => 'Sabtu',
         ];
         $todayName = $dayMap[$now->dayOfWeek];
-        return $employee->schedules()->wherePivot('day_of_week', $todayName)->first();
+        $schedule = $employee->schedules()->wherePivot('day_of_week', $todayName)->first();
+
+        if (!$schedule) {
+            return null;
+        }
+
+        // Jika schedule adalah parent template yang memiliki children, kita cari sub-shift yang cocok
+        if ($schedule->parent_id === null && $schedule->children()->exists()) {
+            // Cek apakah karyawan sudah melakukan check-in hari ini
+            $record = \App\Models\Attendance::where('employee_id', $employee->id)
+                ->whereDate('date', $now->toDateString())
+                ->first();
+            
+            $timeToMatch = $now;
+            if ($record && $record->check_in) {
+                // Gunakan jam check-in yang sudah tercatat
+                $timeToMatch = Carbon::parse($record->check_in);
+            }
+
+            $matchedChild = $this->resolveActiveSubShift($schedule, $todayName, $timeToMatch);
+            if ($matchedChild) {
+                // Kloning parent model dan timpa start_time / end_time menggunakan data anak agar tidak merusak logika penanganan absensi di tempat lain
+                $cloned = $schedule->replicate();
+                $cloned->id = $matchedChild->id; // Gunakan ID anak agar data attendance mereferensikan sub-shift secara benar
+                $cloned->start_time = $matchedChild->start_time;
+                $cloned->end_time = $matchedChild->end_time;
+                $cloned->name = $matchedChild->name;
+                $cloned->exists = true;
+                return $cloned;
+            }
+        }
+
+        return $schedule;
+    }
+
+    /**
+     * Mencocokkan sub-shift (anak) yang aktif di bawah parent template berdasarkan jam kerja/check-in saat ini.
+     *
+     * @param \App\Models\Schedule $parent
+     * @param string $todayName
+     * @param Carbon $now
+     * @return \App\Models\Schedule|null
+     */
+    private function resolveActiveSubShift(\App\Models\Schedule $parent, string $todayName, Carbon $now): ?\App\Models\Schedule
+    {
+        $children = $parent->children()->get();
+        if ($children->isEmpty()) {
+            return null;
+        }
+
+        $nowMins = $now->hour * 60 + $now->minute;
+
+        // Toleransi global dari settings (default: 30 menit sebelum, 60 menit sesudah)
+        $checkinOpenOffset  = (int) \App\Models\Setting::get('checkin_open', '30');
+        $closeCheckinOffset = (int) \App\Models\Setting::get('close_checkin', '60');
+
+        $matched = null;
+        $closestDiff = 999999;
+
+        foreach ($children as $child) {
+            // Evaluasi kecocokan berdasarkan hari jika nama sub-shift memuat hari spesifik (seperti Sabtu, Senin-Jumat)
+            $nameLower = strtolower($child->name);
+            if (str_contains($nameLower, 'sabtu') && $todayName !== 'Sabtu') {
+                continue;
+            }
+            if (str_contains($nameLower, 'senin–jumat') && $todayName === 'Sabtu') {
+                continue;
+            }
+            if (str_contains($nameLower, 'sen-jum') && $todayName === 'Sabtu') {
+                continue;
+            }
+
+            // Hitung rentang check-in untuk sub-shift ini
+            $startTime = substr($child->start_time, 0, 5);
+            $startMins = $this->timeToMins($startTime);
+
+            $openLimitMins  = $startMins - $checkinOpenOffset;
+            $closeLimitMins = $startMins + $closeCheckinOffset;
+
+            // Handle overnight check-in window
+            if ($openLimitMins < 0) {
+                $openLimitMins += 1440;
+            }
+
+            // Evaluasi apakah waktu sekarang berada dalam rentang pintu absensi masuk
+            $inWindow = false;
+            if ($closeLimitMins > $openLimitMins) {
+                $inWindow = ($nowMins >= $openLimitMins && $nowMins <= $closeLimitMins);
+            } else {
+                // Window melewati tengah malam
+                $inWindow = ($nowMins >= $openLimitMins || $nowMins <= $closeLimitMins);
+            }
+
+            if ($inWindow) {
+                return $child;
+            }
+
+            // Fallback: cari sub-shift dengan selisih waktu mulai terdekat dengan jam sekarang
+            $diff = abs($nowMins - $startMins);
+            if ($diff > 720) {
+                $diff = 1440 - $diff;
+            }
+            if ($diff < $closestDiff) {
+                $closestDiff = $diff;
+                $matched = $child;
+            }
+        }
+
+        return $matched;
     }
 
     /**
@@ -867,12 +1116,18 @@ class AttendanceController extends Controller
             }
         }
 
+        $isIncomplete = AttendanceRules::isAttendanceIncomplete($r, $r->employee);
+        $displayStatus = $isIncomplete ? 'tidak_lengkap' : $r->status;
+
         $data = [
             'id'                 => $r->id,
             'date'               => $r->date?->toDateString(),
             'check_in'           => $r->check_in,
             'check_out'          => $r->check_out,
             'status'             => $r->status,
+            'display_status'     => $displayStatus,
+            'checkin_punctuality'     => $r->checkin_punctuality,
+            'effective_checkin_time'  => $r->effective_checkin_time,
             'duration_min'       => $r->duration_minutes_attribute ?? null,
             'latitude'           => $r->latitude,
             'longitude'          => $r->longitude,
@@ -1070,7 +1325,8 @@ class AttendanceController extends Controller
         if ($request->filled('status')) {
             $statuses = (array)$request->input('status');
             $rows = array_filter($rows, function($row) use ($statuses) {
-                return in_array($row['status'], $statuses);
+                $rowStatus = $row['display_status'] ?? $row['status'];
+                return in_array($rowStatus, $statuses);
             });
             $rows = array_values($rows); // reset array keys
         }
@@ -1117,10 +1373,13 @@ class AttendanceController extends Controller
         $telat = 0;
         $alpha = 0;
         $cuti = 0;
+        $tidakLengkap = 0;
 
         foreach ($rows as $row) {
-            $status = $row['status'];
-            if ($status === 'hadir') {
+            $status = $row['display_status'] ?? $row['status'];
+            if ($status === 'tidak_lengkap') {
+                $tidakLengkap++;
+            } elseif ($status === 'hadir') {
                 $hadir++;
             } elseif ($status === 'telat') {
                 $telat++;
@@ -1134,10 +1393,11 @@ class AttendanceController extends Controller
         return response()->json([
             'success' => true,
             'data'    => [
-                'hadir'     => $hadir,
-                'terlambat' => $telat,
-                'alpha'     => $alpha,
-                'cuti'      => $cuti,
+                'hadir'         => $hadir,
+                'terlambat'     => $telat,
+                'alpha'         => $alpha,
+                'cuti'          => $cuti,
+                'tidak_lengkap' => $tidakLengkap,
             ]
         ]);
     }
@@ -1336,6 +1596,9 @@ class AttendanceController extends Controller
 
     private function formatRowFromAttendance($att, $emp, $matchingShift)
     {
+        $isIncomplete = AttendanceRules::isAttendanceIncomplete($att, $emp);
+        $displayStatus = $isIncomplete ? 'tidak_lengkap' : $att->status;
+
         return [
             'id' => $att->id,
             'employee_id' => $emp->id,
@@ -1343,6 +1606,7 @@ class AttendanceController extends Controller
             'check_in' => $att->check_in,
             'check_out' => $att->check_out,
             'status' => $att->status,
+            'display_status' => $displayStatus,
             'duration_min' => $att->duration_minutes,
             'latitude' => $att->latitude,
             'longitude' => $att->longitude,
@@ -1467,33 +1731,106 @@ class AttendanceController extends Controller
     }
 
     /**
-     * GET /api/attendance/overtime
+     * GET /api/attendance/overtimes
      * 
-     * Mengambil daftar absensi yang memiliki pengajuan lembur (is_lembur = true).
-     * Hanya dapat diakses oleh Administrator.
+     * Mengambil daftar lembur pegawai (is_overtime = true) dengan paginasi.
      */
-    public function overtimeList(Request $request)
+    public function overtimes(Request $request)
     {
-        $query = Attendance::with(['employee.user', 'employee.department'])
-            ->where('is_lembur', true)
-            ->orderBy('date', 'desc');
+        $status = $request->query('status', 'pending');
+        
+        $dateFrom = $request->query('date_from', now()->startOfMonth()->toDateString());
+        $dateTo   = $request->query('date_to', now()->endOfMonth()->toDateString());
+        
+        $query = Attendance::where('is_overtime', true)
+            ->with(['employee.user', 'employee.department'])
+            ->whereBetween('date', [$dateFrom, $dateTo]);
 
-        // Filter status_approval_lembur: pending, disetujui, ditolak
-        if ($request->has('status') && in_array($request->query('status'), ['pending', 'disetujui', 'ditolak'])) {
-            $query->where('status_approval_lembur', $request->query('status'));
+        if (in_array($status, ['pending', 'approved', 'rejected'])) {
+            $query->where('overtime_status', $status);
         }
 
-        // Filter bulan & tahun opsional
-        if ($request->has('month') && $request->has('year')) {
-            $query->whereMonth('date', (int)$request->query('month'))
-                  ->whereYear('date', (int)$request->query('year'));
+        if ($request->filled('department_id')) {
+            $query->whereHas('employee', function ($q) use ($request) {
+                $q->where('department_id', $request->query('department_id'));
+            });
         }
 
-        $records = AttendanceResource::collection($query->limit(200)->get());
+        if ($request->filled('search')) {
+            $search = $request->query('search');
+            $query->whereHas('employee', function ($q) use ($search) {
+                $q->where('nip', 'like', "%{$search}%")
+                  ->orWhereHas('user', function ($uq) use ($search) {
+                      $uq->where('name', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        $query->orderBy('date', 'desc');
+
+        $perPage = (int) $request->query('per_page', 20);
+        if ($perPage < 1) $perPage = 20;
+        if ($perPage > 100) $perPage = 100;
+
+        $paginator = $query->paginate($perPage);
 
         return response()->json([
             'success' => true,
-            'data'    => $records,
+            'data'    => AttendanceResource::collection($paginator->items()),
+            'meta'    => [
+                'current_page' => $paginator->currentPage(),
+                'last_page'    => $paginator->lastPage(),
+                'per_page'     => $paginator->perPage(),
+                'total'        => $paginator->total(),
+            ]
+        ]);
+    }
+
+    /**
+     * GET /api/attendance/overtimes/summary
+     * 
+     * Mengambil ringkasan data statistik lembur berdasarkan filter yang dipilih.
+     */
+    public function overtimesSummary(Request $request)
+    {
+        $dateFrom = $request->query('date_from', now()->startOfMonth()->toDateString());
+        $dateTo   = $request->query('date_to', now()->endOfMonth()->toDateString());
+        
+        $baseQuery = Attendance::where('is_overtime', true)
+            ->whereBetween('date', [$dateFrom, $dateTo]);
+
+        if ($request->filled('department_id')) {
+            $baseQuery->whereHas('employee', function ($q) use ($request) {
+                $q->where('department_id', $request->query('department_id'));
+            });
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->query('search');
+            $baseQuery->whereHas('employee', function ($q) use ($search) {
+                $q->where('nip', 'like', "%{$search}%")
+                  ->orWhereHas('user', function ($uq) use ($search) {
+                      $uq->where('name', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        $pending  = (clone $baseQuery)->where('overtime_status', 'pending')->count();
+        $approved = (clone $baseQuery)->where('overtime_status', 'approved')->count();
+        $rejected = (clone $baseQuery)->where('overtime_status', 'rejected')->count();
+        
+        $totalMinutes = (int) (clone $baseQuery)->where('overtime_status', 'approved')->sum('overtime_minutes');
+        $totalHours = round($totalMinutes / 60, 1);
+
+        return response()->json([
+            'success' => true,
+            'data'    => [
+                'pending'       => $pending,
+                'approved'      => $approved,
+                'rejected'      => $rejected,
+                'total_minutes' => $totalMinutes,
+                'total_hours'   => $totalHours,
+            ]
         ]);
     }
 
@@ -1506,15 +1843,35 @@ class AttendanceController extends Controller
     {
         $record = Attendance::findOrFail($id);
 
-        if (!$record->is_lembur) {
+        if (!$record->is_overtime) {
             return response()->json([
                 'success' => false,
                 'message' => 'Rekaman ini tidak terdeteksi lembur.',
             ], 422);
         }
 
+        if ($record->overtime_status !== 'pending') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Status lembur rekaman ini sudah diputuskan sebelumnya.',
+            ], 422);
+        }
+
         $record->update([
-            'status_approval_lembur' => 'disetujui',
+            'overtime_status'        => 'approved',
+            'overtime_reviewed_by'   => $request->user()->id,
+            'overtime_reviewed_at'   => now(),
+            'overtime_admin_note'    => $request->input('overtime_admin_note'),
+            'status_approval_lembur' => 'disetujui', // sync backward compatibility
+        ]);
+
+        // Kirim notifikasi ke karyawan
+        \App\Models\Notification::create([
+            'user_id' => $record->employee->user_id,
+            'title'   => 'Lembur Disetujui ✅',
+            'body'    => 'Lembur Anda tanggal ' . ($record->date ? $record->date->toDateString() : '-') . ' telah disetujui.',
+            'type'    => 'overtime',
+            'data'    => ['attendance_id' => $record->id]
         ]);
 
         return response()->json([
@@ -1527,45 +1884,52 @@ class AttendanceController extends Controller
     /**
      * PUT /api/attendance/{id}/overtime/reject
      * 
-     * Admin menolak lembur karyawan.
+     * Admin menolak lembur karyawan. Catatan alasan wajib diisi.
      */
     public function rejectOvertime(Request $request, int $id)
     {
+        $request->validate([
+            'overtime_admin_note' => 'required|string|min:1|max:255',
+        ], [
+            'overtime_admin_note.required' => 'Alasan penolakan wajib diisi.',
+        ]);
+
         $record = Attendance::findOrFail($id);
 
-        if (!$record->is_lembur) {
+        if (!$record->is_overtime) {
             return response()->json([
                 'success' => false,
                 'message' => 'Rekaman ini tidak terdeteksi lembur.',
             ], 422);
         }
 
-        // Jika ditolak admin, maka jam pulangnya ditolak (di-null-kan)
-        $record->update([
-            'check_out'                => null,
-            'checkout_photo_url'       => null,
-            'image_check_out'          => null,
-            'checkout_latitude'        => null,
-            'checkout_longitude'       => null,
-            'checkout_distance_meters' => null,
-            'checkout_location_note'   => null,
-            'duration_minutes'         => null,
-            
-            // Kolom lembur baru
-            'is_lembur'                => false,
-            'durasi_lembur_menit'      => 0,
-            'keterangan_lembur'        => null,
-            'status_approval_lembur'   => 'ditolak',
+        if ($record->overtime_status !== 'pending') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Status lembur rekaman ini sudah diputuskan sebelumnya.',
+            ], 422);
+        }
 
-            // Kolom lembur legacy
-            'is_overtime'              => false,
-            'overtime_minutes'         => 0,
-            'overtime_note'            => null,
+        $record->update([
+            'overtime_status'        => 'rejected',
+            'overtime_reviewed_by'   => $request->user()->id,
+            'overtime_reviewed_at'   => now(),
+            'overtime_admin_note'    => $request->input('overtime_admin_note'),
+            'status_approval_lembur' => 'ditolak', // sync backward compatibility
+        ]);
+
+        // Kirim notifikasi ke karyawan
+        \App\Models\Notification::create([
+            'user_id' => $record->employee->user_id,
+            'title'   => 'Lembur Ditolak ❌',
+            'body'    => 'Lembur Anda tanggal ' . ($record->date ? $record->date->toDateString() : '-') . ' ditolak. Alasan: ' . $request->input('overtime_admin_note'),
+            'type'    => 'overtime',
+            'data'    => ['attendance_id' => $record->id]
         ]);
 
         return response()->json([
             'success' => true,
-            'message' => 'Lembur ditolak dan jam pulang dibatalkan.',
+            'message' => 'Lembur ditolak.',
             'data'    => new AttendanceResource($record->fresh(['employee.user', 'employee.department'])),
         ]);
     }

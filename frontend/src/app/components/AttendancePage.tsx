@@ -8,6 +8,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useAuth } from '../../context/AuthContext';
 import { attendanceApi, settingApi, scheduleApi, MyShiftSchedule } from '../../services/api';
+import { Alert, AlertDescription } from './ui/alert';
 // ── [DEV] Simulasi Waktu — hapus baris ini saat production ──────────────
 import { SimulationPanel } from '../dev/SimulationPanel';
 
@@ -601,6 +602,9 @@ export function AttendancePage() {
   // State menyimpan file base64 foto selfie wajah yang berhasil diambil
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   
+  // State menyimpan pesan kesalahan (error message) absensi
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  
   // State status konektivitas internet perangkat karyawan
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
@@ -636,6 +640,9 @@ export function AttendancePage() {
 
   // Alasan pulang cepat (early checkout)
   const [earlyCheckoutReason, setEarlyCheckoutReason] = useState('');
+
+  // Status ketepatan absen masuk
+  const [checkinPunctuality, setCheckinPunctuality] = useState<'tepat_waktu' | 'toleransi' | 'terlambat' | null>(null);
   
   // Pengontrol tampilan dialog konfirmasi submit absensi
   const [showModal, setShowModal]   = useState(false);
@@ -794,6 +801,9 @@ export function AttendancePage() {
               setCheckOutTime(res.data.check_out.substring(0, 5));
               setCheckedOut(true);
             }
+            if (res.data.checkin_punctuality) {
+              setCheckinPunctuality(res.data.checkin_punctuality);
+            }
           }
           if (res.active_leave) {
             setActiveLeave(res.active_leave);
@@ -944,6 +954,7 @@ export function AttendancePage() {
   };
 
   const handleAction = () => {
+    setErrorMsg(null);
     if ((canCheckIn || canCheckOut) && faceVerified && inGeofence) setShowModal(true);
   };
 
@@ -976,11 +987,21 @@ export function AttendancePage() {
 
       const photoFile = capturedImage ? dataURLtoBlob(capturedImage) : undefined;
 
+      if (!canCheckIn && !canCheckOut) {
+        alert('Batas waktu absensi telah ditutup.');
+        setShowModal(false);
+        setSubmitting(false);
+        return;
+      }
+
       if (canCheckIn) {
         const res = await attendanceApi.checkIn(latVal, lngVal, accVal, photoFile, simTimeArg, locationNote);
         if (res.success && res.data.check_in) {
           const t = res.data.check_in.substring(0, 5);
           setCheckInTime(t);
+          if (res.data.checkin_punctuality) {
+            setCheckinPunctuality(res.data.checkin_punctuality);
+          }
           setCheckedIn(true);
           setShowModal(false);
           setSuccessAction('Check-In');
@@ -993,7 +1014,7 @@ export function AttendancePage() {
           latVal, lngVal, accVal, photoFile, simTimeArg, locationNote,
           earlyReasonStr || undefined,
           undefined,
-          keteranganLembur.trim() || undefined
+          undefined
         );
         if (res.success && res.data.check_out) {
           const t = res.data.check_out.substring(0, 5);
@@ -1009,13 +1030,23 @@ export function AttendancePage() {
       }
     } catch (err: any) {
       // Backend menolak karena lembur tapi keterangan belum diisi
-      const data = (err as any)?.data;
-      if (data?.requires_keterangan_lembur) {
-        // Jangan tutup modal, biarkan user isi alasan lembur
-        // Scroll ke textarea jika ada
-        alert('Anda terdeteksi lembur. Mohon isi alasan lembur sebelum checkout.');
+      const responseData = err?.data;
+      const message = responseData?.message ?? err?.message ?? 'Terjadi kesalahan. Silakan coba lagi.';
+      
+      if (responseData?.requires_keterangan_lembur) {
+        setErrorMsg('Anda terdeteksi lembur. Mohon isi alasan lembur sebelum checkout.');
       } else {
-        alert(err?.message ?? 'Gagal melakukan absensi.');
+        let friendlyMsg = 'Terjadi kesalahan. Silakan coba lagi.';
+        if (err && typeof err === 'object') {
+          if (responseData && typeof responseData === 'object' && responseData.message) {
+            friendlyMsg = responseData.message;
+          } else if (err.message && typeof err.message === 'string') {
+            if (!err.message.includes('SQLSTATE') && !err.message.includes('syntax error') && !err.message.includes('exception')) {
+              friendlyMsg = err.message;
+            }
+          }
+        }
+        setErrorMsg(friendlyMsg);
       }
     } finally {
       setSubmitting(false);
@@ -1033,6 +1064,15 @@ export function AttendancePage() {
 
   const getAttendStatus = () => {
     if (!checkInTime) return null;
+    if (checkinPunctuality === 'tepat_waktu') {
+      return { label: 'Tepat Waktu', color: '#16A34A', bg: '#DCFCE7' };
+    }
+    if (checkinPunctuality === 'toleransi') {
+      return { label: 'Toleransi', color: '#D97706', bg: '#FEF3C7' };
+    }
+    if (checkinPunctuality === 'terlambat') {
+      return { label: 'Terlambat', color: '#DC2626', bg: '#FEE2E2' };
+    }
     const mins = parseMins(checkInTime);
     const lateMins = parseMins(shiftSettings.late_limit);
     const closeMins = parseMins(shiftSettings.close_checkin);
@@ -1077,6 +1117,13 @@ export function AttendancePage() {
   return (
     <div className="p-5 md:p-7 max-w-2xl mx-auto">
       <style>{RIPPLE_STYLE}</style>
+
+      {errorMsg && !showModal && (
+        <Alert variant="destructive" className="mb-4 border-red-200 bg-red-50 text-red-700">
+          <AlertCircle className="h-4 w-4 text-red-650" />
+          <AlertDescription className="text-[12px]">{errorMsg}</AlertDescription>
+        </Alert>
+      )}
 
       {/* [DEV] Simulation Panel — hapus blok ini saat production */}
       <SimulationPanel
@@ -1283,14 +1330,20 @@ export function AttendancePage() {
           <p className="text-[12px] font-medium text-gray-500 mb-3">Rekap Absensi Hari Ini</p>
           <div className="grid grid-cols-4 gap-2">
             {[
-              { label: 'Jam Masuk', value: checkInTime || '--:--', color: '#000000' },
-              { label: 'Jam Keluar', value: checkOutTime || '--:--', color: '#000000' },
-              { label: 'Durasi', value: checkedOut ? getDuration() : '--', color: '#000000' },
-              { label: 'Status', value: attendStatus?.label || '--', color: '#000000' },
+              { label: 'Jam Masuk', value: checkInTime || '--:--', color: '#000000', custom: false },
+              { label: 'Jam Keluar', value: checkOutTime || '--:--', color: '#000000', custom: false },
+              { label: 'Durasi', value: checkedOut ? getDuration() : '--', color: '#000000', custom: false },
+              { label: 'Status', value: attendStatus, color: '#000000', custom: true },
             ].map((item, i) => (
-              <div key={i} className="text-center">
+              <div key={i} className="text-center flex flex-col items-center">
                 <p className="text-[10px] text-gray-400 mb-1">{item.label}</p>
-                <p className="text-[12px] font-bold" style={{ color: item.color }}>{item.value}</p>
+                {item.custom && item.value ? (
+                  <span className="text-[10.5px] font-bold px-2.5 py-0.5 rounded-full inline-block" style={{ color: (item.value as any).color, backgroundColor: (item.value as any).bg }}>
+                    {(item.value as any).label}
+                  </span>
+                ) : (
+                  <p className="text-[12px] font-bold" style={{ color: item.color }}>{typeof item.value === 'string' ? item.value : '--'}</p>
+                )}
               </div>
             ))}
           </div>
@@ -1416,13 +1469,16 @@ export function AttendancePage() {
         <p className="text-[11px] font-semibold text-gray-500 mb-2">Ketentuan Absensi RSUCL</p>
         <div className="space-y-1.5">
           {[
-            ['Buka absen (Sen–Jum & Sab)', `${shiftSettings.checkin_open} WIB`, 'text-black'],
-            ['Tepat waktu', `${shiftSettings.checkin_open} – ${shiftSettings.late_limit} WIB`, 'text-black'],
-            ['Terlambat (tetap Hadir)', `${shiftSettings.late_limit} – ${shiftSettings.close_checkin} WIB`, 'text-black'],
-            ['Tutup check-in', `${shiftSettings.close_checkin} WIB → Alpha`, 'text-black'],
-            ['Istirahat (Sen–Jum)', `${shiftSettings.break_start} – ${shiftSettings.break_end} WIB`, 'text-black'],
-            ['Check-out / Jam pulang', `${shiftSettings.checkout_open} WIB (Sab: ${shiftSettings.sat_checkout_open})`, 'text-black'],
-            ['Batas akhir check-out', `${shiftSettings.checkout_close} WIB`, 'text-black'],
+            ['Shift Aktif Hari Ini', todayShift ? `${todayShift.name} (${todayShift.start_time.substring(0, 5)} – ${todayShift.end_time.substring(0, 5)} WIB)` : 'Libur / Tidak Ada Shift', 'text-green-700 font-semibold'],
+            ['Pintu Check-In Dibuka', `${shiftSettings.checkin_open} WIB`, 'text-black'],
+            ['Rentang Tepat Waktu', `${shiftSettings.checkin_open} – ${shiftSettings.late_limit} WIB`, 'text-black'],
+            ['Toleransi Terlambat', `${shiftSettings.late_limit} – ${shiftSettings.close_checkin} WIB`, 'text-black'],
+            ['Batas Akhir Check-In (Tutup)', `${shiftSettings.close_checkin} WIB (Lewat = Alpha)`, 'text-black'],
+            ...(shiftSettings.break_start !== shiftSettings.checkout_open ? [
+              ['Jam Istirahat', `${shiftSettings.break_start} – ${shiftSettings.break_end} WIB`, 'text-black']
+            ] : []),
+            ['Waktu Check-Out (Pulang)', `${shiftSettings.checkout_open} WIB` + (saturdayShift ? ` (Sabtu: ${shiftSettings.sat_checkout_open} WIB)` : ''), 'text-black'],
+            ['Batas Akhir Check-Out', 'Bebas (Mendukung Lembur)', 'text-green-600 font-semibold'],
           ].map(([label, value, cls], i) => (
             <div key={i} className="flex justify-between text-[11px]">
               <span className="text-gray-500">{label}</span>
@@ -1435,9 +1491,9 @@ export function AttendancePage() {
       {/* Confirmation Modal */}
       {showModal && (
         <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center">
-          <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setShowModal(false)} />
+          <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => { setShowModal(false); setErrorMsg(null); }} />
           <div className="relative bg-white rounded-t-3xl sm:rounded-2xl w-full sm:max-w-sm p-6 shadow-2xl mx-0 sm:mx-4">
-            <button onClick={() => setShowModal(false)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+            <button onClick={() => { setShowModal(false); setErrorMsg(null); }} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
               <X size={16} className="text-gray-500" />
             </button>
             <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-4 mx-auto ${canCheckIn ? 'bg-green-50' : 'bg-red-50'}`}>
@@ -1447,12 +1503,19 @@ export function AttendancePage() {
               Konfirmasi {canCheckIn ? 'Check-In' : 'Check-Out'}
             </h3>
             <p className="text-[13px] text-gray-500 text-center mb-5">Apakah Anda yakin ingin melakukan absensi?</p>
+
+            {errorMsg && (
+              <Alert variant="destructive" className="mb-4 border-red-200 bg-red-50 text-red-700">
+                <AlertCircle className="h-4 w-4 text-red-650" />
+                <AlertDescription className="text-[12px]">{errorMsg}</AlertDescription>
+              </Alert>
+            )}
             <div className="bg-gray-50 rounded-xl p-3.5 mb-5 space-y-2">
               {[
                 { label: 'Nama',             value: user?.name ?? 'Dr. Rina Kusumawati' },
                 { label: 'NIP',              value: user?.nip ?? '198501012010012001' },
                 { label: 'Waktu',            value: `${current.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB` },
-                { label: 'Jenis',            value: canCheckIn ? 'Check-In Masuk' : 'Check-Out Pulang' },
+                { label: 'Jenis',            value: canCheckIn ? 'Check-In Masuk' : canCheckOut ? 'Check-Out Pulang' : 'Ditutup' },
                 { label: 'Lokasi GPS',       value: inGeofence ? `Dalam Area (~${Math.round(distance ?? 0)}m)` : `Luar Area (~${Math.round(distance ?? 0)}m)` },
                 { label: 'Verifikasi Wajah', value: '✅ Terverifikasi' },
               ].map(({ label, value }, i) => (
@@ -1461,6 +1524,12 @@ export function AttendancePage() {
                   <span className="text-[12px] font-medium text-gray-800">{value}</span>
                 </div>
               ))}
+
+              {!canCheckIn && !canCheckOut && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-[11px] font-semibold text-center mt-2 leading-relaxed">
+                  ⚠️ Batas waktu absensi telah ditutup. Anda tidak dapat melakukan absensi saat ini.
+                </div>
+              )}
 
               <div className="pt-2 border-t border-gray-200 mt-2">
                 <label className="block text-[11px] font-medium text-gray-500 mb-1">Keterangan Detail Lokasi <span className="text-red-500">*</span></label>
@@ -1487,42 +1556,33 @@ export function AttendancePage() {
               )}
 
               {canCheckOut && checkIfOvertime() && (
-                <div className="pt-2 border-t border-orange-200 mt-2">
-                  <div className="flex items-center gap-2 mb-2 px-3 py-2 bg-orange-50 rounded-xl border border-orange-200">
-                    <Clock size={13} className="text-orange-500 flex-shrink-0" />
-                    <div>
-                      <p className="text-[11px] font-semibold text-orange-700">Terdeteksi Lembur</p>
-                      <p className="text-[10px] text-orange-600">{getOvertimeDurationMins()} menit melebihi jam pulang normal</p>
-                    </div>
+                <div className="pt-2 border-t border-gray-200 mt-2">
+                  <div className="flex items-center gap-2 px-3 py-2 bg-gray-55 rounded-xl border border-gray-150">
+                    <Clock size={13} className="text-gray-400 flex-shrink-0" />
+                    <p className="text-[10.5px] text-gray-500 leading-normal font-medium">
+                      Anda checkout melewati jam shift yang dijadwalkan.
+                    </p>
                   </div>
-                  <label className="block text-[11px] font-medium text-orange-600 mb-1">Alasan Lembur <span className="text-red-500">*</span></label>
-                  <textarea
-                    value={keteranganLembur}
-                    onChange={(e) => setKeteranganLembur(e.target.value)}
-                    placeholder="Contoh: Menyelesaikan laporan rekam medis pasien IGD..."
-                    rows={2}
-                    className="w-full px-3 py-2 border border-orange-200 rounded-xl text-[12px] bg-white focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500/25 placeholder:text-gray-400 resize-none"
-                  />
                 </div>
               )}
             </div>
             <div className="flex gap-2">
-              <button onClick={() => setShowModal(false)} className="flex-1 py-3 border border-gray-200 rounded-xl text-[14px] font-medium text-gray-600 hover:bg-gray-50 transition-colors">Batal</button>
+              <button onClick={() => { setShowModal(false); setErrorMsg(null); }} className="flex-1 py-3 border border-gray-200 rounded-xl text-[14px] font-medium text-gray-600 hover:bg-gray-50 transition-colors">Batal</button>
               <button
                 onClick={() => confirmAction(earlyCheckoutReason)}
                 disabled={
                   submitting ||
                   !locationNote.trim() ||
-                  (canCheckOut && checkIfEarlyCheckout() && !earlyCheckoutReason.trim()) ||
-                  (canCheckOut && checkIfOvertime() && !keteranganLembur.trim())
+                  (!canCheckIn && !canCheckOut) ||
+                  (canCheckOut && checkIfEarlyCheckout() && !earlyCheckoutReason.trim())
                 }
                 className={`flex-1 py-3 rounded-xl text-[14px] font-semibold text-white transition-all ${
                   canCheckIn ? 'bg-[#16A34A] hover:bg-[#0d9240]' : 'bg-red-500 hover:bg-red-600'
                 } ${
                   submitting ||
                   !locationNote.trim() ||
-                  (canCheckOut && checkIfEarlyCheckout() && !earlyCheckoutReason.trim()) ||
-                  (canCheckOut && checkIfOvertime() && !keteranganLembur.trim())
+                  (!canCheckIn && !canCheckOut) ||
+                  (canCheckOut && checkIfEarlyCheckout() && !earlyCheckoutReason.trim())
                     ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
               >

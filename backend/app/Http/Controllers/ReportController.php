@@ -92,10 +92,20 @@ class ReportController extends Controller
         $earlyApproved = (clone $earlyCheckoutQuery)->where('early_checkout_status', 'approved')->count();
         $earlyRejected = (clone $earlyCheckoutQuery)->where('early_checkout_status', 'rejected')->count();
 
-        $overtimeRecords = Attendance::whereMonth('date', $month)->whereYear('date', $year)
-            ->where('is_overtime', true)->get();
-        $overtimeTotalIncidents = $overtimeRecords->count();
-        $overtimeTotalMinutes   = (int) $overtimeRecords->sum('overtime_minutes');
+        $approvedOvertimeRequests = \App\Models\OvertimeRequest::whereMonth('date', $month)
+            ->whereYear('date', $year)
+            ->where('status', 'approved')
+            ->get();
+        $overtimeTotalIncidents = $approvedOvertimeRequests->count();
+        $overtimeTotalMinutes   = 0;
+        foreach ($approvedOvertimeRequests as $req) {
+            $att = Attendance::where('employee_id', $req->employee_id)
+                ->whereDate('date', $req->date->toDateString())
+                ->first();
+            if ($att) {
+                $overtimeTotalMinutes += $att->overtime_minutes ?? 0;
+            }
+        }
 
         // Holiday Work Summary
         $holidayWorkRecords = Attendance::whereMonth('date', $month)->whereYear('date', $year)
@@ -285,9 +295,28 @@ class ReportController extends Controller
             $totalDurationMin = 0;
             foreach ($empRecords as $r) {
                 if ($r['check_in'] && $r['check_out']) {
-                    $in  = strtotime($r['check_in']);
+                    $checkInTime = $r['effective_checkin_time'] ?? $r['check_in'];
+                    $in  = strtotime($checkInTime);
                     $out = strtotime($r['check_out']);
                     $totalDurationMin += (int) round(($out - $in) / 60);
+                }
+            }
+
+            // Hitung overtime minutes dari OvertimeRequest approved
+            $approvedReqs = \App\Models\OvertimeRequest::where('employee_id', $emp->id)
+                ->whereMonth('date', $month)
+                ->whereYear('date', $year)
+                ->where('status', 'approved')
+                ->get();
+                
+            $overtimeMinutes = 0;
+            foreach ($approvedReqs as $req) {
+                $attRecord = $empRecords->first(function($r) use ($req) {
+                    $rDate = $r->date instanceof \Carbon\Carbon ? $r->date->toDateString() : $r->date;
+                    return $rDate === $req->date->toDateString();
+                });
+                if ($attRecord) {
+                    $overtimeMinutes += $attRecord->overtime_minutes ?? 0;
                 }
             }
 
@@ -304,7 +333,7 @@ class ReportController extends Controller
                 'duration_min'        => $totalDurationMin,
                 // ── Pulang Cepat & Lembur ──
                 'early_checkout_count'=> $empRecords->where('is_early_checkout', true)->count(),
-                'overtime_minutes'    => (int) $empRecords->where('is_overtime', true)->sum('overtime_minutes'),
+                'overtime_minutes'    => $overtimeMinutes,
                 'holiday_work_days'   => $empRecords->where('is_holiday_work', true)->count(),
             ];
         }

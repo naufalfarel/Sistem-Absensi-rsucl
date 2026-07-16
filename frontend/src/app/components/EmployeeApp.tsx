@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Home, MapPin, History, Bell, User, LogOut, Menu, X, BookOpen } from 'lucide-react';
+import { Home, MapPin, History, Bell, User, LogOut, Menu, X, BookOpen, Clock } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import logoImg from '../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
 import { DashboardHome } from './DashboardHome';
@@ -8,10 +8,11 @@ import { HistoryPage } from './HistoryPage';
 import { NotificationsPage } from './NotificationsPage';
 import { ProfilePage } from './ProfilePage';
 import { GuidePage } from './GuidePage';
+import { OvertimeRequestPage } from './OvertimeRequestPage';
 import { notificationApi } from '../../services/api';
 
 // Tipe union untuk mendefinisikan tab navigasi yang valid pada dashboard karyawan
-type Tab = 'dashboard' | 'attendance' | 'history' | 'notifications' | 'profile' | 'guide';
+type Tab = 'dashboard' | 'attendance' | 'history' | 'notifications' | 'profile' | 'guide' | 'overtime';
 
 /**
  * Interface properti untuk komponen EmployeeApp.
@@ -89,6 +90,7 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
     { id: 'dashboard', icon: Home, label: 'Beranda' },
     { id: 'attendance', icon: MapPin, label: 'Absensi' },
     { id: 'history', icon: History, label: 'Riwayat' },
+    { id: 'overtime', icon: Clock, label: 'Lembur' },
     { id: 'notifications', icon: Bell, label: 'Notifikasi', badge: unreadNotifications },
     { id: 'profile', icon: User, label: 'Profil' },
     { id: 'guide', icon: BookOpen, label: 'Panduan' },
@@ -114,6 +116,7 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
         );
       case 'attendance': return <AttendancePage />;
       case 'history': return <HistoryPage />;
+      case 'overtime': return <OvertimeRequestPage />;
       case 'notifications': return <NotificationsPage onUpdateCount={fetchUnreadCount} />;
       case 'profile': 
         return (
@@ -285,7 +288,7 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
         {/* Bottom Nav (mobile) */}
         <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 shadow-lg z-[9990]">
           <div className="flex items-center justify-around px-2 py-1.5 pb-safe">
-            {navItems.filter(item => item.id !== 'guide').map(item => (
+            {navItems.filter(item => item.id !== 'guide' && item.id !== 'overtime').map(item => (
               <button
                 key={item.id}
                 onClick={() => handleTabChange(item.id)}

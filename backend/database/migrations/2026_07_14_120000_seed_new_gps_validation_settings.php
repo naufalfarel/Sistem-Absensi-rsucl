@@ -21,7 +21,7 @@ return new class extends Migration
             ],
             [
                 'key'   => 'attendance_radius_meters',
-                'value' => '100',
+                'value' => '10',
             ],
         ];
 

@@ -136,4 +136,56 @@ class AttendanceServiceTest extends TestCase
         $this->assertEquals(120, $result['durasi_lembur_menit']);
         $this->assertEquals('17:00:00', $result['jam_pulang_normal']);
     }
+
+    public function testAttendanceIncompleteLogic()
+    {
+        $user = User::factory()->create();
+        $employee = Employee::create([
+            'user_id' => $user->id,
+            'nip' => '1234567',
+            'status' => 'active',
+        ]);
+
+        $schedule = Schedule::create([
+            'name' => 'Pagi',
+            'start_time' => '08:00:00',
+            'end_time' => '17:00:00',
+        ]);
+
+        // 2026-07-14 is a Tuesday (Selasa)
+        $employee->schedules()->attach($schedule->id, ['day_of_week' => 'Selasa']);
+
+        // Case 1: checked out -> false
+        $att1 = \App\Models\Attendance::create([
+            'employee_id' => $employee->id,
+            'date' => '2026-07-14',
+            'check_in' => '08:00:00',
+            'check_out' => '17:00:00',
+            'status' => 'hadir',
+        ]);
+        $this->assertFalse(\App\Support\AttendanceRules::isAttendanceIncomplete($att1, $employee, '2026-07-14 18:00:00'));
+
+        // Case 2: not checked in -> false
+        $att2 = \App\Models\Attendance::create([
+            'employee_id' => $employee->id,
+            'date' => '2026-07-21',
+            'check_in' => null,
+            'check_out' => null,
+            'status' => 'alpha',
+        ]);
+        $this->assertFalse(\App\Support\AttendanceRules::isAttendanceIncomplete($att2, $employee, '2026-07-21 18:00:00'));
+
+        // Case 3: checked in, before shift end -> false
+        $att3 = \App\Models\Attendance::create([
+            'employee_id' => $employee->id,
+            'date' => '2026-07-28',
+            'check_in' => '08:00:00',
+            'check_out' => null,
+            'status' => 'hadir',
+        ]);
+        $this->assertFalse(\App\Support\AttendanceRules::isAttendanceIncomplete($att3, $employee, '2026-07-28 14:00:00'));
+
+        // Case 4: checked in, after shift end -> true
+        $this->assertTrue(\App\Support\AttendanceRules::isAttendanceIncomplete($att3, $employee, '2026-07-28 18:00:00'));
+    }
 }

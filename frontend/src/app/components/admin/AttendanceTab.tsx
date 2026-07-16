@@ -9,7 +9,8 @@ interface MappedAttendance {
   shift: string;
   checkIn: string;
   checkOut: string | null;
-  status: 'working' | 'done' | 'late' | 'absent' | 'leave' | 'not_yet' | 'no_shift';
+  status: 'working' | 'done' | 'late' | 'absent' | 'leave' | 'not_yet' | 'no_shift' | 'tidak_lengkap';
+  checkinPunctuality?: 'tepat_waktu' | 'toleransi' | 'terlambat' | null;
   pos: string;
   imageCheckIn?: string | null;
   imageCheckOut?: string | null;
@@ -37,12 +38,14 @@ const statusMap: Record<string, { label: string; color: string; bg: string; icon
   leave:    { label: 'Cuti/Izin',      color: '#7C3AED', bg: '#F5F3FF', icon: CalendarOff,    border: '#DDD6FE' },
   not_yet:  { label: 'Belum Hadir',    color: '#6B7280', bg: '#F9FAFB', icon: Coffee,         border: '#E5E7EB' },
   no_shift: { label: 'Tidak Ada Shift',color: '#6B7280', bg: '#F3F4F6', icon: Coffee,         border: '#E5E7EB' },
+  tidak_lengkap: { label: 'Tidak Lengkap', color: '#4B5563', bg: '#F3F4F6', icon: AlertTriangle, border: '#D1D5DB' },
 };
 
 const summaryStats = [
   { key: 'working', label: 'Sedang Bekerja', color: '#2563EB', bg: '#EFF6FF' },
   { key: 'done',    label: 'Sudah Pulang',   color: '#16A34A', bg: '#F0FDF4' },
   { key: 'late',    label: 'Terlambat',      color: '#D97706', bg: '#FFFBEB' },
+  { key: 'tidak_lengkap', label: 'Tidak Lengkap', color: '#4B5563', bg: '#F3F4F6' },
   { key: 'absent',  label: 'Alpha',          color: '#DC2626', bg: '#FEE2E2' },
   { key: 'leave',   label: 'Cuti/Izin',      color: '#7C3AED', bg: '#F5F3FF' },
   { key: 'not_yet', label: 'Belum Hadir',    color: '#6B7280', bg: '#F9FAFB' },
@@ -80,7 +83,9 @@ export function AttendanceTab() {
       if (res.success) {
         const mapped: MappedAttendance[] = res.data.map(r => {
           let statusKey: MappedAttendance['status'] = 'not_yet';
-          if (r.status === 'hadir') {
+          if (r.display_status === 'tidak_lengkap') {
+            statusKey = 'tidak_lengkap';
+          } else if (r.status === 'hadir') {
             statusKey = r.check_out ? 'done' : 'working';
           } else if (r.status === 'telat') {
             statusKey = r.check_out ? 'done' : 'late';
@@ -102,6 +107,7 @@ export function AttendanceTab() {
             checkIn: r.check_in ? r.check_in.substring(0, 5) : '--',
             checkOut: r.check_out ? r.check_out.substring(0, 5) : null,
             status: statusKey,
+            checkinPunctuality: r.checkin_punctuality,
             pos: 'Staff',
             imageCheckIn: r.checkin_photo_url || r.image_check_in,
             imageCheckOut: r.checkout_photo_url || r.image_check_out,
@@ -269,10 +275,21 @@ export function AttendanceTab() {
                         </td>
                         <td className="px-4 py-3.5 text-[13px] text-gray-600">{getDuration(emp.checkIn, emp.checkOut)}</td>
                         <td className="px-4 py-3.5">
-                          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full border border-dashed" style={{ color: sc.color, background: sc.bg, borderColor: sc.border }}>
-                            <sc.icon size={11} />
-                            {sc.label}
-                          </span>
+                          <div className="flex flex-col gap-1 items-start">
+                            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full border border-dashed" style={{ color: sc.color, background: sc.bg, borderColor: sc.border }}>
+                              <sc.icon size={11} />
+                              {sc.label}
+                            </span>
+                            {emp.checkinPunctuality && (emp.status === 'working' || emp.status === 'done' || emp.status === 'late') && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border" style={{
+                                color: emp.checkinPunctuality === 'tepat_waktu' ? '#16A34A' : (emp.checkinPunctuality === 'toleransi' ? '#D97706' : '#DC2626'),
+                                backgroundColor: emp.checkinPunctuality === 'tepat_waktu' ? '#F0FDF4' : (emp.checkinPunctuality === 'toleransi' ? '#FFFBEB' : '#FEE2E2'),
+                                borderColor: emp.checkinPunctuality === 'tepat_waktu' ? '#BBF7D0' : (emp.checkinPunctuality === 'toleransi' ? '#FDE68A' : '#FECACA')
+                              }}>
+                                {emp.checkinPunctuality === 'tepat_waktu' ? 'Tepat Waktu' : (emp.checkinPunctuality === 'toleransi' ? 'Toleransi' : 'Terlambat')}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3.5">
                           <button onClick={() => setSelected(emp)} className="w-7 h-7 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center hover:bg-gray-100 transition-colors">
@@ -327,8 +344,10 @@ export function AttendanceTab() {
                 { l: 'Shift', v: selected.shift + (selected.shiftType === 'dinas_luar' ? ' (Dinas Luar)' : ' (Normal)') },
                 { l: 'Jam Masuk', v: selected.checkIn + (selected.checkinDistance !== undefined && selected.checkinDistance !== null ? ` (${selected.checkinDistance}m dari RSUCL)` : '') },
                 { l: 'Jam Keluar', v: (selected.checkOut || 'Belum checkout') + (selected.checkoutDistance !== undefined && selected.checkoutDistance !== null ? ` (${selected.checkoutDistance}m dari RSUCL)` : '') },
-                { l: 'Status', v: statusMap[selected.status].label },
-                ...(selected.checkinLocationNote ? [{ l: 'Lokasi Masuk', v: selected.checkinLocationNote }] : []),
+                { l: 'Status', v: selected.checkinPunctuality && (selected.status === 'working' || selected.status === 'done' || selected.status === 'late')
+                    ? `${statusMap[selected.status].label} (${selected.checkinPunctuality === 'tepat_waktu' ? 'Tepat Waktu' : (selected.checkinPunctuality === 'toleransi' ? 'Toleransi' : 'Terlambat')})`
+                    : statusMap[selected.status].label },
+                ...(selected.checkinLocationNote ? [{ l: 'Posisi', v: selected.checkinLocationNote }] : []),
                 ...(selected.checkoutLocationNote ? [{ l: 'Lokasi Pulang', v: selected.checkoutLocationNote }] : []),
               ].map(({ l, v }, i) => (
                 <div key={i} className="flex justify-between">
@@ -400,9 +419,15 @@ export function AttendanceTab() {
                     <button
                       onClick={async () => {
                         if (!selected.id) return;
+                        const reason = window.prompt('Masukkan alasan penolakan lembur:');
+                        if (reason === null) return;
+                        if (!reason.trim()) {
+                          alert('Alasan penolakan wajib diisi.');
+                          return;
+                        }
                         try {
-                          await attendanceApi.rejectOvertime(selected.id);
-                          alert('Lembur ditolak dan jam pulang dibatalkan.');
+                          await attendanceApi.rejectOvertime(selected.id, reason);
+                          alert('Lembur ditolak.');
                           setSelected(null);
                           loadTodayRecords();
                         } catch (err: any) {

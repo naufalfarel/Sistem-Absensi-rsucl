@@ -14,6 +14,7 @@ import { AttendanceTab } from './admin/AttendanceTab';
 import { HistoryTab } from './admin/HistoryTab';
 import { ScheduleTab } from './admin/ScheduleTab';
 import { LeaveTab } from './admin/LeaveTab';
+import { OvertimeTab } from './admin/OvertimeTab';
 import { ReportsTab } from './admin/ReportsTab';
 import { NotificationsTab } from './admin/NotificationsTab';
 import { SettingsTab } from './admin/SettingsTab';
@@ -30,6 +31,7 @@ const sidebarItems = [
   { id: 'schedule',      icon: CalendarDays,     label: 'Jadwal Shift' },
   { id: 'holidays',      icon: CalendarDays,     label: 'Kalender Libur' },
   { id: 'leave',         icon: FileText,         label: 'Pengajuan Cuti', badge: 0 },
+  { id: 'overtime',      icon: Clock,            label: 'Lembur' },
   { id: 'reports',       icon: BarChart3,        label: 'Laporan' },
   { id: 'notifications', icon: Bell,             label: 'Notifikasi', badge: 0 },
   { id: 'settings',      icon: Settings,         label: 'Pengaturan' },
@@ -700,6 +702,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
           {activeTab === 'history' && <HistoryTab />}
           {activeTab === 'schedule' && <ScheduleTab />}
           {activeTab === 'leave' && <LeaveTab onUpdateCount={refreshReportSummary} />}
+          {activeTab === 'overtime' && <OvertimeTab />}
           {activeTab === 'reports' && <ReportsTab />}
           {activeTab === 'notifications' && <NotificationsTab onUpdateCount={fetchUnreadNotificationsCount} />}
           {activeTab === 'settings' && <SettingsTab />}

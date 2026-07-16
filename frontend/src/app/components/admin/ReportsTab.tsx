@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { FileText, Download, Users, Calendar, Clock, AlertTriangle, ChevronDown, CheckCircle2, X } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { reportApi, ReportSummary, attendanceApi, AttendanceRecord, departmentApi, getToken } from '../../../services/api';
+import { reportApi, ReportSummary, attendanceApi, AttendanceRecord, departmentApi, getToken, OvertimeRequest, overtimeApi } from '../../../services/api';
 import logoImg from '../../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
 import rsLogoImg from '../../../imports/rsucl_wide_logo.png';
 import { useAuth } from '../../../context/AuthContext';
@@ -47,7 +47,7 @@ export function ReportsTab() {
   const [departments, setDepartments] = useState<{ id: number; name: string }[]>([]);
 
   // State untuk daftar lembur pending
-  const [overtimePending, setOvertimePending] = useState<AttendanceRecord[]>([]);
+  const [overtimePending, setOvertimePending] = useState<OvertimeRequest[]>([]);
   const [loadingOvertime, setLoadingOvertime] = useState(false);
   const [overtimeProcessing, setOvertimeProcessing] = useState<number | null>(null);
 
@@ -249,10 +249,15 @@ export function ReportsTab() {
         sortedData.forEach(r => {
           const dept = r.employee?.department ?? 'UMUM';
           if (dept !== lastDept) {
-            bodyRows += `<tr class="dept-row"><td colspan="9">${dept}</td></tr>`;
+            bodyRows += `<tr class="dept-row"><td colspan="10">${dept}</td></tr>`;
             lastDept = dept;
           }
           const dur = r.duration_min ? `${Math.floor(r.duration_min / 60)}j ${r.duration_min % 60}m` : '--';
+          
+          // Durasi lembur yang disetujui
+          const otMin = r.overtime_status === 'approved' ? (r.overtime_minutes ?? 0) : 0;
+          const otStr = otMin > 0 ? `${Math.floor(otMin / 60)}j ${otMin % 60}m` : '0m';
+
           bodyRows += `<tr>
             <td class="center">${rowNum++}</td>
             <td class="center" style="mso-number-format:'\\@';" x:str>${r.employee?.nip ?? '--'}</td>
@@ -262,6 +267,7 @@ export function ReportsTab() {
             <td class="center">${r.check_in ?? '--'}</td>
             <td class="center">${r.check_out ?? '--'}</td>
             <td class="center">${dur}</td>
+            <td class="center">${otStr}</td>
             <td class="center bold">${r.status?.toUpperCase() ?? '--'}</td>
           </tr>`;
         });
@@ -270,11 +276,11 @@ export function ReportsTab() {
           <table style="border:none;margin-bottom:8px;border-collapse:collapse;">
             <tr style="height:22px;">
               <td rowspan="3" colspan="3" class="logo-cell">${logoImg}</td>
-              <td colspan="6" class="header-title">DATA ABSENSI KARYAWAN</td>
+              <td colspan="7" class="header-title">DATA ABSENSI KARYAWAN</td>
             </tr>
-            <tr style="height:18px;"><td colspan="6" class="header-rs">RUMAH SAKIT UMUM CEMPAKA LIMA</td></tr>
-            <tr style="height:16px;"><td colspan="6" class="header-period">${periodStr}${deptLabelText}</td></tr>
-            <tr style="height:3px;"><td colspan="9" class="separator">&nbsp;</td></tr>
+            <tr style="height:18px;"><td colspan="7" class="header-rs">RUMAH SAKIT UMUM CEMPAKA LIMA</td></tr>
+            <tr style="height:16px;"><td colspan="7" class="header-period">${periodStr}${deptLabelText}</td></tr>
+            <tr style="height:3px;"><td colspan="10" class="separator">&nbsp;</td></tr>
           </table>
           <table>
             <thead><tr>
@@ -286,6 +292,7 @@ export function ReportsTab() {
               <th>Jam Masuk</th>
               <th>Jam Keluar</th>
               <th>Durasi Kerja</th>
+              <th>Lembur</th>
               <th>Status Kehadiran</th>
             </tr></thead>
             <tbody>${bodyRows}</tbody>
@@ -459,6 +466,7 @@ export function ReportsTab() {
             <th style="text-align: center; width: 80px;">Jam Masuk</th>
             <th style="text-align: center; width: 80px;">Jam Keluar</th>
             <th style="text-align: center; width: 90px;">Durasi Kerja</th>
+            <th style="text-align: center; width: 80px;">Lembur</th>
             <th style="text-align: center; width: 80px;">Status</th>
           </tr>
         `;
@@ -479,13 +487,17 @@ export function ReportsTab() {
           if (currentDateDept !== lastDateDept) {
             deptRow = `
               <tr style="background-color: #E5E7EB; font-weight: bold; font-size: 11px;">
-                <td colspan="8" style="padding: 8px; border-bottom: 1px solid #E5E7EB; border-right: 1px solid #E5E7EB; text-transform: uppercase; color: #374151;">
+                <td colspan="9" style="padding: 8px; border-bottom: 1px solid #E5E7EB; border-right: 1px solid #E5E7EB; text-transform: uppercase; color: #374151;">
                   ${deptName} (${dateStr})
                 </td>
               </tr>
             `;
             lastDateDept = currentDateDept;
           }
+
+          // Durasi lembur yang disetujui
+          const otMin = r.overtime_status === 'approved' ? (r.overtime_minutes ?? 0) : 0;
+          const otStr = otMin > 0 ? `${Math.floor(otMin / 60)}j ${otMin % 60}m` : '0m';
 
           return deptRow + `
             <tr style="border-bottom: 1px solid #E5E7EB; font-size: 11px;">
@@ -496,6 +508,7 @@ export function ReportsTab() {
               <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB; font-family: monospace;">${r.check_in ?? '--'}</td>
               <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB; font-family: monospace;">${r.check_out ?? '--'}</td>
               <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${r.duration_min ? `${Math.floor(r.duration_min / 60)}j ${r.duration_min % 60}m` : '--'}</td>
+              <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${otStr}</td>
               <td style="padding: 8px; text-align: center; font-weight: bold; color: #1F2937;">${r.status.toUpperCase()}</td>
             </tr>
           `;
@@ -522,7 +535,7 @@ export function ReportsTab() {
             <th style="text-align: center; width: 55px;">Cuti</th>
             <th style="text-align: center; width: 55px;">Alpha</th>
             <th style="text-align: center; width: 70px;">Plg Cepat</th>
-            <th style="text-align: center; width: 70px;">Lembur (m)</th>
+            <th style="text-align: center; width: 70px;">Lembur (m)*</th>
             <th style="text-align: center; width: 70px;">Kerja Libur</th>
             <th style="text-align: center; width: 80px;">Total Jam</th>
           </tr>
@@ -629,6 +642,9 @@ export function ReportsTab() {
               ${tableRowsHtml}
             </tbody>
           </table>
+          <div style="font-size: 9px; color: #6B7280; margin-top: 10px; font-style: italic;">
+            * Lembur (m): Hanya mencakup durasi lembur yang telah disetujui oleh admin.
+          </div>
 
           <div class="footer-section">
             <div class="signature-block">
@@ -680,7 +696,7 @@ export function ReportsTab() {
   const loadOvertimePending = async () => {
     setLoadingOvertime(true);
     try {
-      const res = await attendanceApi.overtimeList('pending');
+      const res = await overtimeApi.list({ status: 'pending' });
       if (res.success) setOvertimePending(res.data);
     } catch (err) {
       console.error(err);
@@ -692,22 +708,28 @@ export function ReportsTab() {
   const handleApproveOvertime = async (id: number) => {
     setOvertimeProcessing(id);
     try {
-      await attendanceApi.approveOvertime(id);
+      await overtimeApi.approve(id);
       setOvertimePending(prev => prev.filter(r => r.id !== id));
     } catch (err: any) {
-      alert(err?.message ?? 'Gagal menyetujui lembur.');
+      alert(err?.data?.message ?? err?.message ?? 'Gagal menyetujui lembur.');
     } finally {
       setOvertimeProcessing(null);
     }
   };
 
   const handleRejectOvertime = async (id: number) => {
+    const reason = window.prompt('Masukkan alasan penolakan lembur:');
+    if (reason === null) return;
+    if (!reason.trim()) {
+      alert('Alasan penolakan wajib diisi.');
+      return;
+    }
     setOvertimeProcessing(id);
     try {
-      await attendanceApi.rejectOvertime(id);
+      await overtimeApi.reject(id, reason);
       setOvertimePending(prev => prev.filter(r => r.id !== id));
     } catch (err: any) {
-      alert(err?.message ?? 'Gagal menolak lembur.');
+      alert(err?.data?.message ?? err?.message ?? 'Gagal menolak lembur.');
     } finally {
       setOvertimeProcessing(null);
     }
@@ -1052,34 +1074,36 @@ export function ReportsTab() {
         ) : (
           <div className="space-y-3">
             {overtimePending.map(r => (
-              <div key={r.id} className="flex items-start gap-4 p-3.5 bg-orange-50/60 border border-orange-100 rounded-xl">
+              <div key={r.id} className="flex items-start gap-4 p-3.5 bg-slate-50 border border-gray-200 rounded-xl">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap text-left">
                     <p className="text-[13px] font-semibold text-gray-800">{r.employee?.name ?? 'Karyawan'}</p>
                     <span className="text-[10px] text-gray-400">{r.employee?.nip}</span>
-                    <span className="text-[10px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-semibold">
-                      {r.durasi_lembur_menit ?? 0} menit lembur
-                    </span>
+                    {r.system_checkout_data?.overtime_minutes ? (
+                      <span className="text-[10px] bg-blue-50 text-[#2563EB] px-2 py-0.5 rounded-full font-semibold border border-blue-100">
+                        {r.system_checkout_data.overtime_minutes} mnt lembur (Sistem)
+                      </span>
+                    ) : null}
                   </div>
-                  <p className="text-[11px] text-gray-500 mt-0.5">
-                    📅 {r.date} &nbsp;·&nbsp; ⏰ Jam pulang normal: {r.jam_pulang_normal?.substring(0,5) ?? '--'} &nbsp;·&nbsp; Checkout: {r.check_out?.substring(0,5) ?? '--'}
+                  <p className="text-[11px] text-gray-500 mt-0.5 text-left">
+                    📅 {r.date} &nbsp;·&nbsp; ⏰ Jam masuk: {r.system_checkout_data?.check_in?.substring(0,5) ?? '--'} &nbsp;·&nbsp; Checkout: {r.system_checkout_data?.check_out?.substring(0,5) ?? '--'}
                   </p>
-                  <p className="text-[11px] text-gray-600 mt-1 bg-white/70 px-2.5 py-1.5 rounded-lg border border-orange-100/70">
-                    💬 <span className="font-medium">Alasan:</span> {r.keterangan_lembur ?? '-'}
+                  <p className="text-[11px] text-gray-650 mt-1 bg-white px-2.5 py-1.5 rounded-lg border border-gray-150 text-left">
+                    💬 <span className="font-medium">Alasan:</span> {r.reason ?? '-'}
                   </p>
                 </div>
                 <div className="flex flex-col gap-1.5 flex-shrink-0">
                   <button
                     onClick={() => handleApproveOvertime(r.id)}
                     disabled={overtimeProcessing === r.id}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-50"
+                    className="flex items-center justify-center gap-1 px-3 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-50"
                   >
                     <CheckCircle2 size={11} /> Setujui
                   </button>
                   <button
                     onClick={() => handleRejectOvertime(r.id)}
                     disabled={overtimeProcessing === r.id}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-50"
+                    className="flex items-center justify-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-50"
                   >
                     <X size={11} /> Tolak
                   </button>

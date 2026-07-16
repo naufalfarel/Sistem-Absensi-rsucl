@@ -30,6 +30,7 @@ function AddShiftModal({ onClose, onAdd }: { onClose: () => void; onAdd: (s: Shi
   const [name, setName]       = useState('');
   const [start, setStart]     = useState('07:00');
   const [end, setEnd]         = useState('15:00');
+  const [windowEnd, setWindowEnd] = useState('');
   const [icon, setIcon]       = useState<IconKey>('sun');
   const [colorId, setColorId] = useState('amber');
   const [shiftType, setShiftType] = useState<'normal' | 'dinas_luar'>('normal');
@@ -44,6 +45,7 @@ function AddShiftModal({ onClose, onAdd }: { onClose: () => void; onAdd: (s: Shi
         name: name.trim(),
         start_time: start,
         end_time: end,
+        checkin_window_end_time: windowEnd || null,
         color: preset.color,
         icon,
         shift_type: shiftType,
@@ -137,6 +139,22 @@ function AddShiftModal({ onClose, onAdd }: { onClose: () => void; onAdd: (s: Shi
               <option value="normal">Normal (GPS Wajib)</option>
               <option value="dinas_luar">Dinas Luar (GPS Opsional)</option>
             </select>
+          </div>
+
+          {/* Batas Akhir Jendela Absen */}
+          <div>
+            <label className="block text-[12px] font-semibold text-gray-700 mb-1.5">
+              Batas Akhir Jendela Absen (Check-in Limit) - Opsional
+            </label>
+            <input
+              type="time"
+              value={windowEnd}
+              onChange={e => setWindowEnd(e.target.value)}
+              className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] font-mono bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all"
+            />
+            <p className="text-[10px] text-gray-400 mt-1">
+              Batas akhir jam absensi check-in untuk shift ini. Jika dikosongkan, batas diset otomatis ke setengah durasi shift.
+            </p>
           </div>
 
           {/* Icon Picker */}
@@ -235,15 +253,20 @@ function DeleteModal({ shift, onClose, onConfirm }: { shift: ShiftSchedule; onCl
 
 // ── Add Employee To Shift Modal ─────────────────────────────────────────
 function AddEmployeeToShiftModal({
+  parentShift,
   onClose,
   onAssign,
 }: {
+  parentShift: ShiftSchedule;
   onClose: () => void;
-  onAssign: (empId: number, day: string) => Promise<void>;
+  onAssign: (empId: number, day: string, childScheduleId: number) => Promise<void>;
 }) {
   const [employees, setEmployees] = useState<any[]>([]);
   const [selectedEmpId, setSelectedEmpId] = useState<number | ''>('');
   const [selectedDay, setSelectedDay] = useState<string>('Senin');
+  const [selectedChildId, setSelectedChildId] = useState<number>(
+    parentShift.children?.[0]?.id ?? parentShift.id
+  );
   const [loading, setLoading]         = useState(false);
 
   useEffect(() => {
@@ -264,16 +287,21 @@ function AddEmployeeToShiftModal({
   }, []);
 
   const handleSubmit = async () => {
-    if (selectedEmpId === '') return;
+    if (selectedEmpId === '' || !selectedChildId) return;
     setLoading(true);
     try {
       if (selectedDay === 'Semua Hari') {
         const days = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
         for (const day of days) {
-          await onAssign(Number(selectedEmpId), day);
+          await onAssign(Number(selectedEmpId), day, selectedChildId);
+        }
+      } else if (selectedDay === 'Senin - Sabtu') {
+        const days = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+        for (const day of days) {
+          await onAssign(Number(selectedEmpId), day, selectedChildId);
         }
       } else {
-        await onAssign(Number(selectedEmpId), selectedDay);
+        await onAssign(Number(selectedEmpId), selectedDay, selectedChildId);
       }
       onClose();
     } catch (err) {
@@ -287,14 +315,14 @@ function AddEmployeeToShiftModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl">
-        <h3 className="text-[15px] font-bold text-gray-900 mb-4">Tambah Karyawan ke Shift</h3>
+        <h3 className="text-[15px] font-bold text-gray-900 mb-4 font-sans">Tambah Karyawan ke Shift</h3>
         <div className="space-y-4">
           <div>
-            <label className="block text-[12px] font-semibold text-gray-700 mb-1.5">Pilih Karyawan</label>
+            <label className="block text-[12px] font-semibold text-gray-700 mb-1.5 font-sans">Pilih Karyawan</label>
             <select
               value={selectedEmpId}
               onChange={e => setSelectedEmpId(Number(e.target.value))}
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all"
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all font-sans"
             >
               {employees.length === 0 && <option value="">Memuat data karyawan...</option>}
               {employees.map(emp => (
@@ -306,13 +334,14 @@ function AddEmployeeToShiftModal({
           </div>
 
           <div>
-            <label className="block text-[12px] font-semibold text-gray-700 mb-1.5">Pilih Hari Kerja</label>
+            <label className="block text-[12px] font-semibold text-gray-700 mb-1.5 font-sans">Pilih Hari Kerja</label>
             <select
               value={selectedDay}
               onChange={e => setSelectedDay(e.target.value)}
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all"
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all font-sans"
             >
-              <option value="Semua Hari">Semua Hari (Senin - Minggu)</option>
+              <option value="Semua Hari">Senin - Minggu</option>
+              <option value="Senin - Sabtu">Senin - Sabtu</option>
               <option value="Senin">Senin</option>
               <option value="Selasa">Selasa</option>
               <option value="Rabu">Rabu</option>
@@ -322,9 +351,169 @@ function AddEmployeeToShiftModal({
               <option value="Minggu">Minggu</option>
             </select>
           </div>
+
+          <div>
+            <label className="block text-[12px] font-semibold text-gray-700 mb-1.5 font-sans">Pilih Sub-Waktu Shift</label>
+            <select
+              value={selectedChildId}
+              onChange={e => setSelectedChildId(Number(e.target.value))}
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all font-sans"
+            >
+              {parentShift.children?.map(child => (
+                <option key={child.id} value={child.id}>
+                  {child.name} ({child.start_time.substring(0, 5)} - {child.end_time.substring(0, 5)})
+                </option>
+              )) ?? <option value={parentShift.id}>{parentShift.name}</option>}
+            </select>
+          </div>
         </div>
 
         <div className="flex gap-2 mt-6">
+          <button
+            onClick={onClose}
+            disabled={loading}
+            className="flex-1 py-2.5 border border-gray-200 rounded-xl text-[13px] font-medium text-gray-600 hover:bg-gray-50 transition-colors font-sans"
+          >
+            Batal
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={loading || selectedEmpId === ''}
+            className="flex-1 py-2.5 bg-[#16A34A] hover:bg-[#0d9240] rounded-xl text-[13px] font-semibold text-white transition-colors font-sans"
+          >
+            {loading ? 'Menyimpan...' : 'Tambahkan'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Assign Department Modal ─────────────────────────────────────────
+function AssignDepartmentModal({
+  shifts,
+  onClose,
+  onAssign,
+}: {
+  shifts: ShiftSchedule[];
+  onClose: () => void;
+  onAssign: (deptId: number, day: string, scheduleId: number | null) => Promise<void>;
+}) {
+  const [departments, setDepartments] = useState<any[]>([]);
+  const [selectedDeptId, setSelectedDeptId] = useState<number | ''>('');
+  const [selectedDay, setSelectedDay] = useState<string>('Senin');
+  const [selectedScheduleId, setSelectedScheduleId] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchDepts = async () => {
+      try {
+        const res = await fetch('/api/departments', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('rsucl-token') || ''}`
+          }
+        });
+        const json = await res.json();
+        if (json.success) {
+          setDepartments(json.data);
+          if (json.data.length > 0) {
+            setSelectedDeptId(json.data[0].id);
+          }
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    fetchDepts();
+  }, []);
+
+  const handleSubmit = async () => {
+    if (selectedDeptId === '') return;
+    setLoading(true);
+    try {
+      const schedId = selectedScheduleId === '' ? null : Number(selectedScheduleId);
+      if (selectedDay === 'Semua Hari') {
+        const days = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+        for (const day of days) {
+          await onAssign(Number(selectedDeptId), day, schedId);
+        }
+      } else if (selectedDay === 'Senin - Sabtu') {
+        const days = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+        for (const day of days) {
+          await onAssign(Number(selectedDeptId), day, schedId);
+        }
+      } else {
+        await onAssign(Number(selectedDeptId), selectedDay, schedId);
+      }
+      onClose();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl font-sans">
+        <h3 className="text-[15px] font-bold text-gray-900 mb-4">Penugasan Shift Massal per Departemen</h3>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-[12px] font-semibold text-gray-700 mb-1.5">Pilih Departemen</label>
+            <select
+              value={selectedDeptId}
+              onChange={e => setSelectedDeptId(Number(e.target.value))}
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all cursor-pointer"
+            >
+              {departments.length === 0 && <option value="">Memuat data departemen...</option>}
+              {departments.map(dept => (
+                <option key={dept.id} value={dept.id}>{dept.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[12px] font-semibold text-gray-700 mb-1.5">Pilih Hari Kerja</label>
+            <select
+              value={selectedDay}
+              onChange={e => setSelectedDay(e.target.value)}
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all cursor-pointer"
+            >
+              <option value="Semua Hari">Senin - Minggu</option>
+              <option value="Senin - Sabtu">Senin - Sabtu</option>
+              <option value="Senin">Senin</option>
+              <option value="Selasa">Selasa</option>
+              <option value="Rabu">Rabu</option>
+              <option value="Kamis">Kamis</option>
+              <option value="Jumat">Jumat</option>
+              <option value="Sabtu">Sabtu</option>
+              <option value="Minggu">Minggu</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[12px] font-semibold text-gray-700 mb-1.5">Pilih Shift Kerja</label>
+            <select
+              value={selectedScheduleId}
+              onChange={e => setSelectedScheduleId(e.target.value)}
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all cursor-pointer"
+            >
+              <option value="">Libur (Off)</option>
+              {shifts.map(parent => (
+                <optgroup key={parent.id} label={parent.name}>
+                  {parent.children?.map(child => (
+                    <option key={child.id} value={child.id}>
+                      {child.name} ({child.start_time.substring(0, 5)} - {child.end_time.substring(0, 5)})
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="flex gap-2 mt-6 font-sans">
           <button
             onClick={onClose}
             disabled={loading}
@@ -334,10 +523,10 @@ function AddEmployeeToShiftModal({
           </button>
           <button
             onClick={handleSubmit}
-            disabled={loading || selectedEmpId === ''}
+            disabled={loading || selectedDeptId === ''}
             className="flex-1 py-2.5 bg-[#16A34A] hover:bg-[#0d9240] rounded-xl text-[13px] font-semibold text-white transition-colors"
           >
-            {loading ? 'Menyimpan...' : 'Tambahkan'}
+            {loading ? 'Menyimpan...' : 'Tugaskan Massal'}
           </button>
         </div>
       </div>
@@ -367,11 +556,16 @@ export function ScheduleTab() {
   const [editEnd, setEditEnd]         = useState('');
   const [editShiftType, setEditShiftType] = useState<'normal' | 'dinas_luar'>('normal');
   
+  // State untuk menyimpan daftar sub-shift (children) yang sedang diedit
+  const [editChildren, setEditChildren] = useState<Array<{ id?: number; name: string; start_time: string; end_time: string; checkin_window_end_time?: string }>>([]);
+  
   // Id shift yang dibuka daftar detail karyawannya
   const [expandedShift, setExpandedShift] = useState<number | null>(null);
   
   // Pengontrol dialog tambah shift baru
   const [showAddModal, setShowAddModal]   = useState(false);
+  // Pengontrol dialog penugasan massal per departemen
+  const [showDeptModal, setShowDeptModal] = useState(false);
   
   // Objek shift yang ditargetkan untuk dihapus
   const [deleteTarget, setDeleteTarget]   = useState<ShiftSchedule | null>(null);
@@ -385,6 +579,9 @@ export function ScheduleTab() {
 
   // Sel koordinat (karyawan, hari) penugasan shift popover yang sedang aktif
   const [activeAssignCell, setActiveAssignCell] = useState<{ empId: number; day: string } | null>(null);
+
+  // State untuk pencarian/filter kartu shift
+  const [searchQuery, setSearchQuery] = useState('');
 
   /**
    * Menarik seluruh daftar template shift dari API.
@@ -426,14 +623,50 @@ export function ScheduleTab() {
   const startEdit = (shift: ShiftSchedule) => {
     setEditingId(shift.id);
     setEditName(shift.name);
-    setEditStart(shift.start_time.substring(0, 5));
-    setEditEnd(shift.end_time.substring(0, 5));
+    setEditStart(shift.start_time ? shift.start_time.substring(0, 5) : '');
+    setEditEnd(shift.end_time ? shift.end_time.substring(0, 5) : '');
     setEditShiftType(shift.shift_type ?? 'normal');
+    
+    // Inisialisasi daftar sub-shift untuk proses edit
+    setEditChildren(
+      shift.children?.map(c => ({
+        id: c.id,
+        name: c.name,
+        start_time: c.start_time.substring(0, 5),
+        end_time: c.end_time.substring(0, 5),
+        checkin_window_end_time: c.checkin_window_end_time ? c.checkin_window_end_time.substring(0, 5) : '',
+      })) ?? []
+    );
   };
 
-  const saveEdit  = async (id: number)   => {
+  const handleAddEditChild = () => {
+    setEditChildren(prev => [
+      ...prev,
+      { name: 'Sub Shift Baru', start_time: '08:00', end_time: '14:00', checkin_window_end_time: '' }
+    ]);
+  };
+
+  const handleRemoveEditChild = (index: number) => {
+    setEditChildren(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleUpdateEditChild = (index: number, field: 'name' | 'start_time' | 'end_time' | 'checkin_window_end_time', value: string) => {
+    setEditChildren(prev =>
+      prev.map((c, i) => (i === index ? { ...c, [field]: value } : c))
+    );
+  };
+
+  const saveEdit  = async (id: number) => {
     try {
-      const res = await scheduleApi.update(id, { name: editName, start_time: editStart, end_time: editEnd, shift_type: editShiftType } as any);
+      const payload: any = { 
+        name: editName, 
+        shift_type: editShiftType,
+        children: editChildren
+      };
+      if (editStart) payload.start_time = editStart;
+      if (editEnd) payload.end_time = editEnd;
+      
+      const res = await scheduleApi.update(id, payload);
       if (res.success) {
         setShifts(prev => prev.map(s => s.id === id ? res.data : s));
         setEditingId(null);
@@ -474,6 +707,18 @@ export function ScheduleTab() {
     }
   };
 
+  const handleAssignDepartment = async (departmentId: number, day: string, scheduleId: number | null) => {
+    try {
+      const res = await scheduleApi.assignDepartmentSchedule(departmentId, day, scheduleId);
+      if (res.success) {
+        loadEmployeeSchedules();
+        loadShifts(); // Update counters on cards
+      }
+    } catch (err: any) {
+      alert(err?.message ?? 'Gagal menugaskan shift per departemen.');
+    }
+  };
+
   const handleRemoveEmployeeFromShift = async (employeeId: number, days: string[]) => {
     if (!confirm('Apakah Anda yakin ingin menghapus penugasan shift untuk karyawan ini?')) return;
     try {
@@ -488,6 +733,21 @@ export function ScheduleTab() {
   };
 
   const totalDays = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+
+  // Logic untuk menyaring data shift berdasarkan search query (Nama atau Departemen)
+  const filteredShifts = shifts.filter(shift => {
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase();
+    
+    const nameMatch = shift.name.toLowerCase().includes(query);
+    const deptMatch = shift.children?.some(child => 
+      child.employees?.some(emp => 
+        emp.department?.name?.toLowerCase().includes(query)
+      )
+    ) ?? false;
+    
+    return nameMatch || deptMatch;
+  });
 
   const getShiftInitials = (name: string) => {
     return name.trim().charAt(0).toUpperCase();
@@ -520,12 +780,44 @@ export function ScheduleTab() {
         </button>
       </div>
 
+      {/* Search Bar & Bulk Assign Button */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <input
+            type="text"
+            placeholder="Cari shift berdasarkan nama shift atau departemen..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-white focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/10 transition-all shadow-sm font-sans"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-[12px] font-semibold font-sans"
+            >
+              Batal
+            </button>
+          )}
+        </div>
+        <button
+          onClick={() => setShowDeptModal(true)}
+          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-50 border border-blue-100 hover:bg-blue-100 text-blue-600 text-[13px] font-semibold rounded-xl transition-all shadow-sm active:scale-95 whitespace-nowrap font-sans"
+        >
+          <Users size={15} /> Tugaskan per Departemen
+        </button>
+      </div>
+
       {/* Shift cards grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {loading && (
           <div className="col-span-2 text-center py-5 text-gray-400 text-[12px]">Memuat data shift...</div>
         )}
-        {shifts.map(shift => {
+        {!loading && filteredShifts.length === 0 && (
+          <div className="col-span-2 text-center py-8 text-gray-400 text-[12px] bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+            Tidak ada shift yang cocok dengan pencarian Anda.
+          </div>
+        )}
+        {filteredShifts.map(shift => {
           const IconComp = ICON_MAP[shift.icon as IconKey]?.component ?? Sun;
           const pr = getPresetByHex(shift.color);
           const isExpanded = expandedShift === shift.id;
@@ -576,45 +868,139 @@ export function ScheduleTab() {
                 </div>
 
                 {editingId === shift.id ? (
-                  <div className="space-y-3">
+                  <div className="space-y-3 font-sans">
                     <div>
-                      <label className="block text-[10px] text-gray-400 mb-1">Nama Shift</label>
+                      <label className="block text-[11px] font-semibold text-gray-600 mb-1">Nama Shift Utama</label>
                       <input type="text" value={editName} onChange={e => setEditName(e.target.value)}
                         className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all" />
                     </div>
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1">
-                        <label className="block text-[10px] text-gray-400 mb-1">Masuk</label>
-                        <input type="time" value={editStart} onChange={e => setEditStart(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[13px] font-mono bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all" />
-                      </div>
-                      <span className="text-gray-400 mt-4">–</span>
-                      <div className="flex-1">
-                        <label className="block text-[10px] text-gray-400 mb-1">Pulang</label>
-                        <input type="time" value={editEnd} onChange={e => setEditEnd(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[13px] font-mono bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all" />
-                      </div>
-                    </div>
                     <div>
-                      <label className="block text-[10px] text-gray-400 mb-1">Tipe Shift</label>
+                      <label className="block text-[11px] font-semibold text-gray-600 mb-1">Tipe Shift</label>
                       <select value={editShiftType} onChange={e => setEditShiftType(e.target.value as 'normal' | 'dinas_luar')}
                         className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all cursor-pointer">
                         <option value="normal">Normal (GPS Wajib)</option>
                         <option value="dinas_luar">Dinas Luar (GPS Opsional)</option>
                       </select>
                     </div>
+
+                    <div className="border-t border-gray-100 pt-3 mt-3 space-y-2">
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-[11px] font-bold text-gray-600 uppercase tracking-wider">Sub-Waktu Kerja</span>
+                        <button
+                          type="button"
+                          onClick={handleAddEditChild}
+                          className="px-2 py-1 bg-green-50 border border-green-100 hover:bg-green-100 text-[#16A34A] text-[10px] font-bold rounded-lg transition-all"
+                        >
+                          + Tambah Waktu
+                        </button>
+                      </div>
+
+                      {editChildren.map((child, index) => (
+                        <div key={index} className="flex flex-col gap-2 bg-gray-50 p-2.5 rounded-xl border border-gray-200/50">
+                          <div className="flex gap-2 items-center">
+                            <div className="flex-1 min-w-0">
+                              <input
+                                type="text"
+                                placeholder="Nama sub-shift (misal: Pagi)"
+                                value={child.name}
+                                onChange={e => handleUpdateEditChild(index, 'name', e.target.value)}
+                                className="w-full px-2 py-1 border border-gray-200 rounded-lg text-[11.5px] bg-white focus:outline-none focus:border-[#16A34A]"
+                              />
+                            </div>
+                            <div className="flex gap-1 items-center">
+                              <input
+                                type="time"
+                                value={child.start_time}
+                                onChange={e => handleUpdateEditChild(index, 'start_time', e.target.value)}
+                                className="px-1.5 py-1 border border-gray-200 rounded-lg text-[11.5px] font-mono bg-white focus:outline-none focus:border-[#16A34A]"
+                              />
+                              <span className="text-gray-400 text-[10px]">-</span>
+                              <input
+                                type="time"
+                                value={child.end_time}
+                                onChange={e => handleUpdateEditChild(index, 'end_time', e.target.value)}
+                                className="px-1.5 py-1 border border-gray-200 rounded-lg text-[11.5px] font-mono bg-white focus:outline-none focus:border-[#16A34A]"
+                              />
+                            </div>
+                            {editChildren.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveEditChild(index)}
+                                className="p-1 hover:bg-red-50 text-red-500 rounded-lg transition-all"
+                                title="Hapus sub-shift"
+                              >
+                                <X size={14} />
+                              </button>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-[10px] text-gray-400 font-semibold uppercase">Limit Absen:</span>
+                            <input
+                              type="time"
+                              value={child.checkin_window_end_time || ''}
+                              onChange={e => handleUpdateEditChild(index, 'checkin_window_end_time', e.target.value)}
+                              className="px-2 py-1 border border-gray-200 rounded-lg text-[11px] font-mono bg-white focus:outline-none focus:border-[#16A34A] w-24"
+                            />
+                            {!child.checkin_window_end_time && (
+                              <span className="text-[9px] text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded border border-amber-200/50">
+                                Fallback aktif
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 text-center py-2 rounded-xl" style={{ background: pr.bg }}>
-                      <p className="text-[11px] text-gray-400">Masuk</p>
-                      <p className="text-[18px] font-bold font-mono text-black">{shift.start_time.substring(0,5)}</p>
-                    </div>
-                    <span className="text-gray-300">–</span>
-                    <div className="flex-1 text-center py-2 rounded-xl" style={{ background: pr.bg }}>
-                      <p className="text-[11px] text-gray-400">Pulang</p>
-                      <p className="text-[18px] font-bold font-mono text-black">{shift.end_time.substring(0,5)}</p>
-                    </div>
+                  <div className="space-y-1.5 mt-1 font-sans">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Daftar Sub-Waktu</p>
+                    {shift.children && shift.children.length > 0 ? (
+                      shift.children.map(child => {
+                        const hasNoWindow = !child.checkin_window_end_time;
+                        const fallbackVal = (() => {
+                          if (!hasNoWindow) return '';
+                          try {
+                            const [sh, sm] = child.start_time.split(':').map(Number);
+                            const [eh, em] = child.end_time.split(':').map(Number);
+                            let startM = sh * 60 + sm;
+                            let endM = eh * 60 + em;
+                            if (endM < startM) endM += 1440;
+                            const dur = endM - startM;
+                            const half = Math.floor(dur / 2);
+                            const fallM = (startM + half) % 1440;
+                            const hh = String(Math.floor(fallM / 60)).padStart(2, '0');
+                            const mm = String(fallM % 60).padStart(2, '0');
+                            return `${hh}:${mm}`;
+                          } catch {
+                            return '--:--';
+                          }
+                        })();
+
+                        return (
+                          <div key={child.id} className="flex flex-col gap-1 w-full border-b border-gray-50 pb-2 last:border-0 last:pb-0">
+                            <div className="flex justify-between items-center text-[12px] py-1.5 px-3 rounded-xl bg-gray-50 border border-gray-100/50 font-medium">
+                              <span className="text-gray-600 text-[11px] truncate max-w-[150px]">{child.name}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-black font-semibold bg-white border border-gray-100 px-2 py-0.5 rounded-lg text-[11px]">
+                                  {child.start_time.substring(0, 5)} – {child.end_time.substring(0, 5)}
+                                </span>
+                                {child.checkin_window_end_time ? (
+                                  <span className="text-[10px] text-gray-500 font-mono bg-gray-100 border border-gray-200 px-1.5 py-0.5 rounded-lg" title="Batas absen masuk">
+                                    Batas: {child.checkin_window_end_time.substring(0, 5)}
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-amber-600 font-bold font-mono bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-lg" title="Menggunakan batas bawaan/sementara">
+                                    Batas: {fallbackVal}*
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <p className="text-[11px] text-gray-400 italic">Belum ada sub-waktu diatur.</p>
+                    )}
                   </div>
                 )}
               </div>
@@ -631,11 +1017,13 @@ export function ScheduleTab() {
 
               {/* Expanded Employee List */}
               {isExpanded && (
-                <div className="p-4 bg-gray-50/50 space-y-3">
+                <div className="p-4 bg-gray-50/50 space-y-3 font-sans">
                   <div className="space-y-2">
                     {(() => {
                       const distinctEmployees = Array.from(
-                        new Map(shift.employees?.map(emp => [emp.id, emp]) ?? []).values()
+                        new Map(
+                          shift.children?.flatMap(child => child.employees ?? [])?.map(emp => [emp.id, emp]) ?? []
+                        ).values()
                       );
 
                       if (distinctEmployees.length === 0) {
@@ -643,9 +1031,11 @@ export function ScheduleTab() {
                       }
 
                       return distinctEmployees.map(emp => {
-                        const days = shift.employees
-                          ?.filter(e => e.id === emp.id && e.pivot?.day_of_week)
-                          .map(e => e.pivot?.day_of_week) ?? [];
+                        const days = shift.children?.flatMap(child => 
+                          child.employees
+                            ?.filter(e => e.id === emp.id && e.pivot?.day_of_week)
+                            .map(e => `${e.pivot?.day_of_week} (${child.name.split(' ')[0]})`) ?? []
+                        ) ?? [];
 
                         return (
                           <div key={emp.id} className="flex items-center justify-between bg-white px-3.5 py-2.5 rounded-xl border border-gray-100 shadow-sm">
@@ -654,7 +1044,7 @@ export function ScheduleTab() {
                               <p className="text-[10px] text-gray-400">{emp.department?.name || 'Tanpa Dept'} · {days.join(', ')}</p>
                             </div>
                             <button
-                              onClick={() => handleRemoveEmployeeFromShift(emp.id, days as string[])}
+                              onClick={() => handleRemoveEmployeeFromShift(emp.id, shift.children?.flatMap(c => c.employees?.filter(e => e.id === emp.id).map(e => e.pivot?.day_of_week as string) ?? []) ?? [])}
                               className="text-[11px] text-red-500 hover:text-red-700 font-semibold px-2 py-1 rounded-lg hover:bg-red-50 transition-colors"
                             >
                               Hapus
@@ -688,7 +1078,7 @@ export function ScheduleTab() {
           <div className="w-11 h-11 rounded-xl bg-white border border-gray-200 flex items-center justify-center group-hover:bg-[#16A34A] group-hover:border-[#16A34A] transition-all shadow-sm">
             <Plus size={20} className="text-gray-300 group-hover:text-white transition-colors" />
           </div>
-          <div className="text-center">
+          <div className="text-center font-sans">
             <p className="text-[13px] font-semibold text-gray-400 group-hover:text-[#16A34A] transition-colors">Tambah Shift Baru</p>
             <p className="text-[11px] text-gray-300 mt-0.5">Klik untuk membuat shift baru</p>
           </div>
@@ -697,11 +1087,11 @@ export function ScheduleTab() {
 
       {/* Dynamic Schedule matrix */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-50">
+        <div className="px-5 py-4 border-b border-gray-50 font-sans">
           <p className="text-[14px] font-semibold text-gray-800">Jadwal Mingguan Karyawan</p>
           <p className="text-[11px] text-gray-400 mt-0.5">Klik pada sel hari kerja karyawan untuk menugaskan/mengubah shift secara mandiri.</p>
         </div>
-        <div className="overflow-x-auto pb-4">
+        <div className="overflow-x-auto pb-4 font-sans">
           <table className="w-full">
             <thead>
               <tr className="bg-gray-50/70 border-b border-gray-100">
@@ -734,21 +1124,26 @@ export function ScheduleTab() {
 
                         {/* Popover choice selection */}
                         {active && (
-                          <div className={`absolute left-1/2 -translate-x-1/2 z-30 bg-white rounded-xl border border-gray-200 shadow-xl py-1.5 min-w-[130px] text-left ${
+                          <div className={`absolute left-1/2 -translate-x-1/2 z-30 bg-white rounded-xl border border-gray-200 shadow-xl py-1.5 min-w-[170px] text-left max-h-[300px] overflow-y-auto ${
                             employeeSchedules.length > 2 && i >= employeeSchedules.length - 2
                               ? 'bottom-full mb-1.5'
                               : 'top-full mt-1.5'
                           }`}>
                             <p className="text-[9px] font-bold text-gray-400 px-3 py-1 uppercase border-b border-gray-50 mb-1">Set Shift ({d})</p>
-                            {shifts.map(sh => (
-                              <button
-                                key={sh.id}
-                                onClick={() => handleAssign(row.employee_id, d, sh.id)}
-                                className="w-full text-left px-3 py-2 text-[11px] font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                              >
-                                <span className="w-2.5 h-2.5 rounded-full border border-gray-100" style={{ background: sh.color }} />
-                                <span className="truncate">{sh.name}</span>
-                              </button>
+                            {shifts.map(parent => (
+                              <div key={parent.id} className="space-y-0.5 border-b border-gray-50 pb-1 mb-1 last:border-0 last:pb-0 last:mb-0">
+                                <p className="text-[8px] font-bold text-gray-400 px-3 py-0.5 uppercase tracking-wider">{parent.name}</p>
+                                {parent.children?.map(child => (
+                                  <button
+                                    key={child.id}
+                                    onClick={() => handleAssign(row.employee_id, d, child.id)}
+                                    className="w-full text-left px-4 py-1.5 text-[10.5px] font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                  >
+                                    <span className="w-2 h-2 rounded-full border border-gray-100" style={{ background: child.color }} />
+                                    <span className="truncate">{child.name}</span>
+                                  </button>
+                                ))}
+                              </div>
                             ))}
                             <div className="h-px bg-gray-100 my-1" />
                             <button
@@ -772,16 +1167,18 @@ export function ScheduleTab() {
 
       {/* Modals */}
       {showAddModal && <AddShiftModal onClose={() => setShowAddModal(false)} onAdd={handleAdd} />}
+      {showDeptModal && <AssignDepartmentModal shifts={shifts} onClose={() => setShowDeptModal(false)} onAssign={handleAssignDepartment} />}
       {deleteTarget && <DeleteModal shift={deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => handleDelete(deleteTarget.id)} />}
       
       {showAddEmpModal && assigningShiftId !== null && (
         <AddEmployeeToShiftModal
+          parentShift={shifts.find(s => s.id === assigningShiftId)!}
           onClose={() => {
             setShowAddEmpModal(false);
             setAssigningShiftId(null);
           }}
-          onAssign={async (empId, day) => {
-            await handleAssign(empId, day, assigningShiftId);
+          onAssign={async (empId, day, childScheduleId) => {
+            await handleAssign(empId, day, childScheduleId);
           }}
         />
       )}

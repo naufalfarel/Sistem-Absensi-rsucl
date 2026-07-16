@@ -13,7 +13,23 @@ use Illuminate\Database\Eloquent\Model;
 class Schedule extends Model
 {
     // Kolom yang dapat diisi secara massal
-    protected $fillable = ['name', 'start_time', 'end_time', 'color', 'icon', 'shift_type'];
+    protected $fillable = ['parent_id', 'name', 'start_time', 'end_time', 'color', 'icon', 'shift_type'];
+
+    /**
+     * Relasi ke model parent Schedule.
+     */
+    public function parent()
+    {
+        return $this->belongsTo(Schedule::class, 'parent_id');
+    }
+
+    /**
+     * Relasi ke model child Schedule.
+     */
+    public function children()
+    {
+        return $this->hasMany(Schedule::class, 'parent_id');
+    }
 
     /**
      * Relasi many-to-many ke model Employee.

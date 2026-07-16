@@ -184,6 +184,7 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
       if (todayShift === undefined) return 'Memuat…';
       return 'Belum Absen';
     }
+    if (todayRecord.display_status === 'tidak_lengkap') return 'Tidak Lengkap';
     const statusMap: Record<string, string> = {
       hadir: 'Hadir',
       telat: 'Terlambat',
@@ -196,6 +197,7 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
   const getStatusBadge = () => {
     if (isOffDuty) return 'Bebas Tugas';
     if (!todayRecord) return 'Belum Check-In';
+    if (todayRecord.display_status === 'tidak_lengkap') return 'Tidak Lengkap';
     if (todayRecord.status === 'alpha') return 'Tidak Hadir';
     if (todayRecord.check_out) return 'Sudah Pulang';
     if (todayRecord.status === 'telat') return 'Terlambat';
@@ -209,6 +211,7 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
       return { color: '#4B5563', bg: '#F3F4F6' }; // Abu-abu untuk libur biasa
     }
     if (!todayRecord) return { color: '#6B7280', bg: '#F9FAFB' };
+    if (todayRecord.display_status === 'tidak_lengkap') return { color: '#4B5563', bg: '#F3F4F6' }; // Abu-abu
     if (todayRecord.status === 'hadir') return { color: '#16A34A', bg: '#DCFCE7' };
     if (todayRecord.status === 'telat') return { color: '#D97706', bg: '#FEF3C7' };
     return { color: '#DC2626', bg: '#FEE2E2' };
@@ -254,19 +257,25 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
       bg: '#FFF1F2',
       badge: todayRecord?.check_out 
         ? 'Selesai' 
-        : (todayRecord?.check_in 
-            ? 'Belum Pulang' 
-            : (isOffDuty ? (leaveType ?? 'Libur') : 'Belum Absen')),
+        : (todayRecord?.display_status === 'tidak_lengkap'
+            ? 'Tidak Lengkap'
+            : (todayRecord?.check_in 
+                ? 'Belum Pulang' 
+                : (isOffDuty ? (leaveType ?? 'Libur') : 'Belum Absen'))),
       badgeColor: todayRecord?.check_out 
         ? '#16A34A' 
-        : (todayRecord?.check_in 
-            ? '#EA580C' 
-            : (isOffDuty ? (leaveType ? '#7C3AED' : '#4B5563') : '#9CA3AF')),
+        : (todayRecord?.display_status === 'tidak_lengkap'
+            ? '#4B5563'
+            : (todayRecord?.check_in 
+                ? '#EA580C' 
+                : (isOffDuty ? (leaveType ? '#7C3AED' : '#4B5563') : '#9CA3AF'))),
       badgeBg: todayRecord?.check_out 
         ? '#DCFCE7' 
-        : (todayRecord?.check_in 
-            ? '#FFF7ED' 
-            : (isOffDuty ? (leaveType ? '#F5F3FF' : '#F3F4F6') : '#F3F4F6')),
+        : (todayRecord?.display_status === 'tidak_lengkap'
+            ? '#F3F4F6'
+            : (todayRecord?.check_in 
+                ? '#FFF7ED' 
+                : (isOffDuty ? (leaveType ? '#F5F3FF' : '#F3F4F6') : '#F3F4F6'))),
     },
     {
       icon: Stethoscope,

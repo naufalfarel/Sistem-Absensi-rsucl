@@ -45,6 +45,12 @@ class SettingController extends Controller
         'hospital_latitude',
         'hospital_longitude',
         'attendance_radius_meters',
+        // ── Toleransi Check-in & Jendela Absen Baru ──
+        'checkin_tolerance_minutes',
+        'early_checkin_window_minutes',
+        'checkin_open_time',
+        'checkin_late_after_time',
+        'checkin_close_time',
     ];
 
     /**
@@ -111,6 +117,12 @@ class SettingController extends Controller
             'hospital_latitude'               => 'sometimes|numeric',
             'hospital_longitude'              => 'sometimes|numeric',
             'attendance_radius_meters'        => 'sometimes|integer|min:10|max:1000',
+            // Toleransi Check-in & Jendela Absen Baru
+            'checkin_tolerance_minutes'       => 'sometimes|integer|min:0|max:1440',
+            'early_checkin_window_minutes'    => 'sometimes|integer|min:0|max:1440',
+            'checkin_open_time'               => 'sometimes|string',
+            'checkin_late_after_time'         => 'sometimes|string',
+            'checkin_close_time'              => 'sometimes|string',
         ]);
 
         // Proses khusus untuk upload logo instansi
@@ -229,12 +241,12 @@ class SettingController extends Controller
             'checkout_close'          => '60',
             'sat_checkout_open'       => '0',
             'sat_checkout_close'      => '60',
-            'gps_radius'              => '40',
+            'gps_radius'              => '10',
             'hospital_lat'            => '5.552740480177099',
             'hospital_lng'            => '95.33486560781716',
             'hospital_latitude'       => '5.552740480177099',
             'hospital_longitude'      => '95.33486560781716',
-            'attendance_radius_meters'=> '100',
+            'attendance_radius_meters'=> '10',
             'notif_email'             => '1',
             'notif_late'              => '1',
             'notif_leave'             => '1',
@@ -246,6 +258,12 @@ class SettingController extends Controller
             // Toleransi Pulang Cepat & Lembur
             'early_checkout_grace_minutes'    => '15',
             'overtime_grace_minutes'          => '15',
+            // Toleransi Check-in & Jendela Absen Baru
+            'checkin_tolerance_minutes'       => '10',
+            'early_checkin_window_minutes'    => '150',
+            'checkin_open_time'               => '08:00',
+            'checkin_late_after_time'         => '08:30',
+            'checkin_close_time'              => '09:00',
             default                           => '',
         };
     }

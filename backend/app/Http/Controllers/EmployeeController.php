@@ -204,7 +204,8 @@ class EmployeeController extends Controller
 
         $computedStatus = null;
         if ($today) {
-            $computedStatus = $today->status;
+            $isIncomplete = \App\Support\AttendanceRules::isAttendanceIncomplete($today, $e);
+            $computedStatus = $isIncomplete ? 'tidak_lengkap' : $today->status;
         } else {
             if (!$schedule) {
                 $computedStatus = 'tidak_ada_shift';

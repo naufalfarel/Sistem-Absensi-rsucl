@@ -116,6 +116,8 @@ export function SettingsTab() {
   const [satCheckoutClose, setSatCheckoutClose] = useState('60');
   const [earlyCheckoutGrace, setEarlyCheckoutGrace] = useState('15');
   const [overtimeGrace, setOvertimeGrace]           = useState('15');
+  const [checkinTolerance, setCheckinTolerance]     = useState('10');
+  const [earlyCheckinWindow, setEarlyCheckinWindow] = useState('150');
 
   // ── State Pengontrol Status Sistem Absensi & Modal Konfirmasi ──
   const [systemActive, setSystemActive]         = useState(true);
@@ -174,6 +176,8 @@ export function SettingsTab() {
         if (res.data.sat_checkout_close !== undefined) setSatCheckoutClose(res.data.sat_checkout_close);
         if (res.data.early_checkout_grace_minutes !== undefined) setEarlyCheckoutGrace(res.data.early_checkout_grace_minutes);
         if (res.data.overtime_grace_minutes !== undefined) setOvertimeGrace(res.data.overtime_grace_minutes);
+        if (res.data.checkin_tolerance_minutes !== undefined) setCheckinTolerance(res.data.checkin_tolerance_minutes);
+        if (res.data.early_checkin_window_minutes !== undefined) setEarlyCheckinWindow(res.data.early_checkin_window_minutes);
         // Kuota Cuti
         if (res.data.leave_reset_month) setLeaveResetMonth(res.data.leave_reset_month);
         if (res.data.leave_reset_day) setLeaveResetDay(res.data.leave_reset_day);
@@ -386,6 +390,8 @@ export function SettingsTab() {
         sat_checkout_close: satCheckoutClose,
         early_checkout_grace_minutes: earlyCheckoutGrace,
         overtime_grace_minutes: overtimeGrace,
+        checkin_tolerance_minutes: checkinTolerance,
+        early_checkin_window_minutes: earlyCheckinWindow,
       });
       if (res.success) {
         setConfigSaved(true);
@@ -948,6 +954,30 @@ export function SettingsTab() {
           {/* Section 1: Check-in (Absen Masuk) */}
           <div className="pt-2">
             <h4 className="text-[12px] font-bold text-gray-800 mb-3 border-l-2 border-[#16A34A] pl-2 uppercase tracking-wider">Absen Masuk (Check-in)</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-[11px] font-medium text-gray-500 mb-1.5">Batas Jendela Buka Absen Relatif (menit sebelum shift mulai)</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="1440"
+                  value={earlyCheckinWindow}
+                  onChange={e => setEarlyCheckinWindow(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[12px] focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all bg-gray-50/50"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-gray-500 mb-1.5">Batas Toleransi Keterlambatan (menit setelah shift mulai)</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="1440"
+                  value={checkinTolerance}
+                  onChange={e => setCheckinTolerance(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[12px] focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all bg-gray-50/50"
+                />
+              </div>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-[11px] font-medium text-gray-500 mb-1.5">Buka Absen (menit sebelum shift mulai)</label>
