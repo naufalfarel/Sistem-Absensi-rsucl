@@ -41,7 +41,7 @@ class LeaveRequestResource extends JsonResource
             'employee'       => [
                 'id'         => $this->employee?->id,
                 'name'       => $this->employee?->user?->name,
-                'nip'        => $this->employee?->nip,
+                'nik_ktp'    => $this->employee?->nik_ktp,
                 'department' => $this->employee?->department?->name,
                 'profile_picture' => $this->employee?->user?->profile_picture ? url($this->employee->user->profile_picture) : null,
             ],

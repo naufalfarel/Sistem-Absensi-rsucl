@@ -13,7 +13,7 @@ interface ShiftProposalTabProps {
     id: number; 
     name: string; 
     username: string; 
-    nip: string; 
+    nik_ktp: string; 
     pj_bagian_department?: string; 
     pj_bagian_department_id?: number 
   };

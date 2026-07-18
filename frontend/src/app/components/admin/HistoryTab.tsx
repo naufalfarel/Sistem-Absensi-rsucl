@@ -18,7 +18,7 @@ const statusConfig: Record<string, { label: string; color: string; bg: string }>
  * Komponen Tab Riwayat Admin (HistoryTab) — Sistem Absensi RSUCL
  * 
  * Halaman khusus admin untuk meninjau rekaman data kehadiran historis seluruh karyawan RSUCL.
- * Dilengkapi filter pencarian berdasarkan nama/departemen/NIP, filter kategori status absensi,
+ * Dilengkapi filter pencarian berdasarkan nama/departemen/NIK KTP, filter kategori status absensi,
  * filter dropdown departemen, toggle harian/rentang tanggal fleksibel,
  * serta detail modal pratinjau selfie masuk/pulang.
  */
@@ -344,7 +344,7 @@ export function HistoryTab() {
           <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
-            placeholder="Cari nama atau NIP..."
+            placeholder="Cari nama atau NIK KTP..."
             value={searchVal}
             onChange={e => setSearchVal(e.target.value)}
             className="w-full pl-10 pr-4 py-2 border border-gray-100 rounded-xl text-[13px] bg-white shadow-sm focus:outline-none focus:border-[#16A34A] transition-all placeholder:text-gray-300 font-medium"
@@ -403,7 +403,7 @@ export function HistoryTab() {
                   <tr key={i} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                     <td className="px-4 py-3">
                       <p className="text-[13px] font-medium text-gray-800">{r.employee?.name}</p>
-                      <p className="text-[10px] text-gray-400 font-mono mt-0.5">{r.employee?.nip}</p>
+                      <p className="text-[10px] text-gray-400 font-mono mt-0.5">{r.employee?.nik_ktp}</p>
                     </td>
                     <td className="px-4 py-3 text-[12px] text-gray-500">{r.employee?.department || 'Umum'}</td>
                     <td className="px-4 py-3 text-[12px] text-gray-600 whitespace-nowrap">
@@ -418,9 +418,11 @@ export function HistoryTab() {
                       ) : (
                         <>
                           <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-green-50 text-green-700">{r.shift_name || 'Reguler'}</span>
-                          {r.shift_type === 'dinas_luar' && (
+                          {r.dinas_reason ? (
+                            <span className="block mt-1 text-[9px] font-bold text-purple-600 bg-purple-50 border border-purple-100 rounded-md px-1.5 py-0.5 w-max" title={r.dinas_reason}>{r.dinas_reason}</span>
+                          ) : r.shift_type === 'dinas_luar' ? (
                             <span className="block mt-1 text-[9px] font-bold text-purple-600 bg-purple-50 border border-purple-100 rounded-md px-1.5 py-0.5 w-max">Dinas Luar</span>
-                          )}
+                          ) : null}
                           {r.is_holiday_work && (
                             <span className="block mt-1 text-[9px] font-bold text-red-600 bg-red-50 border border-red-100 rounded-md px-1.5 py-0.5 w-max" title={r.holiday || 'Hari Libur'}>Kerja Libur</span>
                           )}
@@ -523,7 +525,7 @@ export function HistoryTab() {
             <div className="space-y-2.5 bg-gray-50 rounded-xl p-4 mb-5">
               {[
                 { l: 'Tanggal', v: formatDate(selected.date) },
-                { l: 'Shift', v: (selected.shift_name || 'Reguler') + (selected.shift_type === 'dinas_luar' ? ' (Dinas Luar)' : ' (Normal)') },
+                { l: 'Shift', v: (selected.shift_name || 'Reguler') + (selected.dinas_reason ? ` (${selected.dinas_reason})` : selected.shift_type === 'dinas_luar' ? ' (Dinas Luar)' : ' (Normal)') },
                 { l: 'Jam Masuk', v: (selected.check_in ? selected.check_in.substring(0, 5) : '--') + (selected.checkin_distance_meters !== undefined && selected.checkin_distance_meters !== null ? ` (${selected.checkin_distance_meters}m dari RSUCL)` : '') },
                 { l: 'Jam Keluar', v: (selected.check_out ? selected.check_out.substring(0, 5) : '--') + (selected.checkout_distance_meters !== undefined && selected.checkout_distance_meters !== null ? ` (${selected.checkout_distance_meters}m dari RSUCL)` : '') },
                 { l: 'Status', v: selected.display_status === 'tidak_lengkap'

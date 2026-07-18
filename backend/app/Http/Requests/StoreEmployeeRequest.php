@@ -24,7 +24,7 @@ class StoreEmployeeRequest extends FormRequest
         return [
             'name'          => 'required|string|max:100',
             'email'         => 'required|email|unique:users,email',
-            'nip'           => 'required|string|unique:users,nip|unique:employees,nip',
+            'nik_ktp'       => 'required|string|unique:users,nik_ktp|unique:employees,nik_ktp',
             'username'      => 'required|string|unique:users,username',
             'password'      => 'required|string|min:6',
             'department_id' => 'required|exists:departments,id',

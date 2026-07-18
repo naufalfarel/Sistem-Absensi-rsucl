@@ -11,7 +11,7 @@ class StoreScheduleRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return $this->user() && $this->user()->isAdmin();
+        return $this->user() && ($this->user()->isAdmin() || $this->user()->isPjBagian());
     }
 
     /**
@@ -28,6 +28,7 @@ class StoreScheduleRequest extends FormRequest
             'color'      => 'required|string|max:10',
             'icon'       => 'required|string|max:20',
             'shift_type' => 'sometimes|in:normal,dinas_luar',
+            'owner_department_id' => 'nullable|exists:departments,id',
         ];
     }
 }

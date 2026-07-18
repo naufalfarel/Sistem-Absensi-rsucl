@@ -54,7 +54,7 @@ export default function App() {
     const empProps = {
       id: user.employee_id || 0,
       name: user.name,
-      nip: user.nip,
+      nik_ktp: user.nik_ktp,
       username: user.username,
       dept: user.department || 'Umum',
       pos: user.position || 'Staf',

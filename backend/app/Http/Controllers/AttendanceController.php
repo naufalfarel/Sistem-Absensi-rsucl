@@ -77,11 +77,30 @@ class AttendanceController extends Controller
             ];
         }
 
+        $isExempt = AttendanceRules::isExemptFromGps($employee, Carbon::today('Asia/Jakarta'));
+        $dinasReason = null;
+        if ($isExempt) {
+            $approvedLetter = $employee->approvedAssignmentLetterOn(Carbon::today('Asia/Jakarta'));
+            if ($approvedLetter) {
+                $dinasReason = 'Surat Tugas: ' . $approvedLetter->title;
+            } else {
+                $todayDate = Carbon::today('Asia/Jakarta');
+                $dayName = AttendanceRules::dayNameFor($todayDate);
+                $sched = $employee->schedules()->wherePivot('date', $todayDate->toDateString())->first();
+                if (!$sched) {
+                    $sched = $employee->schedules()->wherePivot('day_of_week', $dayName)->wherePivotNull('date')->first();
+                }
+                $dinasReason = 'Shift: ' . ($sched ? $sched->name : 'Dinas Luar');
+            }
+        }
+
         return response()->json([
             'success' => true,
             'data'    => $record ? new AttendanceResource($record) : null,
             'active_leave' => $leaveData,
             'holiday' => $holidayData,
+            'is_exempt_from_gps' => $isExempt,
+            'dinas_reason' => $dinasReason,
         ]);
     }
 
@@ -116,9 +135,14 @@ class AttendanceController extends Controller
                 $records[] = $this->formatRecord($att, withEmployee: true);
             } else {
                 // Cari jadwal shift hari ini
-                $schedule = $emp->schedules->first(function($s) use ($todayName) {
-                    return $s->pivot->day_of_week === $todayName;
+                $schedule = $emp->schedules->first(function($s) use ($todayStr) {
+                    return $s->pivot->date === $todayStr;
                 });
+                if (!$schedule) {
+                    $schedule = $emp->schedules->first(function($s) use ($todayName) {
+                        return $s->pivot->day_of_week === $todayName && is_null($s->pivot->date);
+                    });
+                }
 
                 if (!$schedule) {
                     $status = 'tidak_ada_shift';
@@ -180,7 +204,7 @@ class AttendanceController extends Controller
                     'employee'           => [
                         'id'         => $emp->id,
                         'name'       => $emp->user?->name ?? 'Karyawan',
-                        'nip'        => $emp->nip,
+                        'nik_ktp'    => $emp->nik_ktp,
                         'department' => $emp->department?->name ?? 'Umum',
                         'position'   => $emp->position?->name ?? 'Staff',
                         'profile_picture' => $emp->user?->profile_picture ? url($emp->user->profile_picture) : null,
@@ -318,7 +342,7 @@ class AttendanceController extends Controller
             $isWithinGeofence = ($distance <= (float) Setting::get('attendance_radius_meters', '10'));
         }
 
-        if ($shiftType !== 'dinas_luar') {
+        if (!AttendanceRules::isExemptFromGps($employee, $now)) {
             if ($clientLat === null || $clientLng === null) {
                 return response()->json([
                     'success' => false,
@@ -689,7 +713,7 @@ class AttendanceController extends Controller
             $isWithinGeofence = ($distance <= (float) Setting::get('attendance_radius_meters', '100'));
         }
 
-        if ($shiftType !== 'dinas_luar') {
+        if (!AttendanceRules::isExemptFromGps($employee, $shiftDate)) {
             if ($clientLat === null || $clientLng === null) {
                 return response()->json([
                     'success' => false,
@@ -969,8 +993,13 @@ class AttendanceController extends Controller
             3 => 'Rabu',   4 => 'Kamis', 5 => 'Jumat', 6 => 'Sabtu',
         ];
         $todayName = $dayMap[$now->dayOfWeek];
-        $schedule = $employee->schedules()->wherePivot('day_of_week', $todayName)->first();
-
+        $schedule = $employee->schedules()->wherePivot('date', $now->toDateString())->first();
+        if (!$schedule) {
+            $schedule = $employee->schedules()
+                                 ->wherePivot('day_of_week', $todayName)
+                                 ->wherePivotNull('date')
+                                 ->first();
+        }
         if (!$schedule) {
             return null;
         }
@@ -1150,16 +1179,24 @@ class AttendanceController extends Controller
             $carbonDate = \Carbon\Carbon::parse($r->date);
             $dayName = $dayMap[$carbonDate->dayOfWeek];
             
-            // Periksa apakah relasi schedules sudah di-load untuk efisiensi kueri database (Eager Loading)
+            $dateStr = $carbonDate->toDateString();
             if ($r->employee->relationLoaded('schedules')) {
-                $sched = $r->employee->schedules->first(function ($s) use ($dayName) {
-                    return $s->pivot->day_of_week === $dayName;
+                $sched = $r->employee->schedules->first(function ($s) use ($dateStr) {
+                    return $s->pivot->date === $dateStr;
                 });
+                if (!$sched) {
+                    $sched = $r->employee->schedules->first(function ($s) use ($dayName) {
+                        return $s->pivot->day_of_week === $dayName && is_null($s->pivot->date);
+                    });
+                }
                 if ($sched) {
                     $shiftName = $sched->name;
                 }
             } else {
-                $sched = $r->employee->schedules()->wherePivot('day_of_week', $dayName)->first();
+                $sched = $r->employee->schedules()->wherePivot('date', $dateStr)->first();
+                if (!$sched) {
+                    $sched = $r->employee->schedules()->wherePivot('day_of_week', $dayName)->wherePivotNull('date')->first();
+                }
                 if ($sched) {
                     $shiftName = $sched->name;
                 }
@@ -1204,7 +1241,7 @@ class AttendanceController extends Controller
             $data['employee'] = [
                 'id'         => $r->employee->id,
                 'name'       => $r->employee->user?->name,
-                'nip'        => $r->employee->nip,
+                'nik_ktp'    => $r->employee->nik_ktp,
                 'department' => $r->employee->department?->name,
                 'profile_picture' => $r->employee->user?->profile_picture ? url($r->employee->user->profile_picture) : null,
             ];
@@ -1470,7 +1507,7 @@ class AttendanceController extends Controller
         if ($request->filled('search')) {
             $search = $request->query('search');
             $empQuery->where(function($q) use ($search) {
-                $q->where('nip', 'like', "%{$search}%")
+                $q->where('nik_ktp', 'like', "%{$search}%")
                   ->orWhereHas('user', function($uq) use ($search) {
                       $uq->where('name', 'like', "%{$search}%");
                   })
@@ -1532,9 +1569,14 @@ class AttendanceController extends Controller
             $limitDate = $carbonDate->gt($today) ? $today : $carbonDate;
 
             foreach ($employees as $emp) {
-                $matchingShift = $emp->schedules->first(function($s) use ($dayName) {
-                    return $s->pivot->day_of_week === $dayName;
+                $matchingShift = $emp->schedules->first(function($s) use ($targetDate) {
+                    return $s->pivot->date === $targetDate;
                 });
+                if (!$matchingShift) {
+                    $matchingShift = $emp->schedules->first(function($s) use ($dayName) {
+                        return $s->pivot->day_of_week === $dayName && is_null($s->pivot->date);
+                    });
+                }
                 
                 $hasShift = !empty($matchingShift);
 
@@ -1616,9 +1658,15 @@ class AttendanceController extends Controller
                 if (!$emp) continue;
                 
                 $dayName = $dayMap[$att->date->dayOfWeek];
-                $matchingShift = $emp->schedules->first(function($s) use ($dayName) {
-                    return $s->pivot->day_of_week === $dayName;
+                $attDateStr = $att->date->toDateString();
+                $matchingShift = $emp->schedules->first(function($s) use ($attDateStr) {
+                    return $s->pivot->date === $attDateStr;
                 });
+                if (!$matchingShift) {
+                    $matchingShift = $emp->schedules->first(function($s) use ($dayName) {
+                        return $s->pivot->day_of_week === $dayName && is_null($s->pivot->date);
+                    });
+                }
                 
                 $rows[] = $this->formatRowFromAttendance($att, $emp, $matchingShift);
             }
@@ -1629,9 +1677,15 @@ class AttendanceController extends Controller
 
                 $startDateCarbon = Carbon::parse($leave->start_date);
                 $dayName = $dayMap[$startDateCarbon->dayOfWeek];
-                $matchingShift = $emp->schedules->first(function($s) use ($dayName) {
-                    return $s->pivot->day_of_week === $dayName;
+                $leaveDateStr = $leave->start_date->toDateString();
+                $matchingShift = $emp->schedules->first(function($s) use ($leaveDateStr) {
+                    return $s->pivot->date === $leaveDateStr;
                 });
+                if (!$matchingShift) {
+                    $matchingShift = $emp->schedules->first(function($s) use ($dayName) {
+                        return $s->pivot->day_of_week === $dayName && is_null($s->pivot->date);
+                    });
+                }
 
                 // Row type: leave_period
                 $rows[] = $this->formatRowFromLeave($leave, $emp, $leave->start_date, $matchingShift, 'leave_period');
@@ -1693,7 +1747,7 @@ class AttendanceController extends Controller
             'employee' => [
                 'id' => $emp->id,
                 'name' => $emp->user?->name,
-                'nip' => $emp->nip,
+                'nik_ktp' => $emp->nik_ktp,
                 'department' => $emp->department?->name,
                 'position' => $emp->position?->name,
                 'profile_picture' => $emp->user?->profile_picture ? url($emp->user->profile_picture) : null,
@@ -1739,7 +1793,7 @@ class AttendanceController extends Controller
             'employee' => [
                 'id' => $emp->id,
                 'name' => $emp->user?->name,
-                'nip' => $emp->nip,
+                'nik_ktp' => $emp->nik_ktp,
                 'department' => $emp->department?->name,
                 'position' => $emp->position?->name,
                 'profile_picture' => $emp->user?->profile_picture ? url($emp->user->profile_picture) : null,
@@ -1782,7 +1836,7 @@ class AttendanceController extends Controller
             'employee' => [
                 'id' => $emp->id,
                 'name' => $emp->user?->name,
-                'nip' => $emp->nip,
+                'nik_ktp' => $emp->nik_ktp,
                 'department' => $emp->department?->name,
                 'position' => $emp->position?->name,
                 'profile_picture' => $emp->user?->profile_picture ? url($emp->user->profile_picture) : null,
@@ -1819,7 +1873,7 @@ class AttendanceController extends Controller
         if ($request->filled('search')) {
             $search = $request->query('search');
             $query->whereHas('employee', function ($q) use ($search) {
-                $q->where('nip', 'like', "%{$search}%")
+                $q->where('nik_ktp', 'like', "%{$search}%")
                   ->orWhereHas('user', function ($uq) use ($search) {
                       $uq->where('name', 'like', "%{$search}%");
                   });
@@ -1868,7 +1922,7 @@ class AttendanceController extends Controller
         if ($request->filled('search')) {
             $search = $request->query('search');
             $baseQuery->whereHas('employee', function ($q) use ($search) {
-                $q->where('nip', 'like', "%{$search}%")
+                $q->where('nik_ktp', 'like', "%{$search}%")
                   ->orWhereHas('user', function ($uq) use ($search) {
                       $uq->where('name', 'like', "%{$search}%");
                   });

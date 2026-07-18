@@ -55,7 +55,7 @@ class EmployeeController extends Controller
             'email'    => $data['email'],
             'password' => Hash::make($data['password']),
             'role'     => 'employee',
-            'nip'      => $data['nip'],
+            'nik_ktp'  => $data['nik_ktp'],
             'username' => $data['username'],
         ]);
 
@@ -63,7 +63,7 @@ class EmployeeController extends Controller
             'user_id'       => $user->id,
             'department_id' => $data['department_id'],
             'position_id'   => $data['position_id'],
-            'nip'           => $data['nip'],
+            'nik_ktp'       => $data['nik_ktp'],
             'phone'         => $data['phone'] ?? null,
             'gender'        => $data['gender'] ?? null,
             'join_date'     => $data['join_date'] ?? null,
@@ -171,7 +171,7 @@ class EmployeeController extends Controller
                     'user_id'                 => $u->id,
                     'employee_id'             => $u->employee?->id,
                     'name'                    => $u->name,
-                    'nip'                     => $u->nip,
+                    'nik_ktp'                 => $u->nik_ktp,
                     'email'                   => $u->email,
                     'username'                => $u->username,
                     'profile_picture'         => $u->profile_picture ? url($u->profile_picture) : null,
@@ -307,10 +307,17 @@ class EmployeeController extends Controller
         ];
         $todayName = $dayMap[\Carbon\Carbon::today('Asia/Jakarta')->dayOfWeek];
 
+        $todayDateStr = \Carbon\Carbon::today('Asia/Jakarta')->toDateString();
         if ($e->relationLoaded('schedules')) {
-            $schedule = $e->schedules->first(fn($s) => $s->pivot->day_of_week === $todayName);
+            $schedule = $e->schedules->first(fn($s) => $s->pivot->date === $todayDateStr);
+            if (!$schedule) {
+                $schedule = $e->schedules->first(fn($s) => $s->pivot->day_of_week === $todayName && is_null($s->pivot->date));
+            }
         } else {
-            $schedule = $e->schedules()->wherePivot('day_of_week', $todayName)->first();
+            $schedule = $e->schedules()->wherePivot('date', $todayDateStr)->first();
+            if (!$schedule) {
+                $schedule = $e->schedules()->wherePivot('day_of_week', $todayName)->wherePivotNull('date')->first();
+            }
         }
 
         $computedStatus = null;
@@ -352,7 +359,7 @@ class EmployeeController extends Controller
             'user_id'          => $e->user_id,
             'name'             => $e->user?->name,
             'email'            => $e->user?->email,
-            'nip'              => $e->nip,
+            'nik_ktp'          => $e->nik_ktp,
             'username'         => $e->user?->username,
             'role'             => $e->user?->role,
             'profile_picture'  => $e->user?->profile_picture ? url($e->user->profile_picture) : null,

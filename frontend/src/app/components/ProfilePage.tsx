@@ -12,10 +12,11 @@ interface ProfilePageProps {
   initialSection?: 'profile' | 'leave';
   initialOpenModal?: boolean;
   onResetInitials?: () => void;
+  onNavigateToLeave?: () => void;
 }
 
 type LeaveType = 'cuti' | 'izin' | 'sakit' | 'cuti_khusus';
-type LeaveStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
+type LeaveStatus = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'draft';
 
 const typeConfig: Record<LeaveType, { label: string; color: string; bg: string; border: string }> = {
   cuti:        { label: 'Cuti Tahunan', color: '#7C3AED', bg: '#F5F3FF', border: '#DDD6FE' },
@@ -29,6 +30,7 @@ const statusConfig: Record<LeaveStatus, { label: string; color: string; bg: stri
   approved:  { label: 'Disetujui',  color: '#16A34A', bg: '#DCFCE7', icon: CheckCircle2 },
   rejected:  { label: 'Ditolak',    color: '#DC2626', bg: '#FEE2E2', icon: XCircle },
   cancelled: { label: 'Dibatalkan', color: '#6B7280', bg: '#F3F4F6', icon: XCircle },
+  draft:     { label: 'Draf (Menunggu PJ)', color: '#4F46E5', bg: '#EEF2FF', icon: Clock },
 };
 
 const months = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
@@ -54,7 +56,7 @@ function CreditCardIcon({ size, className }: { size: number; className?: string 
  * pengajuan cuti/izin/sakit baru beserta dokumen lampiran pendukung,
  * riwayat permohonan cuti, ubah password mandiri, dan update foto profil.
  */
-export function ProfilePage({ onLogout, initialSection, initialOpenModal, onResetInitials }: ProfilePageProps) {
+export function ProfilePage({ onLogout, initialSection, initialOpenModal, onResetInitials, onNavigateToLeave }: ProfilePageProps) {
   const { user, refreshUser } = useAuth();
   
   // Referensi input file tersembunyi untuk upload foto avatar
@@ -319,7 +321,7 @@ export function ProfilePage({ onLogout, initialSection, initialOpenModal, onRese
   const loadLeaveRequests = async () => {
     setLoading(true);
     try {
-      const res = await leaveApi.list();
+      const res = await leaveApi.list({ personal: '1' });
       if (res.success) {
         setRequests(res.data);
       }
@@ -462,7 +464,7 @@ export function ProfilePage({ onLogout, initialSection, initialOpenModal, onRese
 
   const infoPersonal = [
     { icon: User,          label: 'Nama Lengkap',   value: user?.name ?? '' },
-    { icon: CreditCardIcon,label: 'NIP',             value: user?.nip ?? '' },
+    { icon: CreditCardIcon,label: 'NIK KTP',         value: user?.nik_ktp ?? '' },
     { icon: User,          label: 'Username',        value: user?.username ?? '' },
     { icon: Mail,          label: 'Email',            value: user?.email ?? '' },
     { icon: Phone,         label: 'Nomor HP',        value: user?.phone ?? '--' },
@@ -470,7 +472,7 @@ export function ProfilePage({ onLogout, initialSection, initialOpenModal, onRese
   ];
 
   const infoKerja = [
-    { icon: Calendar,  label: 'Tanggal Bergabung', value: user?.join_date ? formatDate(user.join_date) : '--', badge: false },
+    { icon: Calendar,  label: 'Tanggal Masuk Pertama', value: user?.join_date ? formatDate(user.join_date) : '--', badge: false },
     { icon: Briefcase, label: 'Jabatan',            value: user?.position ?? '--', badge: false },
     { icon: Building2, label: 'Departemen/Bagian',  value: user?.department ?? '--', badge: false },
     { icon: User,      label: 'Status Pegawai',     value: 'Aktif', badge: true },
@@ -480,7 +482,9 @@ export function ProfilePage({ onLogout, initialSection, initialOpenModal, onRese
     <div className="p-5 md:p-7 max-w-2xl mx-auto">
       <div className="mb-5">
         <h1 className="text-xl font-semibold text-gray-900">Profil Saya</h1>
-        <p className="text-[13px] text-gray-500 mt-0.5">Informasi akun dan pengajuan cuti</p>
+        <p className="text-[13px] text-gray-500 mt-0.5">
+          {onNavigateToLeave ? 'Informasi detail akun Anda' : 'Informasi akun dan pengajuan cuti'}
+        </p>
       </div>
 
       {/* Success banner */}
@@ -491,20 +495,22 @@ export function ProfilePage({ onLogout, initialSection, initialOpenModal, onRese
         </div>
       )}
 
-      {/* Tab switcher */}
-      <div className="flex gap-1.5 bg-white rounded-xl border border-gray-100 p-1 shadow-sm mb-5 w-fit">
-        {[
-          { key: 'profile', label: 'Profil' },
-          { key: 'leave',   label: `Pengajuan Cuti${pending > 0 ? ` (${pending})` : ''}` },
-        ].map(tab => (
-          <button key={tab.key} onClick={() => setActiveSection(tab.key as 'profile' | 'leave')}
-            className={`px-4 py-2 rounded-lg text-[13px] font-medium transition-all ${
-              activeSection === tab.key ? 'bg-[#16A34A] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'
-            }`}>
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      {/* Tab switcher — only show if no dedicated leave page navigation available */}
+      {!onNavigateToLeave && (
+        <div className="flex gap-1.5 bg-white rounded-xl border border-gray-100 p-1 shadow-sm mb-5 w-fit">
+          {[
+            { key: 'profile', label: 'Profil' },
+            { key: 'leave',   label: `Pengajuan Cuti${pending > 0 ? ` (${pending})` : ''}` },
+          ].map(tab => (
+            <button key={tab.key} onClick={() => setActiveSection(tab.key as 'profile' | 'leave')}
+              className={`px-4 py-2 rounded-lg text-[13px] font-medium transition-all ${
+                activeSection === tab.key ? 'bg-[#16A34A] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* ── PROFIL SECTION ── */}
       {activeSection === 'profile' && (
@@ -565,35 +571,6 @@ export function ProfilePage({ onLogout, initialSection, initialOpenModal, onRese
             </div>
           </div>
 
-          {/* Ajukan Cuti shortcut */}
-          <div className="space-y-2 mb-4">
-            <button onClick={() => { setShowLeaveModal(true); setLeaveType('cuti'); }}
-              className="w-full flex items-center justify-between bg-white border border-gray-100 rounded-2xl px-5 py-4 shadow-sm hover:shadow-md hover:border-[#16A34A]/30 transition-all group">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center">
-                  <FileText size={18} className="text-[#16A34A]" />
-                </div>
-                <div className="text-left">
-                  <p className="text-[14px] font-semibold text-gray-800">Ajukan Cuti / Izin / Sakit</p>
-                  <p className="text-[12px] text-gray-400 mt-0.5">Sisa cuti: {remainingCuti} hari · {pending} pengajuan menunggu</p>
-                </div>
-              </div>
-              <ChevronRight size={16} className="text-gray-300 group-hover:text-[#16A34A] transition-colors" />
-            </button>
-            <button onClick={() => { setShowLeaveModal(true); setLeaveType('cuti_khusus'); }}
-              className="w-full flex items-center justify-between bg-white border border-gray-100 rounded-2xl px-5 py-4 shadow-sm hover:shadow-md hover:border-orange-300 transition-all group">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center">
-                  <FileText size={18} className="text-orange-500" />
-                </div>
-                <div className="text-left">
-                  <p className="text-[14px] font-semibold text-gray-850">Ajukan Cuti Khusus / Diluar Tanggungan</p>
-                  <p className="text-[12px] text-gray-400 mt-0.5">Tidak memotong kuota cuti tahunan</p>
-                </div>
-              </div>
-              <ChevronRight size={16} className="text-gray-300 group-hover:text-orange-500 transition-colors" />
-            </button>
-          </div>
 
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-4">
             <div className="px-5 py-3.5 border-b border-gray-50 flex items-center justify-between">
@@ -834,15 +811,18 @@ export function ProfilePage({ onLogout, initialSection, initialOpenModal, onRese
               <div className="text-center py-5 text-gray-400 text-[12px]">Memuat data pengajuan...</div>
             )}
             {requests.length === 0 && !loading && (
-              <div className="text-center py-10 bg-white rounded-2xl border border-gray-100">
-                <FileText size={28} className="text-gray-200 mx-auto mb-2" />
-                <p className="text-[13px] text-gray-400">Belum ada pengajuan</p>
+              <div className="text-center py-10 bg-white rounded-2xl border border-gray-100 shadow-xs p-5 w-full">
+                <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-3.5 border border-gray-100">
+                  <FileText size={20} className="text-gray-400" />
+                </div>
+                <p className="text-[13px] font-semibold text-gray-700">Belum ada pengajuan</p>
+                <p className="text-[11px] text-gray-400 mt-1">Daftar permohonan cuti dan sakit Anda akan muncul di sini.</p>
               </div>
             )}
             {requests.map(req => {
-              const tc = typeConfig[req.type];
-              const sc = statusConfig[req.status];
-              const StatusIcon = sc.icon;
+              const tc = typeConfig[req.type as LeaveType] || { label: req.type, color: '#6B7280', bg: '#F3F4F6', border: '#E5E7EB' };
+              const sc = statusConfig[req.status as LeaveStatus] || { label: req.status, color: '#6B7280', bg: '#F3F4F6', icon: Clock };
+              const StatusIcon = sc.icon || Clock;
               return (
                 <div key={req.id} className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${req.status === 'pending' ? 'border-amber-200' : 'border-gray-100'}`}>
                   <div className="p-4">

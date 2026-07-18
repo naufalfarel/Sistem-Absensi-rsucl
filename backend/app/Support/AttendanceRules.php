@@ -50,6 +50,26 @@ class AttendanceRules
     }
 
     /**
+     * Memeriksa apakah pegawai dibebaskan dari validasi GPS (karena dinas luar / surat tugas).
+     * 
+     * @param Employee $employee
+     * @param Carbon $date
+     * @return bool
+     */
+    public static function isExemptFromGps(Employee $employee, Carbon $date): bool
+    {
+        if (self::shiftTypeFor($employee, $date) === 'dinas_luar') {
+            return true;
+        }
+
+        if ($employee->hasApprovedAssignmentLetterOn($date)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Menentukan kategori/tipe shift pegawai untuk tanggal tertentu.
      * Mencari jadwal aktif pegawai untuk hari itu berdasarkan pivot day_of_week;
      * jika tidak ditemukan jadwal, mengembalikan 'normal'.
@@ -67,8 +87,14 @@ class AttendanceRules
         $dayName = $dayMap[$date->dayOfWeek];
 
         $schedule = $employee->schedules()
-                             ->wherePivot('day_of_week', $dayName)
+                             ->wherePivot('date', $date->toDateString())
                              ->first();
+        if (!$schedule) {
+            $schedule = $employee->schedules()
+                                 ->wherePivot('day_of_week', $dayName)
+                                 ->wherePivotNull('date')
+                                 ->first();
+        }
 
         if ($schedule) {
             return $schedule->shift_type ?? 'normal';
@@ -116,7 +142,13 @@ class AttendanceRules
             3 => 'Rabu',   4 => 'Kamis', 5 => 'Jumat', 6 => 'Sabtu',
         ];
         $dayName = $dayMap[$date->dayOfWeek];
-        $schedule = $employee->schedules()->wherePivot('day_of_week', $dayName)->first();
+        $schedule = $employee->schedules()->wherePivot('date', $date->toDateString())->first();
+        if (!$schedule) {
+            $schedule = $employee->schedules()
+                                 ->wherePivot('day_of_week', $dayName)
+                                 ->wherePivotNull('date')
+                                 ->first();
+        }
 
         if (!$schedule) {
             return null;

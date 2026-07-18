@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
-import { CheckCircle2, XCircle, Clock, FileText, Trash2, Paperclip } from 'lucide-react';
-import { leaveApi, LeaveRequest } from '../../../services/api';
+import { CheckCircle2, XCircle, Clock, FileText, Trash2, Paperclip, AlertCircle, Calendar, ChevronDown, Search, X, Printer } from 'lucide-react';
+import { leaveApi, LeaveRequest, departmentApi, DepartmentModel } from '../../../services/api';
+import { useAuth } from '../../../context/AuthContext';
+import logoImg from '../../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
 
-type LeaveType = 'cuti' | 'izin' | 'sakit' | 'cuti_khusus';
-type LeaveStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
+type LeaveType = 'cuti' | 'sakit' | 'cuti_khusus';
+type LeaveStatus = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'draft';
 
 const typeConfig: Record<LeaveType, { label: string; color: string; bg: string; border: string }> = {
-  cuti:        { label: 'Cuti Tahunan', color: '#7C3AED', bg: '#F5F3FF', border: '#DDD6FE' },
-  izin:        { label: 'Izin',         color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE' },
-  sakit:       { label: 'Sakit',        color: '#0891B2', bg: '#ECFEFF', border: '#A5F3FC' },
+  cuti:        { label: 'Cuti Tahunan', color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE' },
+  sakit:       { label: 'Sakit',        color: '#92400E', bg: '#FEF3C7', border: '#D97706' },
   cuti_khusus: { label: 'Cuti Khusus / Diluar Tanggungan', color: '#EA580C', bg: '#FFF7ED', border: '#FFEDD5' },
 };
 
@@ -17,9 +18,10 @@ const statusConfig: Record<LeaveStatus, { label: string; color: string; bg: stri
   approved:  { label: 'Disetujui',  color: '#16A34A', bg: '#DCFCE7' },
   rejected:  { label: 'Ditolak',    color: '#DC2626', bg: '#FEE2E2' },
   cancelled: { label: 'Dibatalkan', color: '#6B7280', bg: '#F3F4F6' },
+  draft:     { label: 'Draf (Menunggu PJ)', color: '#4F46E5', bg: '#EEF2FF' },
 };
 
-const filterTabs = ['Semua', 'Menunggu', 'Disetujui', 'Ditolak', 'Dibatalkan'];
+const filterTabs = ['Semua', 'Draf', 'Menunggu', 'Disetujui', 'Ditolak', 'Dibatalkan'];
 
 interface LeaveTabProps {
   onUpdateCount?: () => void;
@@ -39,11 +41,35 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
   };
   const todayStr = getLocalDateString();
 
+  const getMonthBoundaries = () => {
+    const date = new Date();
+    const y = date.getFullYear();
+    const m = date.getMonth();
+    const firstDay = new Date(y, m, 1);
+    const lastDay = new Date(y, m + 1, 0);
+    
+    const tzoffset = date.getTimezoneOffset() * 60000;
+    const firstStr = new Date(firstDay.getTime() - tzoffset).toISOString().slice(0, 10);
+    const lastStr = new Date(lastDay.getTime() - tzoffset).toISOString().slice(0, 10);
+    
+    return { firstStr, lastStr };
+  };
+
+  const { firstStr, lastStr } = getMonthBoundaries();
+
+  // Filters State
+  const [dateFrom, setDateFrom] = useState(firstStr);
+  const [dateTo, setDateTo] = useState(lastStr);
+  const [departmentId, setDepartmentId] = useState('');
+  const [searchVal, setSearchVal] = useState('');
+  const [search, setSearch] = useState('');
+  const [departments, setDepartments] = useState<DepartmentModel[]>([]);
+
   // Daftar lengkap seluruh pengajuan cuti masuk
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   
   // Filter status aktif ('Semua', 'Menunggu', 'Disetujui', 'Ditolak', 'Dibatalkan')
-  const [filter, setFilter] = useState('Semua');
+  const [filter, setFilter] = useState('Menunggu');
   
   // Filter kategori tipe cuti ('all', 'cuti', 'izin', 'sakit')
   const [typeFilter, setTypeFilter] = useState('all');
@@ -62,6 +88,9 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
 
   // Deteksi kemungkinan kembali lebih awal
   const [possibleReturns, setPossibleReturns] = useState<Array<{ leave_request: LeaveRequest; detected_dates: string[] }>>([]);
+
+  const [selectedLeaveForPrint, setSelectedLeaveForPrint] = useState<LeaveRequest | null>(null);
+  const { logoUrl } = useAuth();
 
   // Catatan persetujuan/penolakan dari administrator
   const [adminNote, setAdminNote] = useState('');
@@ -100,6 +129,30 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
     }
   };
 
+  // Debounce search value
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setSearch(searchVal);
+    }, 400);
+
+    return () => clearTimeout(handler);
+  }, [searchVal]);
+
+  // Load departments
+  useEffect(() => {
+    const fetchDepts = async () => {
+      try {
+        const res = await departmentApi.list();
+        if (res.success) {
+          setDepartments(res.data);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    fetchDepts();
+  }, []);
+
   // Panggil load saat tab ini dimuat di layar
   useEffect(() => {
     loadRequests();
@@ -107,16 +160,40 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
   }, []);
 
   const filtered = requests.filter(r => {
+    // 1. Status Filter
     const matchFilter = filter === 'Semua' ||
-      (filter === 'Menunggu' && r.status === 'pending') ||
+      (filter === 'Draf' && r.pj_status === 'pending' && r.status === 'pending') ||
+      (filter === 'Menunggu' && r.pj_status === 'approved' && r.status === 'pending') ||
       (filter === 'Disetujui' && r.status === 'approved') ||
       (filter === 'Ditolak' && r.status === 'rejected') ||
       (filter === 'Dibatalkan' && r.status === 'cancelled');
-    const matchType = typeFilter === 'all' || r.type === typeFilter;
-    return matchFilter && matchType;
+
+    // 2. Type Filter
+    const typeKey = (r.type === 'izin' ? 'cuti' : r.type);
+    const matchType = typeFilter === 'all' || typeKey === typeFilter;
+
+    // 3. Department Filter
+    const matchDept = !departmentId || r.employee?.department === departmentId;
+
+    // 4. Search Filter
+    const matchSearch = !search || 
+      r.employee?.name?.toLowerCase().includes(search.toLowerCase()) || 
+      r.employee?.nik_ktp?.includes(search);
+
+    // 5. Date Filter
+    const reqStart = r.start_date;
+    const reqEnd = r.effective_end_date || r.end_date;
+    const matchDate = (!dateFrom || reqEnd >= dateFrom) && (!dateTo || reqStart <= dateTo);
+
+    return matchFilter && matchType && matchDept && matchSearch && matchDate;
   });
 
-  const pending = requests.filter(r => r.status === 'pending').length;
+  const pending = requests.filter(r => r.pj_status === 'approved' && r.status === 'pending').length;
+  const drafts = requests.filter(r => r.pj_status === 'pending' && r.status === 'pending').length;
+  const approvedCount = requests.filter(r => r.status === 'approved').length;
+  const rejectedCount = requests.filter(r => r.status === 'rejected').length;
+  const cancelledCount = requests.filter(r => r.status === 'cancelled').length;
+  const totalCount = requests.length;
 
   const handleAction = async (id: number, action: 'approve' | 'reject', note?: string) => {
     try {
@@ -223,8 +300,8 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
     <div className="max-w-5xl mx-auto space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-[16px] font-bold text-gray-900">Pengajuan Cuti & Izin</h2>
-          <p className="text-[12px] text-gray-400 mt-0.5">Kelola permintaan cuti, izin, dan sakit karyawan</p>
+          <h2 className="text-[16px] font-bold text-gray-900">Pengajuan Cuti & Sakit</h2>
+          <p className="text-[12px] text-gray-400 mt-0.5">Kelola permintaan cuti, sakit, dan cuti khusus karyawan</p>
         </div>
         {pending > 0 && (
           <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3.5 py-2">
@@ -234,19 +311,53 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
         )}
       </div>
 
-      {/* Summary */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {['cuti', 'izin', 'sakit', 'cuti_khusus'].map(t => {
-          const tc = typeConfig[t as LeaveType];
-          const count = requests.filter(r => r.type === t).length;
+      {/* Catatan Pengingat Tetap (Banner) */}
+      <div className="flex items-start gap-3 p-4 bg-green-50 border border-green-100 rounded-2xl">
+        <AlertCircle size={18} className="text-[#16A34A] flex-shrink-0 mt-0.5" />
+        <div className="text-[12px] text-green-800 leading-normal font-medium space-y-1">
+          <p className="font-bold">Informasi Alur Persetujuan Cuti & Sakit:</p>
+          <ul className="list-disc list-inside space-y-0.5 text-green-755 font-medium">
+            <li><strong>Draf (Belum di-ACC PJ):</strong> Cuti/sakit baru diajukan pegawai, menunggu persetujuan PJ Bagian (Kepala Departemen).</li>
+            <li><strong>Menunggu (ACC PJ Bagian):</strong> Cuti/sakit telah disetujui PJ Bagian dan menunggu persetujuan final Anda (Admin).</li>
+            <li>Admin dapat langsung memproses/menyetujui status <strong>Draf</strong> jika diperlukan (misal untuk departemen tanpa PJ).</li>
+          </ul>
+        </div>
+      </div>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        {[
+          { key: 'Draf',       label: 'Draf (Belum di-ACC PJ)', value: drafts, color: '#D97706', bg: '#FEF3C7', icon: Clock },
+          { key: 'Menunggu',   label: 'Menunggu Persetujuan', value: pending, color: '#16A34A', bg: '#F0FDF4', icon: Clock },
+          { key: 'Disetujui',  label: 'Cuti Disetujui',       value: approvedCount, color: '#15803d', bg: '#DCFCE7', icon: CheckCircle2 },
+          { key: 'Ditolak',    label: 'Cuti Ditolak',         value: rejectedCount, color: '#DC2626', bg: '#FEE2E2', icon: XCircle },
+          { key: 'Semua',      label: 'Total Pengajuan Cuti', value: totalCount,    color: '#2563EB', bg: '#EFF6FF', icon: FileText, isTotal: true },
+        ].map((s) => {
+          const isActive = filter === s.key;
           return (
-            <button key={t} onClick={() => setTypeFilter(typeFilter === t ? 'all' : t)}
-              className={`rounded-2xl p-4 border-2 text-left transition-all ${typeFilter === t ? 'shadow-md' : 'border-transparent hover:border-gray-200'}`}
-              style={{ background: tc.bg, borderColor: typeFilter === t ? tc.color : undefined }}>
-              <p className="text-[22px] font-bold text-black">{count}</p>
-              <p className="text-[12px] font-medium text-gray-700 mt-0.5">{tc.label}</p>
-              <p className="text-[10px] text-gray-400">{requests.filter(r => r.type === t && r.status === 'pending').length} menunggu</p>
-            </button>
+            <div 
+              key={s.key} 
+              onClick={() => setFilter(s.key)}
+              className={`bg-white rounded-2xl border p-4 text-left cursor-pointer transition-all hover:shadow-md ${
+                isActive 
+                  ? 'border-2 shadow-md ring-4 scale-[1.02]' 
+                  : 'border-gray-100 shadow-sm'
+              }`}
+              style={{ 
+                borderLeft: `4px solid ${s.color}`,
+                borderColor: isActive ? s.color : undefined,
+                boxShadow: isActive ? `0 4px 6px -1px ${s.color}15, 0 2px 4px -1px ${s.color}10` : undefined
+              }}
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-[22px] font-bold text-black">{s.value}</p>
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: s.bg }}>
+                  <s.icon size={14} style={{ color: s.color }} />
+                </div>
+              </div>
+              <p className="text-[11px] font-semibold text-gray-500 mt-1.5">{s.label}</p>
+              <p className="text-[9px] text-gray-400 mt-0.5">Klik untuk memfilter</p>
+            </div>
           );
         })}
       </div>
@@ -263,7 +374,8 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
           </p>
           <div className="grid gap-3">
             {possibleReturns.map(({ leave_request, detected_dates }) => {
-              const tc = typeConfig[leave_request.type];
+              const typeKey = (leave_request.type === 'izin' ? 'cuti' : leave_request.type) as LeaveType;
+              const tc = typeConfig[typeKey] || typeConfig.cuti;
               return (
                 <div key={leave_request.id} className="bg-white/80 backdrop-blur-sm border border-amber-100 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 shadow-xs">
                   <div>
@@ -293,27 +405,89 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
         </div>
       )}
 
-      {/* Filter & Bulk Actions */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex gap-1.5 bg-white rounded-xl border border-gray-100 p-1 shadow-sm w-fit">
-          {filterTabs.map(f => (
-            <button key={f} onClick={() => setFilter(f)}
-              className={`px-3.5 py-1.5 rounded-lg text-[12px] font-medium transition-all flex items-center gap-1.5 ${f === filter ? 'bg-[#16A34A] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-              {f}
-              {f === 'Menunggu' && pending > 0 && (
-                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${f === filter ? 'bg-white/25 text-white' : 'bg-amber-100 text-amber-600'}`}>{pending}</span>
-              )}
-            </button>
-          ))}
+      {/* Date & Filter Row */}
+      <div className="flex flex-wrap gap-3 items-center justify-between">
+        <div className="flex items-center gap-3 bg-white px-3 py-1.5 rounded-xl border border-gray-100 shadow-sm flex-wrap">
+          <div className="flex items-center gap-1.5">
+            <Calendar size={13} className="text-gray-400" />
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={e => setDateFrom(e.target.value)}
+              className="text-[12px] font-semibold text-gray-770 bg-transparent focus:outline-none cursor-pointer"
+            />
+          </div>
+          <span className="text-[11.5px] text-gray-400 font-semibold">s/d</span>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={e => setDateTo(e.target.value)}
+            className="text-[12px] font-semibold text-gray-770 bg-transparent focus:outline-none cursor-pointer"
+          />
         </div>
 
-        {hasProcessed && (
+        {/* Filters */}
+        <div className="flex flex-wrap gap-3 items-center flex-1 md:flex-initial">
+          {/* Tipe Cuti Filter */}
+          <div className="relative w-full md:w-auto">
+            <select
+              value={typeFilter}
+              onChange={e => setTypeFilter(e.target.value)}
+              className="w-full appearance-none pl-3 pr-8 py-2 border border-gray-100 rounded-xl text-[12px] bg-white shadow-sm focus:outline-none focus:border-[#16A34A] transition-all text-gray-600 font-semibold cursor-pointer"
+            >
+              <option value="all">Semua Tipe Cuti</option>
+              <option value="cuti">Cuti Tahunan</option>
+              <option value="sakit">Sakit</option>
+              <option value="cuti_khusus">Cuti Khusus</option>
+            </select>
+            <ChevronDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          </div>
+
+          {/* Department */}
+          <div className="relative w-full md:w-auto">
+            <select
+              value={departmentId}
+              onChange={e => setDepartmentId(e.target.value)}
+              className="w-full appearance-none pl-3 pr-8 py-2 border border-gray-100 rounded-xl text-[12px] bg-white shadow-sm focus:outline-none focus:border-[#16A34A] transition-all text-gray-600 font-semibold cursor-pointer"
+            >
+              <option value="">Semua Departemen</option>
+              {departments.map(d => (
+                <option key={d.id} value={d.name}>{d.name}</option>
+              ))}
+            </select>
+            <ChevronDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          </div>
+
+          {/* Search */}
+          <div className="relative flex-1 md:w-64">
+            <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Cari nama atau NIK KTP..."
+              value={searchVal}
+              onChange={e => setSearchVal(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-100 rounded-xl text-[12px] bg-white shadow-sm focus:outline-none focus:border-[#16A34A] transition-all placeholder:text-gray-300 font-medium"
+            />
+            {searchVal && (
+              <button
+                onClick={() => setSearchVal('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {hasProcessed && (
+        <div className="flex justify-end">
           <button onClick={handleDeleteAllProcessed}
             className="flex items-center gap-1.5 px-3.5 py-2.5 bg-red-50 border border-red-100 hover:bg-red-100 text-red-650 rounded-xl text-[12px] font-semibold transition-all shadow-sm active:scale-95">
             <Trash2 size={13} className="text-red-500" /> Hapus Semua Cuti Lama
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Cards */}
       <div className="space-y-3">
@@ -327,8 +501,12 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
           </div>
         )}
         {filtered.map(req => {
-          const tc = typeConfig[req.type];
-          const sc = statusConfig[req.status];
+          const typeKey = (req.type === 'izin' ? 'cuti' : req.type) as LeaveType;
+          const tc = typeConfig[typeKey] || typeConfig.cuti;
+          const isDraft = req.pj_status === 'pending' && req.status === 'pending';
+          const sc = (isDraft 
+            ? { label: 'Draf', color: '#D97706', bg: '#FEF3C7' }
+            : statusConfig[req.status as LeaveStatus]) || { label: req.status, color: '#6B7280', bg: '#F3F4F6' };
           
           const effectiveEnd = req.effective_end_date || req.end_date;
           const isPast = effectiveEnd < todayStr;
@@ -343,7 +521,7 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
                   <div className="flex items-start gap-3 flex-1 min-w-0">
                     <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: tc.bg, border: `1.5px solid ${tc.border}` }}>
                       <span className="text-[13px] font-bold" style={{ color: tc.color }}>
-                        {req.type === 'cuti' ? 'C' : req.type === 'izin' ? 'I' : req.type === 'sakit' ? 'S' : 'CK'}
+                        {req.type === 'cuti' ? 'C' : req.type === 'sakit' ? 'S' : 'CK'}
                       </span>
                     </div>
                     <div className="flex-1 min-w-0">
@@ -355,6 +533,11 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
                             : tc.label}
                         </span>
                         <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ color: sc.color, background: sc.bg }}>{sc.label}</span>
+                        {req.pj_status === 'pending' && req.status === 'pending' && (
+                          <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                            ⚠️ Belum di-ACC PJ Bagian
+                          </span>
+                        )}
                       </div>
                       <p className="text-[12px] text-gray-500 mb-1">{req.employee?.department || 'Karyawan'}</p>
                       <div className="flex items-center gap-4 flex-wrap">
@@ -374,8 +557,8 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
                       <div className="mt-2 bg-gray-50 rounded-xl px-3 py-2">
                         <p className="text-[12px] text-gray-600 italic">"{req.reason}"</p>
                       </div>
-                      {req.attachment_url && (
-                        <div className="mt-2">
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {req.attachment_url && (
                           <a 
                             href={req.attachment_url} 
                             target="_blank" 
@@ -385,8 +568,39 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
                             <Paperclip size={11} className="flex-shrink-0" />
                             Lihat Dokumen Pendukung
                           </a>
+                        )}
+
+                        {req.status === 'approved' && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedLeaveForPrint(req)}
+                            className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-blue-700 hover:text-blue-800 bg-blue-50/70 hover:bg-blue-100 px-3 py-1.5 rounded-xl border border-blue-100 transition-all cursor-pointer font-medium"
+                          >
+                            <FileText size={11} className="flex-shrink-0" />
+                            Lihat Form Cuti & QR Code
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Info Persetujuan PJ Bagian */}
+                      {req.pj_status === 'approved' && (
+                        <div className="mt-2 rounded-xl px-3 py-2 border border-green-100 bg-green-50/30 text-[11px]">
+                          <p className="font-semibold text-green-800">
+                            Disetujui PJ Bagian: <span className="font-normal text-gray-700">{req.pj_reviewer?.name || 'PJ Bagian'}</span>
+                          </p>
+                          {req.pj_note && <p className="text-gray-500 italic mt-0.5">Catatan PJ: "{req.pj_note}"</p>}
                         </div>
                       )}
+
+                      {req.pj_status === 'rejected' && (
+                        <div className="mt-2 rounded-xl px-3 py-2 border border-red-100 bg-red-50/35 text-[11px]">
+                          <p className="font-semibold text-red-800">
+                            Ditolak PJ Bagian: <span className="font-normal text-gray-700">{req.pj_reviewer?.name || 'PJ Bagian'}</span>
+                          </p>
+                          {req.pj_note && <p className="text-gray-500 italic mt-0.5">Catatan PJ: "{req.pj_note}"</p>}
+                        </div>
+                      )}
+
                       {req.admin_note && (
                         <div className={`mt-2 rounded-xl px-3 py-2 border ${req.status === 'approved' ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'}`}>
                           <p className="text-[11px] font-medium text-gray-600">Catatan admin: <span className={req.status === 'approved' ? 'text-green-700' : 'text-red-600'}>{req.admin_note}</span></p>
@@ -394,7 +608,7 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
                       )}
                       {req.status === 'cancelled' && req.cancellation_reason && (
                         <div className="mt-2 rounded-xl px-3 py-2 border bg-gray-50 border-gray-200">
-                          <p className="text-[11px] font-medium text-gray-650">Alasan pembatalan: <span className="text-gray-800 font-semibold">{req.cancellation_reason}</span></p>
+                          <p className="text-[11px] font-medium text-gray-655">Alasan pembatalan: <span className="text-gray-800 font-semibold">{req.cancellation_reason}</span></p>
                         </div>
                       )}
                       {req.actual_end_date && req.shortened_reason && (
@@ -407,6 +621,11 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
                   {/* Actions */}
                   {req.status === 'pending' && (
                     <div className="flex flex-col gap-2 flex-shrink-0">
+                      {req.pj_status === 'pending' && (
+                        <div className="rounded-xl px-3 py-2 border border-amber-200 bg-amber-50 text-[10.5px] text-amber-800 font-semibold max-w-[200px] leading-normal">
+                          ⚠️ Belum di-ACC PJ Bagian.
+                        </div>
+                      )}
                       <button onClick={() => setConfirmModal({ id: req.id, action: 'approve', name: req.employee.name })}
                         className="flex items-center gap-1.5 px-3.5 py-2 bg-[#16A34A] hover:bg-[#0d9240] text-white rounded-xl text-[12px] font-semibold transition-all shadow-sm shadow-green-200">
                         <CheckCircle2 size={13} /> Setujui
@@ -415,12 +634,6 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
                         className="flex items-center gap-1.5 px-3.5 py-2 bg-red-50 border border-red-100 text-red-650 hover:bg-red-100 rounded-xl text-[12px] font-semibold transition-all">
                         <XCircle size={13} /> Tolak
                       </button>
-                      {showCancel && (
-                        <button onClick={() => setCancelModal({ id: req.id, name: req.employee.name })}
-                          className="flex items-center gap-1.5 px-3.5 py-1.5 bg-gray-50 border border-gray-200 text-gray-600 hover:bg-gray-100 rounded-xl text-[11px] font-semibold transition-all">
-                          Batalkan Cuti
-                        </button>
-                      )}
                     </div>
                   )}
                   {req.status === 'approved' && (
@@ -592,6 +805,243 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
           </div>
         </div>
       )}
+      {/* ─── PRINT LEAVE FORM MODAL ───────────────────────────────────────────── */}
+      {selectedLeaveForPrint && (() => {
+        const req = selectedLeaveForPrint;
+        const reqDateStr = req.created_at ? req.created_at.substring(0, 10).replace(/-/g, '') : '';
+        const docNumber = `CUTI-${req.id}-${reqDateStr}`;
+        
+        // Generate QR code content
+        const qrContent = `SURAT PERMOHONAN CUTI RESMI
+RSU CEMPAKA LIMA
+------------------------------
+No. Dokumen: ${docNumber}
+Nama Pegawai: ${req.employee?.name}
+NIK KTP: ${req.employee?.nik_ktp}
+Posisi: ${req.posisi || '-'}
+Unit Kerja: ${req.unit_kerja || '-'}
+No. Telp: ${req.employee?.phone || '-'}
+Masa Cuti: ${req.days} Hari
+Tanggal: ${formatDate(req.start_date)} s/d ${req.actual_end_date ? formatDate(req.actual_end_date) : formatDate(req.end_date)}
+Keterangan: ${req.reason}
+Pengganti: ${req.substitute_name || '-'}
+Alamat Cuti: ${req.alamat_cuti || '-'}
+Status Dokumen: SAH / DISETUJUI ADMIN
+Verifikasi Digital RSUCL`;
+
+        const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrContent)}`;
+
+        return (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 print:p-0 print:static print:inset-auto">
+            <style dangerouslySetInnerHTML={{__html: `
+              @media print {
+                body * {
+                  visibility: hidden;
+                }
+                .print-container, .print-container * {
+                  visibility: visible;
+                }
+                .print-container {
+                  position: absolute;
+                  left: 0;
+                  top: 0;
+                  width: 100%;
+                  margin: 0;
+                  padding: 0;
+                }
+              }
+            `}} />
+            <div className="absolute inset-0 bg-black/55 backdrop-blur-xs print:hidden" onClick={() => setSelectedLeaveForPrint(null)} />
+            <div className="relative bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl p-6 md:p-8 animate-scale-up max-h-[90vh] overflow-y-auto print:max-h-none print:overflow-visible print:shadow-none print:p-0 print:rounded-none print:w-full">
+              
+              {/* Header Controls (Print / Close) */}
+              <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-100 print:hidden">
+                <h2 className="text-[14px] font-bold text-gray-800">Dokumen Permohonan Cuti</h2>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => window.print()}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#16A34A] hover:bg-[#0d9240] text-white rounded-xl text-[11px] font-bold transition-all cursor-pointer shadow-sm"
+                  >
+                    <Printer size={12} /> Cetak Form
+                  </button>
+                  <button
+                    onClick={() => setSelectedLeaveForPrint(null)}
+                    className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-[11px] font-bold transition-all cursor-pointer"
+                  >
+                    Tutup
+                  </button>
+                </div>
+              </div>
+
+              {/* Paper Content */}
+              <div className="print-container bg-white p-4 md:p-6 text-black" style={{ fontFamily: "'Inter', sans-serif" }}>
+                
+                {/* Kop Surat (Letterhead) */}
+                <div className="flex items-center justify-between gap-4 border-b-0 pb-1 text-center">
+                  {/* Logo RSUCL (Left) */}
+                  <div className="w-16 h-16 flex-shrink-0 flex items-center justify-center bg-white p-1">
+                    <img src={logoUrl || logoImg} alt="Logo RSUCL" className="w-full h-full object-contain" />
+                  </div>
+                  
+                  {/* Header Text (Middle) */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] md:text-[14px] font-bold text-[#16A34A] leading-tight tracking-wide">
+                      PT. CEMPAKA LIMA UTAMA
+                    </p>
+                    <h1 className="text-[16px] md:text-[18px] font-extrabold text-red-650 leading-tight tracking-wider mt-0.5">
+                      RUMAH SAKIT UMUM CEMPAKA LIMA
+                    </h1>
+                    <p className="text-[9px] md:text-[10px] text-gray-700 leading-relaxed mt-1 font-medium max-w-lg mx-auto">
+                      Jln. Politeknik No.23 Dusun Meunasah Dayah Lr.B, Gp.Beurawe,
+                      Kecamatan Kuta Alam, Kode Pos 23124, Telp. (0651) 3619999,
+                      Fax. (0651) 3619999, Email: rsu@cempakalima.co.id
+                    </p>
+                    <p className="text-[10px] font-bold text-slate-800 tracking-widest mt-0.5">
+                      BANDA ACEH
+                    </p>
+                  </div>
+                  
+                  {/* Logo KARS (Right) */}
+                  <div className="w-16 h-16 flex-shrink-0 flex flex-col items-center justify-center p-1 bg-white">
+                    <div className="w-10 h-10 border border-slate-200 rounded-full flex items-center justify-center text-[10px] text-[#16A34A] font-extrabold shadow-2xs">
+                      ★ KARS ★
+                    </div>
+                    <span className="text-[7px] text-gray-500 font-bold leading-tight mt-1 text-center uppercase tracking-wide">
+                      PARIPURNA KARS
+                    </span>
+                  </div>
+                </div>
+
+                {/* Double Horizontal Line */}
+                <div className="border-t-[3px] border-[#16A34A] mt-2 mb-0.5" />
+                <div className="border-t-[1px] border-slate-750 mb-5" />
+
+                {/* Title */}
+                <div className="text-center mb-6">
+                  <h2 className="text-[14px] md:text-[15px] font-extrabold text-black tracking-wider uppercase underline decoration-2">
+                    PENGAJUAN PERMOHONAN CUTI
+                  </h2>
+                  <p className="text-[10px] text-gray-500 font-mono mt-1">No. Dokumen: {docNumber}</p>
+                </div>
+
+                {/* Content Details */}
+                <div className="text-[12px] text-slate-900 leading-relaxed space-y-4 text-left">
+                  <p className="font-semibold">Yang bertanda tangan di bawah ini :</p>
+                  
+                  <table className="w-full border-collapse text-left text-[12px]">
+                    <tbody>
+                      <tr className="align-top">
+                        <td className="w-[180px] py-1.5 font-medium text-slate-600">Nama</td>
+                        <td className="w-4 py-1.5">:</td>
+                        <td className="py-1.5 font-bold text-black">{req.employee?.name}</td>
+                      </tr>
+                      <tr className="align-top">
+                        <td className="py-1.5 font-medium text-slate-600">NIK KTP</td>
+                        <td>:</td>
+                        <td className="py-1.5 font-semibold text-slate-800">{req.employee?.nik_ktp || '-'}</td>
+                      </tr>
+                      <tr className="align-top">
+                        <td className="py-1.5 font-medium text-slate-600">Posisi / Jabatan</td>
+                        <td>:</td>
+                        <td className="py-1.5 font-semibold text-slate-800">{req.posisi || '-'}</td>
+                      </tr>
+                      <tr className="align-top">
+                        <td className="py-1.5 font-medium text-slate-600">Unit Kerja / Instalasi</td>
+                        <td>:</td>
+                        <td className="py-1.5 font-semibold text-slate-800">{req.unit_kerja || '-'}</td>
+                      </tr>
+                      <tr className="align-top">
+                        <td className="py-1.5 font-medium text-slate-600">No. Tlp / HP</td>
+                        <td>:</td>
+                        <td className="py-1.5 font-semibold text-slate-800">{req.employee?.phone || '-'}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  <div className="border-t border-slate-100 my-4" />
+
+                  <table className="w-full border-collapse text-left text-[12px]">
+                    <tbody>
+                      <tr className="align-top">
+                        <td className="w-[180px] py-1.5 font-medium text-slate-600">Mohon cuti/izin/sakit selama</td>
+                        <td className="w-4 py-1.5">:</td>
+                        <td className="py-1.5 font-semibold text-slate-800">
+                          <span className="font-bold text-black">{req.days}</span> hari kerja
+                        </td>
+                      </tr>
+                      <tr className="align-top">
+                        <td className="py-1.5 font-medium text-slate-600">Mulai Tanggal</td>
+                        <td>:</td>
+                        <td className="py-1.5 font-semibold text-slate-800">
+                          {formatDate(req.start_date)} s/d {req.actual_end_date ? formatDate(req.actual_end_date) : formatDate(req.end_date)}
+                        </td>
+                      </tr>
+                      <tr className="align-top">
+                        <td className="py-1.5 font-medium text-slate-600">Keterangan Cuti</td>
+                        <td>:</td>
+                        <td className="py-1.5 font-bold text-[#16A34A] uppercase">
+                          {req.type === 'cuti_khusus' && req.special_leave_category
+                            ? `Cuti Khusus (${req.special_leave_category.name})`
+                            : req.type === 'cuti'
+                              ? 'Cuti Tahunan'
+                              : req.type === 'sakit'
+                                ? 'Sakit'
+                                : req.type}
+                        </td>
+                      </tr>
+                      <tr className="align-top">
+                        <td className="py-1.5 font-medium text-slate-600">Alasan Cuti</td>
+                        <td>:</td>
+                        <td className="py-1.5 text-slate-800 italic">"{req.reason}"</td>
+                      </tr>
+                      <tr className="align-top">
+                        <td className="py-1.5 font-medium text-slate-600">Alamat selama cuti</td>
+                        <td>:</td>
+                        <td className="py-1.5 font-semibold text-slate-800">{req.alamat_cuti || '-'}</td>
+                      </tr>
+                      <tr className="align-top">
+                        <td className="py-1.5 font-medium text-slate-600">Orang yang menggantikan</td>
+                        <td>:</td>
+                        <td className="py-1.5 font-bold text-red-700">{req.substitute_name || '-'}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  {/* Digital Verification Seal & QR Code */}
+                  <div className="mt-8 pt-6 border-t border-dashed border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-6">
+                    <div className="text-center sm:text-left space-y-1">
+                      <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Status Dokumen</p>
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-50 border border-green-200 rounded-lg text-[11px] font-extrabold text-[#16A34A]">
+                        ✓ DISETUJUI SECARA DIGITAL
+                      </div>
+                      <p className="text-[10px] text-gray-400 font-medium mt-1">
+                        Disetujui oleh: {req.reviewer?.name || 'Administrator'}
+                      </p>
+                      {req.pj_reviewer && (
+                        <p className="text-[10px] text-gray-400 font-medium">
+                          Mengetahui PJ Bagian: {req.pj_reviewer.name}
+                        </p>
+                      )}
+                      <p className="text-[9px] text-gray-400 leading-normal max-w-sm mt-2">
+                        Surat Permohonan Cuti ini sah dan diotorisasi secara elektronik oleh RSU Cempaka Lima Banda Aceh melalui verifikasi QR Code terlampir. Tanda tangan fisik tidak diperlukan.
+                      </p>
+                    </div>
+                    
+                    {/* QR Code image container */}
+                    <div className="flex flex-col items-center p-2.5 bg-white border border-slate-100 rounded-2xl shadow-xs">
+                      <img src={qrCodeUrl} alt="QR Code Verifikasi Cuti" className="w-[120px] h-[120px] object-contain" />
+                      <span className="text-[8px] font-mono text-slate-400 mt-1.5">VERIFIKASI SAH</span>
+                    </div>
+                  </div>
+
+                </div>
+
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

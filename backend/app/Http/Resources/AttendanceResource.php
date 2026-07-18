@@ -26,20 +26,40 @@ class AttendanceResource extends JsonResource
             $carbonDate = Carbon::parse($this->date);
             $dayName = $dayMap[$carbonDate->dayOfWeek];
             
+            $dateStr = $carbonDate->toDateString();
             if ($this->employee->relationLoaded('schedules')) {
-                $sched = $this->employee->schedules->first(function ($s) use ($dayName) {
-                    return $s->pivot->day_of_week === $dayName;
+                $sched = $this->employee->schedules->first(function ($s) use ($dateStr) {
+                    return $s->pivot->date === $dateStr;
                 });
+                if (!$sched) {
+                    $sched = $this->employee->schedules->first(function ($s) use ($dayName) {
+                        return $s->pivot->day_of_week === $dayName && is_null($s->pivot->date);
+                    });
+                }
                 if ($sched) {
                     $shiftName = $sched->name;
                     $shiftType = $sched->shift_type ?? 'normal';
                 }
             } else {
-                $sched = $this->employee->schedules()->wherePivot('day_of_week', $dayName)->first();
+                $sched = $this->employee->schedules()->wherePivot('date', $dateStr)->first();
+                if (!$sched) {
+                    $sched = $this->employee->schedules()->wherePivot('day_of_week', $dayName)->wherePivotNull('date')->first();
+                }
                 if ($sched) {
                     $shiftName = $sched->name;
                     $shiftType = $sched->shift_type ?? 'normal';
                 }
+            }
+        }
+
+        $dinasReason = null;
+        if ($this->employee && $this->date) {
+            $carbonDate = Carbon::parse($this->date);
+            $approvedLetter = $this->employee->approvedAssignmentLetterOn($carbonDate);
+            if ($approvedLetter) {
+                $dinasReason = 'Surat Tugas: ' . $approvedLetter->title;
+            } elseif ($shiftType === 'dinas_luar') {
+                $dinasReason = 'Shift: ' . $shiftName;
             }
         }
 
@@ -102,6 +122,7 @@ class AttendanceResource extends JsonResource
 
             'shift_name'         => $shiftName,
             'shift_type'         => $shiftType,
+            'dinas_reason'       => $dinasReason,
             
             // Pulang Cepat (Early Checkout)
             'is_early_checkout'        => (bool)$this->is_early_checkout,
@@ -134,7 +155,7 @@ class AttendanceResource extends JsonResource
             $data['employee'] = [
                 'id'         => $this->employee->id,
                 'name'       => $this->employee->user?->name,
-                'nip'        => $this->employee->nip,
+                'nik_ktp'    => $this->employee->nik_ktp,
                 'department' => $this->employee->department?->name,
                 'profile_picture' => $this->employee->user?->profile_picture ? url($this->employee->user->profile_picture) : null,
             ];

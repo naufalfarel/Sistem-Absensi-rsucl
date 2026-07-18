@@ -22,6 +22,7 @@ import { DepartmentsTab } from './admin/DepartmentsTab';
 import { HolidaysTab } from './admin/HolidaysTab';
 import { PJBagianTab } from './admin/PJBagianTab';
 import { ShiftProposalTab } from './admin/ShiftProposalTab';
+import AssignmentLetterTab from './admin/AssignmentLetterTab';
 import { employeeApi, Employee, reportApi, ReportSummary, notificationApi } from '../../services/api';
 
 const sidebarItems = [
@@ -36,6 +37,7 @@ const sidebarItems = [
   { id: 'holidays',        icon: CalendarDays,     label: 'Kalender Libur' },
   { id: 'leave',           icon: FileText,         label: 'Pengajuan Cuti', badge: 0 },
   { id: 'overtime',        icon: Clock,            label: 'Lembur' },
+  { id: 'assignment',      icon: FileText,         label: 'Surat Tugas' },
   { id: 'reports',         icon: BarChart3,        label: 'Laporan' },
   { id: 'notifications',   icon: Bell,             label: 'Notifikasi', badge: 0 },
   { id: 'settings',        icon: Settings,         label: 'Pengaturan' },
@@ -64,7 +66,7 @@ const statusLabels: Record<string, string> = {
 };
 
 const emptyForm = {
-  name: '', nip: '', username: '', password: '', department_id: '', position_id: '',
+  name: '', nik_ktp: '', username: '', password: '', department_id: '', position_id: '',
   email: '', phone: '', gender: 'Laki-laki', joinDate: '',
   motor_plate_1: '', motor_plate_2: '', car_plate_1: '', car_plate_2: '',
 };
@@ -203,7 +205,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
   const openEdit = (emp: Employee) => {
     setForm({
       name: emp.name,
-      nip: emp.nip,
+      nik_ktp: emp.nik_ktp,
       username: emp.username,
       password: '', // blank by default on edit
       department_id: emp.department_id?.toString() ?? '',
@@ -236,8 +238,8 @@ export function AdminApp({ onLogout }: AdminAppProps) {
   };
 
   const handleSave = async () => {
-    if (!form.name.trim() || !form.nip.trim() || !form.username.trim() || (modalType === 'add' && !form.password.trim())) {
-      setFormError('Nama, NIP, Username, dan Password wajib diisi.');
+    if (!form.name.trim() || !form.nik_ktp.trim() || !form.username.trim() || (modalType === 'add' && !form.password.trim())) {
+      setFormError('Nama, NIK KTP, Username, dan Password wajib diisi.');
       return;
     }
     setFormError('');
@@ -245,7 +247,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
       if (modalType === 'add') {
         const res = await employeeApi.create({
           name: form.name,
-          nip: form.nip,
+          nik_ktp: form.nik_ktp,
           username: form.username,
           password: form.password,
           department_id: Number(form.department_id),
@@ -352,7 +354,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
 
   const filtered = employees.filter(e =>
     e.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    e.nip.includes(searchQuery) ||
+    e.nik_ktp.includes(searchQuery) ||
     e.department.toLowerCase().includes(searchQuery.toLowerCase()) ||
     e.position.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -552,7 +554,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
               <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
                 <div className="relative flex-1 max-w-sm">
                   <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input type="text" placeholder="Cari nama, NIP, atau departemen/bagian..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                  <input type="text" placeholder="Cari nama, NIK KTP, atau departemen/bagian..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                     className="w-full pl-10 pr-4 py-2.5 border border-gray-100 rounded-xl text-[13px] bg-white shadow-sm focus:outline-none focus:border-[#16A34A] transition-all placeholder:text-gray-300" />
                 </div>
                 <div className="flex gap-2 flex-wrap">
@@ -583,7 +585,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-gray-50 bg-gray-50/50">
-                        {['Nama Pegawai', 'NIP', 'Username', 'Departemen/Bagian', 'Jabatan', 'Status', 'Check-In', 'Aksi'].map((h, i) => (
+                        {['Nama Pegawai', 'NIK KTP', 'Username', 'Departemen/Bagian', 'Jabatan', 'Status', 'Check-In', 'Aksi'].map((h, i) => (
                           <th key={i} className="text-left px-4 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
@@ -622,7 +624,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
                                   </div>
                                 </div>
                               </td>
-                              <td className="px-4 py-3.5 text-[12px] font-mono text-gray-500">{emp.nip}</td>
+                              <td className="px-4 py-3.5 text-[12px] font-mono text-gray-500">{emp.nik_ktp}</td>
                               <td className="px-4 py-3.5">
                                 <div className="flex items-center gap-1.5">
                                   <Lock size={11} className="text-gray-300 flex-shrink-0" />
@@ -707,6 +709,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
           {activeTab === 'schedule' && <ScheduleTab />}
           {activeTab === 'leave' && <LeaveTab onUpdateCount={refreshReportSummary} />}
           {activeTab === 'overtime' && <OvertimeTab />}
+          {activeTab === 'assignment' && <AssignmentLetterTab />}
           {activeTab === 'reports' && <ReportsTab />}
           {activeTab === 'notifications' && <NotificationsTab onUpdateCount={fetchUnreadNotificationsCount} />}
           {activeTab === 'settings' && <SettingsTab />}
@@ -755,10 +758,10 @@ export function AdminApp({ onLogout }: AdminAppProps) {
                   <input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Contoh: Dr. Andi Wijaya"
                     className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all" />
                 </div>
-                {/* NIP */}
+                {/* NIK KTP */}
                 <div>
-                  <label className="block text-[12px] font-medium text-gray-600 mb-1.5">NIP <span className="text-red-500">*</span></label>
-                  <input type="text" value={form.nip} disabled={modalType === 'edit'} onChange={e => setForm(f => ({ ...f, nip: e.target.value }))} placeholder="198501012010011001"
+                  <label className="block text-[12px] font-medium text-gray-600 mb-1.5">NIK KTP <span className="text-red-500">*</span></label>
+                  <input type="text" value={form.nik_ktp} disabled={modalType === 'edit'} onChange={e => setForm(f => ({ ...f, nik_ktp: e.target.value }))} placeholder="198501012010011001"
                     className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all font-mono disabled:opacity-50" />
                 </div>
                 {/* Email */}
@@ -821,7 +824,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
                 </div>
                 {/* Join Date */}
                 <div>
-                  <label className="block text-[12px] font-medium text-gray-600 mb-1.5">Tanggal Bergabung</label>
+                  <label className="block text-[12px] font-medium text-gray-600 mb-1.5">Tanggal Masuk Pertama</label>
                   <input type="date" value={form.joinDate} onChange={e => setForm(f => ({ ...f, joinDate: e.target.value }))}
                     className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all" />
                 </div>

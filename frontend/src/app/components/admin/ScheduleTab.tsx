@@ -26,7 +26,7 @@ function getPresetByHex(hex: string) {
 }
 
 // ── Add Shift Modal ────────────────────────────────────────────────────
-function AddShiftModal({ onClose, onAdd }: { onClose: () => void; onAdd: (s: ShiftSchedule) => void }) {
+function AddShiftModal({ onClose, onAdd, departments }: { onClose: () => void; onAdd: (s: ShiftSchedule) => void; departments: any[] }) {
   const [name, setName]       = useState('');
   const [start, setStart]     = useState('07:00');
   const [end, setEnd]         = useState('15:00');
@@ -34,6 +34,7 @@ function AddShiftModal({ onClose, onAdd }: { onClose: () => void; onAdd: (s: Shi
   const [icon, setIcon]       = useState<IconKey>('sun');
   const [colorId, setColorId] = useState('amber');
   const [shiftType, setShiftType] = useState<'normal' | 'dinas_luar'>('normal');
+  const [ownerDeptId, setOwnerDeptId] = useState<number | ''>('');
 
   const preset = COLOR_PRESETS.find(c => c.id === colorId)!;
   const IconComp = ICON_MAP[icon].component;
@@ -49,6 +50,7 @@ function AddShiftModal({ onClose, onAdd }: { onClose: () => void; onAdd: (s: Shi
         color: preset.color,
         icon,
         shift_type: shiftType,
+        owner_department_id: ownerDeptId === '' ? null : Number(ownerDeptId),
       } as any);
       if (res.success) {
         onAdd(res.data);
@@ -138,6 +140,21 @@ function AddShiftModal({ onClose, onAdd }: { onClose: () => void; onAdd: (s: Shi
             >
               <option value="normal">Normal (GPS Wajib)</option>
               <option value="dinas_luar">Dinas Luar (GPS Opsional)</option>
+            </select>
+          </div>
+
+          {/* Departemen Pemilik */}
+          <div>
+            <label className="block text-[12px] font-semibold text-gray-700 mb-1.5">Departemen Pemilik Shift</label>
+            <select
+              value={ownerDeptId}
+              onChange={e => setOwnerDeptId(e.target.value === '' ? '' : Number(e.target.value))}
+              className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all cursor-pointer font-semibold"
+            >
+              <option value="">Umum (Bisa Diakses Semua Unit)</option>
+              {departments.map(d => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
             </select>
           </div>
 
@@ -555,6 +572,7 @@ export function ScheduleTab() {
   const [editStart, setEditStart]     = useState('');
   const [editEnd, setEditEnd]         = useState('');
   const [editShiftType, setEditShiftType] = useState<'normal' | 'dinas_luar'>('normal');
+  const [editOwnerDeptId, setEditOwnerDeptId] = useState<number | ''>('');
   
   // State untuk menyimpan daftar sub-shift (children) yang sedang diedit
   const [editChildren, setEditChildren] = useState<Array<{ id?: number; name: string; start_time: string; end_time: string; checkin_window_end_time?: string }>>([]);
@@ -582,6 +600,8 @@ export function ScheduleTab() {
 
   // State untuk pencarian/filter kartu shift
   const [searchQuery, setSearchQuery] = useState('');
+  const [departments, setDepartments] = useState<any[]>([]);
+  const [selectedDeptFilter, setSelectedDeptFilter] = useState<string>('all');
 
   /**
    * Menarik seluruh daftar template shift dari API.
@@ -614,10 +634,27 @@ export function ScheduleTab() {
     }
   };
 
+  const loadDepartments = async () => {
+    try {
+      const res = await fetch('/api/departments', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('rsucl_token') || localStorage.getItem('rsucl-token') || ''}`
+        }
+      });
+      const json = await res.json();
+      if (json.success) {
+        setDepartments(json.data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   // Muat shift dan penugasan saat halaman terpasang di DOM
   useEffect(() => {
     loadShifts();
     loadEmployeeSchedules();
+    loadDepartments();
   }, []);
 
   const startEdit = (shift: ShiftSchedule) => {
@@ -626,6 +663,7 @@ export function ScheduleTab() {
     setEditStart(shift.start_time ? shift.start_time.substring(0, 5) : '');
     setEditEnd(shift.end_time ? shift.end_time.substring(0, 5) : '');
     setEditShiftType(shift.shift_type ?? 'normal');
+    setEditOwnerDeptId(shift.owner_department_id ?? '');
     
     // Inisialisasi daftar sub-shift untuk proses edit
     setEditChildren(
@@ -661,6 +699,7 @@ export function ScheduleTab() {
       const payload: any = { 
         name: editName, 
         shift_type: editShiftType,
+        owner_department_id: editOwnerDeptId === '' ? null : Number(editOwnerDeptId),
         children: editChildren
       };
       if (editStart) payload.start_time = editStart;
@@ -734,8 +773,16 @@ export function ScheduleTab() {
 
   const totalDays = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
 
-  // Logic untuk menyaring data shift berdasarkan search query (Nama atau Departemen)
+  // Logic untuk menyaring data shift berdasarkan search query (Nama atau Departemen) dan filter departemen pemilik
   const filteredShifts = shifts.filter(shift => {
+    if (selectedDeptFilter !== 'all') {
+      if (selectedDeptFilter === 'umum') {
+        if (shift.owner_department_id !== null) return false;
+      } else {
+        if (Number(shift.owner_department_id) !== Number(selectedDeptFilter)) return false;
+      }
+    }
+
     if (!searchQuery.trim()) return true;
     const query = searchQuery.toLowerCase();
     
@@ -781,7 +828,7 @@ export function ScheduleTab() {
       </div>
 
       {/* Search Bar & Bulk Assign Button */}
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div className="flex flex-col md:flex-row gap-3">
         <div className="relative flex-1">
           <input
             type="text"
@@ -793,12 +840,28 @@ export function ScheduleTab() {
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-[12px] font-semibold font-sans"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-650 text-[12px] font-semibold font-sans"
             >
               Batal
             </button>
           )}
         </div>
+
+        {/* Filter Departemen Pemilik */}
+        <div className="min-w-[200px]">
+          <select
+            value={selectedDeptFilter}
+            onChange={e => setSelectedDeptFilter(e.target.value)}
+            className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-white focus:outline-none focus:border-[#16A34A] transition-all cursor-pointer font-semibold"
+          >
+            <option value="all">Semua Pemilik Shift</option>
+            <option value="umum">Umum (Tidak Ada Pemilik)</option>
+            {departments.map(d => (
+              <option key={d.id} value={d.id}>{d.name}</option>
+            ))}
+          </select>
+        </div>
+
         <button
           onClick={() => setShowDeptModal(true)}
           className="flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-50 border border-blue-100 hover:bg-blue-100 text-blue-600 text-[13px] font-semibold rounded-xl transition-all shadow-sm active:scale-95 whitespace-nowrap font-sans"
@@ -832,9 +895,20 @@ export function ScheduleTab() {
                     </div>
                     <div>
                       <p className="text-[14px] font-semibold text-gray-800 leading-tight">{shift.name}</p>
-                      <span className={`inline-block mt-0.5 text-[9px] font-semibold px-2 py-0.5 rounded-full ${shift.shift_type === 'dinas_luar' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'}`}>
-                        {shift.shift_type === 'dinas_luar' ? 'Dinas Luar' : 'Normal'}
-                      </span>
+                      <div className="flex flex-wrap gap-1.5 mt-1 items-center">
+                        <span className={`inline-block text-[9px] font-semibold px-2 py-0.5 rounded-full ${shift.shift_type === 'dinas_luar' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'}`}>
+                          {shift.shift_type === 'dinas_luar' ? 'Dinas Luar' : 'Normal'}
+                        </span>
+                        {shift.owner_department_name ? (
+                          <span className="inline-block text-[9px] font-semibold px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200">
+                            Unit: {shift.owner_department_name}
+                          </span>
+                        ) : (
+                          <span className="inline-block text-[9px] font-semibold px-2 py-0.5 rounded-full bg-gray-50 text-gray-500 border border-gray-200">
+                            Umum
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -880,6 +954,20 @@ export function ScheduleTab() {
                         className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all cursor-pointer">
                         <option value="normal">Normal (GPS Wajib)</option>
                         <option value="dinas_luar">Dinas Luar (GPS Opsional)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-gray-600 mb-1">Departemen Pemilik</label>
+                      <select
+                        value={editOwnerDeptId}
+                        onChange={e => setEditOwnerDeptId(e.target.value === '' ? '' : Number(e.target.value))}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all cursor-pointer font-semibold"
+                      >
+                        <option value="">Umum (Bisa Diakses Semua Unit)</option>
+                        {departments.map(d => (
+                          <option key={d.id} value={d.id}>{d.name}</option>
+                        ))}
                       </select>
                     </div>
 
@@ -1000,6 +1088,18 @@ export function ScheduleTab() {
                       })
                     ) : (
                       <p className="text-[11px] text-gray-400 italic">Belum ada sub-waktu diatur.</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Audit details */}
+                {(shift.created_by_name || shift.updated_by_name) && (
+                  <div className="mt-4 pt-3 border-t border-gray-100 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-400">
+                    {shift.created_by_name && (
+                      <span>Dibuat: <strong className="text-gray-600 font-semibold">{shift.created_by_name}</strong></span>
+                    )}
+                    {shift.updated_by_name && (
+                      <span>Diubah: <strong className="text-gray-600 font-semibold">{shift.updated_by_name}</strong></span>
                     )}
                   </div>
                 )}
@@ -1166,7 +1266,7 @@ export function ScheduleTab() {
       </div>
 
       {/* Modals */}
-      {showAddModal && <AddShiftModal onClose={() => setShowAddModal(false)} onAdd={handleAdd} />}
+      {showAddModal && <AddShiftModal onClose={() => setShowAddModal(false)} onAdd={handleAdd} departments={departments} />}
       {showDeptModal && <AssignDepartmentModal shifts={shifts} onClose={() => setShowDeptModal(false)} onAssign={handleAssignDepartment} />}
       {deleteTarget && <DeleteModal shift={deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => handleDelete(deleteTarget.id)} />}
       

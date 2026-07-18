@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Home, MapPin, History, Bell, User, LogOut, Menu, X, BookOpen, Clock } from 'lucide-react';
+import { Home, MapPin, History, Bell, User, LogOut, Menu, X, BookOpen, Clock, FileText } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import logoImg from '../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
 import { DashboardHome } from './DashboardHome';
@@ -9,10 +9,12 @@ import { NotificationsPage } from './NotificationsPage';
 import { ProfilePage } from './ProfilePage';
 import { GuidePage } from './GuidePage';
 import { OvertimeRequestPage } from './OvertimeRequestPage';
+import { LeaveRequestPage } from './LeaveRequestPage';
+import AssignmentLetterPage from './AssignmentLetterPage';
 import { notificationApi } from '../../services/api';
 
 // Tipe union untuk mendefinisikan tab navigasi yang valid pada dashboard karyawan
-type Tab = 'dashboard' | 'attendance' | 'history' | 'notifications' | 'profile' | 'guide' | 'overtime';
+type Tab = 'dashboard' | 'attendance' | 'history' | 'notifications' | 'profile' | 'guide' | 'overtime' | 'leave' | 'assignment';
 
 /**
  * Interface properti untuk komponen EmployeeApp.
@@ -21,7 +23,7 @@ interface EmployeeAppProps {
   // Callback untuk logout
   onLogout: () => void;
   // Objek data profil karyawan yang sedang login
-  employee?: { name: string; pos: string; dept: string; nip: string; username: string } | null;
+  employee?: { name: string; pos: string; dept: string; nik_ktp: string; username: string } | null;
 }
 
 /**
@@ -90,7 +92,9 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
     { id: 'dashboard', icon: Home, label: 'Beranda' },
     { id: 'attendance', icon: MapPin, label: 'Absensi' },
     { id: 'history', icon: History, label: 'Riwayat' },
+    { id: 'leave', icon: FileText, label: 'Cuti & Sakit' },
     { id: 'overtime', icon: Clock, label: 'Lembur' },
+    { id: 'assignment', icon: FileText, label: 'Surat Tugas' },
     { id: 'notifications', icon: Bell, label: 'Notifikasi', badge: unreadNotifications },
     { id: 'profile', icon: User, label: 'Profil' },
     { id: 'guide', icon: BookOpen, label: 'Panduan' },
@@ -105,9 +109,8 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
           <DashboardHome 
             onNavigate={(tab) => {
               if (tab === 'profile-leave') {
-                setProfileInitialSection('leave');
-                setProfileInitialOpenModal(true);
-                setActiveTab('profile');
+                // Redirect langsung ke halaman cuti baru
+                handleTabChange('leave');
               } else {
                 handleTabChange(tab as Tab);
               }
@@ -116,7 +119,9 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
         );
       case 'attendance': return <AttendancePage />;
       case 'history': return <HistoryPage />;
+      case 'leave': return <LeaveRequestPage onBack={() => handleTabChange('dashboard')} />;
       case 'overtime': return <OvertimeRequestPage />;
+      case 'assignment': return <AssignmentLetterPage />;
       case 'notifications': return <NotificationsPage onUpdateCount={fetchUnreadCount} />;
       case 'profile': 
         return (
@@ -124,6 +129,7 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
             onLogout={onLogout} 
             initialSection={profileInitialSection}
             initialOpenModal={profileInitialOpenModal}
+            onNavigateToLeave={() => handleTabChange('leave')}
             onResetInitials={() => {
               setProfileInitialSection(undefined);
               setProfileInitialOpenModal(undefined);
@@ -177,40 +183,34 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
             ) : null}
           </button>
         ))}
+
       </nav>
 
-      {/* Clickable Profile Card & Logout */}
-      <div className="p-3 border-t border-gray-100 space-y-1.5">
-        <button
-          onClick={() => { handleTabChange('profile'); if (mobile) setSidebarOpen(false); }}
-          className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition-all text-left group"
-        >
-          <div className="w-9 h-9 rounded-xl bg-[#16A34A] flex items-center justify-center flex-shrink-0 overflow-hidden shadow-sm">
-            {user?.profile_picture ? (
-              <img src={user.profile_picture} alt={user.name} className="w-full h-full object-cover" />
-            ) : (
-              <span className="text-white text-[11px] font-bold">
-                {user?.name?.replace(/^(dr\.|Ns\.|Dr\.)\s*/i, '').charAt(0) || 'U'}
-              </span>
-            )}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-semibold text-gray-800 truncate group-hover:text-[#16A34A] transition-colors">
-              {user?.name || 'Karyawan'}
-            </p>
-            <p className="text-[11px] text-gray-400 truncate">
-              {user?.position || 'Staf'} · {user?.department || 'RSUCL'}
-            </p>
-          </div>
-        </button>
-
-        <button
-          onClick={onLogout}
-          className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[13px] text-red-500 hover:bg-red-50 transition-colors"
-        >
-          <LogOut size={15} />
-          <span>Keluar</span>
-        </button>
+      {/* Profile Card & Logout (Tetap di bawah sidebar) */}
+      <div className="p-3 border-t border-gray-100 bg-white flex-shrink-0">
+        <div className="flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-gray-50 transition-colors">
+          <button
+            onClick={() => { handleTabChange('profile'); if (mobile) setSidebarOpen(false); }}
+            className="flex items-center gap-2.5 flex-1 min-w-0 text-left focus:outline-none"
+          >
+            <div className="w-8 h-8 rounded-xl bg-[#16A34A] flex items-center justify-center flex-shrink-0 overflow-hidden shadow-sm">
+              {user?.profile_picture ? (
+                <img src={user.profile_picture} alt={user.name} className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-white text-[11px] font-bold">
+                  {user?.name?.replace(/^(dr\.|Ns\.|Dr\.)\s*/i, '').charAt(0) || 'U'}
+                </span>
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[12px] font-semibold text-gray-850 truncate">{user?.name || 'Karyawan'}</p>
+              <p className="text-[10px] text-gray-400 truncate">{user?.position || 'Staf'} · {user?.department || 'RSUCL'}</p>
+            </div>
+          </button>
+          <button onClick={onLogout} className="text-gray-400 hover:text-red-500 transition-colors flex-shrink-0" title="Keluar">
+            <LogOut size={15} />
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -288,7 +288,7 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
         {/* Bottom Nav (mobile) */}
         <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 shadow-lg z-[9990]">
           <div className="flex items-center justify-around px-2 py-1.5 pb-safe">
-            {navItems.filter(item => item.id !== 'guide' && item.id !== 'overtime').map(item => (
+            {navItems.filter(item => item.id !== 'guide' && item.id !== 'overtime' && item.id !== 'leave').slice(0, 5).map(item => (
               <button
                 key={item.id}
                 onClick={() => handleTabChange(item.id)}

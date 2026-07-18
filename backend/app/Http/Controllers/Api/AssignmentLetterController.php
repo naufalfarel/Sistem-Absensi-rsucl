@@ -1,0 +1,211 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Models\AssignmentLetter;
+use App\Models\Employee;
+use App\Models\User;
+use App\Models\Notification;
+use App\Http\Requests\StoreAssignmentLetterRequest;
+use App\Http\Requests\UpdateAssignmentLetterStatusRequest;
+use App\Http\Resources\AssignmentLetterResource;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Carbon\Carbon;
+
+class AssignmentLetterController extends Controller
+{
+    /**
+     * Menampilkan daftar pengajuan surat tugas.
+     */
+    public function index(Request $request)
+    {
+        $user = $request->user();
+
+        if ($user->role === 'employee') {
+            $employee = $user->employee;
+            if (!$employee) {
+                return response()->json(['success' => false, 'message' => 'Data karyawan tidak ditemukan.'], 404);
+            }
+
+            $query = AssignmentLetter::where('employee_id', $employee->id)
+                ->orderBy('created_at', 'desc');
+
+            return AssignmentLetterResource::collection($query->paginate(10));
+        }
+
+        // Sisi Admin
+        $query = AssignmentLetter::with(['employee.user', 'employee.department', 'reviewer'])
+            ->orderBy('created_at', 'desc');
+
+        if ($request->filled('status') && $request->input('status') !== 'all') {
+            $query->where('status', $request->input('status'));
+        }
+
+        if ($request->filled('start_date')) {
+            $query->whereDate('start_date', '>=', $request->input('start_date'));
+        }
+
+        if ($request->filled('end_date')) {
+            $query->whereDate('end_date', '<=', $request->input('end_date'));
+        }
+
+        if ($request->filled('department_id')) {
+            $query->whereHas('employee', function ($q) use ($request) {
+                $q->where('department_id', $request->input('department_id'));
+            });
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->whereHas('employee', function ($q) use ($search) {
+                $q->where('nik_ktp', 'like', "%{$search}%")
+                  ->orWhereHas('user', function ($qu) use ($search) {
+                      $qu->where('name', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        return AssignmentLetterResource::collection($query->paginate(15));
+    }
+
+    /**
+     * Menyimpan pengajuan surat tugas baru (Karyawan).
+     */
+    public function store(StoreAssignmentLetterRequest $request)
+    {
+        $employee = $request->user()->employee;
+        if (!$employee) {
+            return response()->json(['success' => false, 'message' => 'Data karyawan tidak ditemukan.'], 404);
+        }
+
+        $validated = $request->validated();
+
+        // Unggah dokumen ke storage public
+        $file = $request->file('document');
+        $fileName = 'assignment_letter_' . $employee->id . '_' . time() . '.' . $file->getClientOriginalExtension();
+        $path = $file->storeAs('assignment-letters', $fileName, 'public');
+        $documentUrl = '/storage/' . $path;
+
+        $letter = AssignmentLetter::create([
+            'employee_id'         => $employee->id,
+            'letter_number'       => $validated['letter_number'] ?? null,
+            'title'               => $validated['title'],
+            'issuing_institution' => $validated['issuing_institution'],
+            'purpose'             => $validated['purpose'],
+            'start_date'          => $validated['start_date'],
+            'end_date'            => $validated['end_date'],
+            'document_url'        => $documentUrl,
+            'status'              => 'pending',
+        ]);
+
+        // Kirim Notifikasi ke Pegawai
+        Notification::create([
+            'user_id' => $request->user()->id,
+            'title'   => 'Pengajuan Surat Tugas Terkirim',
+            'body'    => "Pengajuan surat tugas untuk kegiatan '{$letter->title}' telah berhasil terkirim dan menunggu persetujuan admin.",
+            'type'    => 'assignment_letter',
+            'data'    => ['assignment_letter_id' => $letter->id],
+        ]);
+
+        // Kirim Notifikasi ke Admin
+        $admins = User::where('role', 'admin')->get();
+        foreach ($admins as $admin) {
+            Notification::create([
+                'user_id' => $admin->id,
+                'title'   => 'Pengajuan Surat Tugas Baru',
+                'body'    => "Pegawai " . ($request->user()->name) . " mengajukan surat tugas baru untuk '{$letter->title}'.",
+                'type'    => 'assignment_letter',
+                'data'    => ['assignment_letter_id' => $letter->id],
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Pengajuan surat tugas berhasil dikirim.',
+            'data'    => new AssignmentLetterResource($letter),
+        ], 201);
+    }
+
+    /**
+     * Menampilkan detail surat tugas.
+     */
+    public function show($id)
+    {
+        $letter = AssignmentLetter::with(['employee.user', 'employee.department', 'reviewer'])->findOrFail($id);
+        return response()->json([
+            'success' => true,
+            'data'    => new AssignmentLetterResource($letter),
+        ]);
+    }
+
+    /**
+     * Menyetujui pengajuan surat tugas (Admin).
+     */
+    public function approve($id, Request $request)
+    {
+        if ($request->user()->role !== 'admin') {
+            return response()->json(['success' => false, 'message' => 'Akses ditolak.'], 403);
+        }
+
+        $letter = AssignmentLetter::findOrFail($id);
+        
+        $letter->update([
+            'status'      => 'approved',
+            'reviewed_by' => $request->user()->id,
+            'reviewed_at' => now(),
+            'admin_note'  => $request->input('admin_note'),
+        ]);
+
+        // Kirim notifikasi ke pegawai yang bersangkutan
+        if ($letter->employee && $letter->employee->user) {
+            Notification::create([
+                'user_id' => $letter->employee->user->id,
+                'title'   => 'Surat Tugas Disetujui',
+                'body'    => "Pengajuan surat tugas Anda untuk kegiatan '{$letter->title}' telah disetujui oleh admin.",
+                'type'    => 'assignment_letter',
+                'data'    => ['assignment_letter_id' => $letter->id],
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Pengajuan surat tugas berhasil disetujui.',
+            'data'    => new AssignmentLetterResource($letter),
+        ]);
+    }
+
+    /**
+     * Menolak pengajuan surat tugas (Admin).
+     */
+    public function reject($id, UpdateAssignmentLetterStatusRequest $request)
+    {
+        $letter = AssignmentLetter::findOrFail($id);
+        $validated = $request->validated();
+
+        $letter->update([
+            'status'      => 'rejected',
+            'reviewed_by' => $request->user()->id,
+            'reviewed_at' => now(),
+            'admin_note'  => $validated['admin_note'] ?? null,
+        ]);
+
+        // Kirim notifikasi ke pegawai yang bersangkutan
+        if ($letter->employee && $letter->employee->user) {
+            Notification::create([
+                'user_id' => $letter->employee->user->id,
+                'title'   => 'Surat Tugas Ditolak',
+                'body'    => "Pengajuan surat tugas Anda untuk kegiatan '{$letter->title}' ditolak oleh admin. Alasan: " . ($validated['admin_note'] ?? '-'),
+                'type'    => 'assignment_letter',
+                'data'    => ['assignment_letter_id' => $letter->id],
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Pengajuan surat tugas berhasil ditolak.',
+            'data'    => new AssignmentLetterResource($letter),
+        ]);
+    }
+}

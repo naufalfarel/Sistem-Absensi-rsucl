@@ -82,7 +82,7 @@ class ReportController extends Controller
         $cutiTrend     = $monthCuti - $prevMonthCuti;
 
         // Hitung pengajuan cuti yang butuh persetujuan
-        $pendingLeave = LeaveRequest::where('status', 'pending')->count();
+        $pendingLeave = LeaveRequest::where('pj_status', 'approved')->where('status', 'pending')->count();
 
         // ── Statistik Pulang Cepat & Lembur (bulan berjalan) ────────────────
         $earlyCheckoutQuery = Attendance::whereMonth('date', $month)->whereYear('date', $year)
@@ -321,7 +321,7 @@ class ReportController extends Controller
             }
 
             $rekap[] = [
-                'nip'                 => $emp->nip,
+                'nik_ktp'             => $emp->nik_ktp,
                 'name'                => $emp->user?->name ?? 'Karyawan',
                 'department'          => $emp->department?->name ?? 'Umum',
                 'hadir'               => $hadir,

@@ -45,6 +45,12 @@ class ScheduleResource extends JsonResource
             'icon'            => $this->icon,
             'shift_type'      => $this->shift_type ?? 'normal',
             'employees_count' => $this->employees_count ?? $employeesCount,
+            'owner_department_id' => $this->owner_department_id,
+            'owner_department_name' => $this->ownerDepartment ? $this->ownerDepartment->name : null,
+            'created_by'      => $this->created_by,
+            'created_by_name' => $this->creator ? $this->creator->name : null,
+            'updated_by'      => $this->updated_by,
+            'updated_by_name' => $this->updater ? $this->updater->name : null,
         ];
 
         if ($this->relationLoaded('children')) {
@@ -55,7 +61,7 @@ class ScheduleResource extends JsonResource
             $data['employees'] = $this->employees->map(function ($emp) {
                 return [
                     'id'         => $emp->id,
-                    'nip'        => $emp->nip,
+                    'nik_ktp'    => $emp->nik_ktp,
                     'phone'      => $emp->phone,
                     'gender'     => $emp->gender,
                     'department' => $emp->department ? ['name' => $emp->department->name] : null,
@@ -65,7 +71,8 @@ class ScheduleResource extends JsonResource
                         'username' => $emp->user->username
                     ] : null,
                     'pivot'      => [
-                        'day_of_week' => $emp->pivot?->day_of_week
+                        'day_of_week' => $emp->pivot?->day_of_week,
+                        'date'        => $emp->pivot?->date
                     ]
                 ];
             });

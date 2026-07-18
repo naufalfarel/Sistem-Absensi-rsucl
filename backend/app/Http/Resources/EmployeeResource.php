@@ -25,7 +25,7 @@ class EmployeeResource extends JsonResource
             'user_id'       => $this->user_id,
             'name'          => $this->user?->name,
             'email'         => $this->user?->email,
-            'nip'           => $this->nip,
+            'nik_ktp'       => $this->nik_ktp,
             'username'      => $this->user?->username,
             'profile_picture' => $this->user?->profile_picture ? url($this->user->profile_picture) : null,
             'department'    => $this->department?->name,

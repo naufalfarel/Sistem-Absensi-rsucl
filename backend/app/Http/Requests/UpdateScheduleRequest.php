@@ -11,7 +11,7 @@ class UpdateScheduleRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return $this->user() && $this->user()->isAdmin();
+        return $this->user() && ($this->user()->isAdmin() || $this->user()->isPjBagian());
     }
 
     /**
@@ -28,6 +28,7 @@ class UpdateScheduleRequest extends FormRequest
             'color'      => 'sometimes|string|max:10',
             'icon'       => 'sometimes|string|max:20',
             'shift_type' => 'sometimes|in:normal,dinas_luar',
+            'owner_department_id' => 'nullable|exists:departments,id',
             'children'   => 'nullable|array',
             'children.*.id' => 'nullable|exists:schedules,id',
             'children.*.name' => 'required_with:children|string|max:50',

@@ -51,7 +51,7 @@ class DatabaseSeeder extends Seeder
             'email'    => 'admin@rsucl.id',
             'password' => Hash::make('Admin@RSUCL2025'),
             'role'     => 'admin',
-            'nip'      => 'ADMIN001',
+            'nik_ktp'  => 'ADMIN001',
             'username' => 'admin',
         ]);
 
@@ -60,7 +60,7 @@ class DatabaseSeeder extends Seeder
             [
                 'name'     => 'Dr. Rina Kusumawati',
                 'email'    => 'rina.k@rsucl.id',
-                'nip'      => '198501012010012001',
+                'nik_ktp'  => '198501012010012001',
                 'username' => 'rina.kusumawati',
                 'password' => 'Karyawan@RSUCL1',
                 'dept'     => 'Poli Umum',
@@ -72,7 +72,7 @@ class DatabaseSeeder extends Seeder
             [
                 'name'     => 'Ns. Ahmad Fauzi',
                 'email'    => 'ahmad.f@rsucl.id',
-                'nip'      => '198805122012011002',
+                'nik_ktp'  => '198805122012011002',
                 'username' => 'ahmad.fauzi',
                 'password' => 'Karyawan@RSUCL2',
                 'dept'     => 'ICU',
@@ -84,7 +84,7 @@ class DatabaseSeeder extends Seeder
             [
                 'name'     => 'Rini Handayani',
                 'email'    => 'rini.h@rsucl.id',
-                'nip'      => '199508152018012007',
+                'nik_ktp'  => '199508152018012007',
                 'username' => 'rini.handayani',
                 'password' => 'Karyawan@RSUCL3',
                 'dept'     => 'Farmasi',
@@ -101,7 +101,7 @@ class DatabaseSeeder extends Seeder
                 'email'    => $emp['email'],
                 'password' => Hash::make($emp['password']),
                 'role'     => 'employee',
-                'nip'      => $emp['nip'],
+                'nik_ktp'  => $emp['nik_ktp'],
                 'username' => $emp['username'],
             ]);
 
@@ -109,7 +109,7 @@ class DatabaseSeeder extends Seeder
                 'user_id'       => $user->id,
                 'department_id' => $deptMap[$emp['dept']],
                 'position_id'   => $posMap[$emp['pos']],
-                'nip'           => $emp['nip'],
+                'nik_ktp'       => $emp['nik_ktp'],
                 'phone'         => $emp['phone'],
                 'gender'        => $emp['gender'],
                 'join_date'     => $emp['join'],

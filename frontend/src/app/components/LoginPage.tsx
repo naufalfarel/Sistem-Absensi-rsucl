@@ -18,7 +18,7 @@ interface LoginPageProps {
  * Halaman Login — Sistem Absensi RSUCL
  * 
  * Menyediakan form masuk untuk Admin dan Karyawan, serta modal ubah/reset password mandiri
- * dengan mencocokkan data NIP, Username, dan Email terdaftar.
+ * dengan mencocokkan data NIK KTP, Username, dan Email terdaftar.
  */
 export function LoginPage({ onLogin, onBack }: LoginPageProps) {
   const { logoUrl } = useAuth();
@@ -33,7 +33,7 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
 
   // State untuk alur modal lupa password (reset password mandiri)
   const [showForgotModal, setShowForgotModal] = useState(false);
-  const [forgotForm, setForgotForm] = useState({ username: '', nip: '', email: '', newPassword: '', confirmPassword: '' });
+  const [forgotForm, setForgotForm] = useState({ username: '', nik_ktp: '', email: '', newPassword: '', confirmPassword: '' });
   const [forgotError, setForgotError] = useState('');
   const [forgotSuccess, setForgotSuccess] = useState('');
   const [forgotLoading, setForgotLoading] = useState(false);
@@ -67,11 +67,11 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
 
   /**
    * Menangani proses submit reset password mandiri.
-   * Memvalidasi kecocokan data username, nip, email, dan password baru sebelum dikirim ke backend.
+   * Memvalidasi kecocokan data username, nik_ktp, email, dan password baru sebelum dikirim ke backend.
    */
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!forgotForm.username.trim() || !forgotForm.nip.trim() || !forgotForm.email.trim() || !forgotForm.newPassword) {
+    if (!forgotForm.username.trim() || !forgotForm.nik_ktp.trim() || !forgotForm.email.trim() || !forgotForm.newPassword) {
       setForgotError('Semua kolom wajib diisi.');
       return;
     }
@@ -89,13 +89,13 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
     try {
       const res = await authApi.forgotPassword({
         username: forgotForm.username.trim(),
-        nip: forgotForm.nip.trim(),
+        nik_ktp: forgotForm.nik_ktp.trim(),
         email: forgotForm.email.trim(),
         password: forgotForm.newPassword,
       });
       if (res.success) {
         setForgotSuccess(res.message);
-        setForgotForm({ username: '', nip: '', email: '', newPassword: '', confirmPassword: '' });
+        setForgotForm({ username: '', nik_ktp: '', email: '', newPassword: '', confirmPassword: '' });
       }
     } catch (err: any) {
       setForgotError(err?.response?.data?.message ?? err?.message ?? 'Data tidak cocok atau terjadi kesalahan.');
@@ -333,12 +333,12 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
                 />
               </div>
               <div>
-                <label className="block text-[11px] font-medium text-gray-600 mb-1">Nomor Induk Pegawai (NIP)</label>
+                <label className="block text-[11px] font-medium text-gray-600 mb-1">NIK KTP</label>
                 <input 
                   type="text" 
-                  placeholder="Masukkan NIP Anda" 
-                  value={forgotForm.nip} 
-                  onChange={e => setForgotForm({ ...forgotForm, nip: e.target.value })}
+                  placeholder="Masukkan NIK KTP Anda" 
+                  value={forgotForm.nik_ktp} 
+                  onChange={e => setForgotForm({ ...forgotForm, nik_ktp: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[16px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all"
                   required
                 />

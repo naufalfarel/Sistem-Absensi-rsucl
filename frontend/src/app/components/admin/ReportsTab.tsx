@@ -260,7 +260,7 @@ export function ReportsTab() {
 
           bodyRows += `<tr>
             <td class="center">${rowNum++}</td>
-            <td class="center" style="mso-number-format:'\\@';" x:str>${r.employee?.nip ?? '--'}</td>
+            <td class="center" style="mso-number-format:'\\@';" x:str>${r.employee?.nik_ktp ?? '--'}</td>
             <td class="bold">${r.employee?.name ?? 'Karyawan'}</td>
             <td class="center">${r.date || '--'}</td>
             <td>${dept}</td>
@@ -285,7 +285,7 @@ export function ReportsTab() {
           <table>
             <thead><tr>
               <th style="width:40px">No</th>
-              <th>NIP</th>
+              <th>NIK KTP</th>
               <th>Nama</th>
               <th>Tanggal</th>
               <th>Departemen</th>
@@ -334,7 +334,7 @@ export function ReportsTab() {
           const dur = r.duration_min ? `${Math.floor(r.duration_min / 60)}j ${r.duration_min % 60}m` : '0j 0m';
           bodyRows += `<tr>
             <td class="center">${rowNum++}</td>
-            <td class="center" style="mso-number-format:'\\@';" x:str>${r.nip}</td>
+            <td class="center" style="mso-number-format:'\\@';" x:str>${r.nik_ktp}</td>
             <td class="bold">${r.name}</td>
             <td class="center">${r.hadir} d</td>
             <td class="center">${r.telat} d</td>
@@ -359,7 +359,7 @@ export function ReportsTab() {
           <table>
             <thead><tr>
               <th style="width:40px">No</th>
-              <th>NIP</th>
+              <th>NIK KTP</th>
               <th>Nama</th>
               <th>Hadir (Hari)</th>
               <th>Terlambat (Hari)</th>
@@ -461,7 +461,7 @@ export function ReportsTab() {
           <tr>
             <th style="text-align: center; width: 40px;">No</th>
             <th>Tanggal</th>
-            <th>NIP</th>
+            <th>NIK KTP</th>
             <th>Nama</th>
             <th style="text-align: center; width: 80px;">Jam Masuk</th>
             <th style="text-align: center; width: 80px;">Jam Keluar</th>
@@ -503,7 +503,7 @@ export function ReportsTab() {
             <tr style="border-bottom: 1px solid #E5E7EB; font-size: 11px;">
               <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${rowCounter++}</td>
               <td style="padding: 8px; border-right: 1px solid #E5E7EB;">${r.date}</td>
-              <td style="padding: 8px; border-right: 1px solid #E5E7EB;">${r.employee?.nip ?? '--'}</td>
+              <td style="padding: 8px; border-right: 1px solid #E5E7EB;">${r.employee?.nik_ktp ?? '--'}</td>
               <td style="padding: 8px; font-weight: bold; border-right: 1px solid #E5E7EB;">${r.employee?.name ?? 'Karyawan'}</td>
               <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB; font-family: monospace;">${r.check_in ?? '--'}</td>
               <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB; font-family: monospace;">${r.check_out ?? '--'}</td>
@@ -526,7 +526,7 @@ export function ReportsTab() {
         tableHeaders = `
           <tr>
             <th style="text-align: center; width: 40px;">No</th>
-            <th>NIP</th>
+            <th>NIK KTP</th>
             <th>Nama</th>
             <th style="text-align: center; width: 55px;">Hadir</th>
             <th style="text-align: center; width: 55px;">Telat</th>
@@ -566,7 +566,7 @@ export function ReportsTab() {
           return deptRow + `
             <tr style="border-bottom: 1px solid #E5E7EB; font-size: 11px;">
               <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${rowCounter++}</td>
-              <td style="padding: 8px; border-right: 1px solid #E5E7EB;">${r.nip}</td>
+              <td style="padding: 8px; border-right: 1px solid #E5E7EB;">${r.nik_ktp}</td>
               <td style="padding: 8px; font-weight: bold; border-right: 1px solid #E5E7EB;">${r.name}</td>
               <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${r.hadir} d</td>
               <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${r.telat} d</td>
@@ -1078,7 +1078,7 @@ export function ReportsTab() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap text-left">
                     <p className="text-[13px] font-semibold text-gray-800">{r.employee?.name ?? 'Karyawan'}</p>
-                    <span className="text-[10px] text-gray-400">{r.employee?.nip}</span>
+                    <span className="text-[10px] text-gray-400">{r.employee?.nik_ktp}</span>
                     {r.system_checkout_data?.overtime_minutes ? (
                       <span className="text-[10px] bg-blue-50 text-[#2563EB] px-2 py-0.5 rounded-full font-semibold border border-blue-100">
                         {r.system_checkout_data.overtime_minutes} mnt lembur (Sistem)

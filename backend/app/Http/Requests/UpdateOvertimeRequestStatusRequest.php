@@ -8,7 +8,7 @@ class UpdateOvertimeRequestStatusRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user() && $this->user()->role === 'admin';
+        return $this->user() && $this->user()->isPjOrAdmin();
     }
 
     public function rules(): array

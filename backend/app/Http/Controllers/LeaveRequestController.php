@@ -98,24 +98,32 @@ class LeaveRequestController extends Controller
         $query = LeaveRequest::with(['employee.user', 'employee.department', 'reviewer', 'specialLeaveCategory'])
                              ->orderBy('created_at', 'desc');
 
-        if ($user->isAdmin()) {
-            // Admin melihat semua pengajuan — tidak ada filter tambahan
-        } elseif ($user->isPjBagian()) {
-            // PJ Bagian hanya melihat pengajuan dari pegawai di departemennya
-            // (termasuk miliknya sendiri — dia boleh lihat, tapi tidak boleh approve miliknya)
-            if (!$user->pj_bagian_department_id) {
-                return response()->json(['success' => false, 'message' => 'PJ Bagian belum ditugaskan ke departemen.'], 422);
-            }
-            $query->whereHas('employee', function ($q) use ($user) {
-                $q->where('department_id', $user->pj_bagian_department_id);
-            });
-        } else {
-            // Karyawan biasa: hanya lihat milik sendiri
+        if ($request->query('personal') == '1') {
             $employee = $user->employee;
             if (!$employee) {
                 return response()->json(['success' => false, 'message' => 'Data karyawan tidak ditemukan.'], 404);
             }
             $query->where('employee_id', $employee->id);
+        } else {
+            if ($user->isAdmin()) {
+                // Admin melihat semua pengajuan — tidak ada filter tambahan
+            } elseif ($user->isPjBagian()) {
+                // PJ Bagian hanya melihat pengajuan dari pegawai di departemennya
+                // (termasuk miliknya sendiri — dia boleh lihat, tapi tidak boleh approve miliknya)
+                if (!$user->pj_bagian_department_id) {
+                    return response()->json(['success' => false, 'message' => 'PJ Bagian belum ditugaskan ke departemen.'], 422);
+                }
+                $query->whereHas('employee', function ($q) use ($user) {
+                    $q->where('department_id', $user->pj_bagian_department_id);
+                });
+            } else {
+                // Karyawan biasa: hanya lihat milik sendiri
+                $employee = $user->employee;
+                if (!$employee) {
+                    return response()->json(['success' => false, 'message' => 'Data karyawan tidak ditemukan.'], 404);
+                }
+                $query->where('employee_id', $employee->id);
+            }
         }
 
         $requests = $query->get()->map(fn($lr) => $this->format($lr));
@@ -146,6 +154,10 @@ class LeaveRequestController extends Controller
             'end_date'                  => 'required|date|after_or_equal:start_date',
             'reason'                    => 'required|string|max:500',
             'special_leave_category_id' => 'required_if:type,cuti_khusus|exists:special_leave_categories,id',
+            'posisi'                    => 'nullable|string|max:100',
+            'unit_kerja'                => 'nullable|string|max:100',
+            'substitute_name'           => 'nullable|string|max:100',
+            'alamat_cuti'               => 'nullable|string|max:255',
         ];
 
         // Lampiran wajib untuk cuti_khusus. Untuk tipe lain opsional.
@@ -200,6 +212,20 @@ class LeaveRequestController extends Controller
             );
         }
 
+        // Cari PJ Bagian yang bertanggung jawab atas departemen karyawan ini
+        $pjBagian = null;
+        if ($employee->department_id) {
+            $pjBagian = \App\Models\User::where('role', 'pj_bagian')
+                ->where('pj_bagian_department_id', $employee->department_id)
+                ->first();
+        }
+
+        // Tentukan pj_status secara otomatis
+        $pjStatus = 'pending';
+        if (!$pjBagian || $pjBagian->id === $request->user()->id) {
+            $pjStatus = 'approved';
+        }
+
         // Buat record pengajuan berstatus 'pending'
         $lr = LeaveRequest::create([
             'employee_id'               => $employee->id,
@@ -210,19 +236,17 @@ class LeaveRequestController extends Controller
             'reason'                    => $data['reason'],
             'attachment_url'            => $attachmentUrl,
             'status'                    => 'pending',
+            'pj_status'                 => $pjStatus,
+            'posisi'                    => $data['posisi'] ?? null,
+            'unit_kerja'                => $data['unit_kerja'] ?? null,
+            'substitute_name'           => $data['substitute_name'] ?? null,
+            'alamat_cuti'               => $data['alamat_cuti'] ?? null,
         ]);
 
         // Kirim notifikasi sistem ke PJ Bagian departemen karyawan (jika ada),
         // atau ke admin jika departemen tidak memiliki PJ Bagian.
         $notifLeave = \App\Models\Setting::get('notif_leave', '1');
         if ($notifLeave !== '0') {
-            // Cari PJ Bagian yang bertanggung jawab atas departemen karyawan ini
-            $pjBagian = null;
-            if ($employee->department_id) {
-                $pjBagian = \App\Models\User::where('role', 'pj_bagian')
-                    ->where('pj_bagian_department_id', $employee->department_id)
-                    ->first();
-            }
 
             // Jika ada PJ Bagian DAN pengajuan bukan milik PJ itu sendiri, notif ke PJ
             if ($pjBagian && $pjBagian->id !== $request->user()->id) {
@@ -250,9 +274,9 @@ class LeaveRequestController extends Controller
             }
         }
 
-        // Kirim email pengajuan baru ke semua admin (jika notif_email diset aktif)
+        // Kirim email pengajuan baru ke semua admin (jika notif_email diset aktif dan langsung di-approve/tanpa PJ)
         $notifEmail = \App\Models\Setting::get('notif_email', '1');
-        if ($notifEmail !== '0') {
+        if ($notifEmail !== '0' && $pjStatus === 'approved') {
             $admins = \App\Models\User::where('role', 'admin')->get();
             foreach ($admins as $admin) {
                 try {
@@ -339,93 +363,182 @@ class LeaveRequestController extends Controller
             }
         }
 
-        // Cegah pemrosesan ulang data yang sudah disetujui/ditolak
+        // Cegah pemrosesan ulang data yang sudah disetujui/ditolak di tingkat final
         if ($lr->status !== 'pending') {
             return response()->json([
                 'success' => false,
-                'message' => 'Pengajuan ini sudah diproses sebelumnya.',
+                'message' => 'Pengajuan ini sudah diproses secara final sebelumnya.',
             ], 422);
         }
 
         $data = $request->validate(['admin_note' => 'nullable|string|max:300']);
 
-        // ── Cek Kuota Cuti saat Approve (Safety-Net) ──────────────────────────────────
-        // Validasi juga dilakukan saat approve, bukan hanya saat submit.
-        // Ini mencegah edge case: karyawan punya 2 pending cuti sekaligus,
-        // keduanya lolos submit (karena pending tidak terhitung saat itu),
-        // lalu admin approve keduanya sehingga total melebihi kuota.
-        if ($newStatus === 'approved' && $lr->type === 'cuti') {
-            $employee      = $lr->employee;
-            $now           = \Carbon\Carbon::now();
-            $quota         = LeaveQuotaHelper::quotaDays();
-            // Hitung hanya approved (exclude request ini yang masih pending)
-            $alreadyUsed   = LeaveQuotaHelper::usedDays($employee, $now);
-            $daysThisReq   = \Carbon\Carbon::parse($lr->start_date)->diffInDays(\Carbon\Carbon::parse($lr->end_date)) + 1;
+        // 1. JIKA DI-REVIEW OLEH PJ BAGIAN
+        if ($user->isPjBagian()) {
+            if ($newStatus === 'approved') {
+                $lr->update([
+                    'pj_status'      => 'approved',
+                    'pj_reviewed_by' => $user->id,
+                    'pj_reviewed_at' => now(),
+                    'pj_note'        => $data['admin_note'] ?? null,
+                ]);
 
-            if (($alreadyUsed + $daysThisReq) > $quota) {
-                $remaining = max(0, $quota - $alreadyUsed);
+                // Kirim notifikasi sistem ke admin bahwa ada pengajuan yang di-acc PJ Bagian
+                $admins = \App\Models\User::where('role', 'admin')->get();
+                foreach ($admins as $admin) {
+                    Notification::create([
+                        'user_id' => $admin->id,
+                        'title'   => 'Pengajuan ' . ucfirst($lr->type) . ' Di-ACC PJ Bagian',
+                        'body'    => ($lr->employee?->user?->name ?? 'Karyawan') . ' mengajukan ' . $lr->type . ' dan telah di-ACC PJ Bagian. Menunggu persetujuan final Anda.',
+                        'type'    => 'leave',
+                        'data'    => ['leave_request_id' => $lr->id],
+                    ]);
+                }
+
+                // Kirim email pengajuan baru ke semua admin (jika notif_email diset aktif) setelah di-acc PJ Bagian
+                $notifEmail = \App\Models\Setting::get('notif_email', '1');
+                if ($notifEmail !== '0') {
+                    foreach ($admins as $admin) {
+                        try {
+                            \Illuminate\Support\Facades\Mail::raw(
+                                "Halo {$admin->name},\n\nPengajuan " . $lr->type . " dari " . ($lr->employee?->user?->name ?? 'Karyawan') . " telah DI-ACC PJ Bagian (" . $user->name . ") dan membutuhkan persetujuan final Anda.\n\nDetail:\n- Jenis: " . ucfirst($lr->type) . "\n- Tanggal: " . $lr->start_date->toDateString() . " s/d " . $lr->end_date->toDateString() . "\n- Alasan: " . $lr->reason . "\n\nSilakan masuk ke panel admin RSUCL untuk memproses pengajuan ini.",
+                                function ($message) use ($admin, $lr) {
+                                    $message->to($admin->email)
+                                            ->subject('Pengajuan ' . ucfirst($lr->type) . ' Di-ACC PJ Bagian - RSUCL');
+                                }
+                            );
+                        } catch (\Exception $e) {
+                            \Illuminate\Support\Facades\Log::error('Gagal mengirim email pengajuan cuti: ' . $e->getMessage());
+                        }
+                    }
+                }
+
+                $lr->load(['employee.user', 'employee.department', 'reviewer', 'pjReviewer']);
                 return response()->json([
-                    'success' => false,
-                    'message' => "Tidak bisa menyetujui: sisa kuota cuti karyawan ini hanya {$remaining} hari, pengajuan ini membutuhkan {$daysThisReq} hari. Tolak pengajuan ini atau kurangi kuota yang sudah disetujui terlebih dahulu.",
-                ], 422);
+                    'success' => true,
+                    'message' => 'Pengajuan berhasil disetujui oleh PJ Bagian (menunggu persetujuan Admin).',
+                    'data'    => $this->format($lr),
+                ]);
+            } else {
+                // Jika ditolak PJ Bagian, maka otomatis status utama menjadi ditolak secara final
+                $lr->update([
+                    'pj_status'      => 'rejected',
+                    'pj_reviewed_by' => $user->id,
+                    'pj_reviewed_at' => now(),
+                    'pj_note'        => $data['admin_note'] ?? null,
+                    'status'         => 'rejected',
+                    'reviewed_by'    => $user->id,
+                    'reviewed_at'    => now(),
+                    'admin_note'     => $data['admin_note'] ?? 'Ditolak PJ Bagian',
+                ]);
+
+                // Kirim notifikasi ke pegawai
+                Notification::create([
+                    'user_id' => $lr->employee->user_id,
+                    'title'   => 'Pengajuan ' . ucfirst($lr->type) . ' Ditolak ❌',
+                    'body'    => 'Pengajuan ' . $lr->type . ' Anda telah ditolak oleh PJ Bagian. Catatan: ' . ($data['admin_note'] ?? '-'),
+                    'type'    => 'leave',
+                    'data'    => ['leave_request_id' => $lr->id],
+                ]);
+
+                $lr->load(['employee.user', 'employee.department', 'reviewer', 'pjReviewer']);
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Pengajuan berhasil ditolak oleh PJ Bagian.',
+                    'data'    => $this->format($lr),
+                ]);
             }
         }
 
-        // Update status pengajuan beserta data reviewer
-        $lr->update([
-            'status'      => $newStatus,
-            'reviewed_by' => $request->user()->id,
-            'reviewed_at' => now(),
-            'admin_note'  => $data['admin_note'] ?? null,
-        ]);
-
-        // Jika disetujui, buat/perbarui record absensi harian karyawan tersebut
-        if ($newStatus === 'approved') {
-            $start = \Carbon\Carbon::parse($lr->start_date);
-            $end = \Carbon\Carbon::parse($lr->end_date);
-            for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
-                $dateStr = $date->toDateString();
-                \App\Models\Attendance::updateOrCreate(
-                    [
-                        'employee_id' => $lr->employee_id,
-                        'date'        => $dateStr,
-                    ],
-                    [
-                        'status'             => $lr->type === 'cuti_khusus' ? 'cuti' : $lr->type, // cuti_khusus dipetakan sebagai 'cuti' di record absensi
-                        'check_in'           => null,
-                        'check_out'          => null,
-                        'note'               => "Masa " . ucfirst($lr->type) . ": " . $lr->reason,
-                        'latitude'           => null,
-                        'longitude'          => null,
-                        'accuracy'           => null,
-                        'is_within_geofence' => false,
-                        'image_check_in'     => null,
-                        'image_check_out'    => null,
-                    ]
-                );
+        // 2. JIKA DI-REVIEW OLEH ADMIN
+        if ($user->isAdmin()) {
+            // Jika admin meng-approve langsung saat pj_status masih pending, setel pj_status ke approved secara otomatis
+            if ($lr->pj_status === 'pending') {
+                $lr->pj_status = $newStatus === 'approved' ? 'approved' : 'rejected';
+                $lr->pj_reviewed_by = $user->id;
+                $lr->pj_reviewed_at = now();
+                $lr->pj_note = $data['admin_note'] ?? 'Disetujui langsung oleh Admin';
             }
+
+            // ── Cek Kuota Cuti saat Approve oleh Admin (Safety-Net) ──────────────────────────────────
+            if ($newStatus === 'approved' && $lr->type === 'cuti') {
+                $employee      = $lr->employee;
+                $now           = \Carbon\Carbon::now();
+                $quota         = LeaveQuotaHelper::quotaDays();
+                $alreadyUsed   = LeaveQuotaHelper::usedDays($employee, $now);
+                $daysThisReq   = \Carbon\Carbon::parse($lr->start_date)->diffInDays(\Carbon\Carbon::parse($lr->end_date)) + 1;
+
+                if (($alreadyUsed + $daysThisReq) > $quota) {
+                    $remaining = max(0, $quota - $alreadyUsed);
+                    return response()->json([
+                        'success' => false,
+                        'message' => "Tidak bisa menyetujui: sisa kuota cuti karyawan ini hanya {$remaining} hari, pengajuan ini membutuhkan {$daysThisReq} hari. Tolak pengajuan ini atau kurangi kuota yang sudah disetujui terlebih dahulu.",
+                    ], 422);
+                }
+            }
+
+            // Update status pengajuan beserta data reviewer (Admin)
+            $lr->update([
+                'status'      => $newStatus,
+                'reviewed_by' => $user->id,
+                'reviewed_at' => now(),
+                'admin_note'  => $data['admin_note'] ?? null,
+                'pj_status'   => $lr->pj_status,
+                'pj_reviewed_by' => $lr->pj_reviewed_by,
+                'pj_reviewed_at' => $lr->pj_reviewed_at,
+                'pj_note'     => $lr->pj_note,
+            ]);
+
+            // Jika disetujui, buat/perbarui record absensi harian karyawan tersebut
+            if ($newStatus === 'approved') {
+                $start = \Carbon\Carbon::parse($lr->start_date);
+                $end = \Carbon\Carbon::parse($lr->end_date);
+                for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
+                    $dateStr = $date->toDateString();
+                    \App\Models\Attendance::updateOrCreate(
+                        [
+                            'employee_id' => $lr->employee_id,
+                            'date'        => $dateStr,
+                        ],
+                        [
+                            'status'             => $lr->type === 'cuti_khusus' ? 'cuti' : $lr->type, // cuti_khusus dipetakan sebagai 'cuti' di record absensi
+                            'check_in'           => null,
+                            'check_out'          => null,
+                            'note'               => "Masa " . ucfirst($lr->type) . ": " . $lr->reason,
+                            'latitude'           => null,
+                            'longitude'          => null,
+                            'accuracy'           => null,
+                            'is_within_geofence' => false,
+                            'image_check_in'     => null,
+                            'image_check_out'    => null,
+                        ]
+                    );
+                }
+            }
+
+            // Kirim notifikasi sistem secara real-time ke akun karyawan bersangkutan
+            $statusLabel = $newStatus === 'approved' ? 'Disetujui ✅' : 'Ditolak ❌';
+            Notification::create([
+                'user_id' => $lr->employee->user_id,
+                'title'   => 'Pengajuan ' . ucfirst($lr->type) . ' ' . $statusLabel,
+                'body'    => 'Pengajuan ' . $lr->type . ' Anda untuk ' . $lr->start_date->toDateString() .
+                             ' s/d ' . $lr->end_date->toDateString() . ' telah ' .
+                             ($newStatus === 'approved' ? 'disetujui.' : 'ditolak.') .
+                             ($data['admin_note'] ? ' Catatan admin: ' . $data['admin_note'] : ''),
+                'type'    => 'leave',
+                'data'    => ['leave_request_id' => $lr->id],
+            ]);
+
+            $lr->load(['employee.user', 'employee.department', 'reviewer', 'pjReviewer']);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Pengajuan berhasil ' . ($newStatus === 'approved' ? 'disetujui' : 'ditolak') . ' oleh Admin.',
+                'data'    => $this->format($lr),
+            ]);
         }
 
-        // Kirim notifikasi sistem secara real-time ke akun karyawan bersangkutan
-        $statusLabel = $newStatus === 'approved' ? 'Disetujui ✅' : 'Ditolak ❌';
-        Notification::create([
-            'user_id' => $lr->employee->user_id,
-            'title'   => 'Pengajuan ' . ucfirst($lr->type) . ' ' . $statusLabel,
-            'body'    => 'Pengajuan ' . $lr->type . ' Anda untuk ' . $lr->start_date->toDateString() .
-                         ' s/d ' . $lr->end_date->toDateString() . ' telah ' .
-                         ($newStatus === 'approved' ? 'disetujui.' : 'ditolak.') .
-                         ($data['admin_note'] ? ' Catatan admin: ' . $data['admin_note'] : ''),
-            'type'    => 'leave',
-            'data'    => ['leave_request_id' => $lr->id],
-        ]);
-
-        $lr->load(['employee.user', 'employee.department', 'reviewer']);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Pengajuan berhasil ' . ($newStatus === 'approved' ? 'disetujui' : 'ditolak') . '.',
-            'data'    => $this->format($lr),
-        ]);
+        return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
     }
 
     /**
@@ -730,18 +843,27 @@ class LeaveRequestController extends Controller
             'cancelled_at'       => $lr->cancelled_at?->toDateTimeString(),
             'days'               => $lr->days_count,
             'reason'             => $lr->reason,
+            'posisi'             => $lr->posisi,
+            'unit_kerja'         => $lr->unit_kerja,
+            'substitute_name'    => $lr->substitute_name,
+            'alamat_cuti'        => $lr->alamat_cuti,
             'attachment_url'     => $lr->attachment_url ? url($lr->attachment_url) : null,
             'status'             => $lr->status,
             'admin_note'         => $lr->admin_note,
             'reviewed_at'        => $lr->reviewed_at?->toDateTimeString(),
+            'pj_status'          => $lr->pj_status,
+            'pj_note'            => $lr->pj_note,
+            'pj_reviewed_at'     => $lr->pj_reviewed_at?->toDateTimeString(),
             'created_at'         => $lr->created_at?->toDateTimeString(),
             'employee'           => [
                 'id'         => $lr->employee?->id,
                 'name'       => $lr->employee?->user?->name,
-                'nip'        => $lr->employee?->nip,
+                'nik_ktp'    => $lr->employee?->nik_ktp,
                 'department' => $lr->employee?->department?->name,
+                'phone'      => $lr->employee?->phone,
             ],
             'reviewer'           => $lr->reviewer ? ['name' => $lr->reviewer->name] : null,
+            'pj_reviewer'        => $lr->pjReviewer ? ['name' => $lr->pjReviewer->name] : null,
         ];
     }
 

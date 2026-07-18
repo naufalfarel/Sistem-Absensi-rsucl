@@ -117,9 +117,11 @@ export function HistoryPage() {
     checkIn:  r.check_in  ? r.check_in.substring(0, 5)  : '--',
     checkOut: r.check_out ? r.check_out.substring(0, 5) : '--',
     duration: getDurationStr(r.duration_min),
-    location: r.shift_type === 'dinas_luar'
-      ? 'Dinas Luar'
-      : (r.is_within_geofence ? 'RSUCL – Terverifikasi' : (r.check_in || r.check_out ? 'Luar Area Geofence' : '--')),
+    location: r.dinas_reason
+      ? r.dinas_reason
+      : r.shift_type === 'dinas_luar'
+        ? 'Dinas Luar'
+        : (r.is_within_geofence ? 'RSUCL – Terverifikasi' : (r.check_in || r.check_out ? 'Luar Area Geofence' : '--')),
     status:   r.status,
     display_status: r.display_status,
     shift:    r.shift_name ?? 'Reguler',
@@ -139,6 +141,7 @@ export function HistoryPage() {
     checkinDistance: r.checkin_distance_meters,
     checkoutDistance: r.checkout_distance_meters,
     shiftType: r.shift_type ?? 'normal',
+    dinasReason: r.dinas_reason,
     isHolidayWork: r.is_holiday_work,
     holiday: r.holiday,
     checkin_punctuality: r.checkin_punctuality,

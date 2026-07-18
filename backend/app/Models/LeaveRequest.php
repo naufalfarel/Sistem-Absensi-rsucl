@@ -19,6 +19,8 @@ class LeaveRequest extends Model
         'reason', 'attachment_url', 'status', 'reviewed_by', 'reviewed_at', 'admin_note',
         'actual_end_date', 'shortened_by', 'shortened_at', 'shortened_reason',
         'cancelled_by', 'cancelled_at', 'cancellation_reason',
+        'pj_status', 'pj_reviewed_by', 'pj_reviewed_at', 'pj_note',
+        'posisi', 'unit_kerja', 'substitute_name', 'alamat_cuti',
     ];
 
     // Cast tipe data otomatis
@@ -29,6 +31,7 @@ class LeaveRequest extends Model
         'reviewed_at'     => 'datetime',
         'shortened_at'    => 'datetime',
         'cancelled_at'    => 'datetime',
+        'pj_reviewed_at'  => 'datetime',
     ];
 
     /**
@@ -56,6 +59,14 @@ class LeaveRequest extends Model
     public function reviewer()
     {
         return $this->belongsTo(User::class, 'reviewed_by');
+    }
+
+    /**
+     * Relasi ke model User (sebagai PJ Bagian peninjau).
+     */
+    public function pjReviewer()
+    {
+        return $this->belongsTo(User::class, 'pj_reviewed_by');
     }
 
     /**

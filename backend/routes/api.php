@@ -78,6 +78,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/overtime-requests', [\App\Http\Controllers\Api\OvertimeRequestController::class, 'store']);
     Route::get('/overtime-requests/{id}', [\App\Http\Controllers\Api\OvertimeRequestController::class, 'show']);
     
+    // ── Fitur Pengajuan Surat Tugas
+    Route::get('/assignment-letters', [\App\Http\Controllers\Api\AssignmentLetterController::class, 'index']);
+    Route::post('/assignment-letters', [\App\Http\Controllers\Api\AssignmentLetterController::class, 'store']);
+    Route::get('/assignment-letters/{id}', [\App\Http\Controllers\Api\AssignmentLetterController::class, 'show']);
+    
     // Endpoint Kategori Cuti Khusus (Umum untuk Karyawan & Admin)
     Route::get('/special-leave-categories', [\App\Http\Controllers\SpecialLeaveCategoryController::class, 'index']);
 
@@ -109,6 +114,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/employee-schedules', [ScheduleController::class, 'getEmployeeSchedules']);
         Route::post('/employee-schedules/assign', [ScheduleController::class, 'assignEmployeeSchedule']);
         Route::post('/employee-schedules/assign-department', [ScheduleController::class, 'assignDepartmentSchedule']);
+
+        // Shift (Schedules) CRUD for both Admin and PJ Bagian
+        Route::post('/schedules', [ScheduleController::class, 'store']);
+        Route::put('/schedules/{schedule}', [ScheduleController::class, 'update']);
+        Route::delete('/schedules/{schedule}', [ScheduleController::class, 'destroy']);
     });
 
     // ── RUTE KHUSUS ADMINISTRATOR (Hanya untuk User dengan Role 'admin') ──────
@@ -117,6 +127,10 @@ Route::middleware('auth:sanctum')->group(function () {
         // Endpoint CRUD Kategori Cuti Khusus (Hanya Admin)
         Route::post('/special-leave-categories', [\App\Http\Controllers\SpecialLeaveCategoryController::class, 'store']);
         Route::put('/special-leave-categories/{id}', [\App\Http\Controllers\SpecialLeaveCategoryController::class, 'update']);
+
+        // Persetujuan Surat Tugas
+        Route::put('/assignment-letters/{id}/approve', [\App\Http\Controllers\Api\AssignmentLetterController::class, 'approve']);
+        Route::put('/assignment-letters/{id}/reject', [\App\Http\Controllers\Api\AssignmentLetterController::class, 'reject']);
 
         // ── Dashboard / Monitoring Kehadiran
         // Memonitoring status absensi seluruh karyawan hari ini secara real-time
@@ -174,8 +188,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/shift-assignment-proposals/{id}/reject', [\App\Http\Controllers\ShiftAssignmentProposalController::class, 'reject']);
 
 
-        // API Resource standar untuk CRUD data Shift (Schedules) kecuali endpoint Detail (show)
-        Route::apiResource('/schedules', ScheduleController::class)->except(['show', 'index']);
+        // API Resource standar untuk CRUD data Shift (Schedules) kecuali endpoint Detail (show) - Moved to pj_or_admin group
 
         // ── Fitur Pelaporan
         // Mengambil summary data statistik absensi (misal jumlah hadir, sakit, alpa) untuk dashboard admin

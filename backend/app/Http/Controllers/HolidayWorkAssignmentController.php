@@ -26,7 +26,7 @@ class HolidayWorkAssignmentController extends Controller
                 'id' => $assignment->id,
                 'employee_id' => $assignment->employee_id,
                 'employee_name' => $assignment->employee->user?->name ?? 'Pegawai',
-                'nip' => $assignment->employee->nip,
+                'nik_ktp' => $assignment->employee->nik_ktp,
                 'department' => $assignment->employee->department?->name ?? 'Umum',
                 'position' => $assignment->employee->position?->name ?? 'Staff',
                 'note' => $assignment->note,

@@ -21,11 +21,21 @@ class OvertimeRequest extends Model
         'admin_note',
         'reviewed_by',
         'reviewed_at',
+        'pj_status',
+        'pj_reviewed_by',
+        'pj_reviewed_at',
+        'pj_note',
+        'unit_kerja',
+        'overtime_day_type',
+        'start_time',
+        'end_time',
+        'tasks',
     ];
 
     protected $casts = [
         'date' => 'date',
         'reviewed_at' => 'datetime',
+        'pj_reviewed_at' => 'datetime',
     ];
 
     public function employee()
@@ -36,5 +46,10 @@ class OvertimeRequest extends Model
     public function reviewer()
     {
         return $this->belongsTo(User::class, 'reviewed_by');
+    }
+
+    public function pjReviewer()
+    {
+        return $this->belongsTo(User::class, 'pj_reviewed_by');
     }
 }

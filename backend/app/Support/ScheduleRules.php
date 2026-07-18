@@ -41,7 +41,13 @@ class ScheduleRules
         $dayName = $dayMap[$date->dayOfWeek];
 
         // Coba ambil shift karyawan untuk hari ini
-        $shift = $employee->schedules()->wherePivot('day_of_week', $dayName)->first();
+        $shift = $employee->schedules()->wherePivot('date', $date->toDateString())->first();
+        if (!$shift) {
+            $shift = $employee->schedules()
+                              ->wherePivot('day_of_week', $dayName)
+                              ->wherePivotNull('date')
+                              ->first();
+        }
 
         if ($shift) {
             // Gunakan end_time dari jadwal shift

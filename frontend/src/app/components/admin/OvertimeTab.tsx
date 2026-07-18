@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Search, Calendar, ChevronDown, CheckCircle2, XCircle, Clock, X, Filter, AlertCircle } from 'lucide-react';
+import { Search, Calendar, ChevronDown, CheckCircle2, XCircle, Clock, X, Filter, AlertCircle, Printer } from 'lucide-react';
 import { overtimeApi, departmentApi, OvertimeRequest, DepartmentModel } from '../../../services/api';
+import qrCodeImg from '../../../imports/qr_code_cempaka_lima.png';
 
 const statusConfig: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  pending:  { label: 'Menunggu',   color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE' },
-  approved: { label: 'Disetujui',  color: '#1E40AF', bg: '#E0E7FF', border: '#C7D2FE' },
+  pending:  { label: 'Menunggu',   color: '#16A34A', bg: '#F0FDF4', border: '#BBF7D0' },
+  approved: { label: 'Disetujui',  color: '#15803d', bg: '#DCFCE7', border: '#A7F3D0' },
   rejected: { label: 'Ditolak',    color: '#475569', bg: '#F1F5F9', border: '#E2E8F0' },
 };
 
@@ -27,7 +28,7 @@ export function OvertimeTab() {
   const { firstStr, lastStr } = getMonthBoundaries();
 
   // Filters State
-  const [statusFilter, setStatusFilter] = useState<'pending' | 'approved' | 'rejected' | 'all'>('pending');
+  const [statusFilter, setStatusFilter] = useState<'pending' | 'approved' | 'rejected' | 'all' | 'draft'>('pending');
   const [dateFrom, setDateFrom] = useState(firstStr);
   const [dateTo, setDateTo] = useState(lastStr);
   const [departmentId, setDepartmentId] = useState('');
@@ -38,6 +39,7 @@ export function OvertimeTab() {
   const [records, setRecords] = useState<OvertimeRequest[]>([]);
   const [summary, setSummary] = useState({
     pending: 0,
+    draft: 0,
     approved: 0,
     rejected: 0,
     total_minutes: 0,
@@ -56,6 +58,7 @@ export function OvertimeTab() {
   const [rejectingRecord, setRejectingRecord] = useState<OvertimeRequest | null>(null);
   const [rejectionNote, setRejectionNote] = useState('');
   const [submittingRejection, setSubmittingRejection] = useState(false);
+  const [selectedSplRecord, setSelectedSplRecord] = useState<OvertimeRequest | null>(null);
 
   // Load departments on mount
   useEffect(() => {
@@ -144,7 +147,7 @@ export function OvertimeTab() {
     try {
       const res = await overtimeApi.approve(id);
       if (res.success) {
-        if (statusFilter === 'pending') {
+        if (statusFilter === 'pending' || statusFilter === 'draft') {
           setRecords(prev => prev.filter(r => r.id !== id));
         } else {
           setRecords(prev => prev.map(r => r.id === id ? res.data : r));
@@ -175,7 +178,7 @@ export function OvertimeTab() {
     try {
       const res = await overtimeApi.reject(rejectingRecord.id, rejectionNote);
       if (res.success) {
-        if (statusFilter === 'pending') {
+        if (statusFilter === 'pending' || statusFilter === 'draft') {
           setRecords(prev => prev.filter(r => r.id !== rejectingRecord.id));
         } else {
           setRecords(prev => prev.map(r => r.id === rejectingRecord.id ? res.data : r));
@@ -205,20 +208,21 @@ export function OvertimeTab() {
       </div>
 
       {/* Catatan Pengingat Tetap (Banner) */}
-      <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-150 rounded-2xl">
-        <AlertCircle size={18} className="text-[#2563EB] flex-shrink-0 mt-0.5" />
-        <p className="text-[12px] text-blue-800 leading-normal font-medium">
+      <div className="flex items-start gap-3 p-4 bg-green-50 border border-green-100 rounded-2xl">
+        <AlertCircle size={18} className="text-[#16A34A] flex-shrink-0 mt-0.5" />
+        <p className="text-[12px] text-green-800 leading-normal font-medium">
           Pastikan jam check-in dan check-out pegawai sesuai dengan waktu sebenarnya saat berada di rumah sakit sebelum menyetujui pengajuan lembur.
         </p>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {[
-          { key: 'pending',  label: 'Menunggu Persetujuan', value: summary.pending, color: '#2563EB', bg: '#EFF6FF', icon: Clock },
-          { key: 'approved', label: 'Lembur Disetujui',      value: summary.approved, color: '#1E40AF', bg: '#E0E7FF', icon: CheckCircle2 },
+          { key: 'draft',    label: 'Draf (Belum di-ACC PJ)', value: summary.draft, color: '#D97706', bg: '#FEF3C7', icon: Clock },
+          { key: 'pending',  label: 'Menunggu Persetujuan', value: summary.pending, color: '#16A34A', bg: '#F0FDF4', icon: Clock },
+          { key: 'approved', label: 'Lembur Disetujui',      value: summary.approved, color: '#15803d', bg: '#DCFCE7', icon: CheckCircle2 },
           { key: 'rejected', label: 'Lembur Ditolak',       value: summary.rejected, color: '#475569', bg: '#F1F5F9', icon: XCircle },
-          { key: 'hours',    label: 'Total Jam Lembur Sah',  value: `${summary.total_hours} jam`, color: '#1D4ED8', bg: '#DBEAFE', icon: Clock, isTotal: true },
+          { key: 'hours',    label: 'Total Jam Lembur Sah',  value: `${summary.total_hours} jam`, color: '#16A34A', bg: '#F0FDF4', icon: Clock, isTotal: true },
         ].map((s) => {
           const isActive = statusFilter === s.key || (s.isTotal && statusFilter === 'all');
           return (
@@ -283,7 +287,7 @@ export function OvertimeTab() {
             <select
               value={departmentId}
               onChange={e => setDepartmentId(e.target.value)}
-              className="w-full appearance-none pl-3 pr-8 py-2 border border-gray-100 rounded-xl text-[12px] bg-white shadow-sm focus:outline-none focus:border-[#2563EB] transition-all text-gray-600 font-semibold cursor-pointer"
+              className="w-full appearance-none pl-3 pr-8 py-2 border border-gray-100 rounded-xl text-[12px] bg-white shadow-sm focus:outline-none focus:border-[#16A34A] transition-all text-gray-600 font-semibold cursor-pointer"
             >
               <option value="">Semua Departemen</option>
               {departments.map(d => (
@@ -298,10 +302,10 @@ export function OvertimeTab() {
             <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
-              placeholder="Cari nama atau NIP..."
+              placeholder="Cari nama atau NIK KTP..."
               value={searchVal}
               onChange={e => setSearchVal(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-100 rounded-xl text-[12px] bg-white shadow-sm focus:outline-none focus:border-[#2563EB] transition-all placeholder:text-gray-300 font-medium"
+              className="w-full pl-10 pr-4 py-2 border border-gray-100 rounded-xl text-[12px] bg-white shadow-sm focus:outline-none focus:border-[#16A34A] transition-all placeholder:text-gray-300 font-medium"
             />
             {searchVal && (
               <button
@@ -325,7 +329,10 @@ export function OvertimeTab() {
 
         {!loading && records.map((r, i) => {
           const status = r.status || 'pending';
-          const conf = statusConfig[status] || { label: status, color: '#6B7280', bg: '#F3F4F6', border: '#E5E7EB' };
+          const isDraft = r.pj_status === 'pending' && r.status === 'pending';
+          const conf = isDraft 
+            ? { label: 'Belum di-ACC PJ', color: '#D97706', bg: '#FEF3C7', border: '#FDE68A' }
+            : statusConfig[status] || { label: status, color: '#6B7280', bg: '#F3F4F6', border: '#E5E7EB' };
           const noCheckoutData = !r.system_checkout_data || !r.system_checkout_data.check_out || !r.system_checkout_data.is_overtime;
 
           return (
@@ -335,7 +342,7 @@ export function OvertimeTab() {
                 <div>
                   <h4 className="text-[13.5px] font-bold text-gray-900">{r.employee?.name}</h4>
                   <p className="text-[10.5px] text-gray-400 font-mono mt-0.5">
-                    NIP: {r.employee?.nip} · {r.employee?.department || 'Umum'}
+                    NIK KTP: {r.employee?.nik_ktp} · {r.employee?.department || 'Umum'}
                   </p>
                 </div>
                 <div>
@@ -349,11 +356,19 @@ export function OvertimeTab() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Kolom 1: Klaim Karyawan */}
                 <div className="space-y-3 border-r border-gray-100 pr-0 md:pr-6 text-left">
-                  <h5 className="text-[11px] font-bold text-[#2563EB] uppercase tracking-wider">Klaim Pegawai</h5>
+                  <h5 className="text-[11px] font-bold text-[#16A34A] uppercase tracking-wider">Klaim Pegawai</h5>
                   <div className="grid grid-cols-2 gap-2 text-[12px]">
                     <div>
                       <p className="text-gray-400 text-[10px] font-semibold">Tanggal</p>
                       <p className="font-semibold text-gray-700">{formatDate(r.date)}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-400 text-[10px] font-semibold">Unit Kerja</p>
+                      <p className="font-semibold text-[#16A34A]">{r.unit_kerja || r.employee?.department || '-'}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-400 text-[10px] font-semibold">Waktu Lembur</p>
+                      <p className="font-semibold text-gray-700">{r.start_time || '17:00'} - {r.end_time || '19:00'} ({r.overtime_day_type === 'holiday' ? 'Libur' : 'Kerja'})</p>
                     </div>
                     <div>
                       <p className="text-gray-400 text-[10px] font-semibold">Keterangan Lokasi</p>
@@ -361,7 +376,11 @@ export function OvertimeTab() {
                     </div>
                   </div>
                   <div>
-                    <p className="text-gray-400 text-[10px] font-semibold">Rincian Kegiatan</p>
+                    <p className="text-gray-400 text-[10px] font-semibold">Tugas Lembur</p>
+                    <p className="font-semibold text-gray-800 text-[12px] bg-slate-50 border border-slate-100 px-2 py-1 rounded-lg truncate">{r.tasks || r.reason}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400 text-[10px] font-semibold">Rincian Kegiatan (Alasan)</p>
                     <p className="text-gray-650 font-medium leading-relaxed bg-gray-50 p-2.5 rounded-xl border border-gray-100 mt-1 max-h-24 overflow-y-auto">{r.reason}</p>
                   </div>
                   {r.photo_url && (
@@ -401,7 +420,7 @@ export function OvertimeTab() {
                       </div>
                       <div className="col-span-2 pt-2.5 border-t border-gray-100 flex items-center justify-between">
                         <span className="text-gray-450 text-[10px] font-semibold">Deteksi Lembur Otomatis</span>
-                        <span className="font-bold text-[#2563EB] bg-blue-50 px-2.5 py-0.5 rounded-lg border border-blue-100">
+                        <span className="font-bold text-[#16A34A] bg-green-50 px-2.5 py-0.5 rounded-lg border border-green-100">
                           {r.system_checkout_data?.overtime_minutes ? `+${r.system_checkout_data.overtime_minutes} mnt` : '0 mnt'}
                         </span>
                       </div>
@@ -409,36 +428,72 @@ export function OvertimeTab() {
                   </div>
 
                   {/* Actions / Admin Notes */}
-                  <div className="pt-3 border-t border-gray-100 flex items-center justify-between gap-3">
-                    {status === 'pending' ? (
-                      <div className="flex gap-2 w-full">
-                        <button
-                          onClick={() => openRejectionModal(r)}
-                          disabled={processingId === r.id}
-                          className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-[12px] transition-colors"
-                        >
-                          Tolak
-                        </button>
-                        <button
-                          onClick={() => handleApprove(r.id)}
-                          disabled={processingId === r.id}
-                          className="flex-1 py-2.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold rounded-xl text-[12px] shadow-sm transition-all"
-                        >
-                          Setujui
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="text-[11.5px] text-gray-500 w-full space-y-1">
-                        <p className="font-medium">
-                          Diputuskan oleh Admin {r.reviewed_at ? `pada ${r.reviewed_at.substring(0, 10)}` : ''}
+                  <div className="pt-3 border-t border-gray-100 space-y-3">
+                    {/* Info Persetujuan PJ Bagian */}
+                    {r.pj_status === 'approved' && (
+                      <div className="rounded-xl px-3 py-2 border border-green-100 bg-green-50/30 text-[11px]">
+                        <p className="font-semibold text-green-800">
+                          Disetujui PJ Bagian: <span className="font-normal text-gray-700">{r.pj_reviewer?.name || 'PJ Bagian'}</span>
                         </p>
-                        {r.admin_note && (
-                          <p className="bg-slate-50 p-2.5 rounded-xl border border-gray-100 text-[11px] text-gray-650 font-medium">
-                            <strong>Catatan Admin:</strong> {r.admin_note}
-                          </p>
-                        )}
+                        {r.pj_note && <p className="text-gray-500 italic mt-0.5">Catatan PJ: "{r.pj_note}"</p>}
                       </div>
                     )}
+
+                    {r.pj_status === 'rejected' && (
+                      <div className="rounded-xl px-3 py-2 border border-red-100 bg-red-50/35 text-[11px]">
+                        <p className="font-semibold text-red-800">
+                          Ditolak PJ Bagian: <span className="font-normal text-gray-700">{r.pj_reviewer?.name || 'PJ Bagian'}</span>
+                        </p>
+                        {r.pj_note && <p className="text-gray-500 italic mt-0.5">Catatan PJ: "{r.pj_note}"</p>}
+                      </div>
+                    )}
+
+                    {isDraft && (
+                      <p className="text-[10px] text-amber-700 font-semibold bg-amber-50 px-2 py-1 rounded-lg border border-amber-200/50">
+                        ⚠️ Pengajuan ini belum disetujui PJ Bagian. Anda dapat memprosesnya langsung.
+                      </p>
+                    )}
+
+                    <div className="flex items-center justify-between gap-3">
+                      {status === 'pending' ? (
+                        <div className="flex gap-2 w-full">
+                          <button
+                            onClick={() => openRejectionModal(r)}
+                            disabled={processingId === r.id}
+                            className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-[12px] transition-colors"
+                          >
+                            Tolak
+                          </button>
+                          <button
+                            onClick={() => handleApprove(r.id)}
+                            disabled={processingId === r.id}
+                            className="flex-1 py-2.5 bg-[#16A34A] hover:bg-[#15803d] text-white font-bold rounded-xl text-[12px] shadow-sm transition-all"
+                          >
+                            Setujui
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="text-[11.5px] text-gray-500 w-full space-y-2">
+                          <p className="font-medium">
+                            Diputuskan oleh Admin {r.reviewed_at ? `pada ${r.reviewed_at.substring(0, 10)}` : ''}
+                          </p>
+                          {r.admin_note && (
+                            <p className="bg-slate-50 p-2.5 rounded-xl border border-gray-100 text-[11px] text-gray-655 font-medium">
+                              <strong>Catatan Admin:</strong> {r.admin_note}
+                            </p>
+                          )}
+                          {status === 'approved' && (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedSplRecord(r)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100 rounded-xl text-[11px] font-bold mt-2 transition-all w-fit cursor-pointer"
+                            >
+                              <Printer size={12} /> Lihat SPL & QR Code
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -535,6 +590,139 @@ export function OvertimeTab() {
           </div>
         </div>
       )}
+
+      {/* Modal Surat Perintah Lembur (SPL) dengan QR Code */}
+      {selectedSplRecord && (() => {
+        const reqDateStr = selectedSplRecord.date ? selectedSplRecord.date.substring(0, 10).replace(/-/g, '') : '';
+        const splNumber = `SPL-${selectedSplRecord.id}-${reqDateStr}`;
+        
+        const dateObj = selectedSplRecord.date ? new Date(selectedSplRecord.date) : new Date();
+        const monthYears = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+        const periodLabel = `${monthYears[dateObj.getMonth()]} ${dateObj.getFullYear()}`;
+        
+        // Generate QR code content
+        const qrContent = `SURAT PERINTAH LEMBUR RESMI
+RSU CEMPAKA LIMA
+------------------------------
+No. Dokumen: ${splNumber}
+Nama Pegawai: ${selectedSplRecord.employee?.name}
+NIK KTP: ${selectedSplRecord.employee?.nik_ktp}
+Unit Kerja: ${selectedSplRecord.unit_kerja || selectedSplRecord.employee?.department || '-'}
+Tanggal Lembur: ${formatDate(selectedSplRecord.date)}
+Waktu: ${selectedSplRecord.start_time || '17:00'} s/d ${selectedSplRecord.end_time || '19:00'} (${selectedSplRecord.overtime_day_type === 'holiday' ? 'Hari Libur' : 'Hari Kerja'})
+Tugas: ${selectedSplRecord.tasks || selectedSplRecord.reason}
+Status Dokumen: SAH / DISETUJUI
+Otorisasi Final: Direktur PT Cempaka Lima (Amir Hidayat, ST., MKM)`;
+
+        const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(qrContent)}`;
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/55 backdrop-blur-xs" onClick={() => setSelectedSplRecord(null)} />
+            <div className="relative bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl p-6 md:p-8 animate-scale-up max-h-[90vh] overflow-y-auto">
+              
+              {/* Modal controls */}
+              <div className="flex justify-end gap-2 mb-4 border-b border-gray-100 pb-3 no-print">
+                <button
+                  onClick={() => window.print()}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-[#16A34A] hover:bg-[#15803D] text-white rounded-xl text-[12px] font-bold shadow-sm transition-all cursor-pointer"
+                >
+                  <Printer size={13} /> Cetak Dokumen
+                </button>
+                <button
+                  onClick={() => setSelectedSplRecord(null)}
+                  className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 transition-colors cursor-pointer"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+
+              {/* SPL Printable Document Container */}
+              <div className="border-[3px] border-double border-gray-800 p-6 md:p-8 bg-white font-serif text-gray-900 leading-normal text-left">
+                
+                {/* Header */}
+                <div className="text-center border-b-[2px] border-gray-800 pb-3 mb-5">
+                  <h2 className="text-[20px] font-bold tracking-wide uppercase">Surat Perintah Lembur</h2>
+                  <p className="text-[12px] font-bold text-gray-700 tracking-wider mt-0.5">RSU CEMPAKA LIMA</p>
+                  <p className="text-[11px] text-gray-500 font-mono mt-1">No. Dokumen: {splNumber}</p>
+                </div>
+
+                {/* Meta details */}
+                <div className="grid grid-cols-2 gap-4 text-[12px] mb-5 border-b border-gray-250 pb-3">
+                  <div>
+                    <span className="font-bold text-gray-500">Bulan/Tahun :</span>
+                    <span className="ml-1.5 font-semibold text-gray-800">{periodLabel}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-bold text-gray-500">Lembur Pada Waktu :</span>
+                    <span className="ml-2 font-semibold text-gray-800 border border-gray-800 px-2 py-0.5 rounded bg-gray-50">
+                      {selectedSplRecord.overtime_day_type === 'holiday' ? '☑ Hari Libur' : '☑ Hari Kerja'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="font-bold text-gray-500">Bagian/Unit :</span>
+                    <span className="ml-1.5 font-semibold text-gray-800">{selectedSplRecord.unit_kerja || selectedSplRecord.employee?.department || '-'}</span>
+                  </div>
+                </div>
+
+                {/* Table */}
+                <div className="overflow-x-auto mb-6">
+                  <table className="w-full border-collapse border border-gray-800 text-[11.5px]">
+                    <thead>
+                      <tr className="bg-gray-100 border-b border-gray-800 text-center font-bold">
+                        <th className="border border-gray-800 p-2 w-10">No</th>
+                        <th className="border border-gray-800 p-2">Nama Karyawan</th>
+                        <th className="border border-gray-800 p-2">Unit Kerja</th>
+                        <th className="border border-gray-800 p-2">Tanggal</th>
+                        <th className="border border-gray-800 p-2 col-span-2">Jam Lembur</th>
+                        <th className="border border-gray-800 p-2">Tugas Saat Lembur</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="text-center font-semibold text-gray-800">
+                        <td className="border border-gray-800 p-2">1</td>
+                        <td className="border border-gray-800 p-2 text-left">{selectedSplRecord.employee?.name}</td>
+                        <td className="border border-gray-800 p-2">{selectedSplRecord.unit_kerja || selectedSplRecord.employee?.department || '-'}</td>
+                        <td className="border border-gray-800 p-2">{formatDate(selectedSplRecord.date)}</td>
+                        <td className="border border-gray-800 p-2 font-mono">{selectedSplRecord.start_time || '17:00'} - {selectedSplRecord.end_time || '19:00'}</td>
+                        <td className="border border-gray-800 p-2 text-left font-medium">{selectedSplRecord.tasks || selectedSplRecord.reason}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Footer and Signatures */}
+                <div className="grid grid-cols-2 gap-12 pt-6 items-end">
+                  
+                  {/* Diajukan */}
+                  <div className="text-center">
+                    <p className="text-[12px] font-bold text-gray-650">Diajukan Oleh,</p>
+                    <div className="h-20" />
+                    <p className="text-[12px] font-bold text-gray-800 underline">{selectedSplRecord.employee?.name}</p>
+                    <p className="text-[10px] text-gray-500 font-semibold font-mono">NIK KTP: {selectedSplRecord.employee?.nik_ktp}</p>
+                  </div>
+
+                  {/* Disetujui */}
+                  <div className="text-center flex flex-col items-center">
+                    <p className="text-[12px] font-bold text-gray-650">Disetujui Oleh,</p>
+                    <p className="text-[10px] font-bold text-gray-500 italic mt-0.5">Direktur PT Cempaka Lima</p>
+                    
+                    {/* QR Code placed directly here above the name */}
+                    <div className="my-2 p-1 border border-gray-200 rounded-lg bg-white shadow-xs">
+                      <img src={qrCodeImg} alt="QR Verification" className="w-20 h-20 object-contain" />
+                    </div>
+                    
+                    <p className="text-[12px] font-bold text-gray-800 underline">Amir Hidayat, ST., MKM</p>
+                    <p className="text-[10px] text-gray-500 font-semibold">Direktur Utama</p>
+                  </div>
+
+                </div>
+
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

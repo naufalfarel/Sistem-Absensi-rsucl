@@ -53,7 +53,7 @@ class AuthController extends Controller
             'name'            => $user->name,
             'email'           => $user->email,
             'role'            => $user->role,
-            'nip'             => $user->nip,
+            'nik_ktp'         => $user->nik_ktp,
             'username'        => $user->username,
             'profile_picture' => $user->profile_picture ? url($user->profile_picture) : null,
         ];
@@ -112,7 +112,7 @@ class AuthController extends Controller
             'name'            => $user->name,
             'email'           => $user->email,
             'role'            => $user->role,
-            'nip'             => $user->nip,
+            'nik_ktp'         => $user->nik_ktp,
             'username'        => $user->username,
             'profile_picture' => $user->profile_picture ? url($user->profile_picture) : null,
         ];
@@ -251,7 +251,7 @@ class AuthController extends Controller
             'name'            => $user->name,
             'email'           => $user->email,
             'role'            => $user->role,
-            'nip'             => $user->nip,
+            'nik_ktp'         => $user->nik_ktp,
             'username'        => $user->username,
             'profile_picture' => $user->profile_picture ? url($user->profile_picture) : null,
         ];
@@ -285,7 +285,7 @@ class AuthController extends Controller
      * POST /api/forgot-password
      * 
      * Melakukan set ulang password tanpa login.
-     * Menggunakan validasi kecocokan data kombinasi Username, NIP, dan Email.
+     * Menggunakan validasi kecocokan data kombinasi Username, NIK KTP, dan Email.
      * 
      * @param Request $request
      * @return \Illuminate\Http\JsonResponse
@@ -295,21 +295,21 @@ class AuthController extends Controller
         // Validasi parameter reset password
         $request->validate([
             'username' => 'required|string',
-            'nip'      => 'required|string',
+            'nik_ktp'  => 'required|string',
             'email'    => 'required|email',
             'password' => 'required|string|min:6',
         ]);
 
-        // Pastikan kombinasi username, NIP, dan email benar-benar terdaftar di database
+        // Pastikan kombinasi username, NIK KTP, dan email benar-benar terdaftar di database
         $user = User::where('username', $request->username)
-                    ->where('nip', $request->nip)
+                    ->where('nik_ktp', $request->nik_ktp)
                     ->where('email', $request->email)
                     ->first();
 
         if (!$user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Data tidak cocok. Silakan periksa kembali Username, NIP, dan Email Anda.',
+                'message' => 'Data tidak cocok. Silakan periksa kembali Username, NIK KTP, dan Email Anda.',
             ], 422);
         }
 

@@ -60,179 +60,40 @@ class ShiftAssignmentProposalController extends Controller
     /**
      * POST /api/shift-assignment-proposals
      * 
-     * PJ Bagian mengajukan usulan penugasan shift untuk karyawan di departemennya.
+     * Dinonaktifkan - PJ Bagian sekarang langsung mengatur shift tanpa usulan.
      */
     public function store(Request $request)
     {
-        $user = $request->user();
-
-        if (!$user->isPjBagian()) {
-            return response()->json(['success' => false, 'message' => 'Hanya PJ Bagian yang dapat mengajukan usulan shift.'], 403);
-        }
-
-        if (!$user->pj_bagian_department_id) {
-            return response()->json(['success' => false, 'message' => 'PJ Bagian belum ditugaskan ke departemen.'], 422);
-        }
-
-        $data = $request->validate([
-            'employee_id' => 'required|exists:employees,id',
-            'schedule_id' => 'nullable|exists:schedules,id',
-            'day_of_week' => 'required|string|in:Senin,Selasa,Rabu,Kamis,Jumat,Sabtu,Minggu',
-        ]);
-
-        // Pastikan karyawan ada di departemen PJ Bagian
-        $employee = Employee::findOrFail($data['employee_id']);
-        if ($employee->department_id !== $user->pj_bagian_department_id) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Anda hanya dapat mengusulkan shift untuk karyawan di departemen Anda.',
-            ], 403);
-        }
-
-        // Pastikan tidak ada proposal pending yang sama untuk karyawan + hari yang sama
-        $exists = ShiftAssignmentProposal::where('employee_id', $data['employee_id'])
-            ->where('day_of_week', $data['day_of_week'])
-            ->where('status', 'pending')
-            ->exists();
-
-        if ($exists) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Sudah ada usulan shift pending untuk karyawan ini pada hari yang sama.',
-            ], 422);
-        }
-
-        $proposal = ShiftAssignmentProposal::create([
-            'employee_id' => $data['employee_id'],
-            'schedule_id' => $data['schedule_id'] ?? null,
-            'day_of_week' => $data['day_of_week'],
-            'proposed_by' => $user->id,
-            'status'      => 'pending',
-        ]);
-
-        // Notifikasi ke semua admin
-        $admins = \App\Models\User::where('role', 'admin')->get();
-        foreach ($admins as $admin) {
-            \App\Models\Notification::create([
-                'user_id' => $admin->id,
-                'title'   => 'Usulan Shift Baru dari PJ Bagian',
-                'body'    => $user->name . ' mengusulkan penugasan shift untuk ' . ($employee->user?->name ?? 'karyawan') . ' pada hari ' . $data['day_of_week'] . '.',
-                'type'    => 'system',
-                'data'    => ['proposal_id' => $proposal->id],
-            ]);
-        }
-
-        $proposal->load(['employee.user', 'employee.department', 'schedule', 'proposedBy']);
-
         return response()->json([
-            'success' => true,
-            'message' => 'Usulan shift berhasil dikirim. Menunggu persetujuan Admin.',
-            'data'    => $this->format($proposal),
-        ], 201);
+            'success' => false,
+            'message' => 'Fitur pengajuan usulan shift dinonaktifkan. Silakan gunakan menu Jadwal Shift untuk mengatur jadwal secara langsung.'
+        ], 403);
     }
 
     /**
      * PUT /api/shift-assignment-proposals/{id}/approve
      * 
-     * Admin menyetujui proposal → eksekusi penugasan shift ke tabel pivot employee_schedule.
+     * Dinonaktifkan - Persetujuan usulan tidak lagi digunakan.
      */
     public function approve(Request $request, $id)
     {
-        $proposal = ShiftAssignmentProposal::with(['employee', 'schedule', 'proposedBy'])->findOrFail($id);
-
-        if ($proposal->status !== 'pending') {
-            return response()->json(['success' => false, 'message' => 'Usulan ini sudah diproses sebelumnya.'], 422);
-        }
-
-        $data = $request->validate(['admin_note' => 'nullable|string|max:300']);
-
-        // Eksekusi penugasan shift: hapus penugasan lama pada hari yang sama, pasang yang baru jika ada
-        DB::table('employee_schedule')
-            ->where('employee_id', $proposal->employee_id)
-            ->where('day_of_week', $proposal->day_of_week)
-            ->delete();
-
-        if ($proposal->schedule_id) {
-            $proposal->employee->schedules()->attach($proposal->schedule_id, [
-                'day_of_week' => $proposal->day_of_week,
-            ]);
-        }
-
-        // Update status proposal
-        $proposal->update([
-            'status'      => 'approved',
-            'admin_note'  => $data['admin_note'] ?? null,
-            'reviewed_by' => $request->user()->id,
-            'reviewed_at' => now(),
-        ]);
-
-        $scheduleName = $proposal->schedule ? $proposal->schedule->name : 'Libur (Tidak Ada Shift)';
-
-        // Notifikasi ke PJ Bagian yang mengajukan
-        \App\Models\Notification::create([
-            'user_id' => $proposal->proposed_by,
-            'title'   => 'Usulan Shift Disetujui ✅',
-            'body'    => 'Usulan penugasan shift untuk ' . ($proposal->employee->user?->name ?? 'karyawan') . ' pada hari ' . $proposal->day_of_week . ' telah disetujui oleh Admin.',
-            'type'    => 'system',
-            'data'    => ['proposal_id' => $proposal->id],
-        ]);
-
-        // Notifikasi ke karyawan yang bersangkutan
-        \App\Models\Notification::create([
-            'user_id' => $proposal->employee->user_id,
-            'title'   => 'Jadwal Shift Diperbarui',
-            'body'    => 'Jadwal dinas Anda untuk hari ' . $proposal->day_of_week . ' telah diperbarui menjadi "' . $scheduleName . '".',
-            'type'    => 'system',
-            'data'    => ['proposal_id' => $proposal->id],
-        ]);
-
-        $proposal->load(['employee.user', 'employee.department', 'schedule', 'proposedBy', 'reviewedBy']);
-
         return response()->json([
-            'success' => true,
-            'message' => 'Usulan shift disetujui dan penugasan telah dieksekusi.',
-            'data'    => $this->format($proposal),
-        ]);
+            'success' => false,
+            'message' => 'Fitur persetujuan usulan shift dinonaktifkan.'
+        ], 403);
     }
 
     /**
      * PUT /api/shift-assignment-proposals/{id}/reject
      * 
-     * Admin menolak proposal — admin_note wajib diisi.
+     * Dinonaktifkan - Penolakan usulan tidak lagi digunakan.
      */
     public function reject(Request $request, $id)
     {
-        $proposal = ShiftAssignmentProposal::with(['employee', 'schedule', 'proposedBy'])->findOrFail($id);
-
-        if ($proposal->status !== 'pending') {
-            return response()->json(['success' => false, 'message' => 'Usulan ini sudah diproses sebelumnya.'], 422);
-        }
-
-        $data = $request->validate(['admin_note' => 'required|string|max:300']);
-
-        $proposal->update([
-            'status'      => 'rejected',
-            'admin_note'  => $data['admin_note'],
-            'reviewed_by' => $request->user()->id,
-            'reviewed_at' => now(),
-        ]);
-
-        // Notifikasi ke PJ Bagian
-        \App\Models\Notification::create([
-            'user_id' => $proposal->proposed_by,
-            'title'   => 'Usulan Shift Ditolak ❌',
-            'body'    => 'Usulan penugasan shift untuk ' . ($proposal->employee->user?->name ?? 'karyawan') . ' pada hari ' . $proposal->day_of_week . ' ditolak. Alasan: ' . $data['admin_note'],
-            'type'    => 'system',
-            'data'    => ['proposal_id' => $proposal->id],
-        ]);
-
-        $proposal->load(['employee.user', 'employee.department', 'schedule', 'proposedBy', 'reviewedBy']);
-
         return response()->json([
-            'success' => true,
-            'message' => 'Usulan shift ditolak.',
-            'data'    => $this->format($proposal),
-        ]);
+            'success' => false,
+            'message' => 'Fitur penolakan usulan shift dinonaktifkan.'
+        ], 403);
     }
 
     /**
@@ -245,7 +106,7 @@ class ShiftAssignmentProposalController extends Controller
             'employee'    => [
                 'id'         => $p->employee?->id,
                 'name'       => $p->employee?->user?->name,
-                'nip'        => $p->employee?->nip ?? $p->employee?->user?->nip,
+                'nik_ktp'    => $p->employee?->nik_ktp ?? $p->employee?->user?->nik_ktp,
                 'department' => $p->employee?->department?->name,
             ],
             'schedule'    => $p->schedule ? [

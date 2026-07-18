@@ -10,15 +10,15 @@ return new class extends Migration
     {
         Schema::table('users', function (Blueprint $table) {
             $table->string('role')->default('employee')->after('email'); // admin | employee
-            $table->string('nip')->unique()->nullable()->after('role');
-            $table->string('username')->unique()->nullable()->after('nip');
+            $table->string('nik_ktp')->unique()->nullable()->after('role');
+            $table->string('username')->unique()->nullable()->after('nik_ktp');
         });
     }
 
     public function down(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->dropColumn(['role', 'nip', 'username']);
+            $table->dropColumn(['role', 'nik_ktp', 'username']);
         });
     }
 };

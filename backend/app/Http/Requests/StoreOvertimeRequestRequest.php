@@ -14,10 +14,15 @@ class StoreOvertimeRequestRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'date'          => 'required|date',
-            'reason'        => 'required|string|max:1000',
-            'photo'         => 'required|file|mimes:jpg,jpeg,png|max:2048',
-            'location_note' => 'required|string|max:150',
+            'date'              => 'required|date',
+            'reason'            => 'required|string|max:1000',
+            'photo'             => 'required|file|mimes:jpg,jpeg,png|max:2048',
+            'location_note'     => 'required|string|max:150',
+            'unit_kerja'        => 'sometimes|nullable|string|max:100',
+            'overtime_day_type' => 'sometimes|nullable|in:workday,holiday',
+            'start_time'        => 'sometimes|nullable|string',
+            'end_time'          => 'sometimes|nullable|string',
+            'tasks'             => 'sometimes|nullable|string|max:1000',
         ];
     }
 

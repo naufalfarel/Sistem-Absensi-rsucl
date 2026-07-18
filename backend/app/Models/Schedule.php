@@ -13,7 +13,10 @@ use Illuminate\Database\Eloquent\Model;
 class Schedule extends Model
 {
     // Kolom yang dapat diisi secara massal
-    protected $fillable = ['parent_id', 'name', 'start_time', 'end_time', 'color', 'icon', 'shift_type'];
+    protected $fillable = [
+        'parent_id', 'name', 'start_time', 'end_time', 'color', 'icon', 'shift_type',
+        'owner_department_id', 'created_by', 'updated_by'
+    ];
 
     /**
      * Relasi ke model parent Schedule.
@@ -38,7 +41,31 @@ class Schedule extends Model
     public function employees()
     {
         return $this->belongsToMany(Employee::class, 'employee_schedule')
-                    ->withPivot('day_of_week')
+                    ->withPivot(['day_of_week', 'date'])
                     ->withTimestamps();
+    }
+
+    /**
+     * Relasi ke model Department pemilik shift ini.
+     */
+    public function ownerDepartment()
+    {
+        return $this->belongsTo(Department::class, 'owner_department_id');
+    }
+
+    /**
+     * Relasi ke pembuat shift.
+     */
+    public function creator()
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /**
+     * Relasi ke pengubah shift terakhir.
+     */
+    public function updater()
+    {
+        return $this->belongsTo(User::class, 'updated_by');
     }
 }

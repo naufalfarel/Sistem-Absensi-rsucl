@@ -28,7 +28,7 @@ class OvertimeRequestTest extends TestCase
         $this->employeeUser = User::factory()->create(['role' => 'employee']);
         $this->employee = Employee::create([
             'user_id' => $this->employeeUser->id,
-            'nip'     => '1234567890123456',
+            'nik_ktp'     => '1234567890123456',
             'status'  => 'active',
         ]);
 
@@ -136,5 +136,32 @@ class OvertimeRequestTest extends TestCase
         $response = $this->putJson("/api/overtime-requests/{$req->id}/reject", []);
 
         $response->assertStatus(422);
+    }
+
+    public function test_admin_reject_overtime_updates_pj_status()
+    {
+        $req = OvertimeRequest::create([
+            'employee_id'   => $this->employee->id,
+            'date'          => '2026-07-15',
+            'reason'        => 'Kerja lembur',
+            'photo_url'     => '/some/path.jpg',
+            'location_note' => 'Ruang A',
+            'status'        => 'pending',
+            'pj_status'     => 'pending',
+        ]);
+
+        Sanctum::actingAs($this->adminUser);
+
+        $response = $this->putJson("/api/overtime-requests/{$req->id}/reject", [
+            'admin_note' => 'tidak bisa',
+        ]);
+
+        $response->assertStatus(200);
+        $this->assertDatabaseHas('overtime_requests', [
+            'id'          => $req->id,
+            'status'      => 'rejected',
+            'pj_status'   => 'rejected',
+            'admin_note'  => 'tidak bisa',
+        ]);
     }
 }

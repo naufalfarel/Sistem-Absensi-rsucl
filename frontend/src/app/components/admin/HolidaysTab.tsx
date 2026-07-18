@@ -245,7 +245,7 @@ export function HolidaysTab() {
 
   const searchedEmployees = availableEmployees.filter(emp =>
     emp.name.toLowerCase().includes(empSearch.toLowerCase()) ||
-    emp.nip.toLowerCase().includes(empSearch.toLowerCase()) ||
+    emp.nik_ktp.toLowerCase().includes(empSearch.toLowerCase()) ||
     (emp.department && emp.department.toLowerCase().includes(empSearch.toLowerCase()))
   );
 
@@ -542,7 +542,7 @@ export function HolidaysTab() {
                       <Search size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
                       <input
                         type="text"
-                        placeholder="Cari nama / NIP / bagian..."
+                        placeholder="Cari nama / NIK KTP / bagian..."
                         value={empSearch}
                         onChange={e => setEmpSearch(e.target.value)}
                         className="w-full pl-8 pr-7 py-1.5 bg-white border border-gray-200 rounded-lg text-[11.5px] focus:outline-none focus:border-[#16A34A] text-gray-800 placeholder:text-gray-300 shadow-sm"
@@ -564,7 +564,7 @@ export function HolidaysTab() {
                       <option value="">-- Pilih Pegawai ({searchedEmployees.length}) --</option>
                       {searchedEmployees.map(emp => (
                         <option key={emp.id} value={emp.id}>
-                          {emp.name} ({emp.department} - {emp.nip})
+                          {emp.name} ({emp.department} - {emp.nik_ktp})
                         </option>
                       ))}
                     </select>
@@ -608,7 +608,7 @@ export function HolidaysTab() {
                         <div>
                           <p className="text-[12.5px] font-semibold text-gray-800 leading-tight">{assign.employee_name}</p>
                           <div className="flex gap-2 text-[10px] text-gray-400 mt-1 flex-wrap">
-                            <span className="bg-gray-50 border border-gray-150 rounded px-1">{assign.nip}</span>
+                            <span className="bg-gray-50 border border-gray-150 rounded px-1">{assign.nik_ktp}</span>
                             <span>{assign.department} · {assign.position}</span>
                           </div>
                           {assign.note && (

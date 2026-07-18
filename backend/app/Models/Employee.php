@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * Model Employee
  * 
  * Merepresentasikan entitas data karyawan/pegawai RSUCL.
- * Menyimpan informasi profil kepegawaian, NIP, tanggal masuk, status keaktifan,
+ * Menyimpan informasi profil kepegawaian, NIK KTP, tanggal masuk, status keaktifan,
  * serta relasi ke user account, departemen, dan jabatan.
  */
 class Employee extends Model
@@ -19,7 +19,7 @@ class Employee extends Model
     // Kolom yang dapat diisi secara massal
     protected $fillable = [
         'user_id', 'department_id', 'position_id',
-        'nip', 'phone', 'gender', 'join_date', 'status',
+        'nik_ktp', 'phone', 'gender', 'join_date', 'status',
         'motor_plate_1', 'motor_plate_2', 'car_plate_1', 'car_plate_2',
     ];
 
@@ -80,7 +80,7 @@ class Employee extends Model
     public function schedules()
     {
         return $this->belongsToMany(Schedule::class, 'employee_schedule')
-                    ->withPivot('day_of_week')
+                    ->withPivot(['day_of_week', 'date'])
                     ->withTimestamps();
     }
 
@@ -92,5 +92,33 @@ class Employee extends Model
     {
         return $this->hasOne(Attendance::class)
                     ->where('date', today()->toDateString());
+    }
+
+    /**
+     * Relasi ke model AssignmentLetter.
+     */
+    public function assignmentLetters()
+    {
+        return $this->hasMany(AssignmentLetter::class);
+    }
+
+    /**
+     * Mengambil surat tugas yang disetujui untuk tanggal tertentu.
+     */
+    public function approvedAssignmentLetterOn(\Carbon\Carbon $date): ?AssignmentLetter
+    {
+        return $this->assignmentLetters()
+            ->where('status', 'approved')
+            ->where('start_date', '<=', $date->toDateString())
+            ->where('end_date', '>=', $date->toDateString())
+            ->first();
+    }
+
+    /**
+     * Memeriksa apakah pegawai memiliki surat tugas disetujui untuk tanggal tertentu.
+     */
+    public function hasApprovedAssignmentLetterOn(\Carbon\Carbon $date): bool
+    {
+        return $this->approvedAssignmentLetterOn($date) !== null;
     }
 }

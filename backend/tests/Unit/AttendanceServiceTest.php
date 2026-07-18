@@ -34,7 +34,7 @@ class AttendanceServiceTest extends TestCase
         $user = User::factory()->create();
         $employee = Employee::create([
             'user_id' => $user->id,
-            'nip' => '123456',
+            'nik_ktp' => '123456',
             'status' => 'active',
         ]);
 
@@ -64,7 +64,7 @@ class AttendanceServiceTest extends TestCase
         $user = User::factory()->create();
         $employee = Employee::create([
             'user_id' => $user->id,
-            'nip' => '123456',
+            'nik_ktp' => '123456',
             'status' => 'active',
         ]);
 
@@ -92,7 +92,7 @@ class AttendanceServiceTest extends TestCase
         $user = User::factory()->create();
         $employee = Employee::create([
             'user_id' => $user->id,
-            'nip' => '123456',
+            'nik_ktp' => '123456',
             'status' => 'active',
         ]);
 
@@ -121,7 +121,7 @@ class AttendanceServiceTest extends TestCase
         $user = User::factory()->create();
         $employee = Employee::create([
             'user_id' => $user->id,
-            'nip' => '123456',
+            'nik_ktp' => '123456',
             'status' => 'active',
         ]);
 
@@ -142,7 +142,7 @@ class AttendanceServiceTest extends TestCase
         $user = User::factory()->create();
         $employee = Employee::create([
             'user_id' => $user->id,
-            'nip' => '1234567',
+            'nik_ktp' => '1234567',
             'status' => 'active',
         ]);
 

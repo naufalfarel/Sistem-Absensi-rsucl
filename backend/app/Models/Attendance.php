@@ -180,20 +180,26 @@ class Attendance extends Model
             $dayOfWeekName = $dayMap[$date->dayOfWeek];
 
             foreach ($employees as $emp) {
-                // Periksa apakah karyawan memiliki jadwal shift pada hari tersebut
-                $hasShift = $emp->schedules->contains(function($schedule) use ($dayOfWeekName) {
-                    return $schedule->pivot->day_of_week === $dayOfWeekName;
+                // Cari shift spesifik tanggal terlebih dahulu
+                $matchingShift = $emp->schedules->first(function($schedule) use ($dateStr) {
+                    return $schedule->pivot->date === $dateStr;
                 });
+
+                // Jika tidak ada, fallback ke day_of_week
+                if (!$matchingShift) {
+                    $matchingShift = $emp->schedules->first(function($schedule) use ($dayOfWeekName) {
+                        return $schedule->pivot->day_of_week === $dayOfWeekName && is_null($schedule->pivot->date);
+                    });
+                }
+
+                $hasShift = !is_null($matchingShift);
 
                 // Jika tidak ada shift (hari libur/off), lewati pengecekan
                 if (!$hasShift) {
                     continue;
                 }
 
-                $matchingShift = $emp->schedules->first(function($schedule) use ($dayOfWeekName) {
-                    return $schedule->pivot->day_of_week === $dayOfWeekName;
-                });
-                $shiftName = $matchingShift ? $matchingShift->name : 'Reguler';
+                $shiftName = $matchingShift->name;
 
                 $key = $emp->id . '_' . $dateStr;
 
@@ -247,7 +253,7 @@ class Attendance extends Model
                         'employee' => [
                             'id' => $emp->id,
                             'name' => $emp->user?->name ?? 'Karyawan',
-                            'nip' => $emp->nip,
+                            'nik_ktp' => $emp->nik_ktp,
                             'department' => $emp->department?->name ?? 'Umum',
                             'position' => $emp->position?->name ?? 'Staff',
                         ],
@@ -301,7 +307,7 @@ class Attendance extends Model
                             'employee' => [
                                 'id' => $emp->id,
                                 'name' => $emp->user?->name ?? 'Karyawan',
-                                'nip' => $emp->nip,
+                                'nik_ktp' => $emp->nik_ktp,
                                 'department' => $emp->department?->name ?? 'Umum',
                                 'position' => $emp->position?->name ?? 'Staff',
                             ],
@@ -380,7 +386,7 @@ class Attendance extends Model
                                 'employee' => [
                                     'id' => $emp->id,
                                     'name' => $emp->user?->name ?? 'Karyawan',
-                                    'nip' => $emp->nip,
+                                    'nik_ktp' => $emp->nik_ktp,
                                     'department' => $emp->department?->name ?? 'Umum',
                                     'position' => $emp->position?->name ?? 'Staff',
                                 ],

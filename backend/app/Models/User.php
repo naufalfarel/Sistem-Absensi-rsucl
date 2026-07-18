@@ -22,7 +22,7 @@ class User extends Authenticatable
 
     // Kolom-kolom yang dapat diisi secara massal
     protected $fillable = [
-        'name', 'email', 'password', 'role', 'nip', 'username',
+        'name', 'email', 'password', 'role', 'nik_ktp', 'username',
         'profile_picture', 'pj_bagian_department_id',
     ];
 
