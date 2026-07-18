@@ -36,6 +36,7 @@ import {
 import { Alert, AlertDescription } from "./ui/alert";
 // ── [DEV] Simulasi Waktu — hapus baris ini saat production ──────────────
 import { SimulationPanel } from "../dev/SimulationPanel";
+import { dotenv } from "dotenv";
 
 // Fix Leaflet default marker icon broken by bundlers
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -372,7 +373,9 @@ function FaceVerificationCard({
 
         let quality = 0.85;
         let finalDataUrl = "";
-        const limitBytes = 25 * 1024; // 50 KB
+        const limitBytes = parseInt(
+          process.env.REACT_APP_IMAGE_LIMIT || "25600",
+        ); // 25 KB default
 
         try {
           const getBlob = (q: number): Promise<Blob | null> => {
