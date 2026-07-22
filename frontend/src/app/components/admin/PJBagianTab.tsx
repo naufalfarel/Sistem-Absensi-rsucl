@@ -263,7 +263,7 @@ export function PJBagianTab() {
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-[11px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all font-semibold text-gray-700"
                 >
                   <option value="">-- Pilih Karyawan --</option>
-                  {employees.filter(e => e.role !== 'admin').map(emp => (
+                  {employees.filter(e => e.role !== 'admin' && e.role !== 'super_admin').map(emp => (
                     <option key={emp.id} value={emp.id}>{emp.name} ({emp.nik_ktp}) - {emp.department}</option>
                   ))}
                 </select>

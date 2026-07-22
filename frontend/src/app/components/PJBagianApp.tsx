@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Home, MapPin, History, Bell, User, LogOut, Menu, X, Clock, CheckSquare, CalendarDays, FileText } from 'lucide-react';
+import { Home, MapPin, History, Bell, User, LogOut, Menu, X, Clock, CheckSquare, CalendarDays, FileText, BookOpen } from 'lucide-react';
 import logoImg from '../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
 import { useAuth } from '../../context/AuthContext';
 import { AttendancePage } from './AttendancePage';
@@ -8,13 +8,14 @@ import { OvertimeRequestPage } from './OvertimeRequestPage';
 import { NotificationsPage } from './NotificationsPage';
 import { ProfilePage } from './ProfilePage';
 import { LeaveRequestPage } from './LeaveRequestPage';
+import { GuidePage } from './GuidePage';
 import { LeaveApprovalTab } from './pjbagian/LeaveApprovalTab';
 import { OvertimeApprovalTab } from './pjbagian/OvertimeApprovalTab';
 import { JadwalShiftTab } from './pjbagian/JadwalShiftTab';
 import { PJBagianDashboard } from './pjbagian/PJBagianDashboard';
 import { notificationApi, leaveApi, overtimeApi } from '../../services/api';
 
-type Tab = 'dashboard' | 'attendance' | 'history' | 'overtime_personal' | 'approvals' | 'shift_proposals' | 'notifications' | 'profile' | 'leave';
+type Tab = 'dashboard' | 'attendance' | 'history' | 'overtime_personal' | 'approvals' | 'shift_proposals' | 'notifications' | 'profile' | 'leave' | 'guide';
 
 interface PJBagianAppProps {
   onLogout: () => void;
@@ -105,7 +106,7 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
       case 'shift_proposals':
         return <JadwalShiftTab user={user} />;
       case 'notifications':
-        return <NotificationsPage onUpdateCount={fetchUnreadCount} />;
+        return <NotificationsPage onUpdateCount={fetchUnreadCount} onNavigate={(tab) => setActiveTab(tab as Tab)} userRole="pj_bagian" />;
       case 'profile':
         return (
           <ProfilePage
@@ -115,21 +116,28 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
         );
       case 'leave':
         return <LeaveRequestPage onBack={() => setActiveTab('dashboard')} />;
+      case 'guide':
+        return <GuidePage />;
     }
   };
 
-  const personalItems: { id: Tab; icon: any; label: string; badge?: number }[] = [
+  const mainNavItems: { id: Tab; icon: any; label: string; badge?: number }[] = [
     { id: 'dashboard', icon: Home, label: 'Beranda' },
-    { id: 'attendance', icon: MapPin, label: 'Absen Mandiri' },
+    { id: 'attendance', icon: MapPin, label: 'Absen' },
     { id: 'history', icon: History, label: 'Riwayat Absen' },
-    { id: 'leave', icon: FileText, label: 'Cuti & Sakit' },
-    { id: 'overtime_personal', icon: Clock, label: 'Ajukan Lembur' },
     { id: 'notifications', icon: Bell, label: 'Notifikasi', badge: unreadNotifications },
+    { id: 'profile', icon: User, label: 'Profil Saya' },
+    { id: 'guide', icon: BookOpen, label: 'Panduan App' },
+  ];
+
+  const personalProposalItems: { id: Tab; icon: any; label: string; badge?: number }[] = [
+    { id: 'leave', icon: FileText, label: 'Pengajuan Cuti & Sakit' },
+    { id: 'overtime_personal', icon: Clock, label: 'Pengajuan Lembur' },
   ];
 
   const managementItems: { id: Tab; icon: any; label: string; badge?: number }[] = [
-    { id: 'approvals', icon: CheckSquare, label: 'Persetujuan Staf', badge: totalPendingApprovals },
-    { id: 'shift_proposals', icon: CalendarDays, label: 'Jadwal Shift' },
+    { id: 'approvals', icon: CheckSquare, label: 'Pengajuan Staf', badge: totalPendingApprovals },
+    { id: 'shift_proposals', icon: CalendarDays, label: 'Jadwal Shift Staf' },
   ];
 
   return (
@@ -146,13 +154,13 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
           <div className="px-5 pt-5 pb-4 border-b border-gray-100 flex items-center justify-between">
             <div className="flex items-center gap-3">
               {logoUrl !== 'none' && (
-                <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center border border-gray-100 shadow-sm overflow-hidden flex-shrink-0">
-                  <img src={logoUrl || logoImg} alt="Logo" className="w-9 h-9 object-contain" />
+                <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center border border-gray-100 shadow-sm overflow-hidden flex-shrink-0">
+                  <img src={logoUrl || logoImg} alt="Logo" className="w-8 h-8 object-contain" />
                 </div>
               )}
               <div>
-                <p className="text-[13px] font-bold text-gray-900">RSUCL Absensi</p>
-                <p className="text-[10px] text-gray-400 font-medium">Panel PJ Bagian</p>
+                <p className="text-[13px] font-bold text-gray-900 leading-tight">RSUCL PJ Bagian</p>
+                <p className="text-[10px] text-gray-400 font-medium">Supervisor & Koordinator</p>
               </div>
             </div>
             <button className="md:hidden text-gray-400 hover:text-gray-600" onClick={() => setSidebarOpen(false)}>
@@ -162,10 +170,10 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
 
           {/* Navigation Links */}
           <nav className="flex-1 p-3 space-y-4 overflow-y-auto">
-            {/* Aktivitas Mandiri */}
+            {/* Group 1: Menu Utama */}
             <div className="space-y-0.5">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-3 mb-2 mt-1">Aktivitas Personal</p>
-              {personalItems.map(item => {
+              <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider px-3 mb-1.5 mt-0.5">Menu Utama</p>
+              {mainNavItems.map(item => {
                 const Icon = item.icon;
                 const isActive = activeTab === item.id;
                 return (
@@ -177,16 +185,16 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
                     }}
                     className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all ${
                       isActive
-                        ? 'bg-[#16A34A] text-white font-medium shadow-sm shadow-green-200'
-                        : 'text-gray-600 hover:bg-gray-50'
+                        ? 'bg-[#16A34A] text-white font-semibold shadow-sm shadow-green-200'
+                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-medium'
                     }`}
                   >
                     <div className="flex items-center gap-2.5">
                       <Icon size={16} />
-                      <span className="text-[13px]">{item.label}</span>
+                      <span className="text-[12.5px]">{item.label}</span>
                     </div>
                     {item.badge !== undefined && item.badge > 0 && (
-                      <span className={`text-[10px] font-bold w-4.5 h-4.5 min-w-[18px] min-h-[18px] rounded-full flex items-center justify-center ${
+                      <span className={`text-[10px] font-bold min-w-[18px] min-h-[18px] px-1 rounded-full flex items-center justify-center ${
                         isActive ? 'bg-white/30 text-white' : 'bg-red-100 text-red-600'
                       }`}>
                         {item.badge}
@@ -197,9 +205,44 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
               })}
             </div>
 
-            {/* Manajemen Staf & Bagian */}
+            {/* Group 2: Menu Pengajuan Saya */}
             <div className="space-y-0.5 pt-3 border-t border-gray-100">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-3 mb-2">Manajemen Staf & Bagian</p>
+              <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider px-3 mb-1.5">Menu Pengajuan Saya</p>
+              {personalProposalItems.map(item => {
+                const Icon = item.icon;
+                const isActive = activeTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      setActiveTab(item.id);
+                      setSidebarOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all ${
+                      isActive
+                        ? 'bg-[#16A34A] text-white font-semibold shadow-sm shadow-green-200'
+                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-medium'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Icon size={16} />
+                      <span className="text-[12.5px]">{item.label}</span>
+                    </div>
+                    {item.badge !== undefined && item.badge > 0 && (
+                      <span className={`text-[10px] font-bold min-w-[18px] min-h-[18px] px-1 rounded-full flex items-center justify-center ${
+                        isActive ? 'bg-white/30 text-white' : 'bg-red-100 text-red-600'
+                      }`}>
+                        {item.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Group 3: Manajemen Staf & Bagian */}
+            <div className="space-y-0.5 pt-3 border-t border-gray-100">
+              <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider px-3 mb-1.5">Manajemen Staf & Bagian</p>
               {managementItems.map(item => {
                 const Icon = item.icon;
                 const isActive = activeTab === item.id;
@@ -212,16 +255,16 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
                     }}
                     className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all ${
                       isActive
-                        ? 'bg-[#16A34A] text-white font-medium shadow-sm shadow-green-200'
-                        : 'text-gray-600 hover:bg-gray-50'
+                        ? 'bg-[#16A34A] text-white font-semibold shadow-sm shadow-green-200'
+                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-medium'
                     }`}
                   >
                     <div className="flex items-center gap-2.5">
                       <Icon size={16} />
-                      <span className="text-[13px]">{item.label}</span>
+                      <span className="text-[12.5px]">{item.label}</span>
                     </div>
                     {item.badge !== undefined && item.badge > 0 && (
-                      <span className={`text-[10px] font-bold w-4.5 h-4.5 min-w-[18px] min-h-[18px] rounded-full flex items-center justify-center ${
+                      <span className={`text-[10px] font-bold min-w-[18px] min-h-[18px] px-1 rounded-full flex items-center justify-center ${
                         isActive ? 'bg-white/30 text-white' : 'bg-red-100 text-red-600'
                       }`}>
                         {item.badge}

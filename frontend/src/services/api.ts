@@ -120,7 +120,7 @@ export interface AuthUser {
   id: number;
   name: string;
   email: string;
-  role: 'admin' | 'employee' | 'pj_bagian';
+  role: 'admin' | 'employee' | 'pj_bagian' | 'super_admin';
   nik_ktp: string;
   username: string;
   pj_bagian_department_id?: number;
@@ -137,6 +137,11 @@ export interface AuthUser {
     motor_plate_2?: string | null;
     car_plate_1?: string | null;
     car_plate_2?: string | null;
+  };
+  social_media?: {
+    instagram?: string | null;
+    facebook?: string | null;
+    tiktok?: string | null;
   };
 }
 
@@ -169,6 +174,9 @@ export const profileApi = {
     username?: string;
     phone?: string;
     gender?: string;
+    instagram?: string | null;
+    facebook?: string | null;
+    tiktok?: string | null;
     password?: string;
     old_password?: string;
     profile_picture?: string | null;
@@ -213,6 +221,11 @@ export interface Employee {
     motor_plate_2?: string | null;
     car_plate_1?: string | null;
     car_plate_2?: string | null;
+  };
+  social_media?: {
+    instagram?: string | null;
+    facebook?: string | null;
+    tiktok?: string | null;
   };
   motor_plate_1?: string | null;
   motor_plate_2?: string | null;
@@ -707,8 +720,14 @@ export interface MonthlyRekapRecord {
  * Layanan penarikan laporan absensi dan rekapitulasi ekspor.
  */
 export const reportApi = {
-  // Ringkasan data untuk grafik dashboard admin
-  summary: () => api.get<{ success: boolean; data: ReportSummary }>('/reports/summary'),
+  // Ringkasan data untuk grafik dashboard admin (opsional: filter bulan/tahun)
+  summary: (month?: number, year?: number) => {
+    const params = new URLSearchParams();
+    if (month !== undefined) params.append('month', String(month));
+    if (year !== undefined) params.append('year', String(year));
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return api.get<{ success: boolean; data: ReportSummary }>(`/reports/summary${qs}`);
+  },
   // Rekapitulasi bulanan absensi seluruh karyawan
   monthlyRekap: (month: number, year: number) =>
     api.get<{ success: boolean; data: MonthlyRekapRecord[] }>(`/reports/monthly-rekap?month=${month}&year=${year}`),
@@ -830,6 +849,25 @@ export interface MyShiftSchedule {
 }
 
 /**
+ * Interface pemetaan jadwal bulanan per karyawan (sistem kalender tanggal spesifik).
+ * Kunci pada `dates` adalah string tanggal format YYYY-MM-DD.
+ */
+export interface EmployeeMonthlySchedule {
+  employee_id: number;
+  name: string;
+  department?: number;
+  dates: Record<string, {
+    schedule_id: number;
+    name: string;
+    color: string;
+    icon: string;
+    shift_type?: string;
+    start_time?: string | null;
+    end_time?: string | null;
+  }>;
+}
+
+/**
  * Layanan CRUD shift kerja dan pengaturan plot jadwal mingguan karyawan.
  */
 export const scheduleApi = {
@@ -843,22 +881,30 @@ export const scheduleApi = {
     api.put<{ success: boolean; data: ShiftSchedule }>(`/schedules/${id}`, data),
   // Hapus shift kerja
   delete: (id: number)                     => api.delete<{ success: boolean; message: string }>(`/schedules/${id}`),
-  // Ambil tabel penugasan jadwal mingguan semua karyawan
-  getEmployeeSchedules: (startDate?: string) => 
-    api.get<{ 
-      success: boolean; 
-      start_date: string;
-      dates: Record<string, string>;
-      data: EmployeeWeeklySchedule[] 
-    }>(`/employee-schedules${startDate ? `?start_date=${startDate}` : ''}`),
-  // Tugaskan shift tertentu ke karyawan untuk hari/tanggal tertentu
-  assignEmployeeSchedule: (data: { employee_id: number; day_of_week?: string | null; date?: string | null; schedule_id: number | null }) =>
-    api.post<{ success: boolean; message: string }>('/employee-schedules/assign', data),
-  // Tugaskan shift ke seluruh departemen sekaligus
-  assignDepartmentSchedule: (data: { department_id: number; day_of_week?: string | null; date?: string | null; schedule_id: number | null }) =>
-    api.post<{ success: boolean; message: string }>('/employee-schedules/assign-department', data),
+  // Ambil tabel penugasan jadwal mingguan semua karyawan (legacy Senin-Minggu)
+  getEmployeeSchedules: () => api.get<{ success: boolean; data: EmployeeWeeklySchedule[] }>('/employee-schedules'),
+  // Tugaskan shift tertentu ke karyawan untuk hari tertentu (legacy day_of_week)
+  assignEmployeeSchedule: (employee_id: number, day_of_week: string, schedule_id: number | null) =>
+    api.post<{ success: boolean; message: string }>('/employee-schedules/assign', { employee_id, day_of_week, schedule_id }),
+  // Tugaskan shift ke seluruh departemen sekaligus (legacy)
+  assignDepartmentSchedule: (department_id: number, day_of_week: string, schedule_id: number | null) =>
+    api.post<{ success: boolean; message: string }>('/employee-schedules/assign-department', { department_id, day_of_week, schedule_id }),
   // Ambil info shift kerja yang berlaku untuk diri sendiri hari ini
-  mySchedule: () => api.get<{ success: boolean; data: MyShiftSchedule | null; saturday_shift?: MyShiftSchedule | null; day: string }>('/my-schedule'),
+  mySchedule: () => api.get<{ success: boolean; data: MyShiftSchedule | null; saturday_shift?: MyShiftSchedule | null; day: string; source?: 'date_specific' | 'weekly' }>('/my-schedule'),
+
+  // ── KALENDER BULANAN (tanggal spesifik) ────────────────────────────────
+  // Ambil jadwal shift per-tanggal seluruh karyawan dalam satu bulan
+  getMonthlySchedule: (year: number, month: number, departmentId?: number) => {
+    let path = `/employee-schedules/monthly?year=${year}&month=${month}`;
+    if (departmentId) path += `&department_id=${departmentId}`;
+    return api.get<{ success: boolean; year: number; month: number; days: number; data: EmployeeMonthlySchedule[] }>(path);
+  },
+  // Tugaskan shift ke satu karyawan untuk satu tanggal spesifik
+  assignByDate: (employee_id: number, work_date: string, schedule_id: number | null) =>
+    api.post<{ success: boolean; message: string }>('/employee-schedules/assign-date', { employee_id, work_date, schedule_id }),
+  // Tugaskan shift ke banyak karyawan & banyak tanggal sekaligus
+  assignBulkByDate: (assignments: Array<{ employee_id: number; work_date: string; schedule_id: number | null }>) =>
+    api.post<{ success: boolean; message: string }>('/employee-schedules/assign-bulk-date', { assignments }),
 };
 
 // ─────────────────────────────────────────────────────────────────────
@@ -907,9 +953,23 @@ export const holidayApi = {
   update: (id: number, data: { date: string; name: string }) =>
     api.put<{ success: boolean; message: string; data: Holiday }>(`/holidays/${id}`, data),
   // Hapus hari libur (admin)
-  delete: (id: number) =>
-    api.delete<{ success: boolean; message: string }>(`/holidays/${id}`),
+  delete: (id: number) => api.delete<{ success: boolean; message: string }>(`/shift-assignment-proposals/${id}`),
+};
 
+// ─────────────────────────────────────────────────────────────────────
+// Super Admin (Direktur RSUCL - Kelola Akun Admin)
+// ─────────────────────────────────────────────────────────────────────
+
+export const adminManagementApi = {
+  list: () => api.get<{ success: boolean; data: AuthUser[] }>('/super-admin/admins'),
+  create: (data: { name: string; username: string; email: string; password?: string; nik_ktp?: string; role?: string }) =>
+    api.post<{ success: boolean; message: string; data: AuthUser }>('/super-admin/admins', data),
+  update: (id: number, data: { name: string; username: string; email: string; password?: string; nik_ktp?: string; role?: string }) =>
+    api.put<{ success: boolean; message: string; data: AuthUser }>(`/super-admin/admins/${id}`, data),
+  delete: (id: number) => api.delete<{ success: boolean; message: string }>(`/super-admin/admins/${id}`),
+};
+
+export const holidayExtraApi = {
   // Ambil daftar penugasan kerja hari libur tertentu (admin)
   listAssignments: (holidayId: number) =>
     api.get<{ success: boolean; data: HolidayWorkAssignment[] }>(`/holidays/${holidayId}/work-assignments`),
@@ -1006,17 +1066,17 @@ export const overtimeApi = {
     }>(`/overtime-requests/${id}`);
   },
 
-  overtimesSummary: (params: {
+  overtimesSummary: (params?: {
     date_from?: string;
     date_to?: string;
     department_id?: string;
     search?: string;
   }) => {
     const query = new URLSearchParams();
-    if (params.date_from) query.append('date_from', params.date_from);
-    if (params.date_to) query.append('date_to', params.date_to);
-    if (params.department_id) query.append('department_id', params.department_id);
-    if (params.search) query.append('search', params.search);
+    if (params?.date_from) query.append('date_from', params.date_from);
+    if (params?.date_to) query.append('date_to', params.date_to);
+    if (params?.department_id) query.append('department_id', params.department_id);
+    if (params?.search) query.append('search', params.search);
 
     return api.get<{
       success: boolean;
@@ -1045,6 +1105,10 @@ export const overtimeApi = {
       message: string;
       data: OvertimeRequest;
     }>(`/overtime-requests/${id}/reject`, { admin_note: adminNote });
+  },
+
+  cancel: (id: number) => {
+    return api.delete<{ success: boolean; message: string }>(`/overtime-requests/${id}/cancel`);
   },
 };
 
@@ -1131,14 +1195,17 @@ export const pjBagianApi = {
 export interface AssignmentLetter {
   id: number;
   employee_id: number;
-  letter_number: string | null;
+  source?: 'employee_request' | 'admin_assignment';
+  letter_number?: string | null;
   title: string;
   issuing_institution: string;
   purpose: string;
   start_date: string;
   end_date: string;
-  document_url: string;
-  status: 'pending' | 'approved' | 'rejected';
+  document_url: string | null;
+  attendance_proof_url?: string | null;
+  activity_notes?: string | null;
+  status: 'pending' | 'approved' | 'completed' | 'rejected';
   admin_note: string | null;
   reviewed_by: string | null;
   reviewed_at: string | null;
@@ -1160,6 +1227,7 @@ export const assignmentLetterApi = {
     department_id?: string;
     search?: string;
     page?: number;
+    personal?: boolean;
   }) => {
     const query = new URLSearchParams();
     if (params?.status) query.append('status', params.status);
@@ -1168,6 +1236,7 @@ export const assignmentLetterApi = {
     if (params?.department_id) query.append('department_id', params.department_id);
     if (params?.search) query.append('search', params.search);
     if (params?.page) query.append('page', params.page.toString());
+    if (params?.personal) query.append('personal', '1');
 
     return api.get<{
       success: boolean;
@@ -1184,6 +1253,14 @@ export const assignmentLetterApi = {
     }>('/assignment-letters', formData);
   },
 
+  createByAdmin: (formData: FormData) => {
+    return api.post<{
+      success: boolean;
+      message: string;
+      data: AssignmentLetter;
+    }>('/assignment-letters/admin-create', formData);
+  },
+
   show: (id: number) => {
     return api.get<{
       success: boolean;
@@ -1191,12 +1268,22 @@ export const assignmentLetterApi = {
     }>(`/assignment-letters/${id}`);
   },
 
-  approve: (id: number, adminNote?: string) => {
+  approve: (id: number, adminNote?: string, documentFile?: File | null) => {
+    if (documentFile) {
+      const formData = new FormData();
+      formData.append('document', documentFile);
+      if (adminNote) formData.append('admin_note', adminNote);
+      return api.post<{
+        success: boolean;
+        message: string;
+        data: AssignmentLetter;
+      }>(`/assignment-letters/${id}/approve`, formData);
+    }
     return api.put<{
       success: boolean;
       message: string;
       data: AssignmentLetter;
-    }>(`/assignment-letters/${id}/approve`, { admin_note: adminNote });
+    }>(`/assignment-letters/${id}/approve`, { status: 'approved', admin_note: adminNote });
   },
 
   reject: (id: number, adminNote: string) => {
@@ -1204,9 +1291,166 @@ export const assignmentLetterApi = {
       success: boolean;
       message: string;
       data: AssignmentLetter;
-    }>(`/assignment-letters/${id}/reject`, { admin_note: adminNote });
+    }>(`/assignment-letters/${id}/reject`, { status: 'rejected', admin_note: adminNote });
+  },
+
+  uploadReport: (id: number, formData: FormData) => {
+    return api.post<{
+      success: boolean;
+      message: string;
+      data: AssignmentLetter;
+    }>(`/assignment-letters/${id}/report`, formData);
+  },
+
+  cancel: (id: number) => {
+    return api.delete<{ success: boolean; message: string }>(`/assignment-letters/${id}/cancel`);
   },
 };
+
+// ─────────────────────────────────────────────────────────────────────
+// Onboarding / Registrasi Pegawai Baru
+// ─────────────────────────────────────────────────────────────────────
+export interface EmployeeRegistration {
+  id: number;
+  registration_number: string;
+  name: string;
+  nik_ktp: string;
+  email: string;
+  phone: string;
+  gender: 'Laki-laki' | 'Perempuan';
+  department_id?: number | null;
+  position_id?: number | null;
+  status: 'pending' | 'revision_required' | 'approved' | 'rejected';
+  admin_note?: string | null;
+  temp_password_encrypted?: string | null;
+  user_id?: number | null;
+  employee_id?: number | null;
+  motor_plate_1?: string | null;
+  motor_plate_2?: string | null;
+  car_plate_1?: string | null;
+  car_plate_2?: string | null;
+  instagram?: string | null;
+  facebook?: string | null;
+  tiktok?: string | null;
+  created_at: string;
+  updated_at: string;
+  department?: { id: number; name: string };
+  position?: { id: number; name: string };
+  user?: { id: number; username: string; name: string };
+}
+
+export const employeeRegistrationApi = {
+  getMeta: () => {
+    return api.get<{
+      success: boolean;
+      data: {
+        departments: { id: number; name: string }[];
+        positions: { id: number; name: string }[];
+      };
+    }>('/public/employee-registrations/meta');
+  },
+
+  submit: (data: {
+    name: string;
+    nik_ktp: string;
+    email: string;
+    phone: string;
+    gender: string;
+    department_id?: number | null;
+    position_id?: number | null;
+    motor_plate_1?: string | null;
+    motor_plate_2?: string | null;
+    car_plate_1?: string | null;
+    car_plate_2?: string | null;
+    instagram?: string | null;
+    facebook?: string | null;
+    tiktok?: string | null;
+  }) => {
+    return api.post<{
+      success: boolean;
+      message: string;
+      data: {
+        registration_number: string;
+        name: string;
+        created_at: string;
+      };
+    }>('/public/employee-registrations', data);
+  },
+
+  checkStatus: (data: {
+    registration_number: string;
+    nik?: string;
+    phone?: string;
+  }) => {
+    return api.post<{
+      success: boolean;
+      data: {
+        registration_number: string;
+        name: string;
+        status: 'pending' | 'revision_required' | 'approved' | 'rejected';
+        admin_note?: string | null;
+        created_at?: string;
+        updated_at?: string;
+        employee_code?: string;
+        username?: string;
+        department?: string;
+        position?: string;
+        temp_password?: string | null;
+        password_note?: string;
+      };
+    }>('/public/employee-registrations/check-status', data);
+  },
+
+  list: (params?: { status?: string; search?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.status) query.append('status', params.status);
+    if (params?.search) query.append('search', params.search);
+    return api.get<{
+      success: boolean;
+      data: EmployeeRegistration[];
+      summary?: {
+        pending: number;
+        revision_required: number;
+        approved: number;
+        rejected: number;
+        total: number;
+      };
+    }>(`/employee-registrations?${query.toString()}`);
+  },
+
+  show: (id: number) => {
+    return api.get<{ success: boolean; data: EmployeeRegistration }>(`/employee-registrations/${id}`);
+  },
+
+  approve: (id: number, adminNote?: string) => {
+    return api.put<{
+      success: boolean;
+      message: string;
+      data: {
+        registration_id: number;
+        username: string;
+        temp_password: string;
+        user_id: number;
+        employee_id: number;
+      };
+    }>(`/employee-registrations/${id}/approve`, { admin_note: adminNote });
+  },
+
+  reject: (id: number, adminNote: string) => {
+    return api.put<{ success: boolean; message: string; data: EmployeeRegistration }>(
+      `/employee-registrations/${id}/reject`,
+      { admin_note: adminNote }
+    );
+  },
+
+  requestRevision: (id: number, adminNote: string) => {
+    return api.put<{ success: boolean; message: string; data: EmployeeRegistration }>(
+      `/employee-registrations/${id}/revision`,
+      { admin_note: adminNote }
+    );
+  },
+};
+
 
 
 

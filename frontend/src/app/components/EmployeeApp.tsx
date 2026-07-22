@@ -87,17 +87,21 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
     return () => clearInterval(t);
   }, []);
 
-  // Daftar item navigasi menu sidebar & bottom nav
-  const navItems: { id: Tab; icon: typeof Home; label: string; badge?: number }[] = [
-    { id: 'dashboard', icon: Home, label: 'Beranda' },
-    { id: 'attendance', icon: MapPin, label: 'Absensi' },
-    { id: 'history', icon: History, label: 'Riwayat' },
-    { id: 'leave', icon: FileText, label: 'Cuti & Sakit' },
-    { id: 'overtime', icon: Clock, label: 'Lembur' },
-    { id: 'assignment', icon: FileText, label: 'Surat Tugas' },
-    { id: 'notifications', icon: Bell, label: 'Notifikasi', badge: unreadNotifications },
-    { id: 'profile', icon: User, label: 'Profil' },
-    { id: 'guide', icon: BookOpen, label: 'Panduan' },
+  // Item Navigasi Menu Utama
+  const mainNavItems: { id: Tab; icon: typeof Home; label: string; badge?: number }[] = [
+    { id: 'dashboard',     icon: Home,     label: 'Beranda' },
+    { id: 'attendance',    icon: MapPin,   label: 'Absen' },
+    { id: 'history',       icon: History,  label: 'Riwayat Absen' },
+    { id: 'notifications', icon: Bell,     label: 'Notifikasi', badge: unreadNotifications },
+    { id: 'profile',       icon: User,     label: 'Profil Saya' },
+    { id: 'guide',         icon: BookOpen, label: 'Panduan App' },
+  ];
+
+  // Item Navigasi Menu Pengajuan
+  const proposalNavItems: { id: Tab; icon: typeof Home; label: string; badge?: number }[] = [
+    { id: 'leave',      icon: FileText, label: 'Pengajuan Cuti & Sakit' },
+    { id: 'overtime',   icon: Clock,    label: 'Pengajuan Lembur' },
+    { id: 'assignment', icon: FileText, label: 'Pengajuan Surat Tugas' },
   ];
 
   const timeStr = time.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
@@ -109,7 +113,6 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
           <DashboardHome 
             onNavigate={(tab) => {
               if (tab === 'profile-leave') {
-                // Redirect langsung ke halaman cuti baru
                 handleTabChange('leave');
               } else {
                 handleTabChange(tab as Tab);
@@ -122,7 +125,7 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
       case 'leave': return <LeaveRequestPage onBack={() => handleTabChange('dashboard')} />;
       case 'overtime': return <OvertimeRequestPage />;
       case 'assignment': return <AssignmentLetterPage />;
-      case 'notifications': return <NotificationsPage onUpdateCount={fetchUnreadCount} />;
+      case 'notifications': return <NotificationsPage onUpdateCount={fetchUnreadCount} onNavigate={(tab) => handleTabChange(tab as Tab)} userRole="employee" />;
       case 'profile': 
         return (
           <ProfilePage 
@@ -143,57 +146,93 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
   const SidebarContent = ({ mobile }: { mobile?: boolean }) => (
     <div className="flex flex-col h-full bg-white">
       {/* Logo */}
-      <div className="px-5 pt-6 pb-5 border-b border-gray-100">
+      <div className="px-5 pt-5 pb-4 border-b border-gray-100">
         <div className="flex items-center gap-3">
           {logoUrl !== 'none' && (
-            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center border border-gray-100 shadow-sm flex-shrink-0 overflow-hidden">
-              <img src={logoUrl || logoImg} alt="Logo RSUCL" className="w-9 h-9 object-contain" />
+            <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center border border-gray-100 shadow-sm flex-shrink-0 overflow-hidden">
+              <img src={logoUrl || logoImg} alt="Logo RSUCL" className="w-8 h-8 object-contain" />
             </div>
           )}
           <div>
-            <p className="text-[14px] font-semibold text-gray-900">RSUCL</p>
-            <p className="text-[11px] text-gray-400">Sistem Absensi</p>
+            <p className="text-[13px] font-bold text-gray-900 leading-tight">RSUCL Pegawai</p>
+            <p className="text-[10px] text-gray-400 font-medium">Sistem Absensi Digital</p>
           </div>
         </div>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-3 mb-2 mt-1">Menu</p>
-        {navItems.map(item => (
-          <button
-            key={item.id}
-            onClick={() => { handleTabChange(item.id); if (mobile) setSidebarOpen(false); }}
-            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-[13px] transition-all ${
-              activeTab === item.id
-                ? 'bg-[#16A34A] text-white font-medium shadow-sm shadow-green-200'
-                : 'text-gray-600 hover:bg-gray-50'
-            }`}
-          >
-            <div className="flex items-center gap-2.5">
-              <item.icon size={16} />
-              <span>{item.label}</span>
-            </div>
-            {item.badge !== undefined && item.badge > 0 ? (
-              <span className={`text-[10px] font-bold w-4.5 h-4.5 min-w-[18px] min-h-[18px] rounded-full flex items-center justify-center ${
-                activeTab === item.id ? 'bg-white/30 text-white' : 'bg-red-100 text-red-600'
-              }`}>
-                {item.badge}
-              </span>
-            ) : null}
-          </button>
-        ))}
+      {/* Navigation Groups */}
+      <nav className="flex-1 p-3 space-y-4 overflow-y-auto">
+        {/* Group 1: Menu Utama */}
+        <div className="space-y-0.5">
+          <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider px-3 mb-1.5 mt-0.5">Menu Utama</p>
+          {mainNavItems.map(item => {
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => { handleTabChange(item.id); if (mobile) setSidebarOpen(false); }}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-[12.5px] transition-all ${
+                  isActive
+                    ? 'bg-[#16A34A] text-white font-semibold shadow-sm shadow-green-200'
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-medium'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <item.icon size={16} />
+                  <span>{item.label}</span>
+                </div>
+                {item.badge !== undefined && item.badge > 0 ? (
+                  <span className={`text-[10px] font-bold min-w-[18px] min-h-[18px] px-1 rounded-full flex items-center justify-center ${
+                    isActive ? 'bg-white/30 text-white' : 'bg-red-100 text-red-600'
+                  }`}>
+                    {item.badge}
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
 
+        {/* Group 2: Menu Pengajuan */}
+        <div className="space-y-0.5 pt-3 border-t border-gray-100">
+          <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider px-3 mb-1.5">Menu Pengajuan</p>
+          {proposalNavItems.map(item => {
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => { handleTabChange(item.id); if (mobile) setSidebarOpen(false); }}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-[12.5px] transition-all ${
+                  isActive
+                    ? 'bg-[#16A34A] text-white font-semibold shadow-sm shadow-green-200'
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-medium'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <item.icon size={16} />
+                  <span>{item.label}</span>
+                </div>
+                {item.badge !== undefined && item.badge > 0 ? (
+                  <span className={`text-[10px] font-bold min-w-[18px] min-h-[18px] px-1 rounded-full flex items-center justify-center ${
+                    isActive ? 'bg-white/30 text-white' : 'bg-red-100 text-red-600'
+                  }`}>
+                    {item.badge}
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
       </nav>
 
-      {/* Profile Card & Logout (Tetap di bawah sidebar) */}
+      {/* Profile Card & Logout (Bottom) */}
       <div className="p-3 border-t border-gray-100 bg-white flex-shrink-0">
-        <div className="flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-gray-50 transition-colors">
+        <div className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-gray-50 transition-colors">
           <button
             onClick={() => { handleTabChange('profile'); if (mobile) setSidebarOpen(false); }}
             className="flex items-center gap-2.5 flex-1 min-w-0 text-left focus:outline-none"
           >
-            <div className="w-8 h-8 rounded-xl bg-[#16A34A] flex items-center justify-center flex-shrink-0 overflow-hidden shadow-sm">
+            <div className="w-8 h-8 rounded-xl bg-[#16A34A] flex items-center justify-center flex-shrink-0 overflow-hidden shadow-xs">
               {user?.profile_picture ? (
                 <img src={user.profile_picture} alt={user.name} className="w-full h-full object-cover" />
               ) : (
@@ -203,17 +242,19 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[12px] font-semibold text-gray-850 truncate">{user?.name || 'Karyawan'}</p>
+              <p className="text-[12px] font-semibold text-gray-900 truncate">{user?.name || 'Karyawan'}</p>
               <p className="text-[10px] text-gray-400 truncate">{user?.position || 'Staf'} · {user?.department || 'RSUCL'}</p>
             </div>
           </button>
-          <button onClick={onLogout} className="text-gray-400 hover:text-red-500 transition-colors flex-shrink-0" title="Keluar">
+          <button onClick={onLogout} className="text-gray-400 hover:text-red-500 transition-colors flex-shrink-0 p-1" title="Keluar">
             <LogOut size={15} />
           </button>
         </div>
       </div>
     </div>
   );
+
+  const allNavItems = [...mainNavItems, ...proposalNavItems];
 
   return (
     <div className="flex h-screen bg-[#F5F7FA] overflow-hidden" style={{ fontFamily: "'Inter', sans-serif" }}>
@@ -258,7 +299,7 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
                 </div>
               )}
               <p className="text-[14px] font-semibold text-gray-900">
-                {navItems.find(n => n.id === activeTab)?.label}
+                {allNavItems.find(n => n.id === activeTab)?.label}
               </p>
             </div>
           </div>
@@ -288,19 +329,20 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
         {/* Bottom Nav (mobile) */}
         <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 shadow-lg z-[9990]">
           <div className="flex items-center justify-around px-2 py-1.5 pb-safe">
-            {navItems.filter(item => item.id !== 'guide' && item.id !== 'overtime' && item.id !== 'leave').slice(0, 5).map(item => (
+            {[
+              { id: 'dashboard',  icon: Home,     label: 'Beranda' },
+              { id: 'attendance', icon: MapPin,   label: 'Absensi' },
+              { id: 'leave',      icon: FileText, label: 'Cuti' },
+              { id: 'overtime',   icon: Clock,    label: 'Lembur' },
+              { id: 'profile',    icon: User,     label: 'Profil' },
+            ].map(item => (
               <button
                 key={item.id}
-                onClick={() => handleTabChange(item.id)}
+                onClick={() => handleTabChange(item.id as Tab)}
                 className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all relative ${
                   activeTab === item.id ? 'text-[#16A34A]' : 'text-gray-400'
                 }`}
               >
-                {item.badge !== undefined && item.badge > 0 ? (
-                  <span className="absolute top-0.5 right-1.5 w-3.5 h-3.5 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center">
-                    {item.badge}
-                  </span>
-                ) : null}
                 <div className={`p-1.5 rounded-xl transition-all ${activeTab === item.id ? 'bg-green-50' : ''}`}>
                   <item.icon size={18} strokeWidth={activeTab === item.id ? 2.5 : 1.8} />
                 </div>

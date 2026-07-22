@@ -29,13 +29,7 @@ class AttendanceService
         $dayName = $dayMap[$shiftDate->dayOfWeek];
 
         // Cari shift/schedule untuk hari ini
-        $shift = $employee->schedules()->wherePivot('date', $shiftDate->toDateString())->first();
-        if (!$shift) {
-            $shift = $employee->schedules()
-                              ->wherePivot('day_of_week', $dayName)
-                              ->wherePivotNull('date')
-                              ->first();
-        }
+        $shift = $employee->schedules()->wherePivot('day_of_week', $dayName)->first();
 
         // Tentukan jam pulang normal
         if ($shift) {

@@ -13,6 +13,7 @@ class AssignmentLetter extends Model
 {
     protected $fillable = [
         'employee_id',
+        'source',
         'letter_number',
         'title',
         'issuing_institution',
@@ -20,6 +21,8 @@ class AssignmentLetter extends Model
         'start_date',
         'end_date',
         'document_url',
+        'attendance_proof_url',
+        'activity_notes',
         'status',
         'admin_note',
         'reviewed_by',

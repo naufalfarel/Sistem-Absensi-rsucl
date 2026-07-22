@@ -12,9 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('employee_schedule', function (Blueprint $table) {
-            $table->date('date')->nullable()->after('schedule_id');
-            $table->index('date');
-            $table->string('day_of_week')->nullable()->change(); // Pastikan nullable jika belum
+            //
         });
     }
 
@@ -24,8 +22,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('employee_schedule', function (Blueprint $table) {
-            $table->dropIndex(['date']);
-            $table->dropColumn('date');
+            //
         });
     }
 };

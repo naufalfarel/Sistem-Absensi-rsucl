@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { CheckCircle2, XCircle, Clock, FileText, MapPin, Eye, Printer, X } from 'lucide-react';
 import { overtimeApi, OvertimeRequest } from '../../../services/api';
 import qrCodeImg from '../../../imports/qr_code_cempaka_lima.png';
+import qrHrdImg from '../../../imports/qr_hrd_rsucl.png';
 import logoImg from '../../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
 import { useAuth } from '../../../context/AuthContext';
+import { MonthYearDeptFilter } from '../ui/MonthYearDeptFilter';
 
 type OvertimeStatus = 'pending' | 'approved' | 'rejected';
 
@@ -24,6 +26,8 @@ export function OvertimeApprovalTab({ user, onUpdateCount }: OvertimeApprovalTab
   const { logoUrl } = useAuth();
   const [records, setRecords] = useState<OvertimeRequest[]>([]);
   const [filter, setFilter] = useState<'pending' | 'approved' | 'rejected' | 'all'>('pending');
+  const [filterMonth, setFilterMonth] = useState<number>(0);
+  const [filterYear, setFilterYear]   = useState<number>(new Date().getFullYear());
   const [confirmModal, setConfirmModal] = useState<{ id: number; action: 'approve' | 'reject'; name: string } | null>(null);
   const [adminNote, setAdminNote] = useState('');
   const [loading, setLoading] = useState(false);
@@ -51,6 +55,15 @@ export function OvertimeApprovalTab({ user, onUpdateCount }: OvertimeApprovalTab
   useEffect(() => {
     loadRecords();
   }, [filter]);
+
+  const filteredRecords = records.filter(r => {
+    if (r.date) {
+      const d = new Date(r.date);
+      if (filterMonth > 0 && d.getMonth() + 1 !== filterMonth) return false;
+      if (filterYear > 0 && d.getFullYear() !== filterYear) return false;
+    }
+    return true;
+  });
 
   const pendingCount = records.filter(r => r.pj_status === 'pending' && r.status === 'pending').length;
 
@@ -109,6 +122,15 @@ export function OvertimeApprovalTab({ user, onUpdateCount }: OvertimeApprovalTab
         </div>
       </div>
 
+      {/* ── Month & Year Filter ──────────────────────────────────── */}
+      <MonthYearDeptFilter
+        month={filterMonth}
+        year={filterYear}
+        showAllMonthsOption={true}
+        onMonthChange={setFilterMonth}
+        onYearChange={setFilterYear}
+      />
+
       {/* Filter Tabs */}
       <div className="flex gap-1 bg-white rounded-xl border border-gray-100 p-1 shadow-xs w-fit overflow-x-auto">
         {(['all', 'pending', 'approved', 'rejected'] as const).map(f => (
@@ -124,7 +146,7 @@ export function OvertimeApprovalTab({ user, onUpdateCount }: OvertimeApprovalTab
         {loading && (
           <div className="text-center py-5 text-gray-400 text-[11px]">Memuat data...</div>
         )}
-        {records.length === 0 && !loading && (
+        {filteredRecords.length === 0 && !loading && (
           <div className="text-center py-10 bg-white rounded-2xl border border-gray-100 shadow-xs p-5 w-full">
             <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-3.5 border border-gray-100">
               <FileText size={20} className="text-gray-400" />
@@ -133,7 +155,7 @@ export function OvertimeApprovalTab({ user, onUpdateCount }: OvertimeApprovalTab
             <p className="text-[11px] text-gray-400 mt-1">Semua permohonan lembur telah diproses.</p>
           </div>
         )}
-        {records.map(req => {
+        {filteredRecords.map(req => {
           const displayStatus = req.status !== 'pending' ? req.status : req.pj_status;
           const sc = statusConfig[displayStatus as OvertimeStatus] || { label: displayStatus, color: '#16A34A', bg: '#DCFCE7', border: '#BBF7D0' };
           const isOwnRequest = req.employee?.id === user.id;
@@ -394,28 +416,29 @@ Otorisasi Final: Direktur PT Cempaka Lima (Amir Hidayat, ST., MKM)`;
                 </div>
 
                 {/* Footer and Signatures */}
-                <div className="grid grid-cols-2 gap-12 pt-6 items-end">
+                <div className="grid grid-cols-2 gap-12 pt-6 items-start">
                   
-                  {/* Diajukan */}
-                  <div className="text-center">
-                    <p className="text-[12px] font-bold text-gray-650">Diajukan Oleh,</p>
-                    <div className="h-20" />
-                    <p className="text-[12px] font-bold text-gray-800 underline">{selectedSplRecord.employee?.name}</p>
-                    <p className="text-[10px] text-gray-500 font-semibold font-mono">NIK KTP: {selectedSplRecord.employee?.nik_ktp}</p>
+                  {/* Disetujui Oleh - Tim Administrator RSUCL */}
+                  <div className="text-center flex flex-col items-center">
+                    <p className="text-[12px] font-bold text-gray-800">Disetujui Oleh,</p>
+                    
+                    <div className="my-2 p-1 border border-gray-200 rounded-lg bg-white shadow-xs">
+                      <img src={qrHrdImg} alt="QR HRD RSUCL" className="w-20 h-20 object-contain" />
+                    </div>
+                    
+                    <p className="text-[12px] font-bold text-gray-800 underline">Tim Administrator RSUCL</p>
                   </div>
 
-                  {/* Disetujui */}
+                  {/* Diketahui Oleh - Direktur PT Cempaka Lima */}
                   <div className="text-center flex flex-col items-center">
-                    <p className="text-[12px] font-bold text-gray-650">Disetujui Oleh,</p>
-                    <p className="text-[10px] font-bold text-gray-500 italic mt-0.5">Direktur PT Cempaka Lima</p>
+                    <p className="text-[12px] font-bold text-gray-800">Diketahui Oleh,</p>
                     
-                    {/* QR Code placed directly here above the name */}
                     <div className="my-2 p-1 border border-gray-200 rounded-lg bg-white shadow-xs">
                       <img src={qrCodeImg} alt="QR Verification" className="w-20 h-20 object-contain" />
                     </div>
                     
                     <p className="text-[12px] font-bold text-gray-800 underline">Amir Hidayat, ST., MKM</p>
-                    <p className="text-[10px] text-gray-500 font-semibold">Direktur Utama</p>
+                    <p className="text-[10px] text-gray-600 font-semibold">Direktur PT Cempaka Lima</p>
                   </div>
 
                 </div>

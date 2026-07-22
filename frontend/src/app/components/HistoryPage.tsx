@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Search, Calendar, MapPin, Clock, TrendingUp, X } from 'lucide-react';
 import { BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { attendanceApi, AttendanceRecord } from '../../services/api';
+import { MonthYearDeptFilter } from './ui/MonthYearDeptFilter';
 
 /* ─── Status Config ─────────────────────────────────────────── */
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
@@ -193,59 +194,24 @@ export function HistoryPage() {
       </div>
 
       {/* ── Range Filter Bar ───────────────────────────────────── */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-5">
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-[13px] font-semibold text-gray-700">Rentang Waktu</p>
-          <span className="text-[11px] text-[#16A34A] font-medium bg-green-50 px-2 py-0.5 rounded-full">
-            {currentRangeLabel}
-          </span>
-        </div>
-
-        {/* Quick range chips */}
-        <div className="flex flex-wrap gap-2">
-          {rangeOptions.map(opt => (
-            <button
-              key={opt.id}
-              onClick={() => {
-                setRangeMode(opt.id);
-                if (opt.id === 'custom') setShowRange(true);
-                else setShowRange(false);
-              }}
-              className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all ${
-                rangeMode === opt.id
-                  ? 'bg-[#16A34A] text-white shadow-sm'
-                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Custom month/year picker */}
-        {rangeMode === 'custom' && (
-          <div className="mt-3 flex gap-2 items-center">
-            <select
-              value={customMonth}
-              onChange={e => setCustomMonth(Number(e.target.value))}
-              className="flex-1 text-[12px] border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/10 transition-all"
-            >
-              {MONTHS.map((m, i) => (
-                <option key={i} value={i + 1}>{m}</option>
-              ))}
-            </select>
-            <select
-              value={customYear}
-              onChange={e => setCustomYear(Number(e.target.value))}
-              className="w-28 text-[12px] border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/10 transition-all"
-            >
-              {[now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2].map(y => (
-                <option key={y} value={y}>{y}</option>
-              ))}
-            </select>
-          </div>
-        )}
-      </div>
+      <MonthYearDeptFilter
+        month={rangeMode === 'custom' ? customMonth : 0}
+        year={customYear}
+        showAllMonthsOption={true}
+        onMonthChange={(m) => {
+          if (m === 0) {
+            setRangeMode('1m');
+          } else {
+            setRangeMode('custom');
+            setCustomMonth(m);
+          }
+        }}
+        onYearChange={(y) => {
+          setCustomYear(y);
+          setRangeMode('custom');
+        }}
+        className="mb-5"
+      />
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">

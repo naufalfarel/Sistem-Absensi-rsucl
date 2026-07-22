@@ -9,6 +9,8 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ScheduleController;
 use App\Http\Controllers\SettingController;
+use App\Http\Controllers\Api\PublicEmployeeRegistrationController;
+use App\Http\Controllers\Api\AdminEmployeeRegistrationController;
 
 /*
 |--------------------------------------------------------------------------
@@ -28,6 +30,11 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::post('/forgot-password', [AuthController::class, 'resetPassword']);
 // Endpoint untuk mengambil konfigurasi sistem absensi (misal data radius, geofence, nama instansi)
 Route::get('/settings', [SettingController::class, 'index']);
+
+// ── Onboarding / Registrasi Pegawai Baru (Publik) ──
+Route::get('/public/employee-registrations/meta', [PublicEmployeeRegistrationController::class, 'meta']);
+Route::post('/public/employee-registrations', [PublicEmployeeRegistrationController::class, 'store']);
+Route::post('/public/employee-registrations/check-status', [PublicEmployeeRegistrationController::class, 'checkStatus'])->middleware('throttle:5,1');
 
 // ── Rute Terproteksi (Wajib menggunakan token Laravel Sanctum) ─────────────
 Route::middleware('auth:sanctum')->group(function () {
@@ -77,11 +84,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/overtime-requests/summary', [\App\Http\Controllers\Api\OvertimeRequestController::class, 'summary']);
     Route::post('/overtime-requests', [\App\Http\Controllers\Api\OvertimeRequestController::class, 'store']);
     Route::get('/overtime-requests/{id}', [\App\Http\Controllers\Api\OvertimeRequestController::class, 'show']);
+    Route::delete('/overtime-requests/{id}/cancel', [\App\Http\Controllers\Api\OvertimeRequestController::class, 'cancel']);
     
     // ── Fitur Pengajuan Surat Tugas
     Route::get('/assignment-letters', [\App\Http\Controllers\Api\AssignmentLetterController::class, 'index']);
     Route::post('/assignment-letters', [\App\Http\Controllers\Api\AssignmentLetterController::class, 'store']);
     Route::get('/assignment-letters/{id}', [\App\Http\Controllers\Api\AssignmentLetterController::class, 'show']);
+    Route::post('/assignment-letters/{id}/report', [\App\Http\Controllers\Api\AssignmentLetterController::class, 'uploadReport']);
+    Route::delete('/assignment-letters/{id}/cancel', [\App\Http\Controllers\Api\AssignmentLetterController::class, 'cancel']);
     
     // Endpoint Kategori Cuti Khusus (Umum untuk Karyawan & Admin)
     Route::get('/special-leave-categories', [\App\Http\Controllers\SpecialLeaveCategoryController::class, 'index']);
@@ -115,6 +125,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/employee-schedules/assign', [ScheduleController::class, 'assignEmployeeSchedule']);
         Route::post('/employee-schedules/assign-department', [ScheduleController::class, 'assignDepartmentSchedule']);
 
+        // Kalender bulanan (jadwal per-tanggal)
+        Route::get('/employee-schedules/monthly', [ScheduleController::class, 'getMonthlySchedule']);
+        Route::post('/employee-schedules/assign-date', [ScheduleController::class, 'assignEmployeeScheduleByDate']);
+        Route::post('/employee-schedules/assign-bulk-date', [ScheduleController::class, 'assignBulkByDate']);
+
         // Shift (Schedules) CRUD for both Admin and PJ Bagian
         Route::post('/schedules', [ScheduleController::class, 'store']);
         Route::put('/schedules/{schedule}', [ScheduleController::class, 'update']);
@@ -128,8 +143,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/special-leave-categories', [\App\Http\Controllers\SpecialLeaveCategoryController::class, 'store']);
         Route::put('/special-leave-categories/{id}', [\App\Http\Controllers\SpecialLeaveCategoryController::class, 'update']);
 
-        // Persetujuan Surat Tugas
+        // Persetujuan & Penerbitan Surat Tugas
+        Route::post('/assignment-letters/admin-create', [\App\Http\Controllers\Api\AssignmentLetterController::class, 'adminStore']);
         Route::put('/assignment-letters/{id}/approve', [\App\Http\Controllers\Api\AssignmentLetterController::class, 'approve']);
+        Route::post('/assignment-letters/{id}/approve', [\App\Http\Controllers\Api\AssignmentLetterController::class, 'approve']);
         Route::put('/assignment-letters/{id}/reject', [\App\Http\Controllers\Api\AssignmentLetterController::class, 'reject']);
 
         // ── Dashboard / Monitoring Kehadiran
@@ -156,7 +173,13 @@ Route::middleware('auth:sanctum')->group(function () {
         // Tolak laporan lembur (admin_note wajib)
         Route::put('/attendance/{id}/overtime/reject', [AttendanceController::class, 'rejectOvertime']);
 
-        // ── CRUD Karyawan
+        // ── CRUD Karyawan & Onboarding Draf Registrasi (Admin)
+        Route::get('/employee-registrations', [AdminEmployeeRegistrationController::class, 'index']);
+        Route::get('/employee-registrations/{id}', [AdminEmployeeRegistrationController::class, 'show']);
+        Route::put('/employee-registrations/{id}/approve', [AdminEmployeeRegistrationController::class, 'approve']);
+        Route::put('/employee-registrations/{id}/reject', [AdminEmployeeRegistrationController::class, 'reject']);
+        Route::put('/employee-registrations/{id}/revision', [AdminEmployeeRegistrationController::class, 'requestRevision']);
+
         // Mendapatkan data meta pendukung (list department/position) untuk registrasi karyawan
         Route::get('/employees/meta',   [EmployeeController::class, 'meta']);
         
@@ -212,5 +235,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/holidays/{id}/work-assignments', [\App\Http\Controllers\HolidayWorkAssignmentController::class, 'index']);
         Route::post('/holidays/{id}/work-assignments', [\App\Http\Controllers\HolidayWorkAssignmentController::class, 'store']);
         Route::delete('/holidays/{id}/work-assignments/{employeeId}', [\App\Http\Controllers\HolidayWorkAssignmentController::class, 'destroy']);
+    });
+
+    // ── RUTE KHUSUS SUPER ADMIN (Direktur RSUCL - Hanya untuk role 'super_admin') ──────
+    Route::middleware('super_admin')->group(function () {
+        Route::get('/super-admin/admins', [\App\Http\Controllers\AdminManagementController::class, 'index']);
+        Route::post('/super-admin/admins', [\App\Http\Controllers\AdminManagementController::class, 'store']);
+        Route::put('/super-admin/admins/{id}', [\App\Http\Controllers\AdminManagementController::class, 'update']);
+        Route::delete('/super-admin/admins/{id}', [\App\Http\Controllers\AdminManagementController::class, 'destroy']);
     });
 });

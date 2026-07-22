@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import {
   ChevronRight, User, Lock, Bell, Globe, Info, Shield, LogOut,
   Mail, Phone, MapPin, Calendar, Briefcase, Building2, Edit3, Camera,
-  Plus, X, CheckCircle2, Clock, XCircle, FileText, ChevronDown, AlertCircle, Paperclip, Trash2, Car
+  Plus, X, CheckCircle2, Clock, XCircle, FileText, ChevronDown, AlertCircle, Paperclip, Trash2, Car, Instagram, Facebook
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { leaveApi, LeaveRequest as ApiLeave, LeaveQuota, profileApi } from '../../services/api';
@@ -135,6 +135,9 @@ export function ProfilePage({ onLogout, initialSection, initialOpenModal, onRese
   const [editEmail, setEditEmail] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [editGender, setEditGender] = useState('Laki-laki');
+  const [editInstagram, setEditInstagram] = useState('');
+  const [editFacebook, setEditFacebook] = useState('');
+  const [editTiktok, setEditTiktok] = useState('');
   const [editProfileError, setEditProfileError] = useState('');
   const [editProfileSuccess, setEditProfileSuccess] = useState('');
   const [editProfileLoading, setEditProfileLoading] = useState(false);
@@ -193,7 +196,11 @@ export function ProfilePage({ onLogout, initialSection, initialOpenModal, onRese
       return;
     }
     if (newPassword.length < 6) {
-      setPasswordError('Password minimal 6 karakter.');
+      setPasswordError('Password minimal 6 angka.');
+      return;
+    }
+    if (!/^\d+$/.test(newPassword)) {
+      setPasswordError('Password hanya boleh berupa angka.');
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -236,7 +243,10 @@ export function ProfilePage({ onLogout, initialSection, initialOpenModal, onRese
         username: editUsername,
         email: editEmail,
         phone: editPhone,
-        gender: editGender
+        gender: editGender,
+        instagram: editInstagram.trim() || null,
+        facebook: editFacebook.trim() || null,
+        tiktok: editTiktok.trim() || null,
       });
       if (res.success) {
         setEditProfileSuccess('Profil berhasil diperbarui.');
@@ -469,6 +479,9 @@ export function ProfilePage({ onLogout, initialSection, initialOpenModal, onRese
     { icon: Mail,          label: 'Email',            value: user?.email ?? '' },
     { icon: Phone,         label: 'Nomor HP',        value: user?.phone ?? '--' },
     { icon: User,          label: 'Jenis Kelamin',   value: user?.gender ?? '--' },
+    { icon: Instagram,     label: 'Instagram',       value: user?.social_media?.instagram ? `@${user.social_media.instagram}` : '--' },
+    { icon: Facebook,      label: 'Facebook',        value: user?.social_media?.facebook ?? '--' },
+    { icon: Globe,         label: 'TikTok',          value: user?.social_media?.tiktok ? `@${user.social_media.tiktok}` : '--' },
   ];
 
   const infoKerja = [
@@ -560,7 +573,7 @@ export function ProfilePage({ onLogout, initialSection, initialOpenModal, onRese
             <div className="relative mt-5 grid grid-cols-3 gap-2">
               {[
                 { label: 'Kehadiran', value: '100%' },
-                { label: 'Status Role', value: user?.role === 'admin' ? 'Admin' : 'Karyawan' },
+                { label: 'Status Role', value: user?.role === 'super_admin' ? 'Super Admin' : user?.role === 'admin' ? 'Admin' : user?.role === 'pj_bagian' ? 'PJ Bagian' : 'Karyawan' },
                 { label: 'Sisa Cuti', value: `${remainingCuti} hari` },
               ].map((s, i) => (
                 <div key={i} className="bg-white/15 rounded-xl p-2.5 text-center border border-white/10">
@@ -582,6 +595,9 @@ export function ProfilePage({ onLogout, initialSection, initialOpenModal, onRese
                   setEditEmail(user?.email ?? '');
                   setEditPhone(user?.phone ?? '');
                   setEditGender(user?.gender ?? 'Laki-laki');
+                  setEditInstagram(user?.social_media?.instagram ?? '');
+                  setEditFacebook(user?.social_media?.facebook ?? '');
+                  setEditTiktok(user?.social_media?.tiktok ?? '');
                   setEditProfileError('');
                   setEditProfileSuccess('');
                   setShowEditProfileModal(true);
@@ -1171,29 +1187,32 @@ export function ProfilePage({ onLogout, initialSection, initialOpenModal, onRese
                 <label className="block text-[12px] font-medium text-gray-600 mb-1">Password Lama</label>
                 <input
                   type="password"
-                  placeholder="Masukkan password saat ini"
+                  inputMode="numeric"
+                  placeholder="Masukkan password saat ini (angka)"
                   value={oldPassword}
-                  onChange={e => setOldPassword(e.target.value)}
+                  onChange={e => setOldPassword(e.target.value.replace(/\D/g, ''))}
                   className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-[16px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all"
                 />
               </div>
               <div>
-                <label className="block text-[12px] font-medium text-gray-600 mb-1">Password Baru</label>
+                <label className="block text-[12px] font-medium text-gray-600 mb-1">Password Baru <span className="text-gray-400 font-normal text-[11px]">(Minimal 6 angka)</span></label>
                 <input
                   type="password"
-                  placeholder="Minimal 6 karakter"
+                  placeholder="Minimal 6 angka"
+                  inputMode="numeric"
                   value={newPassword}
-                  onChange={e => setNewPassword(e.target.value)}
+                  onChange={e => setNewPassword(e.target.value.replace(/\D/g, ''))}
                   className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-[16px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all"
                 />
               </div>
               <div>
-                <label className="block text-[12px] font-medium text-gray-600 mb-1">Konfirmasi Password Baru</label>
+                <label className="block text-[12px] font-medium text-gray-600 mb-1">Konfirmasi Password Baru <span className="text-gray-400 font-normal text-[11px]">(Ulangi angka)</span></label>
                 <input
                   type="password"
-                  placeholder="Ulangi password baru"
+                  placeholder="Ulangi angka password baru"
+                  inputMode="numeric"
                   value={confirmPassword}
-                  onChange={e => setConfirmPassword(e.target.value)}
+                  onChange={e => setConfirmPassword(e.target.value.replace(/\D/g, ''))}
                   className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-[16px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all"
                 />
               </div>
@@ -1316,6 +1335,42 @@ export function ProfilePage({ onLogout, initialSection, initialOpenModal, onRese
                     <option value="P">Perempuan (P)</option>
                   </select>
                   <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[12px] font-medium text-gray-600 mb-1">Instagram</label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-semibold text-[13px]">@</span>
+                  <input
+                    type="text"
+                    value={editInstagram}
+                    onChange={e => setEditInstagram(e.target.value)}
+                    placeholder="username"
+                    className="w-full pl-8 pr-4 py-2 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[12px] font-medium text-gray-600 mb-1">Facebook</label>
+                <input
+                  type="text"
+                  value={editFacebook}
+                  onChange={e => setEditFacebook(e.target.value)}
+                  placeholder="nama.pengguna"
+                  className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all"
+                />
+              </div>
+              <div>
+                <label className="block text-[12px] font-medium text-gray-600 mb-1">TikTok</label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-semibold text-[13px]">@</span>
+                  <input
+                    type="text"
+                    value={editTiktok}
+                    onChange={e => setEditTiktok(e.target.value)}
+                    placeholder="username"
+                    className="w-full pl-8 pr-4 py-2 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all"
+                  />
                 </div>
               </div>
             </div>

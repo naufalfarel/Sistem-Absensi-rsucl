@@ -87,14 +87,8 @@ class AttendanceRules
         $dayName = $dayMap[$date->dayOfWeek];
 
         $schedule = $employee->schedules()
-                             ->wherePivot('date', $date->toDateString())
+                             ->wherePivot('day_of_week', $dayName)
                              ->first();
-        if (!$schedule) {
-            $schedule = $employee->schedules()
-                                 ->wherePivot('day_of_week', $dayName)
-                                 ->wherePivotNull('date')
-                                 ->first();
-        }
 
         if ($schedule) {
             return $schedule->shift_type ?? 'normal';
@@ -142,13 +136,7 @@ class AttendanceRules
             3 => 'Rabu',   4 => 'Kamis', 5 => 'Jumat', 6 => 'Sabtu',
         ];
         $dayName = $dayMap[$date->dayOfWeek];
-        $schedule = $employee->schedules()->wherePivot('date', $date->toDateString())->first();
-        if (!$schedule) {
-            $schedule = $employee->schedules()
-                                 ->wherePivot('day_of_week', $dayName)
-                                 ->wherePivotNull('date')
-                                 ->first();
-        }
+        $schedule = $employee->schedules()->wherePivot('day_of_week', $dayName)->first();
 
         if (!$schedule) {
             return null;

@@ -81,6 +81,9 @@ export function SettingsTab() {
   const [name, setName]               = useState('Super Admin');
   const [email, setEmail]             = useState('admin@rsucl.id');
   const [username, setUsername]       = useState('admin');
+  const [profilePicPreview, setProfilePicPreview] = useState<string | null>(null);
+  const [profilePicBase64, setProfilePicBase64]   = useState<string | null | undefined>(undefined);
+  const avatarFileRef                 = useRef<HTMLInputElement>(null);
   const [oldPass, setOldPass]         = useState('');
   const [newPass, setNewPass]         = useState('');
   const [confirmPass, setConfirmPass] = useState('');
@@ -213,6 +216,7 @@ export function SettingsTab() {
       setName(user.name);
       setEmail(user.email);
       setUsername(user.username);
+      setProfilePicPreview(user.profile_picture || null);
     }
     fetchCategories();
   }, [user]);
@@ -252,13 +256,40 @@ export function SettingsTab() {
     }
   };
 
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!['image/png', 'image/jpeg', 'image/jpg', 'image/webp'].includes(file.type)) {
+      alert('Format file foto harus PNG, JPG, JPEG, atau WEBP.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const result = ev.target?.result as string;
+      setProfilePicPreview(result);
+      setProfilePicBase64(result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveAvatar = () => {
+    setProfilePicPreview(null);
+    setProfilePicBase64(null);
+    if (avatarFileRef.current) avatarFileRef.current.value = '';
+  };
+
   // ── Handlers ──
   const saveProfile = async () => {
     setProfileSaved(false);
     try {
-      const res = await profileApi.update({ name, email, username });
+      const payload: any = { name, email, username };
+      if (profilePicBase64 !== undefined) {
+        payload.profile_picture = profilePicBase64;
+      }
+      const res = await profileApi.update(payload);
       if (res.success) {
         setProfileSaved(true);
+        setProfilePicBase64(undefined);
         await refreshUser();
         setTimeout(() => setProfileSaved(false), 3000);
       }
@@ -273,7 +304,8 @@ export function SettingsTab() {
     setPassSaved(false);
     if (!oldPass || !newPass || !confirmPass) { setPassError('Semua field wajib diisi.'); return; }
     if (newPass !== confirmPass) { setPassError('Password baru tidak cocok.'); return; }
-    if (newPass.length < 6) { setPassError('Password minimal 6 karakter.'); return; }
+    if (newPass.length < 6) { setPassError('Password minimal 6 angka.'); return; }
+    if (!/^\d+$/.test(newPass)) { setPassError('Password hanya boleh berupa angka.'); return; }
     
     try {
       const res = await profileApi.update({ password: newPass, old_password: oldPass });
@@ -636,20 +668,60 @@ export function SettingsTab() {
           <p className="text-[14px] font-semibold text-gray-800">Pengaturan Akun</p>
         </div>
         <div className="p-5">
-          <div className="flex items-center gap-4 mb-5 p-3.5 bg-gray-50 rounded-2xl border border-gray-100">
-            <div className="w-14 h-14 rounded-2xl bg-white border border-gray-100 shadow-sm flex items-center justify-center overflow-hidden flex-shrink-0">
-              {user?.profile_picture ? (
-                <img src={user.profile_picture} alt={name} className="w-full h-full object-cover" />
-              ) : (
-                <span className="text-lg font-bold text-[#16A34A]">{(name || 'U').charAt(0)}</span>
-              )}
+          <div className="flex items-center gap-4 mb-5 p-4 bg-gray-50 rounded-2xl border border-gray-100">
+            {/* Avatar & Hover Upload Overlay */}
+            <div className="relative group flex-shrink-0">
+              <div className="w-16 h-16 rounded-2xl bg-white border border-gray-200 shadow-sm flex items-center justify-center overflow-hidden">
+                {profilePicPreview ? (
+                  <img src={profilePicPreview} alt={name} className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-xl font-black text-[#16A34A]">{(name || 'U').charAt(0)}</span>
+                )}
+              </div>
+              <label
+                htmlFor="admin-avatar-input"
+                className="absolute inset-0 bg-black/40 rounded-2xl opacity-0 group-hover:opacity-100 flex items-center justify-center text-white cursor-pointer transition-opacity"
+                title="Ganti Foto Profil"
+              >
+                <Upload size={18} />
+              </label>
+              <input
+                id="admin-avatar-input"
+                ref={avatarFileRef}
+                type="file"
+                accept="image/png, image/jpeg, image/jpg, image/webp"
+                className="hidden"
+                onChange={handleAvatarChange}
+              />
             </div>
-            <div>
-              <p className="text-[14px] font-semibold text-gray-800">{name}</p>
-              <p className="text-[12px] text-gray-400">Administrator RSUCL</p>
-              <div className="flex items-center gap-1 mt-1">
-                <Shield size={11} className="text-[#16A34A]" />
-                <span className="text-[11px] text-[#16A34A] font-medium">Akses penuh</span>
+
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="text-[14px] font-bold text-gray-800 truncate">{name}</p>
+                {user?.role === 'super_admin' && (
+                  <span className="px-2 py-0.5 text-[9px] font-black bg-amber-100 text-amber-800 rounded-full border border-amber-200">Super Admin</span>
+                )}
+              </div>
+              <p className="text-[11px] text-gray-400">
+                {user?.role === 'super_admin' ? 'Direktur Utama RSUCL' : 'Administrator RSUCL'}
+              </p>
+
+              <div className="flex items-center gap-2.5 mt-2">
+                <label
+                  htmlFor="admin-avatar-input"
+                  className="inline-flex items-center gap-1.5 px-3 py-1 bg-white hover:bg-gray-100 border border-gray-200 text-gray-700 rounded-lg text-[11px] font-bold cursor-pointer shadow-2xs transition-all"
+                >
+                  <Upload size={12} className="text-[#16A34A]" /> {profilePicPreview ? 'Ubah Foto' : 'Unggah Foto'}
+                </label>
+                {profilePicPreview && (
+                  <button
+                    type="button"
+                    onClick={handleRemoveAvatar}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-red-500 hover:text-red-700 cursor-pointer"
+                  >
+                    <Trash2 size={12} /> Hapus Foto
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -707,7 +779,7 @@ export function SettingsTab() {
               <label className="block text-[12px] font-medium text-gray-600 mb-1.5">{label}</label>
               <div className="relative">
                 <Lock size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input type={show ? 'text' : 'password'} value={val} onChange={e => set(e.target.value)} placeholder="••••••••"
+                <input type={show ? 'text' : 'password'} inputMode="numeric" value={val} onChange={e => set(e.target.value.replace(/\D/g, ''))} placeholder="••••••••"
                   className="w-full pl-10 pr-10 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all" />
                 <button type="button" onClick={toggle} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                   {show ? <EyeOff size={14} /> : <Eye size={14} />}
@@ -716,7 +788,7 @@ export function SettingsTab() {
             </div>
           ))}
           <div className="bg-blue-50 border border-blue-100 rounded-xl px-3.5 py-2.5">
-            <p className="text-[11px] text-blue-600">Password minimal 6 karakter.</p>
+            <p className="text-[11px] text-blue-600">Password minimal 6 angka (hanya angka, tanpa huruf).</p>
           </div>
           <button onClick={savePassword}
             className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold transition-all shadow-sm ${passSaved ? 'bg-green-50 text-[#16A34A] border border-green-200' : 'bg-[#16A34A] text-white hover:bg-[#0d9240] shadow-green-200'}`}>

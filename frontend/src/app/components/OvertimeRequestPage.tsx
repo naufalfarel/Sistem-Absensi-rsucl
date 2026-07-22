@@ -5,7 +5,9 @@ import {
 } from 'lucide-react';
 import { overtimeApi, OvertimeRequest, departmentApi, DepartmentModel } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { MonthYearDeptFilter } from './ui/MonthYearDeptFilter';
 import qrCodeImg from '../../imports/qr_code_cempaka_lima.png';
+import qrHrdImg from '../../imports/qr_hrd_rsucl.png';
 import logoImg from '../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
 
 export function OvertimeRequestPage() {
@@ -37,6 +39,8 @@ export function OvertimeRequestPage() {
   const [showForm, setShowForm] = useState(false);
   const [selectedSplRequest, setSelectedSplRequest] = useState<OvertimeRequest | null>(null);
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+  const [filterMonth, setFilterMonth]   = useState<number>(0);
+  const [filterYear, setFilterYear]     = useState<number>(new Date().getFullYear());
   
   // File Input Ref
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -144,8 +148,6 @@ export function OvertimeRequestPage() {
         setStartHour('17');
         setStartMinute('00');
         setEndHour('19');
-        setEndMinute('00');
-        setOvertimeDayType('workday');
         const dept = user?.pj_bagian_department || user?.department || '';
         if (dept) setUnitKerja(dept);
         setShowForm(false);
@@ -156,6 +158,19 @@ export function OvertimeRequestPage() {
       setErrorMsg(msg);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleCancelOvertime = async (id: number) => {
+    if (!window.confirm('Apakah Anda yakin ingin membatalkan pengajuan lembur ini?')) return;
+    try {
+      const res = await overtimeApi.cancel(id);
+      if (res.success) {
+        setSuccessMsg('Pengajuan lembur berhasil dibatalkan.');
+        fetchRequests();
+      }
+    } catch (err: any) {
+      alert(err?.data?.message ?? err?.message ?? 'Gagal membatalkan pengajuan lembur.');
     }
   };
 
@@ -220,8 +235,13 @@ export function OvertimeRequestPage() {
   };
 
   const filteredRequests = requests.filter(r => {
-    if (filterStatus === 'all') return true;
-    return r.status === filterStatus;
+    if (filterStatus !== 'all' && r.status !== filterStatus) return false;
+    if (r.date) {
+      const d = new Date(r.date);
+      if (filterMonth > 0 && d.getMonth() + 1 !== filterMonth) return false;
+      if (filterYear > 0 && d.getFullYear() !== filterYear) return false;
+    }
+    return true;
   });
 
   return (
@@ -624,6 +644,18 @@ export function OvertimeRequestPage() {
             </div>
           </div>
         )}
+
+        {/* ── Month & Year Filter ──────────────────────────────────── */}
+        {requests.length > 0 && (
+          <MonthYearDeptFilter
+            month={filterMonth}
+            year={filterYear}
+            showAllMonthsOption={true}
+            onMonthChange={setFilterMonth}
+            onYearChange={setFilterYear}
+            className="mb-3"
+          />
+        )}
         
         {loading && requests.length === 0 ? (
           <div className="space-y-3">
@@ -720,6 +752,18 @@ export function OvertimeRequestPage() {
                         </div>
                       )}
                       
+                      {r.status === 'pending' && r.pj_status === 'pending' && (
+                        <div className="pt-1">
+                          <button
+                            type="button"
+                            onClick={() => handleCancelOvertime(r.id)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 rounded-xl text-[11.5px] font-extrabold transition-all shadow-xs cursor-pointer active:scale-95"
+                          >
+                            <XCircle size={13} className="text-rose-600" /> Batalkan Pengajuan
+                          </button>
+                        </div>
+                      )}
+
                       {r.status === 'approved' && (
                         <div className="flex flex-col gap-3">
                           {r.admin_note && (
@@ -862,28 +906,29 @@ Otorisasi Final: Direktur PT Cempaka Lima (Amir Hidayat, ST., MKM)`;
                 </div>
 
                 {/* Footer and Signatures */}
-                <div className="grid grid-cols-2 gap-12 pt-6 items-end">
+                <div className="grid grid-cols-2 gap-12 pt-6 items-start">
                   
-                  {/* Diajukan */}
-                  <div className="text-center">
-                    <p className="text-[12px] font-bold text-slate-600">Diajukan Oleh,</p>
-                    <div className="h-20" />
-                    <p className="text-[12px] font-bold text-slate-800 underline">{selectedSplRequest.employee?.name}</p>
-                    <p className="text-[10px] text-slate-500 font-semibold font-mono">NIK KTP: {selectedSplRequest.employee?.nik_ktp}</p>
+                  {/* Disetujui Oleh - Tim Administrator RSUCL */}
+                  <div className="text-center flex flex-col items-center">
+                    <p className="text-[12px] font-bold text-slate-800">Disetujui Oleh,</p>
+                    
+                    <div className="my-2 p-1 border border-slate-200 rounded-lg bg-white shadow-xs">
+                      <img src={qrHrdImg} alt="QR HRD RSUCL" className="w-20 h-20 object-contain" />
+                    </div>
+                    
+                    <p className="text-[12px] font-bold text-slate-800 underline">Tim Administrator RSUCL</p>
                   </div>
 
-                  {/* Disetujui */}
+                  {/* Diketahui Oleh - Direktur PT Cempaka Lima */}
                   <div className="text-center flex flex-col items-center">
-                    <p className="text-[12px] font-bold text-slate-600">Disetujui Oleh,</p>
-                    <p className="text-[10px] font-bold text-slate-500 italic mt-0.5">Direktur PT Cempaka Lima</p>
+                    <p className="text-[12px] font-bold text-slate-800">Diketahui Oleh,</p>
                     
-                    {/* QR Code placed directly here above the name */}
                     <div className="my-2 p-1 border border-slate-200 rounded-lg bg-white shadow-xs">
                       <img src={qrCodeImg} alt="QR Verification" className="w-20 h-20 object-contain" />
                     </div>
                     
                     <p className="text-[12px] font-bold text-slate-800 underline">Amir Hidayat, ST., MKM</p>
-                    <p className="text-[10px] text-slate-500 font-semibold">Direktur Utama</p>
+                    <p className="text-[10px] text-slate-600 font-semibold">Direktur PT Cempaka Lima</p>
                   </div>
 
                 </div>

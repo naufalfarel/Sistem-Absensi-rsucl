@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { Eye, EyeOff, Lock, User, MapPin, Clock, BarChart3, Shield, AlertCircle, ArrowLeft, CheckCircle2, X } from 'lucide-react';
+import { Eye, EyeOff, Lock, User, MapPin, Clock, BarChart3, Shield, AlertCircle, ArrowLeft, CheckCircle2, X, UserPlus, Search } from 'lucide-react';
 import logoImg from '../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
+import { EmployeeRegistrationPage } from './EmployeeRegistrationPage';
+import { CheckRegistrationStatusPage } from './CheckRegistrationStatusPage';
 import { authApi } from '../../services/api';
 
 /**
@@ -18,11 +20,15 @@ interface LoginPageProps {
  * Halaman Login — Sistem Absensi RSUCL
  * 
  * Menyediakan form masuk untuk Admin dan Karyawan, serta modal ubah/reset password mandiri
- * dengan mencocokkan data NIK KTP, Username, dan Email terdaftar.
+ * dan link pendaftaran/cek status pengajuan pegawai baru.
  */
 export function LoginPage({ onLogin, onBack }: LoginPageProps) {
   const { logoUrl } = useAuth();
   
+  // State mode tampilan halaman publik (login | register | check_status)
+  const [publicView, setPublicView] = useState<'login' | 'register' | 'check_status'>('login');
+  const [prefilledRegNumber, setPrefilledRegNumber] = useState<string | undefined>(undefined);
+
   // State untuk form login utama
   const [showPassword, setShowPassword] = useState(false);
   const [username, setUsername] = useState('');
@@ -76,7 +82,11 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
       return;
     }
     if (forgotForm.newPassword.length < 6) {
-      setForgotError('Password baru minimal 6 karakter.');
+      setForgotError('Password baru harus berupa angka minimal 6 digit.');
+      return;
+    }
+    if (!/^\d+$/.test(forgotForm.newPassword)) {
+      setForgotError('Password baru hanya boleh berupa angka.');
       return;
     }
     if (forgotForm.newPassword !== forgotForm.confirmPassword) {
@@ -111,6 +121,28 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
     if (e.key === 'Enter') handleLogin();
   };
 
+  if (publicView === 'register') {
+    return (
+      <EmployeeRegistrationPage
+        onBack={() => setPublicView('login')}
+        onGoToCheckStatus={(regNum) => {
+          setPrefilledRegNumber(regNum);
+          setPublicView('check_status');
+        }}
+      />
+    );
+  }
+
+  if (publicView === 'check_status') {
+    return (
+      <CheckRegistrationStatusPage
+        onBack={() => setPublicView('login')}
+        onGoToLogin={() => setPublicView('login')}
+        initialRegNumber={prefilledRegNumber}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen flex" style={{ fontFamily: "'Inter', sans-serif" }}>
 
@@ -122,7 +154,7 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
           {onBack && (
             <button
               onClick={onBack}
-              className="flex items-center gap-1.5 text-[13px] text-gray-500 hover:text-[#16A34A] transition-colors mb-6 group"
+              className="flex items-center gap-1.5 text-[13px] text-gray-500 hover:text-[#16A34A] transition-colors mb-6 group cursor-pointer"
             >
               <ArrowLeft size={14} className="group-hover:-translate-x-0.5 transition-transform" />
               Kembali ke Beranda
@@ -143,7 +175,7 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
           </div>
 
           {/* Card */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-left">
             <div className="mb-6">
               <h1 className="text-xl font-semibold text-gray-900">Selamat Datang</h1>
               <p className="text-[13px] text-gray-500 mt-1">Masuk menggunakan akun yang diberikan administrator</p>
@@ -157,8 +189,6 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
               </div>
             )}
 
-
-
             {/* Username */}
             <div className="mb-4">
               <label className="block text-[13px] font-medium text-gray-700 mb-1.5">Username</label>
@@ -170,7 +200,7 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
                   value={username}
                   onChange={e => { setUsername(e.target.value); setError(''); }}
                   onKeyDown={handleKey}
-                  className={`w-full pl-10 pr-4 py-2.5 border rounded-xl text-[16px] bg-gray-50 focus:outline-none focus:ring-2 transition-all placeholder:text-gray-300 ${error ? 'border-red-200 focus:border-red-400 focus:ring-red-100' : 'border-gray-200 focus:border-[#16A34A] focus:ring-[#16A34A]/15'}`}
+                  className={`w-full pl-10 pr-4 py-2.5 border rounded-xl text-[14px] bg-gray-50 focus:outline-none focus:ring-2 transition-all placeholder:text-gray-300 ${error ? 'border-red-200 focus:border-red-400 focus:ring-red-100' : 'border-gray-200 focus:border-[#16A34A] focus:ring-[#16A34A]/15'}`}
                 />
               </div>
             </div>
@@ -182,11 +212,13 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
                 <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type={showPassword ? 'text' : 'password'}
-                  placeholder="Masukkan password"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  placeholder="Masukkan password angka (min. 6 angka)"
                   value={password}
-                  onChange={e => { setPassword(e.target.value); setError(''); }}
+                  onChange={e => { setPassword(e.target.value.replace(/\D/g, '')); setError(''); }}
                   onKeyDown={handleKey}
-                  className={`w-full pl-10 pr-10 py-2.5 border rounded-xl text-[16px] bg-gray-50 focus:outline-none focus:ring-2 transition-all placeholder:text-gray-300 ${error ? 'border-red-200 focus:border-red-400 focus:ring-red-100' : 'border-gray-200 focus:border-[#16A34A] focus:ring-[#16A34A]/15'}`}
+                  className={`w-full pl-10 pr-10 py-2.5 border rounded-xl text-[14px] bg-gray-50 focus:outline-none focus:ring-2 transition-all placeholder:text-gray-300 ${error ? 'border-red-200 focus:border-red-400 focus:ring-red-100' : 'border-gray-200 focus:border-[#16A34A] focus:ring-[#16A34A]/15'}`}
                 />
                 <button
                   type="button"
@@ -212,7 +244,7 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
               </label>
               <button 
                 onClick={() => setShowForgotModal(true)}
-                className="text-[13px] text-[#16A34A] font-medium hover:text-[#0B7A36] transition-colors"
+                className="text-[13px] text-[#16A34A] font-medium hover:text-[#0B7A36] transition-colors cursor-pointer"
               >
                 Lupa Password?
               </button>
@@ -222,7 +254,7 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
             <button
               onClick={handleLogin}
               disabled={isLoading}
-              className="w-full py-3 bg-[#16A34A] hover:bg-[#0d9240] active:bg-[#0B7A36] text-white rounded-xl text-[14px] font-semibold transition-all duration-150 shadow-md shadow-green-200/60 disabled:opacity-70 disabled:cursor-not-allowed"
+              className="w-full py-3 bg-[#16A34A] hover:bg-[#0d9240] active:bg-[#0B7A36] text-white rounded-xl text-[14px] font-semibold transition-all duration-150 shadow-md shadow-green-200/60 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
             >
               {isLoading ? (
                 <span className="flex items-center justify-center gap-2">
@@ -232,11 +264,40 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
               ) : 'Masuk'}
             </button>
 
+            {/* Section Ringkas: Belum Punya Akun (Space-Saving) */}
+            <div className="mt-4 p-3 bg-emerald-50/60 border border-emerald-100 rounded-xl flex items-center justify-between gap-3 text-left">
+              <div className="min-w-0 flex-1">
+                <p className="text-[12px] font-bold text-gray-900 leading-tight flex items-center gap-1.5">
+                  <UserPlus size={13} className="text-[#16A34A] flex-shrink-0" />
+                  <span>Belum punya akun pegawai?</span>
+                </p>
+                <p className="text-[10.5px] text-gray-500 mt-0.5">
+                  Silakan daftarkan data Anda terlebih dahulu.
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setPublicView('register')}
+                  className="px-3 py-1.5 bg-[#16A34A] hover:bg-[#0d9240] text-white text-[11px] font-bold rounded-lg transition-all shadow-xs text-center cursor-pointer"
+                >
+                  Daftar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPublicView('check_status')}
+                  className="px-2.5 py-1.5 bg-white border border-emerald-200 text-emerald-800 hover:bg-emerald-100/60 text-[11px] font-bold rounded-lg transition-all text-center cursor-pointer"
+                >
+                  Cek Status
+                </button>
+              </div>
+            </div>
+
             {/* Info akun */}
-            <div className="mt-5 flex items-start gap-2.5 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
+            <div className="mt-4 flex items-start gap-2.5 bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5">
               <Shield size={14} className="text-blue-500 flex-shrink-0 mt-0.5" />
-              <p className="text-[12px] text-blue-600 leading-snug">
-                Akun dan password diberikan oleh Administrator RSUCL. Hubungi admin jika belum memiliki akun.
+              <p className="text-[11.5px] text-blue-600 leading-snug">
+                Akun dan password diberikan oleh Administrator RSUCL. Hubungi admin jika terjadi kendala.
               </p>
             </div>
           </div>
@@ -355,24 +416,26 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
                 />
               </div>
               <div>
-                <label className="block text-[11px] font-medium text-gray-600 mb-1">Password Baru</label>
+                <label className="block text-[11px] font-medium text-gray-600 mb-1">Password Baru <span className="text-gray-400 font-normal">(Minimal 6 angka)</span></label>
                 <input 
                   type="password" 
-                  placeholder="Minimal 6 karakter" 
+                  placeholder="Minimal 6 angka" 
                   value={forgotForm.newPassword} 
-                  onChange={e => setForgotForm({ ...forgotForm, newPassword: e.target.value })}
+                  onChange={e => setForgotForm({ ...forgotForm, newPassword: e.target.value.replace(/\D/g, '') })}
                   className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[16px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all"
+                  inputMode="numeric"
                   required
                 />
               </div>
               <div>
-                <label className="block text-[11px] font-medium text-gray-600 mb-1">Konfirmasi Password Baru</label>
+                <label className="block text-[11px] font-medium text-gray-600 mb-1">Konfirmasi Password Baru <span className="text-gray-400 font-normal">(Ulangi angka)</span></label>
                 <input 
                   type="password" 
-                  placeholder="Ulangi password baru" 
+                  placeholder="Ulangi angka password baru" 
                   value={forgotForm.confirmPassword} 
-                  onChange={e => setForgotForm({ ...forgotForm, confirmPassword: e.target.value })}
+                  onChange={e => setForgotForm({ ...forgotForm, confirmPassword: e.target.value.replace(/\D/g, '') })}
                   className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[16px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all"
+                  inputMode="numeric"
                   required
                 />
               </div>

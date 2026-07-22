@@ -72,14 +72,7 @@ class MarkAbsentEmployees extends Command
             }
 
             // Check schedule for today
-            $hasSchedule = $emp->schedules()
-                ->where(function($q) use ($dayName, $dateStr) {
-                    $q->where('employee_schedule.date', $dateStr)
-                      ->orWhere(function($q2) use ($dayName) {
-                          $q2->where('employee_schedule.day_of_week', $dayName)
-                             ->whereNull('employee_schedule.date');
-                      });
-                })->exists();
+            $hasSchedule = $emp->schedules()->wherePivot('day_of_week', $dayName)->exists();
             if (!$hasSchedule) {
                 continue;
             }

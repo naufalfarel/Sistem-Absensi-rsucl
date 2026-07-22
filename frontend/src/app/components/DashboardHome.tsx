@@ -171,11 +171,12 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
   const shiftRange      = todayShift ? `${shiftStartTime} – ${shiftEndTime} WIB` : todayShift === null ? 'Tidak ada jadwal hari ini' : '';
 
   // ── Stat card helpers ───────────────────────────────────────────────────
-  // Menentukan apakah hari ini karyawan bebas tugas (libur / tidak ada shift ATAU berstatus cuti/izin/sakit)
-  const isOffDuty = todayShift === null || todayRecord?.status === 'cuti' || todayRecord?.status === 'izin' || todayRecord?.status === 'sakit';
+  // Menentukan apakah hari ini karyawan bebas tugas (libur / LJ / tidak ada shift ATAU berstatus cuti/izin/sakit)
+  const isLiburJaga = todayShift?.name?.toLowerCase().includes('libur jaga') || todayShift?.name?.toUpperCase() === 'LJ';
+  const isOffDuty   = todayShift === null || isLiburJaga || todayRecord?.status === 'cuti' || todayRecord?.status === 'izin' || todayRecord?.status === 'sakit';
   
-  // Format string tipe izin/cuti yang sedang aktif untuk label UI
-  const leaveType = todayRecord?.status === 'cuti' ? 'Cuti' : todayRecord?.status === 'izin' ? 'Izin' : todayRecord?.status === 'sakit' ? 'Sakit' : null;
+  // Format string tipe izin/cuti/lj yang sedang aktif untuk label UI
+  const leaveType = isLiburJaga ? 'Libur Jaga (LJ)' : todayRecord?.status === 'cuti' ? 'Cuti' : todayRecord?.status === 'izin' ? 'Izin' : todayRecord?.status === 'sakit' ? 'Sakit' : null;
 
   // Mendapatkan label utama penanda status kehadiran (misal: Hadir, Terlambat, Cuti, Libur)
   const getStatusLabel = () => {

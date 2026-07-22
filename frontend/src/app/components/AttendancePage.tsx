@@ -36,7 +36,6 @@ import {
 import { Alert, AlertDescription } from "./ui/alert";
 // ── [DEV] Simulasi Waktu — hapus baris ini saat production ──────────────
 import { SimulationPanel } from "../dev/SimulationPanel";
-import { dotenv } from "dotenv";
 
 // Fix Leaflet default marker icon broken by bundlers
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -317,7 +316,10 @@ function FaceVerificationCard({
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
+  const [cameraError, setCameraError] = useState<string | null>(null);
+
   const startCamera = useCallback(async () => {
+    setCameraError(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
@@ -328,8 +330,11 @@ function FaceVerificationCard({
       });
       streamRef.current = stream;
       if (videoRef.current) videoRef.current.srcObject = stream;
-    } catch {
-      // Camera simulation fallback
+    } catch (err) {
+      console.error("Camera access error:", err);
+      setCameraError(
+        "Gagal mengaktifkan kamera. Pastikan Anda telah memberikan izin akses kamera pada browser.",
+      );
     }
   }, []);
 
@@ -348,84 +353,41 @@ function FaceVerificationCard({
   const handleCaptureClick = async () => {
     let capturedDataUrl = "";
     if (videoRef.current) {
+      const video = videoRef.current;
       const canvas = document.createElement("canvas");
+      const videoWidth = video.videoWidth || 640;
+      const videoHeight = video.videoHeight || 480;
 
-      let targetWidth = 640;
-      let targetHeight = 480;
-      const videoWidth = videoRef.current.videoWidth;
-      const videoHeight = videoRef.current.videoHeight;
-      if (videoWidth > 0 && videoHeight > 0) {
-        const maxDim = 640;
-        if (videoWidth > videoHeight) {
-          targetWidth = maxDim;
-          targetHeight = Math.round((videoHeight / videoWidth) * maxDim);
-        } else {
-          targetHeight = maxDim;
-          targetWidth = Math.round((videoWidth / videoHeight) * maxDim);
-        }
+      const maxDim = 640;
+      let targetWidth = maxDim;
+      let targetHeight = Math.round((videoHeight / videoWidth) * maxDim);
+      if (videoHeight > videoWidth) {
+        targetHeight = maxDim;
+        targetWidth = Math.round((videoWidth / videoHeight) * maxDim);
       }
+
       canvas.width = targetWidth;
       canvas.height = targetHeight;
 
       const ctx = canvas.getContext("2d");
       if (ctx) {
-        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-
-        let quality = 0.85;
-        let finalDataUrl = "";
-        const limitBytes = parseInt(
-          process.env.REACT_APP_IMAGE_LIMIT || "25600",
-        ); // 25 KB default
-
-        try {
-          const getBlob = (q: number): Promise<Blob | null> => {
-            return new Promise((resolve) =>
-              canvas.toBlob(resolve, "image/jpeg", q),
-            );
-          };
-
-          let blob: Blob | null = null;
-          while (quality >= 0.15) {
-            const tempBlob = await getBlob(quality);
-            if (tempBlob) {
-              blob = tempBlob;
-              if (tempBlob.size <= limitBytes) {
-                break;
-              }
-            }
-            quality -= 0.05;
-          }
-
-          if (blob) {
-            finalDataUrl = await new Promise<string>((resolve) => {
-              const reader = new FileReader();
-              reader.onloadend = () => resolve(reader.result as string);
-              reader.readAsDataURL(blob!);
-            });
-          }
-        } catch (e) {
-          console.error("Blob compression failed, using dataURL fallback", e);
-        }
-
-        // Fallback to toDataURL if blob creation failed
-        if (!finalDataUrl) {
-          quality = 0.8;
-          while (quality >= 0.15) {
-            finalDataUrl = canvas.toDataURL("image/jpeg", quality);
-            if (finalDataUrl.length * 0.75 <= limitBytes) {
-              break;
-            }
-            quality -= 0.05;
-          }
-        }
-        capturedDataUrl = finalDataUrl;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        capturedDataUrl = canvas.toDataURL("image/jpeg", 0.75);
       }
     }
 
     if (!capturedDataUrl) {
-      capturedDataUrl =
-        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+      const canvas = document.createElement("canvas");
+      canvas.width = 320;
+      canvas.height = 240;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.fillStyle = "#16A34A";
+        ctx.fillRect(0, 0, 320, 240);
+      }
+      capturedDataUrl = canvas.toDataURL("image/jpeg", 0.7);
     }
+
     stopCamera();
     onCapture(capturedDataUrl);
   };
@@ -554,36 +516,62 @@ function FaceVerificationCard({
           </span>
         </div>
         <div className="p-4">
-          <div className="relative rounded-2xl overflow-hidden bg-gray-900 aspect-[4/3] flex items-center justify-center mb-4">
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              className="absolute inset-0 w-full h-full object-cover"
-            />
-            <div className="absolute inset-0 flex items-center justify-center bg-gray-900/60 text-center">
-              <div>
-                <div className="w-16 h-16 rounded-full border-2 border-white/60 flex items-center justify-center mx-auto mb-2">
-                  <Camera size={28} className="text-white/80" />
-                </div>
-                <p className="text-white/70 text-[11px]">
-                  Posisikan wajah di tengah
-                </p>
-              </div>
+          {cameraError ? (
+            <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-center mb-4">
+              <AlertCircle size={24} className="text-red-500 mx-auto mb-2" />
+              <p className="text-[12px] font-semibold text-red-700">{cameraError}</p>
+              <button
+                onClick={startCamera}
+                className="mt-3 px-4 py-1.5 bg-red-600 text-white rounded-xl text-[11px] font-bold"
+              >
+                Coba Lagi
+              </button>
             </div>
-            {[
-              ["top-3 left-3", "border-t-2 border-l-2 rounded-tl-lg"],
-              ["top-3 right-3", "border-t-2 border-r-2 rounded-tr-lg"],
-              ["bottom-3 left-3", "border-b-2 border-l-2 rounded-bl-lg"],
-              ["bottom-3 right-3", "border-b-2 border-r-2 rounded-br-lg"],
-            ].map(([pos, cls], i) => (
-              <div
-                key={i}
-                className={`absolute ${pos} w-8 h-8 border-[#16A34A] ${cls}`}
+          ) : (
+            <div
+              onClick={handleCaptureClick}
+              className="relative rounded-2xl overflow-hidden bg-gray-900 aspect-[4/3] flex items-center justify-center mb-4 cursor-pointer group"
+              title="Klik di mana saja untuk mengambil foto"
+            >
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="absolute inset-0 w-full h-full object-cover"
               />
-            ))}
-          </div>
+
+              {/* Clean face frame overlay (pointer-events-none) */}
+              <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-between p-4 z-10">
+                <div className="bg-black/50 backdrop-blur-xs text-white px-3 py-1 rounded-full text-[10px] font-medium border border-white/20 mt-1">
+                  Klik pada kamera / tombol "Ambil Foto" di bawah
+                </div>
+
+                {/* Interactive shutter icon feedback */}
+                <div className="w-16 h-16 rounded-full border-2 border-white/90 bg-black/30 backdrop-blur-xs flex items-center justify-center group-hover:scale-110 group-hover:bg-[#16A34A]/40 transition-all shadow-xl">
+                  <Camera size={26} className="text-white drop-shadow-md" />
+                </div>
+
+                <div className="text-white/80 text-[10px] bg-black/40 px-2 py-0.5 rounded-md">
+                  Posisikan wajah di tengah
+                </div>
+              </div>
+
+              {/* Corner guide brackets */}
+              {[
+                ["top-3 left-3", "border-t-2 border-l-2 rounded-tl-lg"],
+                ["top-3 right-3", "border-t-2 border-r-2 rounded-tr-lg"],
+                ["bottom-3 left-3", "border-b-2 border-l-2 rounded-bl-lg"],
+                ["bottom-3 right-3", "border-b-2 border-r-2 rounded-br-lg"],
+              ].map(([pos, cls], i) => (
+                <div
+                  key={i}
+                  className={`absolute ${pos} w-8 h-8 border-[#16A34A] pointer-events-none z-10 ${cls}`}
+                />
+              ))}
+            </div>
+          )}
+
           <div className="flex gap-2">
             <button
               onClick={onRetake}
@@ -593,7 +581,8 @@ function FaceVerificationCard({
             </button>
             <button
               onClick={handleCaptureClick}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-[#16A34A] hover:bg-[#0d9240] text-white rounded-xl text-[13px] font-semibold transition-all active:scale-95 shadow-sm shadow-green-200"
+              disabled={!!cameraError}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-[#16A34A] hover:bg-[#0d9240] text-white rounded-xl text-[13px] font-semibold transition-all active:scale-95 shadow-sm shadow-green-200 disabled:opacity-50"
             >
               <Camera size={14} /> Ambil Foto
             </button>
@@ -1903,16 +1892,18 @@ export function AttendancePage() {
             </div>
           </>
         ) : (
-          // STATE HARI LIBUR: Pegawai tidak memiliki jadwal shift apa pun hari ini (todayShift === null)
+          // STATE HARI LIBUR / LIBUR JAGA
           <div className="text-center py-6 px-4 bg-gray-50/50 rounded-2xl border border-dashed border-gray-200">
-            <Moon size={22} className="text-gray-300 mx-auto mb-2" />
-            <p className="text-[12.5px] text-gray-600 font-semibold">
-              Tidak Ada Jadwal Absensi
+            <Moon size={22} className="text-slate-400 mx-auto mb-2" />
+            <p className="text-[12.5px] text-gray-700 font-bold">
+              {todayShift?.name?.toLowerCase().includes('libur jaga') || todayShift?.name?.toUpperCase() === 'LJ'
+                ? 'Libur Jaga (LJ) — Bebas Tugas'
+                : 'Tidak Ada Jadwal Absensi'}
             </p>
             <p className="text-[11px] text-gray-400 mt-1 max-w-[280px] mx-auto leading-relaxed">
-              Hari ini adalah hari libur Anda. Jadwal absensi harian akan
-              otomatis mengikuti jadwal shift dinas yang ditentukan oleh
-              Administrator.
+              {todayShift?.name?.toLowerCase().includes('libur jaga') || todayShift?.name?.toUpperCase() === 'LJ'
+                ? 'Hari ini Anda mendapat Libur Jaga setelah menyelesaikan tugas dinas. Tidak diperlukan absensi.'
+                : 'Hari ini adalah hari libur Anda. Jadwal absensi harian akan otomatis mengikuti jadwal shift dinas.'}
             </p>
           </div>
         )}

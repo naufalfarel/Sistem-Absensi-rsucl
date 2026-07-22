@@ -16,7 +16,7 @@ class OvertimeRequestResource extends JsonResource
 
         // Cari data attendance pembanding jika user adalah admin
         $systemCheckoutData = null;
-        if ($request->user() && $request->user()->role === 'admin' && $employee && $dateStr) {
+        if ($request->user() && $request->user()->isAdmin() && $employee && $dateStr) {
             $attendance = Attendance::where('employee_id', $employee->id)
                 ->whereDate('date', $dateStr)
                 ->first();

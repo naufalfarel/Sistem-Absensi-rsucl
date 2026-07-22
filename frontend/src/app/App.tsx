@@ -39,8 +39,8 @@ export default function App() {
 
   // 2. Alur Routing setelah berhasil masuk (Logged In)
   if (user) {
-    // Pengguna adalah administrator
-    if (user.role === 'admin') {
+    // Pengguna adalah administrator atau Super Admin (Direktur RSUCL)
+    if (user.role === 'admin' || user.role === 'super_admin') {
       return <AdminApp onLogout={logout} />;
     }
     

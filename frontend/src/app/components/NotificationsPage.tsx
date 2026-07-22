@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { 
-  Bell, Check, Calendar, Trash2, Clock, AlertTriangle, Layers, Settings, MessageSquare
+  Bell, Check, Calendar, Trash2, Clock, AlertTriangle, Layers, Settings, ChevronRight, FileText, UserCheck, ArrowRight
 } from 'lucide-react';
 import { notificationApi, AppNotification } from '../../services/api';
 
@@ -8,18 +8,14 @@ const filterOptions = ['Semua', 'Belum Dibaca'];
 
 interface NotificationsPageProps {
   onUpdateCount?: () => void;
+  onNavigate?: (tab: string) => void;
+  userRole?: 'employee' | 'pj_bagian' | 'admin' | 'super_admin';
 }
 
 /**
- * Halaman Notifikasi Staf (NotificationsPage) — Sistem Absensi RSUCL
- * 
- * Menampilkan seluruh pemberitahuan yang relevan dengan absensi, penugasan shift,
- * maupun persetujuan izin/cuti oleh administrator. Menyediakan filter status baca,
- * penandaan pesan dibaca, serta penghapusan log notifikasi.
- * 
- * @param onUpdateCount Callback opsional untuk sinkronisasi ulang lencana angka notifikasi di parent/sidebar
+ * Halaman Notifikasi Staf & PJ Bagian (NotificationsPage) — Sistem Absensi RSUCL
  */
-export function NotificationsPage({ onUpdateCount }: NotificationsPageProps) {
+export function NotificationsPage({ onUpdateCount, onNavigate, userRole = 'employee' }: NotificationsPageProps) {
   // Filter aktif ('Semua' vs 'Belum Dibaca')
   const [activeFilter, setActiveFilter] = useState('Semua');
   
@@ -51,7 +47,6 @@ export function NotificationsPage({ onUpdateCount }: NotificationsPageProps) {
     }
   };
 
-  // Muat notifikasi saat halaman terpasang di DOM
   useEffect(() => {
     loadNotifications();
   }, []);
@@ -82,6 +77,57 @@ export function NotificationsPage({ onUpdateCount }: NotificationsPageProps) {
       }
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  /**
+   * Menangani klik pada notifikasi:
+   * 1. Tandai sebagai sudah dibaca
+   * 2. Arahkan pengguna ke tab terkait sesuai jenis notifikasi
+   */
+  const handleItemClick = (n: AppNotification) => {
+    markRead(n.id);
+
+    if (!onNavigate) return;
+
+    const type = (n.type || '').toLowerCase();
+    const title = (n.title || '').toLowerCase();
+    const body = (n.body || '').toLowerCase();
+    const text = `${type} ${title} ${body}`;
+
+    if (userRole === 'pj_bagian') {
+      // Jika notifikasi staf yang membutuhkan persetujuan PJ
+      if (text.includes('staf') || text.includes('mengajukan') || text.includes('persetujuan') || text.includes('permohonan staf')) {
+        if (text.includes('cuti') || text.includes('lembur')) {
+          onNavigate('approvals');
+          return;
+        }
+      }
+
+      if (text.includes('cuti') || text.includes('sakit') || type === 'leave') {
+        onNavigate('leave');
+      } else if (text.includes('lembur') || type === 'overtime') {
+        onNavigate('overtime_personal');
+      } else if (text.includes('tugas') || type.includes('assignment')) {
+        onNavigate('leave');
+      } else if (text.includes('shift') || text.includes('jadwal') || type === 'schedule') {
+        onNavigate('shift_proposals');
+      } else if (text.includes('absen') || type === 'attendance') {
+        onNavigate('history');
+      }
+    } else {
+      // Pegawai biasa
+      if (text.includes('cuti') || text.includes('sakit') || type === 'leave') {
+        onNavigate('leave');
+      } else if (text.includes('lembur') || type === 'overtime') {
+        onNavigate('overtime');
+      } else if (text.includes('tugas') || type.includes('assignment')) {
+        onNavigate('assignment');
+      } else if (text.includes('absen') || type === 'attendance') {
+        onNavigate('history');
+      } else if (text.includes('shift') || text.includes('jadwal') || type === 'schedule') {
+        onNavigate('history');
+      }
     }
   };
 
@@ -118,17 +164,20 @@ export function NotificationsPage({ onUpdateCount }: NotificationsPageProps) {
     return true;
   });
 
-  const getIconProps = (type: string) => {
-    switch (type) {
-      case 'leave':
-        return { icon: Calendar, color: '#7C3AED', bg: '#F5F3FF' };
-      case 'attendance':
-        return { icon: Clock, color: '#16A34A', bg: '#F0FDF4' };
-      case 'system':
-        return { icon: Settings, color: '#2563EB', bg: '#EFF6FF' };
-      default:
-        return { icon: Bell, color: '#EA580C', bg: '#FFF7ED' };
+  const getIconProps = (type: string, text: string) => {
+    if (text.includes('cuti') || type === 'leave') {
+      return { icon: Calendar, color: '#7C3AED', bg: '#F5F3FF', label: 'Cuti & Sakit' };
     }
+    if (text.includes('lembur') || type === 'overtime') {
+      return { icon: Clock, color: '#EA580C', bg: '#FFF7ED', label: 'Lembur' };
+    }
+    if (text.includes('tugas') || type.includes('assignment')) {
+      return { icon: FileText, color: '#16A34A', bg: '#F0FDF4', label: 'Surat Tugas' };
+    }
+    if (text.includes('absen') || type === 'attendance') {
+      return { icon: Clock, color: '#2563EB', bg: '#EFF6FF', label: 'Absensi' };
+    }
+    return { icon: Bell, color: '#6B7280', bg: '#F3F4F6', label: 'Info' };
   };
 
   const formatTime = (timeStr: string) => {
@@ -202,25 +251,26 @@ export function NotificationsPage({ onUpdateCount }: NotificationsPageProps) {
         )}
         
         {filtered.map(n => {
-          const ip = getIconProps(n.type);
+          const text = `${n.type} ${n.title} ${n.body}`.toLowerCase();
+          const ip = getIconProps(n.type, text);
           const Icon = ip.icon;
           
           let borderTheme = 'border-l-gray-250';
           let bgTheme = 'bg-white';
           
           if (!n.is_read) {
-            if (n.type === 'leave') {
+            if (text.includes('cuti') || n.type === 'leave') {
               borderTheme = 'border-l-purple-500';
               bgTheme = 'bg-purple-50/15 hover:bg-purple-50/25';
-            } else if (n.type === 'attendance') {
+            } else if (text.includes('lembur') || n.type === 'overtime') {
+              borderTheme = 'border-l-orange-500';
+              bgTheme = 'bg-orange-50/15 hover:bg-orange-50/25';
+            } else if (text.includes('tugas') || n.type.includes('assignment')) {
               borderTheme = 'border-l-green-500';
               bgTheme = 'bg-green-50/15 hover:bg-green-50/25';
-            } else if (n.type === 'system') {
+            } else {
               borderTheme = 'border-l-blue-500';
               bgTheme = 'bg-blue-50/15 hover:bg-blue-50/25';
-            } else {
-              borderTheme = 'border-l-amber-500';
-              bgTheme = 'bg-amber-50/15 hover:bg-amber-50/25';
             }
           } else {
             bgTheme = 'bg-white hover:bg-gray-50/60';
@@ -230,8 +280,8 @@ export function NotificationsPage({ onUpdateCount }: NotificationsPageProps) {
           return (
             <div
               key={n.id}
-              onClick={() => markRead(n.id)}
-              className={`group bg-white rounded-2xl border-y border-r border-l-4 ${borderTheme} ${bgTheme} border-gray-100 shadow-sm overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-md hover:translate-y-[-1px] flex gap-4 p-4.5`}
+              onClick={() => handleItemClick(n)}
+              className={`group bg-white rounded-2xl border-y border-r border-l-4 ${borderTheme} ${bgTheme} border-gray-100 shadow-sm overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-md hover:translate-y-[-1px] flex items-start gap-4 p-4.5`}
             >
               {/* Icon Container */}
               <div
@@ -244,12 +294,12 @@ export function NotificationsPage({ onUpdateCount }: NotificationsPageProps) {
               {/* Text Body */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between gap-3 mb-1">
-                  <div className="min-w-0 flex-1">
-                    <span className={`text-[13px] leading-snug break-words ${!n.is_read ? 'font-bold text-gray-900' : 'font-medium text-gray-700'}`}>
+                  <div className="min-w-0 flex-1 flex items-center gap-2 flex-wrap">
+                    <span className={`text-[13px] leading-snug break-words ${!n.is_read ? 'font-bold text-gray-900' : 'font-semibold text-gray-700'}`}>
                       {n.title}
                     </span>
                     {!n.is_read && (
-                      <span className="ml-2 inline-block w-1.5 h-1.5 rounded-full bg-[#16A34A] animate-pulse" />
+                      <span className="inline-block w-2 h-2 rounded-full bg-[#16A34A] animate-pulse" />
                     )}
                   </div>
                   <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap mt-0.5">
@@ -257,22 +307,16 @@ export function NotificationsPage({ onUpdateCount }: NotificationsPageProps) {
                   </span>
                 </div>
                 <p className="text-[12px] text-gray-500 leading-relaxed font-normal">{n.body}</p>
+                
+                {/* Action hint badge */}
+                <div className="mt-2.5 flex items-center gap-1 text-[11px] font-bold text-[#16A34A] group-hover:underline">
+                  <span>Buka Halaman {ip.label}</span>
+                  <ArrowRight size={12} className="transition-transform group-hover:translate-x-1" />
+                </div>
               </div>
 
               {/* Hover actions */}
-              <div className="flex items-center gap-1.5 self-center flex-shrink-0 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                {!n.is_read && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      markRead(n.id);
-                    }}
-                    className="p-1.5 text-gray-400 hover:text-[#16A34A] hover:bg-green-50 rounded-xl transition-all"
-                    title="Tandai dibaca"
-                  >
-                    <Check size={13} className="stroke-[2.5]" />
-                  </button>
-                )}
+              <div className="flex items-center gap-1 self-start flex-shrink-0 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                 <button
                   onClick={(e) => {
                     e.stopPropagation();

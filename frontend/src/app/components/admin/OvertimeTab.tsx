@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Search, Calendar, ChevronDown, CheckCircle2, XCircle, Clock, X, Filter, AlertCircle, Printer } from 'lucide-react';
 import { overtimeApi, departmentApi, OvertimeRequest, DepartmentModel } from '../../../services/api';
+import { MonthYearDeptFilter } from '../ui/MonthYearDeptFilter';
 import qrCodeImg from '../../../imports/qr_code_cempaka_lima.png';
+import qrHrdImg from '../../../imports/qr_hrd_rsucl.png';
 
 const statusConfig: Record<string, { label: string; color: string; bg: string; border: string }> = {
   pending:  { label: 'Menunggu',   color: '#16A34A', bg: '#F0FDF4', border: '#BBF7D0' },
@@ -9,7 +11,11 @@ const statusConfig: Record<string, { label: string; color: string; bg: string; b
   rejected: { label: 'Ditolak',    color: '#475569', bg: '#F1F5F9', border: '#E2E8F0' },
 };
 
-export function OvertimeTab() {
+interface OvertimeTabProps {
+  onUpdateCount?: () => void;
+}
+
+export function OvertimeTab({ onUpdateCount }: OvertimeTabProps) {
   // Ambil tanggal awal & akhir bulan ini untuk default filter
   const getMonthBoundaries = () => {
     const date = new Date();
@@ -34,6 +40,9 @@ export function OvertimeTab() {
   const [departmentId, setDepartmentId] = useState('');
   const [searchVal, setSearchVal] = useState('');
   const [search, setSearch] = useState('');
+
+  const [filterMonth, setFilterMonth] = useState<number>(new Date().getMonth() + 1);
+  const [filterYear, setFilterYear]   = useState<number>(new Date().getFullYear());
 
   // Data State
   const [records, setRecords] = useState<OvertimeRequest[]>([]);
@@ -153,6 +162,7 @@ export function OvertimeTab() {
           setRecords(prev => prev.map(r => r.id === id ? res.data : r));
         }
         loadSummary();
+        onUpdateCount?.();
       }
     } catch (err: any) {
       alert(err?.data?.message ?? err?.message ?? 'Gagal menyetujui lembur.');
@@ -185,6 +195,7 @@ export function OvertimeTab() {
         }
         setRejectingRecord(null);
         loadSummary();
+        onUpdateCount?.();
       }
     } catch (err: any) {
       alert(err?.data?.message ?? err?.message ?? 'Gagal menolak lembur.');
@@ -215,7 +226,36 @@ export function OvertimeTab() {
         </p>
       </div>
 
-      {/* Summary Cards */}
+      {/* ── Month, Year & Department Filter ──────────────────────── */}
+      <MonthYearDeptFilter
+        month={filterMonth}
+        year={filterYear}
+        deptId={departmentId}
+        departments={departments}
+        showAllMonthsOption={true}
+        onMonthChange={(m) => {
+          setFilterMonth(m);
+          if (m > 0) {
+            const mm = String(m).padStart(2, '0');
+            const lastDay = new Date(filterYear, m, 0).getDate();
+            setDateFrom(`${filterYear}-${mm}-01`);
+            setDateTo(`${filterYear}-${mm}-${String(lastDay).padStart(2, '0')}`);
+          } else {
+            setDateFrom('');
+            setDateTo('');
+          }
+        }}
+        onYearChange={(y) => {
+          setFilterYear(y);
+          if (filterMonth > 0) {
+            const mm = String(filterMonth).padStart(2, '0');
+            const lastDay = new Date(y, filterMonth, 0).getDate();
+            setDateFrom(`${y}-${mm}-01`);
+            setDateTo(`${y}-${mm}-${String(lastDay).padStart(2, '0')}`);
+          }
+        }}
+        onDeptChange={setDepartmentId}
+      />
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {[
           { key: 'draft',    label: 'Draf (Belum di-ACC PJ)', value: summary.draft, color: '#D97706', bg: '#FEF3C7', icon: Clock },
@@ -282,20 +322,6 @@ export function OvertimeTab() {
 
         {/* Filters */}
         <div className="flex flex-wrap gap-3 items-center flex-1 md:flex-initial">
-          {/* Department */}
-          <div className="relative w-full md:w-auto">
-            <select
-              value={departmentId}
-              onChange={e => setDepartmentId(e.target.value)}
-              className="w-full appearance-none pl-3 pr-8 py-2 border border-gray-100 rounded-xl text-[12px] bg-white shadow-sm focus:outline-none focus:border-[#16A34A] transition-all text-gray-600 font-semibold cursor-pointer"
-            >
-              <option value="">Semua Departemen</option>
-              {departments.map(d => (
-                <option key={d.id} value={d.id}>{d.name}</option>
-              ))}
-            </select>
-            <ChevronDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-          </div>
 
           {/* Search */}
           <div className="relative flex-1 md:w-64">
@@ -692,28 +718,29 @@ Otorisasi Final: Direktur PT Cempaka Lima (Amir Hidayat, ST., MKM)`;
                 </div>
 
                 {/* Footer and Signatures */}
-                <div className="grid grid-cols-2 gap-12 pt-6 items-end">
+                <div className="grid grid-cols-2 gap-12 pt-6 items-start">
                   
-                  {/* Diajukan */}
-                  <div className="text-center">
-                    <p className="text-[12px] font-bold text-gray-650">Diajukan Oleh,</p>
-                    <div className="h-20" />
-                    <p className="text-[12px] font-bold text-gray-800 underline">{selectedSplRecord.employee?.name}</p>
-                    <p className="text-[10px] text-gray-500 font-semibold font-mono">NIK KTP: {selectedSplRecord.employee?.nik_ktp}</p>
+                  {/* Disetujui Oleh - Tim Administrator RSUCL */}
+                  <div className="text-center flex flex-col items-center">
+                    <p className="text-[12px] font-bold text-gray-800">Disetujui Oleh,</p>
+                    
+                    <div className="my-2 p-1 border border-gray-200 rounded-lg bg-white shadow-xs">
+                      <img src={qrHrdImg} alt="QR HRD RSUCL" className="w-20 h-20 object-contain" />
+                    </div>
+                    
+                    <p className="text-[12px] font-bold text-gray-800 underline">Tim Administrator RSUCL</p>
                   </div>
 
-                  {/* Disetujui */}
+                  {/* Diketahui Oleh - Direktur PT Cempaka Lima */}
                   <div className="text-center flex flex-col items-center">
-                    <p className="text-[12px] font-bold text-gray-650">Disetujui Oleh,</p>
-                    <p className="text-[10px] font-bold text-gray-500 italic mt-0.5">Direktur PT Cempaka Lima</p>
+                    <p className="text-[12px] font-bold text-gray-800">Diketahui Oleh,</p>
                     
-                    {/* QR Code placed directly here above the name */}
                     <div className="my-2 p-1 border border-gray-200 rounded-lg bg-white shadow-xs">
                       <img src={qrCodeImg} alt="QR Verification" className="w-20 h-20 object-contain" />
                     </div>
                     
                     <p className="text-[12px] font-bold text-gray-800 underline">Amir Hidayat, ST., MKM</p>
-                    <p className="text-[10px] text-gray-500 font-semibold">Direktur Utama</p>
+                    <p className="text-[10px] text-gray-600 font-semibold">Direktur PT Cempaka Lima</p>
                   </div>
 
                 </div>

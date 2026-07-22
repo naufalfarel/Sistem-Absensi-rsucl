@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
-import { Sun, Sunset, Moon, Edit2, Check, X, Plus, Users, Trash2, Star, Zap } from 'lucide-react';
-import { scheduleApi, employeeApi, ShiftSchedule, EmployeeWeeklySchedule } from '../../../services/api';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Sun, Sunset, Moon, Edit2, Check, X, Plus, Users, Trash2, Star, Zap, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Loader2, Save, Coffee } from 'lucide-react';
+import { scheduleApi, employeeApi, ShiftSchedule, EmployeeWeeklySchedule, EmployeeMonthlySchedule } from '../../../services/api';
+import { MonthYearDeptFilter } from '../ui/MonthYearDeptFilter';
 
 type IconKey = 'sun' | 'sunset' | 'moon' | 'star' | 'zap';
 
@@ -448,19 +449,46 @@ function AssignDepartmentModal({
     if (selectedDeptId === '') return;
     setLoading(true);
     try {
-      const schedId = selectedScheduleId === '' ? null : Number(selectedScheduleId);
-      if (selectedDay === 'Semua Hari') {
-        const days = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
-        for (const day of days) {
-          await onAssign(Number(selectedDeptId), day, schedId);
+      if (selectedScheduleId === 'lj') {
+        let foundShift = shifts.find(s => s.name.toLowerCase().includes('libur jaga') || s.name.toUpperCase() === 'LJ');
+        if (!foundShift) {
+          const createRes = await scheduleApi.create({
+            name: 'Libur Jaga (LJ)',
+            start_time: '00:00',
+            end_time: '00:00',
+            color: '#475569',
+            icon: 'moon',
+            shift_type: 'normal',
+          } as any);
+          if (createRes.success) {
+            foundShift = createRes.data;
+          }
         }
-      } else if (selectedDay === 'Senin - Sabtu') {
-        const days = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-        for (const day of days) {
-          await onAssign(Number(selectedDeptId), day, schedId);
+        const schedId = foundShift ? foundShift.id : null;
+        if (selectedDay === 'Semua Hari') {
+          const days = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+          for (const day of days) { await onAssign(Number(selectedDeptId), day, schedId); }
+        } else if (selectedDay === 'Senin - Sabtu') {
+          const days = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+          for (const day of days) { await onAssign(Number(selectedDeptId), day, schedId); }
+        } else {
+          await onAssign(Number(selectedDeptId), selectedDay, schedId);
         }
       } else {
-        await onAssign(Number(selectedDeptId), selectedDay, schedId);
+        const schedId = selectedScheduleId === '' ? null : Number(selectedScheduleId);
+        if (selectedDay === 'Semua Hari') {
+          const days = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+          for (const day of days) {
+            await onAssign(Number(selectedDeptId), day, schedId);
+          }
+        } else if (selectedDay === 'Senin - Sabtu') {
+          const days = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+          for (const day of days) {
+            await onAssign(Number(selectedDeptId), day, schedId);
+          }
+        } else {
+          await onAssign(Number(selectedDeptId), selectedDay, schedId);
+        }
       }
       onClose();
     } catch (err) {
@@ -517,6 +545,7 @@ function AssignDepartmentModal({
               className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all cursor-pointer"
             >
               <option value="">Libur (Off)</option>
+              <option value="lj">Libur Jaga (LJ)</option>
               {shifts.map(parent => (
                 <optgroup key={parent.id} label={parent.name}>
                   {parent.children?.map(child => (
@@ -603,6 +632,25 @@ export function ScheduleTab() {
   const [departments, setDepartments] = useState<any[]>([]);
   const [selectedDeptFilter, setSelectedDeptFilter] = useState<string>('all');
 
+  // ── Kalender Bulanan ────────────────────────────────────────────────
+  const today = new Date();
+  const [viewYear, setViewYear]   = useState(today.getFullYear());
+  const [viewMonth, setViewMonth] = useState(today.getMonth() + 1);
+  const [daysInMonth, setDaysInMonth] = useState(0);
+  const [monthlyData, setMonthlyData] = useState<EmployeeMonthlySchedule[]>([]);
+  const [calDeptFilter, setCalDeptFilter] = useState<string>('all');
+  const [calLoading, setCalLoading] = useState(false);
+  const [calPendingChanges, setCalPendingChanges] = useState<Record<string, { employee_id: number; work_date: string; schedule_id: number | null }>>({});
+  const [calSavingAll, setCalSavingAll] = useState(false);
+  const [calSuccessMsg, setCalSuccessMsg] = useState('');
+  const [calPopover, setCalPopover] = useState<{ empId: number; dateStr: string; x: number; y: number } | null>(null);
+  const calTableRef = useRef<HTMLDivElement>(null);
+
+  const MONTH_NAMES = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+  const DAY_ABBR = ['Min','Sen','Sel','Rab','Kam','Jum','Sab'];
+
+  const today_str = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+
   /**
    * Menarik seluruh daftar template shift dari API.
    */
@@ -656,6 +704,120 @@ export function ScheduleTab() {
     loadEmployeeSchedules();
     loadDepartments();
   }, []);
+
+  // Load kalender bulanan saat bulan/tahun/dept berubah
+  const loadMonthlyCalendar = useCallback(async () => {
+    setCalLoading(true);
+    try {
+      const deptId = calDeptFilter !== 'all' ? Number(calDeptFilter) : undefined;
+      const res = await scheduleApi.getMonthlySchedule(viewYear, viewMonth, deptId);
+      if (res.success) {
+        setMonthlyData(res.data);
+        setDaysInMonth(res.days);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setCalLoading(false);
+    }
+  }, [viewYear, viewMonth, calDeptFilter]);
+
+  useEffect(() => { loadMonthlyCalendar(); }, [loadMonthlyCalendar]);
+
+  const prevMonth = () => {
+    if (viewMonth === 1) { setViewYear(y => y - 1); setViewMonth(12); }
+    else setViewMonth(m => m - 1);
+  };
+  const nextMonth = () => {
+    if (viewMonth === 12) { setViewYear(y => y + 1); setViewMonth(1); }
+    else setViewMonth(m => m + 1);
+  };
+
+  const getDayHeaderStyle = (dow: number) => {
+    if (dow === 0) return { color: '#E11D48', fontWeight: 700 };
+    if (dow === 6) return { color: '#2563EB', fontWeight: 600 };
+    return { color: '#374151', fontWeight: 500 };
+  };
+
+  const handleCalCellClick = (e: React.MouseEvent, empId: number, dateStr: string) => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setCalPopover({ empId, dateStr, x: rect.left, y: rect.bottom + 4 });
+  };
+
+  // Simpan pilihan ke draft pending changes (tanpa auto save instan)
+  const handleCalAssign = (scheduleId: number | null) => {
+    if (!calPopover) return;
+    const { empId, dateStr } = calPopover;
+    setCalPopover(null);
+
+    const changeKey = `${empId}-${dateStr}`;
+    setCalPendingChanges(prev => ({
+      ...prev,
+      [changeKey]: { employee_id: empId, work_date: dateStr, schedule_id: scheduleId }
+    }));
+
+    // Optimistic update
+    setMonthlyData(prev => prev.map(row => {
+      if (row.employee_id !== empId) return row;
+      const newDates = { ...row.dates };
+      if (scheduleId === null) {
+        delete newDates[dateStr];
+      } else {
+        let schedInfo: any = null;
+        for (const s of shifts) {
+          if (s.id === scheduleId) { schedInfo = s; break; }
+          for (const c of (s.children ?? [])) {
+            if (c.id === scheduleId) { schedInfo = c; break; }
+          }
+          if (schedInfo) break;
+        }
+        if (schedInfo) {
+          newDates[dateStr] = { schedule_id: scheduleId, name: schedInfo.name, color: schedInfo.color, icon: schedInfo.icon, shift_type: schedInfo.shift_type, start_time: schedInfo.start_time?.substring(0,5), end_time: schedInfo.end_time?.substring(0,5) };
+        }
+      }
+      return { ...row, dates: newDates };
+    }));
+  };
+
+  // Simpan seluruh draft perubahan sekaligus ke backend
+  const handleCalSaveAllPending = async () => {
+    const assignments = Object.values(calPendingChanges);
+    if (assignments.length === 0) return;
+    setCalSavingAll(true);
+    try {
+      const res = await scheduleApi.assignBulkByDate(assignments);
+      if (res.success) {
+        setCalPendingChanges({});
+        setCalSuccessMsg(`Berhasil menyimpan ${assignments.length} perubahan jadwal shift!`);
+        setTimeout(() => setCalSuccessMsg(''), 4000);
+        loadMonthlyCalendar();
+      }
+    } catch (err: any) {
+      alert(err?.message ?? 'Gagal menyimpan perubahan jadwal.');
+    } finally {
+      setCalSavingAll(false);
+    }
+  };
+
+  // Batal seluruh draft perubahan
+  const handleCalCancelPending = () => {
+    setCalPendingChanges({});
+    loadMonthlyCalendar();
+  };
+
+  const getShiftBadge = (name: string) => {
+    const u = name.toUpperCase();
+    if (u.includes('LIBUR JAGA') || u === 'LJ') return 'LJ';
+    if (u.includes('CUTI')) return 'C';
+    if (u.includes('SAKIT')) return 'SK';
+    if (u.includes('DINAS') || u.includes('TUGAS')) return 'DL';
+    if (u.includes('IZIN')) return 'IZ';
+    if (u.includes('PAGI')) return 'P';
+    if (u.includes('SIANG')) return 'S';
+    if (u.includes('MALAM')) return 'M';
+    if (u.includes('SORE')) return 'Sr';
+    return name.trim().charAt(0).toUpperCase();
+  };
 
   const startEdit = (shift: ShiftSchedule) => {
     setEditingId(shift.id);
@@ -1185,85 +1347,257 @@ export function ScheduleTab() {
         </button>
       </div>
 
-      {/* Dynamic Schedule matrix */}
+      {/* ── KALENDER BULANAN (WADAH TUNGGAL TERPADU) ─────────────────────────── */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-50 font-sans">
-          <p className="text-[14px] font-semibold text-gray-800">Jadwal Mingguan Karyawan</p>
-          <p className="text-[11px] text-gray-400 mt-0.5">Klik pada sel hari kerja karyawan untuk menugaskan/mengubah shift secara mandiri.</p>
+        {/* Header Filter Terpadu */}
+        <div className="p-4 border-b border-gray-100 bg-slate-50/30">
+          <MonthYearDeptFilter
+            month={viewMonth}
+            year={viewYear}
+            deptId={calDeptFilter}
+            departments={departments}
+            showAllMonthsOption={false}
+            embedded={true}
+            onMonthChange={setViewMonth}
+            onYearChange={setViewYear}
+            onDeptChange={setCalDeptFilter}
+          />
         </div>
-        <div className="overflow-x-auto pb-4 font-sans">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-gray-50/70 border-b border-gray-100">
-                <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Karyawan</th>
-                {totalDays.map(d => (
-                  <th key={d} className="text-center px-3 py-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">{d}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {employeeSchedules.map((row, i) => (
-                <tr key={i} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                  <td className="px-4 py-3 text-[13px] font-medium text-gray-800 whitespace-nowrap">{row.name}</td>
-                  {totalDays.map((d, j) => {
-                    const assigned = row.schedules[d];
-                    const sc = assigned ? getShiftColors(assigned.color) : { bg: '#F9FAFB', text: '#9CA3AF' };
-                    const initial = assigned ? getShiftInitials(assigned.name) : '-';
-                    const active = activeAssignCell?.empId === row.employee_id && activeAssignCell?.day === d;
 
+        {/* Calendar Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between px-5 py-4 border-b border-gray-100 bg-gradient-to-r from-green-50 to-white gap-3">
+          <div className="flex items-center gap-3">
+            <CalendarIcon size={18} className="text-[#16A34A]" />
+            <div>
+              <p className="text-[15px] font-bold text-gray-900">
+                Kalender Jadwal — {MONTH_NAMES[viewMonth - 1]} {viewYear}
+              </p>
+              <p className="text-[11px] text-gray-400">{daysInMonth} hari · Klik sel untuk atur shift tiap tanggal</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Legend */}
+        <div className="px-5 py-2 border-b border-gray-50 flex items-center gap-4 flex-wrap">
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Keterangan:</p>
+          {shifts.slice(0, 5).map(s => {
+            const badge = getShiftBadge(s.name);
+            const pr = getPresetByHex(s.color);
+            return (
+              <div key={s.id} className="flex items-center gap-1.5">
+                <span className="inline-flex items-center justify-center w-6 h-6 rounded-md text-[10px] font-bold border"
+                  style={{ background: pr.bg, borderColor: pr.border, color: s.color }}>
+                  {badge}
+                </span>
+                <span className="text-[10px] text-gray-500">{s.name}</span>
+              </div>
+            );
+          })}
+          <div className="flex items-center gap-1.5">
+            <span className="inline-flex items-center justify-center w-6 h-6 rounded-md text-[10px] font-bold border border-gray-200 bg-gray-100 text-gray-400">–</span>
+            <span className="text-[10px] text-gray-500">Libur/Kosong</span>
+          </div>
+        </div>
+
+        {/* Grid */}
+        {calLoading ? (
+          <div className="flex items-center justify-center py-16 gap-3 text-gray-400">
+            <Loader2 size={22} className="animate-spin text-[#16A34A]" />
+            <span className="text-[13px]">Memuat kalender...</span>
+          </div>
+        ) : (
+          <div ref={calTableRef} className="overflow-x-auto pb-2">
+            <table className="text-[11px] border-collapse" style={{ minWidth: `${Math.max(900, 140 + daysInMonth * 44)}px` }}>
+              <thead>
+                <tr className="border-b border-gray-100">
+                  <th className="sticky left-0 z-10 bg-gray-50 text-left px-4 py-3 min-w-[150px] font-semibold text-gray-500 uppercase tracking-wider text-[10px] border-r border-gray-100">
+                    <div className="flex items-center gap-1.5"><Users size={12} className="text-gray-400" /> Karyawan</div>
+                  </th>
+                  {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => {
+                    const dateStr = `${viewYear}-${String(viewMonth).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                    const dow = new Date(viewYear, viewMonth - 1, day).getDay();
+                    const isToday = dateStr === today_str;
                     return (
-                      <td key={j} className="px-3 py-3 text-center relative">
-                        <button
-                          onClick={() => setActiveAssignCell(active ? null : { empId: row.employee_id, day: d })}
-                          className="inline-block text-[11px] font-bold px-3 py-1 rounded-lg transition-all hover:scale-105 active:scale-95 shadow-sm border border-transparent hover:border-gray-200"
-                          style={{ background: sc.bg, color: sc.text }}
-                          title={assigned ? `${assigned.name} (Klik untuk ganti)` : 'Libur (Klik untuk set)'}
-                        >
-                          {initial}
-                        </button>
-
-                        {/* Popover choice selection */}
-                        {active && (
-                          <div className={`absolute left-1/2 -translate-x-1/2 z-30 bg-white rounded-xl border border-gray-200 shadow-xl py-1.5 min-w-[170px] text-left max-h-[300px] overflow-y-auto ${
-                            employeeSchedules.length > 2 && i >= employeeSchedules.length - 2
-                              ? 'bottom-full mb-1.5'
-                              : 'top-full mt-1.5'
-                          }`}>
-                            <p className="text-[9px] font-bold text-gray-400 px-3 py-1 uppercase border-b border-gray-50 mb-1">Set Shift ({d})</p>
-                            {shifts.map(parent => (
-                              <div key={parent.id} className="space-y-0.5 border-b border-gray-50 pb-1 mb-1 last:border-0 last:pb-0 last:mb-0">
-                                <p className="text-[8px] font-bold text-gray-400 px-3 py-0.5 uppercase tracking-wider">{parent.name}</p>
-                                {parent.children?.map(child => (
-                                  <button
-                                    key={child.id}
-                                    onClick={() => handleAssign(row.employee_id, d, child.id)}
-                                    className="w-full text-left px-4 py-1.5 text-[10.5px] font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                                  >
-                                    <span className="w-2 h-2 rounded-full border border-gray-100" style={{ background: child.color }} />
-                                    <span className="truncate">{child.name}</span>
-                                  </button>
-                                ))}
-                              </div>
-                            ))}
-                            <div className="h-px bg-gray-100 my-1" />
-                            <button
-                              onClick={() => handleAssign(row.employee_id, d, null)}
-                              className="w-full text-left px-3 py-2 text-[11px] font-bold text-red-500 hover:bg-red-50 flex items-center gap-2"
-                            >
-                              <span className="w-2.5 h-2.5 rounded-full bg-gray-300" />
-                              Libur (-)
-                            </button>
-                          </div>
-                        )}
-                      </td>
+                      <th key={day} className={`text-center py-2 px-1 font-semibold text-[10px] ${isToday ? 'bg-green-50' : ''}`}
+                        style={{ minWidth: '40px', ...getDayHeaderStyle(dow) }}>
+                        <div className="flex flex-col items-center">
+                          <span>{DAY_ABBR[dow]}</span>
+                          <span className={`mt-0.5 w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold ${
+                            isToday ? 'bg-[#16A34A] text-white' : ''
+                          }`}>{day}</span>
+                        </div>
+                      </th>
                     );
                   })}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {monthlyData.length === 0 ? (
+                  <tr><td colSpan={daysInMonth + 1} className="text-center py-10 text-gray-400 text-[12px] italic">
+                    Belum ada data karyawan. Pilih departemen untuk melihat jadwal.
+                  </td></tr>
+                ) : (
+                  monthlyData.map((row, ri) => (
+                    <tr key={row.employee_id}
+                      className={`border-b border-gray-50 ${ri % 2 === 0 ? 'bg-white' : 'bg-gray-50/40'} hover:bg-green-50/20 transition-colors`}>
+                      <td className="sticky left-0 z-10 bg-inherit px-4 py-2 border-r border-gray-100">
+                        <p className="font-semibold text-gray-800 whitespace-nowrap text-[12px]">{row.name}</p>
+                      </td>
+                      {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => {
+                        const dateStr = `${viewYear}-${String(viewMonth).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                        const assigned = row.dates[dateStr];
+                        const dow = new Date(viewYear, viewMonth - 1, day).getDay();
+                        const isToday = dateStr === today_str;
+                        const isPending = !!calPendingChanges[`${row.employee_id}-${dateStr}`];
+                        const pr = assigned ? getPresetByHex(assigned.color) : null;
+                        const badge = assigned ? getShiftBadge(assigned.name) : null;
+                        return (
+                          <td key={day} className={`px-0.5 py-1 text-center relative ${isToday ? 'bg-green-50/50' : ''}`}>
+                            <div className="relative inline-block">
+                              <button onClick={e => handleCalCellClick(e, row.employee_id, dateStr)}
+                                className={`w-8 h-7 mx-auto rounded-lg text-[10px] font-bold transition-all hover:scale-110 active:scale-95 border flex items-center justify-center ${
+                                  isPending
+                                    ? 'ring-2 ring-blue-500 border-blue-400 shadow-md font-extrabold animate-pulse'
+                                    : assigned
+                                      ? 'shadow-sm hover:shadow-md'
+                                      : dow === 0
+                                        ? 'border-red-100 bg-red-50/50 text-red-300 hover:bg-red-100'
+                                        : dow === 6
+                                          ? 'border-blue-100 bg-blue-50/50 text-blue-300 hover:bg-blue-100'
+                                          : 'border-gray-100 bg-gray-50 text-gray-300 hover:bg-gray-100'
+                                }`}
+                                style={assigned && pr ? { background: pr.bg, borderColor: isPending ? '#3B82F6' : pr.border, color: assigned.color } : {}}
+                                title={isPending
+                                  ? `[BELUM DISIMPAN] ${assigned ? assigned.name : 'Libur'}\nKlik lagi untuk ubah.`
+                                  : assigned
+                                    ? `${assigned.name}\n${assigned.start_time ?? ''}–${assigned.end_time ?? ''}\nKlik untuk ubah`
+                                    : `Tgl ${day} — kosong. Klik untuk atur.`}>
+                                {badge ?? '·'}
+                              </button>
+                              {isPending && (
+                                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-blue-500 border border-white flex items-center justify-center shadow-xs" title="Perubahan Belum Disimpan" />
+                              )}
+                            </div>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
+
+      {/* Save Success Banner */}
+      {calSuccessMsg && (
+        <div className="p-3.5 bg-green-500 text-white rounded-2xl shadow-lg flex items-center gap-2.5 text-[13px] font-bold animate-bounce max-w-md mx-auto">
+          <Check size={18} />
+          <span>{calSuccessMsg}</span>
+        </div>
+      )}
+
+      {/* Floating Save Bar */}
+      {Object.keys(calPendingChanges).length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-gray-900/95 text-white px-5 py-3 rounded-2xl shadow-2xl backdrop-blur-md flex items-center gap-4 border border-gray-700 animate-slide-up font-sans">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
+            <p className="text-[12.5px] font-bold">
+              {Object.keys(calPendingChanges).length} Perubahan Shift Belum Disimpan
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleCalCancelPending}
+              disabled={calSavingAll}
+              className="px-3 py-1.5 text-[12px] font-semibold text-gray-300 hover:text-white hover:bg-white/10 rounded-xl transition-colors cursor-pointer"
+            >
+              Batal
+            </button>
+            <button
+              onClick={handleCalSaveAllPending}
+              disabled={calSavingAll}
+              className="px-4 py-1.5 text-[12.5px] font-bold text-white bg-[#16A34A] hover:bg-[#0d9240] rounded-xl transition-all shadow-sm flex items-center gap-1.5 cursor-pointer active:scale-95"
+            >
+              {calSavingAll ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+              {calSavingAll ? 'Menyimpan...' : 'Simpan Perubahan Jadwal'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Cal Popover */}
+      {calPopover && (
+        <div className="fixed inset-0 z-30" onClick={() => setCalPopover(null)}>
+          <div
+            className="absolute bg-white rounded-2xl border border-gray-200 shadow-2xl py-2 min-w-[200px] max-h-[320px] overflow-y-auto z-40"
+            style={{ top: calPopover.y, left: Math.min(calPopover.x, window.innerWidth - 220) }}
+            onClick={e => e.stopPropagation()}>
+            <p className="text-[9px] font-bold text-gray-400 px-3 py-1 uppercase tracking-wider border-b border-gray-100 mb-1">Pilih Shift</p>
+            <button onClick={() => handleCalAssign(null)}
+              className="w-full text-left px-3 py-2 text-[11px] font-bold text-gray-500 hover:bg-gray-50 flex items-center gap-2">
+              <Coffee size={13} className="text-gray-400" /> Libur / OFF
+            </button>
+            <button onClick={async () => {
+              let foundShift = shifts.find(s => s.name.toLowerCase().includes('libur jaga') || s.name.toUpperCase() === 'LJ');
+              if (!foundShift) {
+                try {
+                  const createRes = await scheduleApi.create({
+                    name: 'Libur Jaga (LJ)',
+                    start_time: '00:00',
+                    end_time: '00:00',
+                    color: '#475569',
+                    icon: 'moon',
+                    shift_type: 'normal',
+                  } as any);
+                  if (createRes.success) {
+                    foundShift = createRes.data;
+                    setShifts(prev => [...prev, createRes.data]);
+                  }
+                } catch (err) {
+                  console.error(err);
+                }
+              }
+              if (foundShift) {
+                await handleCalAssign(foundShift.id);
+              }
+            }}
+              className="w-full text-left px-3 py-2 text-[11px] font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-slate-600 flex-shrink-0" /> Libur Jaga (LJ)
+            </button>
+            <div className="h-px bg-gray-100 my-1" />
+            {shifts.map(parent => (
+              <div key={parent.id}>
+                <p className="text-[9px] font-bold text-gray-400 px-3 py-1 uppercase tracking-wider">{parent.name}</p>
+                {parent.children && parent.children.length > 0
+                  ? parent.children.map(child => {
+                      const pr = getPresetByHex(child.color);
+                      const cur = monthlyData.find(r => r.employee_id === calPopover.empId)?.dates[calPopover.dateStr]?.schedule_id;
+                      return (
+                        <button key={child.id} onClick={() => handleCalAssign(child.id)}
+                          className="w-full text-left px-3 py-2 text-[11px] hover:bg-gray-50 flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: child.color }} />
+                          <span className="font-medium text-gray-700 truncate">{child.name}</span>
+                          <span className="ml-auto text-[10px] text-gray-400 font-mono flex-shrink-0">{child.start_time?.substring(0,5)}–{child.end_time?.substring(0,5)}</span>
+                          {cur === child.id && <Check size={12} className="ml-1 text-[#16A34A]" />}
+                        </button>
+                      );
+                    })
+                  : (
+                    <button onClick={() => handleCalAssign(parent.id)}
+                      className="w-full text-left px-3 py-2 text-[11px] hover:bg-gray-50 flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: parent.color }} />
+                      <span className="font-medium text-gray-700 truncate">{parent.name}</span>
+                      <span className="ml-auto text-[10px] text-gray-400 font-mono flex-shrink-0">{parent.start_time?.substring(0,5)}–{parent.end_time?.substring(0,5)}</span>
+                    </button>
+                  )
+                }
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Modals */}
       {showAddModal && <AddShiftModal onClose={() => setShowAddModal(false)} onAdd={handleAdd} departments={departments} />}

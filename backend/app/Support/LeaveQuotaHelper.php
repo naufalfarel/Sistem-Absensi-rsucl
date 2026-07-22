@@ -201,4 +201,52 @@ class LeaveQuotaHelper
 
         return $total;
     }
+
+    /**
+     * Menghitung total hari cuti tahunan (type='cuti', status pending+approved)
+     * yang jatuh pada bulan kalender tertentu untuk karyawan tertentu.
+     *
+     * Digunakan untuk validasi batas maksimal 4 hari cuti per bulan kalender.
+     * Setiap pengajuan yang rentang tanggalnya mencakup bulan tersebut akan
+     * dihitung hanya untuk hari-hari yang jatuh di dalam bulan itu.
+     *
+     * Contoh: Pengajuan 28 Juli – 2 Agustus (6 hari):
+     *   - Untuk bulan Juli   → menghitung 4 hari (28, 29, 30, 31 Juli)
+     *   - Untuk bulan Agustus → menghitung 2 hari (1, 2 Agustus)
+     *
+     * @param Employee $employee   Karyawan yang dicek
+     * @param int      $year       Tahun bulan yang dicek (contoh: 2026)
+     * @param int      $month      Bulan yang dicek (1-12)
+     * @param int|null $excludeId  ID leave request yang dikecualikan (untuk re-checking)
+     * @return int Total hari cuti committed (pending+approved) dalam bulan tersebut
+     */
+    public static function committedDaysInMonth(Employee $employee, int $year, int $month, ?int $excludeId = null): int
+    {
+        $monthStart = Carbon::create($year, $month, 1, 0, 0, 0)->toDateString();
+        $monthEnd   = Carbon::create($year, $month, 1, 0, 0, 0)->endOfMonth()->toDateString();
+
+        $query = $employee->leaveRequests()
+            ->where('type', 'cuti')
+            ->whereIn('status', ['pending', 'approved'])
+            // Hanya ambil request yang rentangnya menyentuh bulan ini
+            ->where('start_date', '<=', $monthEnd)
+            ->where('end_date',   '>=', $monthStart);
+
+        if ($excludeId !== null) {
+            $query->where('id', '!=', $excludeId);
+        }
+
+        $leaveRequests = $query->get();
+
+        $total = 0;
+        foreach ($leaveRequests as $lr) {
+            // Hitung overlap antara rentang leave request dengan bulan ini
+            $lrStart   = Carbon::parse(max($lr->start_date->toDateString(), $monthStart));
+            $lrEnd     = Carbon::parse(min($lr->end_date->toDateString(),   $monthEnd));
+            $daysInMonth = $lrStart->diffInDays($lrEnd) + 1;
+            $total += max(0, $daysInMonth);
+        }
+
+        return $total;
+    }
 }

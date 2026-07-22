@@ -152,7 +152,7 @@ class SettingController extends Controller
         // Buat notifikasi sistem untuk seluruh administrator jika opsi notif_system diaktifkan
         $notifSystem = Setting::get('notif_system', '0');
         if ($notifSystem !== '0') {
-            $admins = \App\Models\User::where('role', 'admin')->get();
+            $admins = \App\Models\User::whereIn('role', ['admin', 'super_admin'])->get();
             foreach ($admins as $admin) {
                 \App\Models\Notification::create([
                     'user_id' => $admin->id,

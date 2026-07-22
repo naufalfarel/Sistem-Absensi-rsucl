@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { 
-  AlertTriangle, Bell, Check, Calendar, Trash2, Layers, Settings 
+  AlertTriangle, Bell, Check, Calendar, Trash2, Layers, Settings, Clock, FileText, UserCheck, ArrowRight 
 } from 'lucide-react';
 import { notificationApi, AppNotification } from '../../../services/api';
 
@@ -13,17 +13,13 @@ const catFilters = [
 
 interface NotificationsTabProps {
   onUpdateCount?: () => void;
+  onNavigate?: (tab: string) => void;
 }
 
 /**
  * Komponen Tab Notifikasi Admin (NotificationsTab) — Sistem Absensi RSUCL
- * 
- * Halaman pemberitahuan khusus untuk Administrator. Menampilkan laporan keterlambatan karyawan,
- * log pengajuan cuti/izin/sakit baru, penugasan jadwal kerja shift, serta pemberitahuan sistem.
- * 
- * @param onUpdateCount Callback opsional untuk sinkronisasi lencana jumlah notifikasi belum dibaca di sidebar
  */
-export function NotificationsTab({ onUpdateCount }: NotificationsTabProps) {
+export function NotificationsTab({ onUpdateCount, onNavigate }: NotificationsTabProps) {
   // Filter kategori aktif ('all', 'attendance', 'leave', 'system')
   const [filter, setFilter] = useState('all');
   
@@ -55,7 +51,6 @@ export function NotificationsTab({ onUpdateCount }: NotificationsTabProps) {
     }
   };
 
-  // Muat notifikasi saat tab ini dipasang di DOM
   useEffect(() => {
     loadNotifications();
   }, []);
@@ -89,6 +84,36 @@ export function NotificationsTab({ onUpdateCount }: NotificationsTabProps) {
     }
   };
 
+  /**
+   * Menangani klik notifikasi pada Admin:
+   * 1. Tandai sebagai sudah dibaca
+   * 2. Pindah langsung ke tab admin yang relevan
+   */
+  const handleItemClick = (n: AppNotification) => {
+    markOne(n.id);
+
+    if (!onNavigate) return;
+
+    const type = (n.type || '').toLowerCase();
+    const title = (n.title || '').toLowerCase();
+    const body = (n.body || '').toLowerCase();
+    const text = `${type} ${title} ${body}`;
+
+    if (text.includes('cuti') || text.includes('sakit') || text.includes('izin') || type === 'leave') {
+      onNavigate('leave');
+    } else if (text.includes('lembur') || type === 'overtime') {
+      onNavigate('overtime');
+    } else if (text.includes('tugas') || type.includes('assignment')) {
+      onNavigate('assignment');
+    } else if (text.includes('registrasi') || text.includes('onboarding') || text.includes('pendaftaran') || type === 'onboarding') {
+      onNavigate('onboarding');
+    } else if (text.includes('shift') || text.includes('jadwal') || type === 'schedule') {
+      onNavigate('schedule');
+    } else if (text.includes('absen') || text.includes('keterlambatan') || type === 'attendance') {
+      onNavigate('attendance');
+    }
+  };
+
   const handleDelete = async (id: number) => {
     if (!window.confirm('Apakah Anda yakin ingin menghapus notifikasi ini?')) return;
     try {
@@ -119,15 +144,20 @@ export function NotificationsTab({ onUpdateCount }: NotificationsTabProps) {
 
   const filtered = notifs.filter(n => filter === 'all' || n.type === filter);
 
-  const getIconProps = (type: string) => {
-    switch (type) {
-      case 'leave':
-        return { icon: Calendar, color: '#7C3AED', bg: '#F5F3FF' };
-      case 'attendance':
-        return { icon: AlertTriangle, color: '#D97706', bg: '#FFFBEB' };
-      default:
-        return { icon: Bell, color: '#2563EB', bg: '#EFF6FF' };
+  const getIconProps = (type: string, text: string) => {
+    if (text.includes('cuti') || type === 'leave') {
+      return { icon: Calendar, color: '#7C3AED', bg: '#F5F3FF', label: 'Pengajuan Cuti' };
     }
+    if (text.includes('lembur') || type === 'overtime') {
+      return { icon: Clock, color: '#EA580C', bg: '#FFF7ED', label: 'Lembur' };
+    }
+    if (text.includes('tugas') || type.includes('assignment')) {
+      return { icon: FileText, color: '#16A34A', bg: '#F0FDF4', label: 'Surat Tugas' };
+    }
+    if (text.includes('onboarding') || text.includes('registrasi')) {
+      return { icon: UserCheck, color: '#2563EB', bg: '#EFF6FF', label: 'Onboarding Pegawai' };
+    }
+    return { icon: AlertTriangle, color: '#D97706', bg: '#FFFBEB', label: 'Monitoring Absensi' };
   };
 
   const formatTime = (timeStr: string) => {
@@ -211,19 +241,20 @@ export function NotificationsTab({ onUpdateCount }: NotificationsTabProps) {
         )}
         
         {filtered.map(n => {
-          const ip = getIconProps(n.type);
+          const text = `${n.type} ${n.title} ${n.body}`.toLowerCase();
+          const ip = getIconProps(n.type, text);
           const Icon = ip.icon;
           
           let borderTheme = 'border-l-gray-200';
           let bgTheme = 'bg-white';
           
           if (!n.is_read) {
-            if (n.type === 'leave') {
+            if (text.includes('cuti') || n.type === 'leave') {
               borderTheme = 'border-l-purple-500';
               bgTheme = 'bg-purple-50/15 hover:bg-purple-50/25';
-            } else if (n.type === 'attendance') {
-              borderTheme = 'border-l-amber-500';
-              bgTheme = 'bg-amber-50/15 hover:bg-amber-50/25';
+            } else if (text.includes('lembur') || n.type === 'overtime') {
+              borderTheme = 'border-l-orange-500';
+              bgTheme = 'bg-orange-50/15 hover:bg-orange-50/25';
             } else {
               borderTheme = 'border-l-blue-500';
               bgTheme = 'bg-blue-50/15 hover:bg-blue-50/25';
@@ -236,20 +267,20 @@ export function NotificationsTab({ onUpdateCount }: NotificationsTabProps) {
           return (
             <div 
               key={n.id} 
-              onClick={() => markOne(n.id)}
-              className={`group bg-white rounded-2xl border-y border-r border-l-4 ${borderTheme} ${bgTheme} border-gray-100 shadow-sm overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-md hover:translate-y-[-1px] flex gap-4 p-4.5`}
+              onClick={() => handleItemClick(n)}
+              className={`group bg-white rounded-2xl border-y border-r border-l-4 ${borderTheme} ${bgTheme} border-gray-100 shadow-sm overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-md hover:translate-y-[-1px] flex items-start gap-4 p-4.5`}
             >
               <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors duration-300 style-scope" style={{ background: ip.bg }}>
                 <Icon size={17} style={{ color: ip.color }} />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between gap-3 mb-1">
-                  <div className="min-w-0 flex-1">
-                    <span className={`text-[13px] leading-snug break-words ${!n.is_read ? 'font-bold text-gray-900' : 'font-medium text-gray-700'}`}>
+                  <div className="min-w-0 flex-1 flex items-center gap-2 flex-wrap">
+                    <span className={`text-[13px] leading-snug break-words ${!n.is_read ? 'font-bold text-gray-900' : 'font-semibold text-gray-700'}`}>
                       {n.title}
                     </span>
                     {!n.is_read && (
-                      <span className="ml-2 inline-block w-1.5 h-1.5 rounded-full bg-[#16A34A] animate-pulse" />
+                      <span className="inline-block w-2 h-2 rounded-full bg-[#16A34A] animate-pulse" />
                     )}
                   </div>
                   <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap mt-0.5">
@@ -257,22 +288,16 @@ export function NotificationsTab({ onUpdateCount }: NotificationsTabProps) {
                   </span>
                 </div>
                 <p className="text-[12px] text-gray-500 leading-relaxed font-normal">{n.body}</p>
+                
+                {/* Action hint badge */}
+                <div className="mt-2.5 flex items-center gap-1 text-[11px] font-bold text-[#16A34A] group-hover:underline">
+                  <span>Buka Halaman {ip.label}</span>
+                  <ArrowRight size={12} className="transition-transform group-hover:translate-x-1" />
+                </div>
               </div>
               
               {/* Individual quick actions on hover */}
-              <div className="flex items-center gap-1.5 self-center flex-shrink-0 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                {!n.is_read && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      markOne(n.id);
-                    }}
-                    className="p-1.5 text-gray-400 hover:text-[#16A34A] hover:bg-green-50 rounded-xl transition-all"
-                    title="Tandai dibaca"
-                  >
-                    <Check size={13} className="stroke-[2.5]" />
-                  </button>
-                )}
+              <div className="flex items-center gap-1.5 self-start flex-shrink-0 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                 <button
                   onClick={(e) => {
                     e.stopPropagation();

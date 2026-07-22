@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { FileText, Download, Users, Calendar, Clock, AlertTriangle, ChevronDown, CheckCircle2, X } from 'lucide-react';
+import { FileText, Download, Users, Calendar, Clock, AlertTriangle, ChevronDown, CheckCircle2, X, BarChart3 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { reportApi, ReportSummary, attendanceApi, AttendanceRecord, departmentApi, getToken, OvertimeRequest, overtimeApi } from '../../../services/api';
+import { MonthYearDeptFilter } from '../ui/MonthYearDeptFilter';
 import logoImg from '../../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
 import rsLogoImg from '../../../imports/rsucl_wide_logo.png';
 import { useAuth } from '../../../context/AuthContext';
@@ -34,14 +35,14 @@ export function ReportsTab() {
 
   const currentDate = new Date();
   
-  // State dropdown filter bulan laporan aktif
+  // State filter EKSPOR laporan
   const [selectedMonth, setSelectedMonth] = useState<number>(currentDate.getMonth() + 1);
-  
-  // State dropdown filter tahun laporan aktif
   const [selectedYear, setSelectedYear] = useState<number>(currentDate.getFullYear());
-  
-  // State filter departemen karyawan
   const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
+  
+  // State filter DIAGRAM / GRAFIK (terpisah dari filter ekspor)
+  const [chartMonth, setChartMonth] = useState<number>(currentDate.getMonth() + 1);
+  const [chartYear, setChartYear] = useState<number>(currentDate.getFullYear());
   
   // Menampung daftar departemen untuk dropdown filter
   const [departments, setDepartments] = useState<{ id: number; name: string }[]>([]);
@@ -71,12 +72,13 @@ export function ReportsTab() {
   };
 
   /**
-   * Mengambil data analitik KPI absensi berjalan dari API backend.
+   * Mengambil data analitik KPI absensi dari API backend.
+   * Parameter month/year memungkinkan data grafik difilter per bulan.
    */
-  const loadSummary = async () => {
+  const loadSummary = async (month?: number, year?: number) => {
     setLoading(true);
     try {
-      const res = await reportApi.summary();
+      const res = await reportApi.summary(month, year);
       if (res.success) {
         setSummary(res.data);
       }
@@ -678,7 +680,7 @@ export function ReportsTab() {
   };
 
   useEffect(() => {
-    loadSummary();
+    loadSummary(chartMonth, chartYear);
     const fetchDepts = async () => {
       try {
         const res = await departmentApi.list();
@@ -692,6 +694,11 @@ export function ReportsTab() {
     fetchDepts();
     loadOvertimePending();
   }, []);
+
+  // Re-fetch grafik setiap kali filter diagram berubah
+  useEffect(() => {
+    loadSummary(chartMonth, chartYear);
+  }, [chartMonth, chartYear]);
 
   const loadOvertimePending = async () => {
     setLoadingOvertime(true);
@@ -811,59 +818,114 @@ export function ReportsTab() {
         </div>
       </div>
 
-      {/* Filters bar */}
-      <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm flex flex-wrap gap-4 items-center">
-        <div className="flex flex-col gap-1">
+      {/* ── Month, Year & Department Filter ──────────────────────── */}
+      <div className="space-y-3">
+        <div className="flex flex-col gap-1 w-fit">
           <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Tipe Laporan</label>
           <div className="relative">
             <select value={reportType} onChange={e => setReportType(e.target.value as any)}
-              className="appearance-none pl-3.5 pr-9 py-2 border border-gray-200 rounded-xl text-[12px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all text-gray-700 font-semibold cursor-pointer">
+              className="appearance-none pl-3.5 pr-9 py-2 border border-gray-200 rounded-full text-[13px] bg-white focus:outline-none focus:border-[#16A34A] transition-all text-gray-700 font-semibold cursor-pointer shadow-xs">
               <option value="harian">Harian (Detail Kehadiran)</option>
               <option value="bulanan">Rekap Bulanan (Ringkasan)</option>
             </select>
-            <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <ChevronDown size={12} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           </div>
         </div>
 
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bulan</label>
-          <div className="relative">
-            <select value={selectedMonth} onChange={e => setSelectedMonth(Number(e.target.value))}
-              className="appearance-none pl-3.5 pr-9 py-2 border border-gray-200 rounded-xl text-[12px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all text-gray-700 font-semibold cursor-pointer">
-              {[
-                { v: 1, l: 'Januari' }, { v: 2, l: 'Februari' }, { v: 3, l: 'Maret' },
-                { v: 4, l: 'April' }, { v: 5, l: 'Mei' }, { v: 6, l: 'Juni' },
-                { v: 7, l: 'Juli' }, { v: 8, l: 'Agustus' }, { v: 9, l: 'September' },
-                { v: 10, l: 'Oktober' }, { v: 11, l: 'November' }, { v: 12, l: 'Desember' }
-              ].map(m => <option key={m.v} value={m.v}>{m.l}</option>)}
-            </select>
-            <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Tahun</label>
-          <div className="relative">
-            <select value={selectedYear} onChange={e => setSelectedYear(Number(e.target.value))}
-              className="appearance-none pl-3.5 pr-9 py-2 border border-gray-200 rounded-xl text-[12px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all text-gray-700 font-semibold cursor-pointer">
-              {[2025, 2026, 2027, 2028].map(y => <option key={y} value={y}>{y}</option>)}
-            </select>
-            <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Departemen/Bagian</label>
-          <div className="relative">
-            <select value={selectedDepartment} onChange={e => setSelectedDepartment(e.target.value)}
-              className="appearance-none pl-3.5 pr-9 py-2 border border-gray-200 rounded-xl text-[12px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all text-gray-700 font-semibold cursor-pointer">
-              <option value="all">Semua Departemen/Bagian</option>
-              {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
-            </select>
-            <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-          </div>
-        </div>
+        <MonthYearDeptFilter
+          month={selectedMonth}
+          year={selectedYear}
+          deptId={selectedDepartment}
+          departments={departments}
+          showAllMonthsOption={false}
+          onMonthChange={setSelectedMonth}
+          onYearChange={setSelectedYear}
+          onDeptChange={setSelectedDepartment}
+        />
       </div>
+
+      {/* ── Filter Diagram / Grafik ──────────────────────── */}
+      {(() => {
+        const monthNames = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+        const currentYear = new Date().getFullYear();
+        // Pilihan tahun: 2020 s.d. tahun sekarang saja (tanpa tahun masa depan)
+        const yearOptions = Array.from({ length: currentYear - 2020 + 1 }, (_, i) => 2020 + i).reverse();
+        const chartPeriodLabel = `${monthNames[chartMonth - 1]} ${chartYear}`;
+        return (
+          <div className="bg-white rounded-2xl border border-indigo-100 shadow-sm p-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center">
+                  <BarChart3 size={14} className="text-indigo-500" />
+                </div>
+                <div>
+                  <p className="text-[12px] font-bold text-gray-800">Filter Diagram &amp; Analitik</p>
+                  <p className="text-[10px] text-gray-400">Pilih bulan/tahun untuk memperbarui semua grafik</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 ml-auto flex-wrap">
+                {/* Shortcut bulan cepat */}
+                <div className="flex gap-1">
+                  {[0, -1, -2, -3].map((offset) => {
+                    const d = new Date(currentYear, new Date().getMonth() + offset, 1);
+                    const m = d.getMonth() + 1;
+                    const y = d.getFullYear();
+                    const isActive = chartMonth === m && chartYear === y;
+                    return (
+                      <button
+                        key={offset}
+                        onClick={() => { setChartMonth(m); setChartYear(y); }}
+                        className={`px-2.5 py-1 rounded-lg text-[10.5px] font-semibold transition-all ${
+                          isActive
+                            ? 'bg-indigo-600 text-white shadow-sm'
+                            : 'bg-gray-50 border border-gray-200 text-gray-600 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600'
+                        }`}
+                      >
+                        {offset === 0 ? 'Bulan Ini' : monthNames[m - 1].slice(0, 3) + ' ' + (y !== currentYear ? String(y).slice(2) : '')}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="h-5 w-px bg-gray-200" />
+                {/* Select bulan */}
+                <div className="relative">
+                  <select
+                    value={chartMonth}
+                    onChange={e => setChartMonth(Number(e.target.value))}
+                    className="appearance-none pl-2.5 pr-7 py-1.5 border border-gray-200 rounded-lg text-[12px] bg-gray-50 focus:outline-none focus:border-indigo-400 transition-all text-gray-700 font-medium cursor-pointer"
+                  >
+                    {monthNames.map((mn, idx) => (
+                      <option key={idx + 1} value={idx + 1}>{mn}</option>
+                    ))}
+                  </select>
+                  <ChevronDown size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                </div>
+                {/* Select tahun */}
+                <div className="relative">
+                  <select
+                    value={chartYear}
+                    onChange={e => setChartYear(Number(e.target.value))}
+                    className="appearance-none pl-2.5 pr-7 py-1.5 border border-gray-200 rounded-lg text-[12px] bg-gray-50 focus:outline-none focus:border-indigo-400 transition-all text-gray-700 font-medium cursor-pointer"
+                  >
+                    {yearOptions.map(y => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                  <ChevronDown size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                </div>
+                {loading && (
+                  <span className="text-[10px] text-indigo-500 font-medium animate-pulse">Memuat...</span>
+                )}
+              </div>
+            </div>
+            {/* Period indicator */}
+            <div className="mt-2.5 pt-2.5 border-t border-gray-50 flex items-center gap-1.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+              <span className="text-[10.5px] text-gray-500">Menampilkan data grafik periode: <strong className="text-gray-700">{chartPeriodLabel}</strong></span>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* KPI cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -934,7 +996,7 @@ export function ReportsTab() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <p className="text-[14px] font-semibold text-gray-800">Tren Kehadiran Bulanan</p>
-              <p className="text-[11px] text-gray-400">7 Bulan Terakhir</p>
+              <p className="text-[11px] text-gray-400">7 bulan s.d. {['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Ags','Sep','Okt','Nov','Des'][chartMonth-1]} {chartYear}</p>
             </div>
             <div className="flex gap-3">
               {[['#16A34A','Hadir'],['#FBBF24','Terlambat'],['#F87171','Alpha'],['#A78BFA','Cuti']].map(([c,l]) => (
@@ -968,7 +1030,7 @@ export function ReportsTab() {
         {/* Pie chart */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           <p className="text-[14px] font-semibold text-gray-800 mb-1">Komposisi Kehadiran</p>
-          <p className="text-[11px] text-gray-400 mb-4">Bulan Ini</p>
+          <p className="text-[11px] text-gray-400 mb-4">{['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'][chartMonth-1]} {chartYear}</p>
           {pieData.some(d => d.value > 0) ? (
             <>
               <ResponsiveContainer width="100%" height={140}>
@@ -1003,11 +1065,11 @@ export function ReportsTab() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Weekly late */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <p className="text-[14px] font-semibold text-gray-800 mb-1">Keterlambatan Mingguan</p>
-          <p className="text-[11px] text-gray-400 mb-4">Jumlah karyawan terlambat per hari (minggu ini)</p>
+          <p className="text-[14px] font-semibold text-gray-800 mb-1">Keterlambatan per Minggu</p>
+          <p className="text-[11px] text-gray-400 mb-4">Jumlah karyawan terlambat per minggu · {['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'][chartMonth-1]} {chartYear}</p>
           {weeklyLateData.some(d => d.count > 0) ? (
             <ResponsiveContainer width="100%" height={150}>
-              <BarChart id="rep-late-bar" data={weeklyLateData} barCategoryGap="40%">
+              <BarChart id="rep-late-bar" data={weeklyLateData} barCategoryGap="35%">
                 <XAxis dataKey="hari" tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} width={20} />
                 <Tooltip contentStyle={{ borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '12px' }} cursor={{ fill: 'rgba(0,0,0,0.02)' }} />
@@ -1015,13 +1077,14 @@ export function ReportsTab() {
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <div className="text-center py-10 text-[12px] text-gray-400">Belum ada karyawan terlambat minggu ini</div>
+            <div className="text-center py-10 text-[12px] text-gray-400">Tidak ada keterlambatan pada periode ini</div>
           )}
         </div>
 
         {/* Dept breakdown */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <p className="text-[14px] font-semibold text-gray-800 mb-4">Kehadiran per Departemen/Bagian</p>
+          <p className="text-[14px] font-semibold text-gray-800 mb-1">Kehadiran per Departemen/Bagian</p>
+          <p className="text-[11px] text-gray-400 mb-4">{['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'][chartMonth-1]} {chartYear}</p>
           {deptData.length > 0 ? (
             <div className="space-y-2.5">
               {deptData.map((d, i) => (

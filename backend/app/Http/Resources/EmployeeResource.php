@@ -42,6 +42,11 @@ class EmployeeResource extends JsonResource
                 'car_plate_1'   => $this->car_plate_1,
                 'car_plate_2'   => $this->car_plate_2,
             ],
+            'social_media'  => [
+                'instagram' => $this->instagram,
+                'facebook'  => $this->facebook,
+                'tiktok'    => $this->tiktok,
+            ],
         ];
     }
 }

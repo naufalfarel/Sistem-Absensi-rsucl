@@ -34,12 +34,15 @@ class UpdateEmployeeRequest extends FormRequest
             'gender'        => 'nullable|in:Laki-laki,Perempuan',
             'join_date'     => 'nullable|date',
             'status'        => 'sometimes|in:active,inactive',
-            'password'      => 'sometimes|string|min:6',
+            'password'      => 'sometimes|string|regex:/^[0-9]{6,}$/',
             // Field Kendaraan Pegawai
             'motor_plate_1' => 'nullable|string|max:15',
             'motor_plate_2' => 'nullable|string|max:15',
             'car_plate_1'   => 'nullable|string|max:15',
             'car_plate_2'   => 'nullable|string|max:15',
+            'instagram'     => 'nullable|string|max:100',
+            'facebook'      => 'nullable|string|max:100',
+            'tiktok'        => 'nullable|string|max:100',
         ];
     }
 }

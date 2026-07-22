@@ -21,26 +21,29 @@ import { SettingsTab } from './admin/SettingsTab';
 import { DepartmentsTab } from './admin/DepartmentsTab';
 import { HolidaysTab } from './admin/HolidaysTab';
 import { PJBagianTab } from './admin/PJBagianTab';
-import { ShiftProposalTab } from './admin/ShiftProposalTab';
+import { EmployeeRegistrationTab } from './admin/EmployeeRegistrationTab';
 import AssignmentLetterTab from './admin/AssignmentLetterTab';
-import { employeeApi, Employee, reportApi, ReportSummary, notificationApi } from '../../services/api';
+import { AdminManagementTab } from './admin/AdminManagementTab';
+import { Crown } from 'lucide-react';
+import { employeeApi, Employee, reportApi, ReportSummary, notificationApi, overtimeApi, employeeRegistrationApi } from '../../services/api';
 
 const sidebarItems = [
   { id: 'dashboard',       icon: LayoutDashboard, label: 'Dashboard' },
   { id: 'employees',       icon: Users,            label: 'Data Pegawai' },
+  { id: 'onboarding',      icon: UserCheck,        label: 'Draf Pegawai / Onboarding', badge: 0 },
   { id: 'departments',     icon: Building2,        label: 'Departemen/Bagian' },
   { id: 'pj_bagian',       icon: UserCheck,        label: 'PJ Bagian' },
   { id: 'attendance',      icon: ClipboardList,    label: 'Absensi' },
   { id: 'history',         icon: History,          label: 'Riwayat' },
   { id: 'schedule',        icon: CalendarDays,     label: 'Jadwal Shift' },
-  { id: 'shift_proposals', icon: Clock,            label: 'Usulan Shift' },
   { id: 'holidays',        icon: CalendarDays,     label: 'Kalender Libur' },
   { id: 'leave',           icon: FileText,         label: 'Pengajuan Cuti', badge: 0 },
-  { id: 'overtime',        icon: Clock,            label: 'Lembur' },
-  { id: 'assignment',      icon: FileText,         label: 'Surat Tugas' },
+  { id: 'overtime',        icon: Clock,            label: 'Lembur', badge: 0 },
+  { id: 'assignment',      icon: FileText,         label: 'Pengajuan Surat Tugas' },
   { id: 'reports',         icon: BarChart3,        label: 'Laporan' },
   { id: 'notifications',   icon: Bell,             label: 'Notifikasi', badge: 0 },
   { id: 'settings',        icon: Settings,         label: 'Pengaturan' },
+  { id: 'super_admin_management', icon: Crown,     label: 'Kelola Admin (Super Admin)' },
 ];
 
 const statusColors: Record<string, { color: string; bg: string }> = {
@@ -69,6 +72,7 @@ const emptyForm = {
   name: '', nik_ktp: '', username: '', password: '', department_id: '', position_id: '',
   email: '', phone: '', gender: 'Laki-laki', joinDate: '',
   motor_plate_1: '', motor_plate_2: '', car_plate_1: '', car_plate_2: '',
+  instagram: '', facebook: '', tiktok: '',
 };
 
 interface AdminAppProps {
@@ -125,6 +129,12 @@ export function AdminApp({ onLogout }: AdminAppProps) {
   // Jumlah notifikasi sistem admin yang belum dibaca
   const [unreadNotifications, setUnreadNotifications] = useState(0);
 
+  // Jumlah pengajuan lembur yang belum diproses (draft / pending)
+  const [pendingOvertimeCount, setPendingOvertimeCount] = useState(0);
+
+  // Jumlah pengajuan pendaftaran pegawai baru yang belum diproses (pending)
+  const [pendingRegistrationCount, setPendingRegistrationCount] = useState(0);
+
   // State untuk preview pas foto besar
   const [previewPhoto, setPreviewPhoto] = useState<{ url: string; name: string } | null>(null);
 
@@ -136,6 +146,34 @@ export function AdminApp({ onLogout }: AdminAppProps) {
       const res = await notificationApi.list();
       if (res.success) {
         setUnreadNotifications(res.data.unread_count);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  /**
+   * Mengambil jumlah pengajuan lembur yang masih pending/draft.
+   */
+  const fetchPendingOvertimeCount = async () => {
+    try {
+      const res = await overtimeApi.overtimesSummary();
+      if (res.success) {
+        setPendingOvertimeCount((res.data.pending || 0) + (res.data.draft || 0));
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  /**
+   * Mengambil jumlah pendaftaran pegawai baru yang pending.
+   */
+  const fetchPendingRegistrationCount = async () => {
+    try {
+      const res = await employeeRegistrationApi.list({ status: 'pending' });
+      if (res.success && res.summary) {
+        setPendingRegistrationCount(res.summary.pending || 0);
       }
     } catch (err) {
       console.error(err);
@@ -186,7 +224,13 @@ export function AdminApp({ onLogout }: AdminAppProps) {
   useEffect(() => {
     loadData();
     fetchUnreadNotificationsCount();
-    const interval = setInterval(fetchUnreadNotificationsCount, 20000);
+    fetchPendingOvertimeCount();
+    fetchPendingRegistrationCount();
+    const interval = setInterval(() => {
+      fetchUnreadNotificationsCount();
+      fetchPendingOvertimeCount();
+      fetchPendingRegistrationCount();
+    }, 20000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -218,6 +262,9 @@ export function AdminApp({ onLogout }: AdminAppProps) {
       motor_plate_2: emp.vehicles?.motor_plate_2 || '',
       car_plate_1: emp.vehicles?.car_plate_1 || '',
       car_plate_2: emp.vehicles?.car_plate_2 || '',
+      instagram: emp.social_media?.instagram || '',
+      facebook: emp.social_media?.facebook || '',
+      tiktok: emp.social_media?.tiktok || '',
     });
     setFormError('');
     setSelectedEmp(emp);
@@ -242,6 +289,14 @@ export function AdminApp({ onLogout }: AdminAppProps) {
       setFormError('Nama, NIK KTP, Username, dan Password wajib diisi.');
       return;
     }
+    if (modalType === 'add' && !/^\d{6,}$/.test(form.password)) {
+      setFormError('Password harus berupa angka minimal 6 digit.');
+      return;
+    }
+    if (modalType === 'edit' && form.password.trim() && !/^\d{6,}$/.test(form.password)) {
+      setFormError('Password baru harus berupa angka minimal 6 digit.');
+      return;
+    }
     setFormError('');
     try {
       if (modalType === 'add') {
@@ -260,6 +315,9 @@ export function AdminApp({ onLogout }: AdminAppProps) {
           motor_plate_2: form.motor_plate_2 || undefined,
           car_plate_1: form.car_plate_1 || undefined,
           car_plate_2: form.car_plate_2 || undefined,
+          instagram: form.instagram || undefined,
+          facebook: form.facebook || undefined,
+          tiktok: form.tiktok || undefined,
         });
         if (res.success) {
           setEmployees(prev => [res.data, ...prev]);
@@ -277,6 +335,9 @@ export function AdminApp({ onLogout }: AdminAppProps) {
           motor_plate_2: form.motor_plate_2 || null,
           car_plate_1: form.car_plate_1 || null,
           car_plate_2: form.car_plate_2 || null,
+          instagram: form.instagram || null,
+          facebook: form.facebook || null,
+          tiktok: form.tiktok || null,
         };
         if (form.password.trim()) {
           updateData.password = form.password;
@@ -368,8 +429,14 @@ export function AdminApp({ onLogout }: AdminAppProps) {
 
   const SidebarContent = ({ mobile }: { mobile?: boolean }) => {
     const sidebarItemsWithBadges = sidebarItems.map(item => {
+      if (item.id === 'onboarding') {
+        return { ...item, badge: pendingRegistrationCount };
+      }
       if (item.id === 'leave') {
         return { ...item, badge: reportSummary?.pending_leave ?? 0 };
+      }
+      if (item.id === 'overtime') {
+        return { ...item, badge: pendingOvertimeCount };
       }
       if (item.id === 'notifications') {
         return { ...item, badge: unreadNotifications };
@@ -377,9 +444,42 @@ export function AdminApp({ onLogout }: AdminAppProps) {
       return item;
     });
 
+    const getItem = (id: string) => sidebarItemsWithBadges.find(i => i.id === id);
+
+    // Grouping Sidebar Menu Admin
+    const groups = [
+      {
+      title: 'Utama',
+        items: ['dashboard', 'reports', 'notifications'].map(getItem).filter(Boolean),
+      },
+      {
+        title: 'Manajemen Pegawai',
+        items: [
+          'employees',
+          'onboarding',
+          'departments',
+          'pj_bagian',
+          ...(user?.role === 'super_admin' ? ['super_admin_management'] : [])
+        ].map(getItem).filter(Boolean),
+      },
+      {
+        title: 'Operasional & Jadwal',
+        items: ['attendance', 'history', 'schedule', 'holidays'].map(getItem).filter(Boolean),
+      },
+      {
+        title: 'Permohonan & Persetujuan',
+        items: ['leave', 'overtime', 'assignment'].map(getItem).filter(Boolean),
+      },
+      {
+        title: 'Pengaturan',
+        items: ['settings'].map(getItem).filter(Boolean),
+      },
+    ];
+
     return (
       <div className="flex flex-col h-full bg-white">
-        <div className="px-5 py-5 border-b border-gray-100">
+        {/* Header Logo */}
+        <div className="px-5 py-4 border-b border-gray-100 flex-shrink-0">
           <div className="flex items-center gap-3">
             {logoUrl !== 'none' && (
               <div className="w-9 h-9 rounded-xl bg-white border border-gray-100 shadow-sm flex items-center justify-center flex-shrink-0 overflow-hidden">
@@ -387,31 +487,59 @@ export function AdminApp({ onLogout }: AdminAppProps) {
               </div>
             )}
             <div>
-              <p className="text-[13px] font-semibold text-gray-900 leading-tight">RSUCL Admin</p>
-              <p className="text-[10px] text-gray-400">Sistem Absensi</p>
+              <p className="text-[13px] font-bold text-gray-900 leading-tight">
+                {user?.role === 'super_admin' ? 'RSUCL Direksi' : 'RSUCL Admin'}
+              </p>
+              <p className="text-[10px] text-gray-400 font-medium">
+                {user?.role === 'super_admin' ? 'Super Admin (Direktur)' : 'Administrator Panel'}
+              </p>
             </div>
           </div>
         </div>
-        <nav className="flex-1 p-3 overflow-y-auto">
-          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-3 mb-2 mt-1">Menu Utama</p>
-          {sidebarItemsWithBadges.slice(0, 5).map(item => (
-            <button key={item.id} onClick={() => { setActiveTab(item.id); if (mobile) setSidebarOpen(false); }}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-[13px] transition-all mb-0.5 ${activeTab === item.id ? 'bg-[#16A34A] text-white font-medium shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}>
-              <div className="flex items-center gap-2.5"><item.icon size={16} />{item.label}</div>
-              {item.badge && item.badge > 0 ? <span className={`text-[10px] font-bold min-w-[18px] min-h-[18px] rounded-full flex items-center justify-center px-1 bg-red-100 text-red-600`}>{item.badge}</span> : null}
-            </button>
-          ))}
-          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-3 mb-2 mt-4">Manajemen</p>
-          {sidebarItemsWithBadges.slice(5).map(item => (
-            <button key={item.id} onClick={() => { setActiveTab(item.id); if (mobile) setSidebarOpen(false); }}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-[13px] transition-all mb-0.5 ${activeTab === item.id ? 'bg-[#16A34A] text-white font-medium shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}>
-              <div className="flex items-center gap-2.5"><item.icon size={16} />{item.label}</div>
-              {item.badge && item.badge > 0 ? <span className={`text-[10px] font-bold min-w-[18px] min-h-[18px] rounded-full flex items-center justify-center px-1 bg-red-100 text-red-600`}>{item.badge}</span> : null}
-            </button>
+
+        {/* Grouped Nav List */}
+        <nav className="flex-1 p-3 space-y-4 overflow-y-auto">
+          {groups.map((grp, gIdx) => (
+            <div key={gIdx} className={gIdx > 0 ? 'pt-3 border-t border-gray-100' : ''}>
+              <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider px-3 mb-1.5 mt-0.5">
+                {grp.title}
+              </p>
+              <div className="space-y-0.5">
+                {grp.items.map(item => {
+                  if (!item) return null;
+                  const isActive = activeTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => { setActiveTab(item.id); if (mobile) setSidebarOpen(false); }}
+                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-[12.5px] transition-all ${
+                        isActive
+                          ? 'bg-[#16A34A] text-white font-semibold shadow-sm shadow-green-200'
+                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-medium'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <item.icon size={16} />
+                        <span>{item.label}</span>
+                      </div>
+                      {item.badge !== undefined && item.badge > 0 ? (
+                        <span className={`text-[10px] font-bold min-w-[18px] min-h-[18px] px-1 rounded-full flex items-center justify-center ${
+                          isActive ? 'bg-white/30 text-white' : 'bg-red-100 text-red-600'
+                        }`}>
+                          {item.badge}
+                        </span>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           ))}
         </nav>
-        <div className="p-3 border-t border-gray-100">
-          <div className="flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-gray-50 transition-colors">
+
+        {/* Profile Card & Logout (Bottom) */}
+        <div className="p-3 border-t border-gray-100 flex-shrink-0">
+          <div className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-gray-50 transition-colors">
             <div className="w-8 h-8 rounded-xl bg-[#16A34A]/15 flex items-center justify-center flex-shrink-0 overflow-hidden">
               {user?.profile_picture ? (
                 <img src={user.profile_picture} alt={user.name} className="w-full h-full object-cover" />
@@ -422,10 +550,12 @@ export function AdminApp({ onLogout }: AdminAppProps) {
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[12px] font-semibold text-gray-800 truncate">{user?.name || 'Super Admin'}</p>
+              <p className="text-[12px] font-semibold text-gray-900 truncate">{user?.name || 'Super Admin'}</p>
               <p className="text-[10px] text-gray-400">Administrator</p>
             </div>
-            <button onClick={onLogout} className="text-gray-400 hover:text-red-500 transition-colors"><LogOut size={15} /></button>
+            <button onClick={onLogout} className="text-gray-400 hover:text-red-500 transition-colors p-1" title="Keluar">
+              <LogOut size={15} />
+            </button>
           </div>
         </div>
       </div>
@@ -662,23 +792,39 @@ export function AdminApp({ onLogout }: AdminAppProps) {
                             {isExpanded && (
                               <tr className="bg-gray-50/50">
                                 <td colSpan={8} className="px-6 py-3.5 border-b border-gray-100">
-                                  <div className="flex flex-wrap gap-x-8 gap-y-2 text-[12px]">
-                                    <div className="flex items-center gap-2">
-                                      <span className="font-semibold text-gray-400 uppercase text-[9px] tracking-wider">Motor 1:</span>
-                                      <span className="font-mono bg-white border border-gray-205 rounded px-2 py-0.5 text-gray-700">{emp.vehicles?.motor_plate_1 || '—'}</span>
+                                  <div className="flex flex-col gap-2.5 text-[12px]">
+                                    <div className="flex flex-wrap gap-x-8 gap-y-2">
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-semibold text-gray-400 uppercase text-[9px] tracking-wider">Motor 1:</span>
+                                        <span className="font-mono bg-white border border-gray-200 rounded px-2 py-0.5 text-gray-700">{emp.vehicles?.motor_plate_1 || '—'}</span>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-semibold text-gray-400 uppercase text-[9px] tracking-wider">Motor 2:</span>
+                                        <span className="font-mono bg-white border border-gray-200 rounded px-2 py-0.5 text-gray-700">{emp.vehicles?.motor_plate_2 || '—'}</span>
+                                      </div>
+                                      <div className="w-px bg-gray-200 hidden sm:block" />
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-semibold text-gray-400 uppercase text-[9px] tracking-wider">Mobil 1:</span>
+                                        <span className="font-mono bg-white border border-gray-200 rounded px-2 py-0.5 text-gray-700">{emp.vehicles?.car_plate_1 || '—'}</span>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-semibold text-gray-400 uppercase text-[9px] tracking-wider">Mobil 2:</span>
+                                        <span className="font-mono bg-white border border-gray-200 rounded px-2 py-0.5 text-gray-700">{emp.vehicles?.car_plate_2 || '—'}</span>
+                                      </div>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                      <span className="font-semibold text-gray-400 uppercase text-[9px] tracking-wider">Motor 2:</span>
-                                      <span className="font-mono bg-white border border-gray-205 rounded px-2 py-0.5 text-gray-700">{emp.vehicles?.motor_plate_2 || '—'}</span>
-                                    </div>
-                                    <div className="w-px bg-gray-200 hidden sm:block" />
-                                    <div className="flex items-center gap-2">
-                                      <span className="font-semibold text-gray-400 uppercase text-[9px] tracking-wider">Mobil 1:</span>
-                                      <span className="font-mono bg-white border border-gray-205 rounded px-2 py-0.5 text-gray-700">{emp.vehicles?.car_plate_1 || '—'}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <span className="font-semibold text-gray-400 uppercase text-[9px] tracking-wider">Mobil 2:</span>
-                                      <span className="font-mono bg-white border border-gray-205 rounded px-2 py-0.5 text-gray-700">{emp.vehicles?.car_plate_2 || '—'}</span>
+                                    <div className="flex flex-wrap gap-x-8 gap-y-2 pt-1 border-t border-gray-100">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="font-semibold text-gray-400 uppercase text-[9px] tracking-wider">Instagram:</span>
+                                        <span className="text-gray-700 font-medium">{emp.social_media?.instagram ? `@${emp.social_media.instagram}` : '—'}</span>
+                                      </div>
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="font-semibold text-gray-400 uppercase text-[9px] tracking-wider">Facebook:</span>
+                                        <span className="text-gray-700 font-medium">{emp.social_media?.facebook || '—'}</span>
+                                      </div>
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="font-semibold text-gray-400 uppercase text-[9px] tracking-wider">TikTok:</span>
+                                        <span className="text-gray-700 font-medium">{emp.social_media?.tiktok ? `@${emp.social_media.tiktok}` : '—'}</span>
+                                      </div>
                                     </div>
                                   </div>
                                 </td>
@@ -707,16 +853,18 @@ export function AdminApp({ onLogout }: AdminAppProps) {
           {activeTab === 'attendance' && <AttendanceTab />}
           {activeTab === 'history' && <HistoryTab />}
           {activeTab === 'schedule' && <ScheduleTab />}
+          {activeTab === 'holidays' && <HolidaysTab />}
           {activeTab === 'leave' && <LeaveTab onUpdateCount={refreshReportSummary} />}
-          {activeTab === 'overtime' && <OvertimeTab />}
+          {activeTab === 'overtime' && <OvertimeTab onUpdateCount={fetchPendingOvertimeCount} />}
           {activeTab === 'assignment' && <AssignmentLetterTab />}
           {activeTab === 'reports' && <ReportsTab />}
-          {activeTab === 'notifications' && <NotificationsTab onUpdateCount={fetchUnreadNotificationsCount} />}
+          {activeTab === 'notifications' && <NotificationsTab onUpdateCount={fetchUnreadNotificationsCount} onNavigate={(tab) => setActiveTab(tab)} />}
           {activeTab === 'settings' && <SettingsTab />}
           {activeTab === 'departments' && <DepartmentsTab onRefreshDepartments={loadData} />}
-          {activeTab === 'holidays' && <HolidaysTab />}
           {activeTab === 'pj_bagian' && <PJBagianTab />}
-          {activeTab === 'shift_proposals' && <ShiftProposalTab />}
+          {activeTab === 'onboarding' && <EmployeeRegistrationTab />}
+          {activeTab === 'super_admin_management' && <AdminManagementTab />}
+
         </div>
       </div>
 
@@ -747,7 +895,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
               <div className="flex items-start gap-2.5 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
                 <Lock size={13} className="text-blue-500 flex-shrink-0 mt-0.5" />
                 <p className="text-[12px] text-blue-700 leading-snug">
-                  Isi <strong>Username</strong> dan {modalType === 'add' ? <strong>Password</strong> : <strong>Password (kosongkan jika tidak ingin diubah)</strong>} untuk akses login absensi.
+                  Isi <strong>Username</strong> dan {modalType === 'add' ? <strong>Password (angka saja, minimal 6 digit)</strong> : <strong>Password (kosongkan jika tidak ingin diubah — angka saja, minimal 6 digit)</strong>} untuk akses login absensi.
                 </p>
               </div>
 
@@ -776,10 +924,9 @@ export function AdminApp({ onLogout }: AdminAppProps) {
                   <input type="text" value={form.username} disabled={modalType === 'edit'} onChange={e => setForm(f => ({ ...f, username: e.target.value }))} placeholder="nama.pegawai"
                     className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all disabled:opacity-50" />
                 </div>
-                {/* Password */}
                 <div>
-                  <label className="block text-[12px] font-medium text-gray-600 mb-1.5">Password {modalType === 'add' && <span className="text-red-500">*</span>}</label>
-                  <input type="text" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} placeholder={modalType === 'edit' ? 'Kosongkan jika tidak diubah' : 'Min. 6 karakter'}
+                  <label className="block text-[12px] font-medium text-gray-600 mb-1.5">Password {modalType === 'add' && <span className="text-red-500">*</span>} <span className="text-gray-400 font-normal text-[11px]">(Minimal 6 angka)</span></label>
+                  <input type="text" inputMode="numeric" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value.replace(/\D/g, '') }))} placeholder={modalType === 'edit' ? 'Kosongkan jika tidak diubah (angka saja)' : 'Minimal 6 angka'}
                     className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all font-mono" />
                 </div>
                 {/* Phone */}
@@ -853,6 +1000,34 @@ export function AdminApp({ onLogout }: AdminAppProps) {
                     <label className="block text-[11px] font-medium text-gray-500 mb-1">Mobil 2</label>
                     <input type="text" value={form.car_plate_2} onChange={e => setForm(f => ({ ...f, car_plate_2: e.target.value }))} placeholder="Contoh: B 8888 YY" maxLength={15}
                       className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-[12px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all placeholder:text-gray-300" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Data Sosial Media Section */}
+              <div className="pt-4 border-t border-gray-100 space-y-3">
+                <p className="text-[12.5px] font-bold text-gray-700 uppercase tracking-wider border-l-2 border-[#16A34A] pl-2">Sosial Media Pegawai (Opsional)</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[11px] font-medium text-gray-500 mb-1">Instagram</label>
+                    <div className="relative">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-semibold text-[12px]">@</span>
+                      <input type="text" value={form.instagram} onChange={e => setForm(f => ({ ...f, instagram: e.target.value }))} placeholder="username"
+                        className="w-full pl-8 pr-4 py-2 border border-gray-200 rounded-xl text-[12px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-gray-500 mb-1">Facebook</label>
+                    <input type="text" value={form.facebook} onChange={e => setForm(f => ({ ...f, facebook: e.target.value }))} placeholder="nama.pengguna"
+                      className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-[12px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all" />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-gray-500 mb-1">TikTok</label>
+                    <div className="relative">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-semibold text-[12px]">@</span>
+                      <input type="text" value={form.tiktok} onChange={e => setForm(f => ({ ...f, tiktok: e.target.value }))} placeholder="username"
+                        className="w-full pl-8 pr-4 py-2 border border-gray-200 rounded-xl text-[12px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all" />
+                    </div>
                   </div>
                 </div>
               </div>

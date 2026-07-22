@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { CheckCircle2, XCircle, Clock, FileText, Trash2, Paperclip, AlertCircle, Calendar, ChevronDown, Search, X, Printer } from 'lucide-react';
 import { leaveApi, LeaveRequest, departmentApi, DepartmentModel } from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
+import { MonthYearDeptFilter } from '../ui/MonthYearDeptFilter';
+import { LeaveFormPrintModal } from '../ui/LeaveFormPrintModal';
 import logoImg from '../../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
 
 type LeaveType = 'cuti' | 'sakit' | 'cuti_khusus';
@@ -57,19 +59,22 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
 
   const { firstStr, lastStr } = getMonthBoundaries();
 
-  // Filters State
-  const [dateFrom, setDateFrom] = useState(firstStr);
-  const [dateTo, setDateTo] = useState(lastStr);
+  // Filters State (default dateFrom/dateTo to empty so future leave requests are not hidden)
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [departmentId, setDepartmentId] = useState('');
   const [searchVal, setSearchVal] = useState('');
   const [search, setSearch] = useState('');
   const [departments, setDepartments] = useState<DepartmentModel[]>([]);
 
+  const [filterMonth, setFilterMonth] = useState<number>(0);
+  const [filterYear, setFilterYear]   = useState<number>(new Date().getFullYear());
+
   // Daftar lengkap seluruh pengajuan cuti masuk
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   
-  // Filter status aktif ('Semua', 'Menunggu', 'Disetujui', 'Ditolak', 'Dibatalkan')
-  const [filter, setFilter] = useState('Menunggu');
+  // Filter status aktif (default 'Semua' agar admin melihat seluruh data yang baru diisi)
+  const [filter, setFilter] = useState('Semua');
   
   // Filter kategori tipe cuti ('all', 'cuti', 'izin', 'sakit')
   const [typeFilter, setTypeFilter] = useState('all');
@@ -163,7 +168,7 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
     // 1. Status Filter
     const matchFilter = filter === 'Semua' ||
       (filter === 'Draf' && r.pj_status === 'pending' && r.status === 'pending') ||
-      (filter === 'Menunggu' && r.pj_status === 'approved' && r.status === 'pending') ||
+      (filter === 'Menunggu' && r.status === 'pending') ||
       (filter === 'Disetujui' && r.status === 'approved') ||
       (filter === 'Ditolak' && r.status === 'rejected') ||
       (filter === 'Dibatalkan' && r.status === 'cancelled');
@@ -405,9 +410,42 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
         </div>
       )}
 
-      {/* Date & Filter Row */}
-      <div className="flex flex-wrap gap-3 items-center justify-between">
-        <div className="flex items-center gap-3 bg-white px-3 py-1.5 rounded-xl border border-gray-100 shadow-sm flex-wrap">
+      {/* ── Wadah Filter Terpadu ──────────────────────── */}
+      <div className="bg-white rounded-3xl border border-gray-100 p-4 shadow-sm space-y-3">
+        <MonthYearDeptFilter
+          month={filterMonth}
+          year={filterYear}
+          deptId={departmentId}
+          departments={departments}
+          showAllMonthsOption={true}
+          embedded={true}
+          onMonthChange={(m) => {
+            setFilterMonth(m);
+            if (m > 0) {
+              const mm = String(m).padStart(2, '0');
+              const lastDay = new Date(filterYear, m, 0).getDate();
+              setDateFrom(`${filterYear}-${mm}-01`);
+              setDateTo(`${filterYear}-${mm}-${String(lastDay).padStart(2, '0')}`);
+            } else {
+              setDateFrom('');
+              setDateTo('');
+            }
+          }}
+          onYearChange={(y) => {
+            setFilterYear(y);
+            if (filterMonth > 0) {
+              const mm = String(filterMonth).padStart(2, '0');
+              const lastDay = new Date(y, filterMonth, 0).getDate();
+              setDateFrom(`${y}-${mm}-01`);
+              setDateTo(`${y}-${mm}-${String(lastDay).padStart(2, '0')}`);
+            }
+          }}
+          onDeptChange={setDepartmentId}
+        />
+
+        {/* Date & Filter Row */}
+        <div className="flex flex-wrap gap-3 items-center justify-between pt-2 border-t border-gray-100">
+          <div className="flex items-center gap-3 bg-slate-50/70 px-3 py-1.5 rounded-xl border border-gray-100 shadow-2xs flex-wrap">
           <div className="flex items-center gap-1.5">
             <Calendar size={13} className="text-gray-400" />
             <input
@@ -443,21 +481,6 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
             <ChevronDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           </div>
 
-          {/* Department */}
-          <div className="relative w-full md:w-auto">
-            <select
-              value={departmentId}
-              onChange={e => setDepartmentId(e.target.value)}
-              className="w-full appearance-none pl-3 pr-8 py-2 border border-gray-100 rounded-xl text-[12px] bg-white shadow-sm focus:outline-none focus:border-[#16A34A] transition-all text-gray-600 font-semibold cursor-pointer"
-            >
-              <option value="">Semua Departemen</option>
-              {departments.map(d => (
-                <option key={d.id} value={d.name}>{d.name}</option>
-              ))}
-            </select>
-            <ChevronDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-          </div>
-
           {/* Search */}
           <div className="relative flex-1 md:w-64">
             <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -479,6 +502,7 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
           </div>
         </div>
       </div>
+    </div>
 
       {hasProcessed && (
         <div className="flex justify-end">
@@ -554,8 +578,13 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
                           </span>
                         )}
                       </div>
-                      <div className="mt-2 bg-gray-50 rounded-xl px-3 py-2">
+                      <div className="mt-2 bg-gray-50 rounded-xl px-3 py-2 space-y-1">
                         <p className="text-[12px] text-gray-600 italic">"{req.reason}"</p>
+                        {req.substitute_name && (
+                          <p className="text-[11px] text-gray-500 font-medium pt-1 border-t border-gray-100">
+                            👥 Rekan Kerja Pengganti: <span className="font-bold text-gray-800">{req.substitute_name}</span>
+                          </p>
+                        )}
                       </div>
                       <div className="flex flex-wrap gap-2 mt-2">
                         {req.attachment_url && (
@@ -570,16 +599,14 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
                           </a>
                         )}
 
-                        {req.status === 'approved' && (
-                          <button
-                            type="button"
-                            onClick={() => setSelectedLeaveForPrint(req)}
-                            className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-blue-700 hover:text-blue-800 bg-blue-50/70 hover:bg-blue-100 px-3 py-1.5 rounded-xl border border-blue-100 transition-all cursor-pointer font-medium"
-                          >
-                            <FileText size={11} className="flex-shrink-0" />
-                            Lihat Form Cuti & QR Code
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedLeaveForPrint(req)}
+                          className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-blue-700 hover:text-blue-800 bg-blue-50/70 hover:bg-blue-100 px-3 py-1.5 rounded-xl border border-blue-100 transition-all cursor-pointer font-medium"
+                        >
+                          <FileText size={11} className="flex-shrink-0" />
+                          {req.status === 'approved' ? 'Lihat Form Cuti & QR Code' : 'Lihat Dokumen Form Cuti'}
+                        </button>
                       </div>
 
                       {/* Info Persetujuan PJ Bagian */}
@@ -806,242 +833,12 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
         </div>
       )}
       {/* ─── PRINT LEAVE FORM MODAL ───────────────────────────────────────────── */}
-      {selectedLeaveForPrint && (() => {
-        const req = selectedLeaveForPrint;
-        const reqDateStr = req.created_at ? req.created_at.substring(0, 10).replace(/-/g, '') : '';
-        const docNumber = `CUTI-${req.id}-${reqDateStr}`;
-        
-        // Generate QR code content
-        const qrContent = `SURAT PERMOHONAN CUTI RESMI
-RSU CEMPAKA LIMA
-------------------------------
-No. Dokumen: ${docNumber}
-Nama Pegawai: ${req.employee?.name}
-NIK KTP: ${req.employee?.nik_ktp}
-Posisi: ${req.posisi || '-'}
-Unit Kerja: ${req.unit_kerja || '-'}
-No. Telp: ${req.employee?.phone || '-'}
-Masa Cuti: ${req.days} Hari
-Tanggal: ${formatDate(req.start_date)} s/d ${req.actual_end_date ? formatDate(req.actual_end_date) : formatDate(req.end_date)}
-Keterangan: ${req.reason}
-Pengganti: ${req.substitute_name || '-'}
-Alamat Cuti: ${req.alamat_cuti || '-'}
-Status Dokumen: SAH / DISETUJUI ADMIN
-Verifikasi Digital RSUCL`;
-
-        const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrContent)}`;
-
-        return (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 print:p-0 print:static print:inset-auto">
-            <style dangerouslySetInnerHTML={{__html: `
-              @media print {
-                body * {
-                  visibility: hidden;
-                }
-                .print-container, .print-container * {
-                  visibility: visible;
-                }
-                .print-container {
-                  position: absolute;
-                  left: 0;
-                  top: 0;
-                  width: 100%;
-                  margin: 0;
-                  padding: 0;
-                }
-              }
-            `}} />
-            <div className="absolute inset-0 bg-black/55 backdrop-blur-xs print:hidden" onClick={() => setSelectedLeaveForPrint(null)} />
-            <div className="relative bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl p-6 md:p-8 animate-scale-up max-h-[90vh] overflow-y-auto print:max-h-none print:overflow-visible print:shadow-none print:p-0 print:rounded-none print:w-full">
-              
-              {/* Header Controls (Print / Close) */}
-              <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-100 print:hidden">
-                <h2 className="text-[14px] font-bold text-gray-800">Dokumen Permohonan Cuti</h2>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => window.print()}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#16A34A] hover:bg-[#0d9240] text-white rounded-xl text-[11px] font-bold transition-all cursor-pointer shadow-sm"
-                  >
-                    <Printer size={12} /> Cetak Form
-                  </button>
-                  <button
-                    onClick={() => setSelectedLeaveForPrint(null)}
-                    className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-[11px] font-bold transition-all cursor-pointer"
-                  >
-                    Tutup
-                  </button>
-                </div>
-              </div>
-
-              {/* Paper Content */}
-              <div className="print-container bg-white p-4 md:p-6 text-black" style={{ fontFamily: "'Inter', sans-serif" }}>
-                
-                {/* Kop Surat (Letterhead) */}
-                <div className="flex items-center justify-between gap-4 border-b-0 pb-1 text-center">
-                  {/* Logo RSUCL (Left) */}
-                  <div className="w-16 h-16 flex-shrink-0 flex items-center justify-center bg-white p-1">
-                    <img src={logoUrl || logoImg} alt="Logo RSUCL" className="w-full h-full object-contain" />
-                  </div>
-                  
-                  {/* Header Text (Middle) */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13px] md:text-[14px] font-bold text-[#16A34A] leading-tight tracking-wide">
-                      PT. CEMPAKA LIMA UTAMA
-                    </p>
-                    <h1 className="text-[16px] md:text-[18px] font-extrabold text-red-650 leading-tight tracking-wider mt-0.5">
-                      RUMAH SAKIT UMUM CEMPAKA LIMA
-                    </h1>
-                    <p className="text-[9px] md:text-[10px] text-gray-700 leading-relaxed mt-1 font-medium max-w-lg mx-auto">
-                      Jln. Politeknik No.23 Dusun Meunasah Dayah Lr.B, Gp.Beurawe,
-                      Kecamatan Kuta Alam, Kode Pos 23124, Telp. (0651) 3619999,
-                      Fax. (0651) 3619999, Email: rsu@cempakalima.co.id
-                    </p>
-                    <p className="text-[10px] font-bold text-slate-800 tracking-widest mt-0.5">
-                      BANDA ACEH
-                    </p>
-                  </div>
-                  
-                  {/* Logo KARS (Right) */}
-                  <div className="w-16 h-16 flex-shrink-0 flex flex-col items-center justify-center p-1 bg-white">
-                    <div className="w-10 h-10 border border-slate-200 rounded-full flex items-center justify-center text-[10px] text-[#16A34A] font-extrabold shadow-2xs">
-                      ★ KARS ★
-                    </div>
-                    <span className="text-[7px] text-gray-500 font-bold leading-tight mt-1 text-center uppercase tracking-wide">
-                      PARIPURNA KARS
-                    </span>
-                  </div>
-                </div>
-
-                {/* Double Horizontal Line */}
-                <div className="border-t-[3px] border-[#16A34A] mt-2 mb-0.5" />
-                <div className="border-t-[1px] border-slate-750 mb-5" />
-
-                {/* Title */}
-                <div className="text-center mb-6">
-                  <h2 className="text-[14px] md:text-[15px] font-extrabold text-black tracking-wider uppercase underline decoration-2">
-                    PENGAJUAN PERMOHONAN CUTI
-                  </h2>
-                  <p className="text-[10px] text-gray-500 font-mono mt-1">No. Dokumen: {docNumber}</p>
-                </div>
-
-                {/* Content Details */}
-                <div className="text-[12px] text-slate-900 leading-relaxed space-y-4 text-left">
-                  <p className="font-semibold">Yang bertanda tangan di bawah ini :</p>
-                  
-                  <table className="w-full border-collapse text-left text-[12px]">
-                    <tbody>
-                      <tr className="align-top">
-                        <td className="w-[180px] py-1.5 font-medium text-slate-600">Nama</td>
-                        <td className="w-4 py-1.5">:</td>
-                        <td className="py-1.5 font-bold text-black">{req.employee?.name}</td>
-                      </tr>
-                      <tr className="align-top">
-                        <td className="py-1.5 font-medium text-slate-600">NIK KTP</td>
-                        <td>:</td>
-                        <td className="py-1.5 font-semibold text-slate-800">{req.employee?.nik_ktp || '-'}</td>
-                      </tr>
-                      <tr className="align-top">
-                        <td className="py-1.5 font-medium text-slate-600">Posisi / Jabatan</td>
-                        <td>:</td>
-                        <td className="py-1.5 font-semibold text-slate-800">{req.posisi || '-'}</td>
-                      </tr>
-                      <tr className="align-top">
-                        <td className="py-1.5 font-medium text-slate-600">Unit Kerja / Instalasi</td>
-                        <td>:</td>
-                        <td className="py-1.5 font-semibold text-slate-800">{req.unit_kerja || '-'}</td>
-                      </tr>
-                      <tr className="align-top">
-                        <td className="py-1.5 font-medium text-slate-600">No. Tlp / HP</td>
-                        <td>:</td>
-                        <td className="py-1.5 font-semibold text-slate-800">{req.employee?.phone || '-'}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-
-                  <div className="border-t border-slate-100 my-4" />
-
-                  <table className="w-full border-collapse text-left text-[12px]">
-                    <tbody>
-                      <tr className="align-top">
-                        <td className="w-[180px] py-1.5 font-medium text-slate-600">Mohon cuti/izin/sakit selama</td>
-                        <td className="w-4 py-1.5">:</td>
-                        <td className="py-1.5 font-semibold text-slate-800">
-                          <span className="font-bold text-black">{req.days}</span> hari kerja
-                        </td>
-                      </tr>
-                      <tr className="align-top">
-                        <td className="py-1.5 font-medium text-slate-600">Mulai Tanggal</td>
-                        <td>:</td>
-                        <td className="py-1.5 font-semibold text-slate-800">
-                          {formatDate(req.start_date)} s/d {req.actual_end_date ? formatDate(req.actual_end_date) : formatDate(req.end_date)}
-                        </td>
-                      </tr>
-                      <tr className="align-top">
-                        <td className="py-1.5 font-medium text-slate-600">Keterangan Cuti</td>
-                        <td>:</td>
-                        <td className="py-1.5 font-bold text-[#16A34A] uppercase">
-                          {req.type === 'cuti_khusus' && req.special_leave_category
-                            ? `Cuti Khusus (${req.special_leave_category.name})`
-                            : req.type === 'cuti'
-                              ? 'Cuti Tahunan'
-                              : req.type === 'sakit'
-                                ? 'Sakit'
-                                : req.type}
-                        </td>
-                      </tr>
-                      <tr className="align-top">
-                        <td className="py-1.5 font-medium text-slate-600">Alasan Cuti</td>
-                        <td>:</td>
-                        <td className="py-1.5 text-slate-800 italic">"{req.reason}"</td>
-                      </tr>
-                      <tr className="align-top">
-                        <td className="py-1.5 font-medium text-slate-600">Alamat selama cuti</td>
-                        <td>:</td>
-                        <td className="py-1.5 font-semibold text-slate-800">{req.alamat_cuti || '-'}</td>
-                      </tr>
-                      <tr className="align-top">
-                        <td className="py-1.5 font-medium text-slate-600">Orang yang menggantikan</td>
-                        <td>:</td>
-                        <td className="py-1.5 font-bold text-red-700">{req.substitute_name || '-'}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-
-                  {/* Digital Verification Seal & QR Code */}
-                  <div className="mt-8 pt-6 border-t border-dashed border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-6">
-                    <div className="text-center sm:text-left space-y-1">
-                      <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Status Dokumen</p>
-                      <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-50 border border-green-200 rounded-lg text-[11px] font-extrabold text-[#16A34A]">
-                        ✓ DISETUJUI SECARA DIGITAL
-                      </div>
-                      <p className="text-[10px] text-gray-400 font-medium mt-1">
-                        Disetujui oleh: {req.reviewer?.name || 'Administrator'}
-                      </p>
-                      {req.pj_reviewer && (
-                        <p className="text-[10px] text-gray-400 font-medium">
-                          Mengetahui PJ Bagian: {req.pj_reviewer.name}
-                        </p>
-                      )}
-                      <p className="text-[9px] text-gray-400 leading-normal max-w-sm mt-2">
-                        Surat Permohonan Cuti ini sah dan diotorisasi secara elektronik oleh RSU Cempaka Lima Banda Aceh melalui verifikasi QR Code terlampir. Tanda tangan fisik tidak diperlukan.
-                      </p>
-                    </div>
-                    
-                    {/* QR Code image container */}
-                    <div className="flex flex-col items-center p-2.5 bg-white border border-slate-100 rounded-2xl shadow-xs">
-                      <img src={qrCodeUrl} alt="QR Code Verifikasi Cuti" className="w-[120px] h-[120px] object-contain" />
-                      <span className="text-[8px] font-mono text-slate-400 mt-1.5">VERIFIKASI SAH</span>
-                    </div>
-                  </div>
-
-                </div>
-
-              </div>
-
-            </div>
-          </div>
-        );
-      })()}
+      {selectedLeaveForPrint && (
+        <LeaveFormPrintModal
+          request={selectedLeaveForPrint}
+          onClose={() => setSelectedLeaveForPrint(null)}
+        />
+      )}
     </div>
   );
 }

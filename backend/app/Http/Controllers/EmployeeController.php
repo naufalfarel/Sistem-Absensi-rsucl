@@ -71,6 +71,9 @@ class EmployeeController extends Controller
             'motor_plate_2' => $data['motor_plate_2'] ?? null,
             'car_plate_1'   => $data['car_plate_1'] ?? null,
             'car_plate_2'   => $data['car_plate_2'] ?? null,
+            'instagram'     => $data['instagram'] ?? null,
+            'facebook'      => $data['facebook'] ?? null,
+            'tiktok'        => $data['tiktok'] ?? null,
         ]);
 
         $employee->load(['user', 'department', 'position']);
@@ -116,6 +119,9 @@ class EmployeeController extends Controller
             'motor_plate_2' => array_key_exists('motor_plate_2', $data) ? $data['motor_plate_2'] : $employee->motor_plate_2,
             'car_plate_1'   => array_key_exists('car_plate_1', $data) ? $data['car_plate_1'] : $employee->car_plate_1,
             'car_plate_2'   => array_key_exists('car_plate_2', $data) ? $data['car_plate_2'] : $employee->car_plate_2,
+            'instagram'     => array_key_exists('instagram', $data) ? $data['instagram'] : $employee->instagram,
+            'facebook'      => array_key_exists('facebook', $data) ? $data['facebook'] : $employee->facebook,
+            'tiktok'        => array_key_exists('tiktok', $data) ? $data['tiktok'] : $employee->tiktok,
         ]);
         $employee->update($empFields);
 
@@ -307,17 +313,10 @@ class EmployeeController extends Controller
         ];
         $todayName = $dayMap[\Carbon\Carbon::today('Asia/Jakarta')->dayOfWeek];
 
-        $todayDateStr = \Carbon\Carbon::today('Asia/Jakarta')->toDateString();
         if ($e->relationLoaded('schedules')) {
-            $schedule = $e->schedules->first(fn($s) => $s->pivot->date === $todayDateStr);
-            if (!$schedule) {
-                $schedule = $e->schedules->first(fn($s) => $s->pivot->day_of_week === $todayName && is_null($s->pivot->date));
-            }
+            $schedule = $e->schedules->first(fn($s) => $s->pivot->day_of_week === $todayName);
         } else {
-            $schedule = $e->schedules()->wherePivot('date', $todayDateStr)->first();
-            if (!$schedule) {
-                $schedule = $e->schedules()->wherePivot('day_of_week', $todayName)->wherePivotNull('date')->first();
-            }
+            $schedule = $e->schedules()->wherePivot('day_of_week', $todayName)->first();
         }
 
         $computedStatus = null;
@@ -381,6 +380,11 @@ class EmployeeController extends Controller
                 'motor_plate_2' => $e->motor_plate_2,
                 'car_plate_1'   => $e->car_plate_1,
                 'car_plate_2'   => $e->car_plate_2,
+            ],
+            'social_media' => [
+                'instagram' => $e->instagram,
+                'facebook'  => $e->facebook,
+                'tiktok'    => $e->tiktok,
             ],
         ];
     }

@@ -233,7 +233,7 @@ class OvertimeRequestController extends Controller
                 'data'    => ['overtime_request_id' => $overtimeRequest->id],
             ]);
         } else {
-            $admins = \App\Models\User::where('role', 'admin')->get();
+            $admins = \App\Models\User::whereIn('role', ['admin', 'super_admin'])->get();
             foreach ($admins as $admin) {
                 \App\Models\Notification::create([
                     'user_id' => $admin->id,
@@ -296,7 +296,7 @@ class OvertimeRequestController extends Controller
             ]);
 
             // Kirim notifikasi ke Admin
-            $admins = \App\Models\User::where('role', 'admin')->get();
+            $admins = \App\Models\User::whereIn('role', ['admin', 'super_admin'])->get();
             foreach ($admins as $admin) {
                 \App\Models\Notification::create([
                     'user_id' => $admin->id,
@@ -441,5 +441,38 @@ class OvertimeRequestController extends Controller
         }
 
         return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
+    }
+
+    /**
+     * Membatalkan pengajuan lembur oleh pegawai sendiri jika belum disetujui.
+     */
+    public function cancel(Request $request, $id)
+    {
+        $user     = $request->user();
+        $employee = $user->employee;
+        $overtime = OvertimeRequest::findOrFail($id);
+
+        if (!$employee || $overtime->employee_id !== $employee->id) {
+            return response()->json(['success' => false, 'message' => 'Anda tidak memiliki akses untuk membatalkan pengajuan lembur ini.'], 403);
+        }
+
+        if ($overtime->status !== 'pending' || $overtime->pj_status !== 'pending') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Pengajuan lembur yang sudah disetujui tidak dapat dibatalkan oleh pegawai.',
+            ], 422);
+        }
+
+        if ($overtime->photo_url) {
+            $path = str_replace('/storage/', '', $overtime->photo_url);
+            Storage::disk('public')->delete($path);
+        }
+
+        $overtime->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Pengajuan lembur berhasil dibatalkan.',
+        ]);
     }
 }

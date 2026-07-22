@@ -21,6 +21,7 @@ class Employee extends Model
         'user_id', 'department_id', 'position_id',
         'nik_ktp', 'phone', 'gender', 'join_date', 'status',
         'motor_plate_1', 'motor_plate_2', 'car_plate_1', 'car_plate_2',
+        'instagram', 'facebook', 'tiktok',
     ];
 
     // Cast tipe data otomatis
@@ -80,7 +81,7 @@ class Employee extends Model
     public function schedules()
     {
         return $this->belongsToMany(Schedule::class, 'employee_schedule')
-                    ->withPivot(['day_of_week', 'date'])
+                    ->withPivot('day_of_week')
                     ->withTimestamps();
     }
 
@@ -108,7 +109,7 @@ class Employee extends Model
     public function approvedAssignmentLetterOn(\Carbon\Carbon $date): ?AssignmentLetter
     {
         return $this->assignmentLetters()
-            ->where('status', 'approved')
+            ->whereIn('status', ['approved', 'completed'])
             ->where('start_date', '<=', $date->toDateString())
             ->where('end_date', '>=', $date->toDateString())
             ->first();

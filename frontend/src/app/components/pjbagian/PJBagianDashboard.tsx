@@ -397,7 +397,7 @@ export function PJBagianDashboard({ pendingLeaveCount, pendingOvertimeCount, onN
             </div>
             <div className="p-3 space-y-1">
               {[
-                { label: 'Absen Mandiri', icon: MapPin, tab: 'attendance' },
+                { label: 'Absen', icon: MapPin, tab: 'attendance' },
                 { label: 'Riwayat Absen', icon: TrendingUp, tab: 'history' },
                 { label: 'Profil Saya', icon: User, tab: 'profile' },
                 { label: 'Notifikasi', icon: Bell, tab: 'notifications' },

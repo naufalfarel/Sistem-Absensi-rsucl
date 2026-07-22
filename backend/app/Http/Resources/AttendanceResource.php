@@ -26,25 +26,16 @@ class AttendanceResource extends JsonResource
             $carbonDate = Carbon::parse($this->date);
             $dayName = $dayMap[$carbonDate->dayOfWeek];
             
-            $dateStr = $carbonDate->toDateString();
             if ($this->employee->relationLoaded('schedules')) {
-                $sched = $this->employee->schedules->first(function ($s) use ($dateStr) {
-                    return $s->pivot->date === $dateStr;
+                $sched = $this->employee->schedules->first(function ($s) use ($dayName) {
+                    return $s->pivot->day_of_week === $dayName;
                 });
-                if (!$sched) {
-                    $sched = $this->employee->schedules->first(function ($s) use ($dayName) {
-                        return $s->pivot->day_of_week === $dayName && is_null($s->pivot->date);
-                    });
-                }
                 if ($sched) {
                     $shiftName = $sched->name;
                     $shiftType = $sched->shift_type ?? 'normal';
                 }
             } else {
-                $sched = $this->employee->schedules()->wherePivot('date', $dateStr)->first();
-                if (!$sched) {
-                    $sched = $this->employee->schedules()->wherePivot('day_of_week', $dayName)->wherePivotNull('date')->first();
-                }
+                $sched = $this->employee->schedules()->wherePivot('day_of_week', $dayName)->first();
                 if ($sched) {
                     $shiftName = $sched->name;
                     $shiftType = $sched->shift_type ?? 'normal';

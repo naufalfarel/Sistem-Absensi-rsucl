@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Search, Calendar, ChevronDown, Eye, X, Filter, Clock } from 'lucide-react';
 import { attendanceApi, departmentApi, AttendanceRecord, DepartmentModel } from '../../../services/api';
+import { MonthYearDeptFilter } from '../ui/MonthYearDeptFilter';
 
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
   hadir:         { label: 'Hadir',         color: '#16A34A', bg: '#DCFCE7' },
@@ -48,6 +49,9 @@ export function HistoryTab() {
   const [departmentId, setDepartmentId] = useState('');
   const [departments, setDepartments] = useState<DepartmentModel[]>([]);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
+
+  const [filterMonth, setFilterMonth] = useState<number>(new Date().getMonth() + 1);
+  const [filterYear, setFilterYear]   = useState<number>(new Date().getFullYear());
 
   // Pagination State
   const [page, setPage] = useState(1);
@@ -223,6 +227,36 @@ export function HistoryTab() {
         </div>
       </div>
 
+      {/* ── Month, Year & Department Filter ──────────────────────── */}
+      <MonthYearDeptFilter
+        month={filterMonth}
+        year={filterYear}
+        deptId={departmentId}
+        departments={departments}
+        showAllMonthsOption={true}
+        onMonthChange={(m) => {
+          setFilterMonth(m);
+          if (m > 0) {
+            setViewMode('range');
+            const mm = String(m).padStart(2, '0');
+            const lastDay = new Date(filterYear, m, 0).getDate();
+            setDateFrom(`${filterYear}-${mm}-01`);
+            setDateTo(`${filterYear}-${mm}-${String(lastDay).padStart(2, '0')}`);
+          }
+        }}
+        onYearChange={(y) => {
+          setFilterYear(y);
+          if (filterMonth > 0) {
+            setViewMode('range');
+            const mm = String(filterMonth).padStart(2, '0');
+            const lastDay = new Date(y, filterMonth, 0).getDate();
+            setDateFrom(`${y}-${mm}-01`);
+            setDateTo(`${y}-${mm}-${String(lastDay).padStart(2, '0')}`);
+          }
+        }}
+        onDeptChange={setDepartmentId}
+      />
+
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {[
@@ -300,20 +334,6 @@ export function HistoryTab() {
 
       {/* Filters Row */}
       <div className="flex flex-wrap gap-3 items-center">
-        {/* Department Dropdown */}
-        <div className="relative">
-          <select
-            value={departmentId}
-            onChange={e => setDepartmentId(e.target.value)}
-            className="appearance-none pl-3 pr-8 py-2 border border-gray-100 rounded-xl text-[12px] bg-white shadow-sm focus:outline-none focus:border-[#16A34A] transition-all text-gray-600 font-semibold cursor-pointer"
-          >
-            <option value="">Semua Departemen</option>
-            {departments.map(d => (
-              <option key={d.id} value={d.id}>{d.name}</option>
-            ))}
-          </select>
-          <ChevronDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-        </div>
 
         {/* Status Dropdown */}
         <div className="relative">

@@ -49,7 +49,7 @@ class DatabaseSeeder extends Seeder
         User::create([
             'name'     => 'Administrator RSUCL',
             'email'    => 'admin@rsucl.id',
-            'password' => Hash::make('Admin@RSUCL2025'),
+            'password' => Hash::make('123456'),
             'role'     => 'admin',
             'nik_ktp'  => 'ADMIN001',
             'username' => 'admin',
@@ -62,7 +62,7 @@ class DatabaseSeeder extends Seeder
                 'email'    => 'rina.k@rsucl.id',
                 'nik_ktp'  => '198501012010012001',
                 'username' => 'rina.kusumawati',
-                'password' => 'Karyawan@RSUCL1',
+                'password' => '123456',
                 'dept'     => 'Poli Umum',
                 'pos'      => 'Dokter Umum',
                 'phone'    => '081234567890',
@@ -74,7 +74,7 @@ class DatabaseSeeder extends Seeder
                 'email'    => 'ahmad.f@rsucl.id',
                 'nik_ktp'  => '198805122012011002',
                 'username' => 'ahmad.fauzi',
-                'password' => 'Karyawan@RSUCL2',
+                'password' => '123456',
                 'dept'     => 'ICU',
                 'pos'      => 'Perawat',
                 'phone'    => '082345678901',
@@ -86,7 +86,7 @@ class DatabaseSeeder extends Seeder
                 'email'    => 'rini.h@rsucl.id',
                 'nik_ktp'  => '199508152018012007',
                 'username' => 'rini.handayani',
-                'password' => 'Karyawan@RSUCL3',
+                'password' => '123456',
                 'dept'     => 'Farmasi',
                 'pos'      => 'Apoteker',
                 'phone'    => '087890123456',
@@ -216,6 +216,12 @@ class DatabaseSeeder extends Seeder
                 'parent' => ['name' => 'Cleaning Service Kantor', 'color' => '#16A34A', 'icon' => 'sun'],
                 'children' => [
                     ['name' => 'Normal (07:00–17:00)', 'start_time' => '07:00:00', 'end_time' => '17:00:00', 'color' => '#16A34A', 'icon' => 'sun'],
+                ]
+            ],
+            [
+                'parent' => ['name' => 'Libur Jaga (LJ)', 'color' => '#475569', 'icon' => 'moon'],
+                'children' => [
+                    ['name' => 'Libur Jaga (00:00–00:00)', 'start_time' => '00:00:00', 'end_time' => '00:00:00', 'color' => '#475569', 'icon' => 'moon'],
                 ]
             ],
         ];

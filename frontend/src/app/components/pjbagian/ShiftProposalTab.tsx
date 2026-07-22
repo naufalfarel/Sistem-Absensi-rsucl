@@ -7,6 +7,7 @@ import {
   EmployeeWeeklySchedule, 
   ShiftProposal 
 } from '../../../services/api';
+import { MonthYearDeptFilter } from '../ui/MonthYearDeptFilter';
 
 interface ShiftProposalTabProps {
   user: { 
@@ -62,7 +63,27 @@ function AssignDepartmentModal({
   const handleSubmit = async () => {
     setLoading(true);
     try {
-      const schedId = selectedScheduleId === '' ? null : Number(selectedScheduleId);
+      let schedId: number | null = null;
+      if (selectedScheduleId === 'lj') {
+        let foundShift = shifts.find(s => s.name.toLowerCase().includes('libur jaga') || s.name.toUpperCase() === 'LJ');
+        if (!foundShift) {
+          const createRes = await scheduleApi.create({
+            name: 'Libur Jaga (LJ)',
+            start_time: '00:00',
+            end_time: '00:00',
+            color: '#475569',
+            icon: 'moon',
+            shift_type: 'normal',
+          } as any);
+          if (createRes.success) {
+            foundShift = createRes.data;
+          }
+        }
+        schedId = foundShift ? foundShift.id : null;
+      } else {
+        schedId = selectedScheduleId === '' ? null : Number(selectedScheduleId);
+      }
+
       if (selectedDay === 'Semua Hari') {
         const days = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
         for (const day of days) {
@@ -128,6 +149,7 @@ function AssignDepartmentModal({
               className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all cursor-pointer font-semibold"
             >
               <option value="">Libur (Off)</option>
+              <option value="lj">Libur Jaga (LJ)</option>
               {shifts.map(parent => (
                 <optgroup key={parent.id} label={parent.name}>
                   {parent.children?.map(child => (
@@ -171,6 +193,8 @@ export function ShiftProposalTab({ user }: ShiftProposalTabProps) {
   const [showDeptModal, setShowDeptModal] = useState(false);
   const [activeAssignCell, setActiveAssignCell] = useState<{ empId: number; day: string } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterMonth, setFilterMonth] = useState<number>(new Date().getMonth() + 1);
+  const [filterYear, setFilterYear]   = useState<number>(new Date().getFullYear());
 
   const loadData = async () => {
     setLoading(true);
@@ -260,6 +284,8 @@ export function ShiftProposalTab({ user }: ShiftProposalTabProps) {
   const totalDays = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
 
   const getShiftInitials = (name: string) => {
+    const u = name.toUpperCase();
+    if (u.includes('LIBUR JAGA') || u === 'LJ') return 'LJ';
     return name.trim().charAt(0).toUpperCase();
   };
 
@@ -297,6 +323,15 @@ export function ShiftProposalTab({ user }: ShiftProposalTabProps) {
           </button>
         )}
       </div>
+
+      {/* ── Month & Year Filter ──────────────────────────────────── */}
+      <MonthYearDeptFilter
+        month={filterMonth}
+        year={filterYear}
+        showAllMonthsOption={true}
+        onMonthChange={setFilterMonth}
+        onYearChange={setFilterYear}
+      />
 
       {/* Search Bar */}
       <div className="relative max-w-md">
@@ -388,6 +423,36 @@ export function ShiftProposalTab({ user }: ShiftProposalTabProps) {
                               </div>
                             ))}
                             <div className="h-px bg-gray-100 my-1" />
+                            <button
+                              onClick={async () => {
+                                let foundShift = shifts.find(s => s.name.toLowerCase().includes('libur jaga') || s.name.toUpperCase() === 'LJ');
+                                if (!foundShift) {
+                                  try {
+                                    const createRes = await scheduleApi.create({
+                                      name: 'Libur Jaga (LJ)',
+                                      start_time: '00:00',
+                                      end_time: '00:00',
+                                      color: '#475569',
+                                      icon: 'moon',
+                                      shift_type: 'normal',
+                                    } as any);
+                                    if (createRes.success) {
+                                      foundShift = createRes.data;
+                                      setShifts(prev => [...prev, createRes.data]);
+                                    }
+                                  } catch (err) {
+                                    console.error(err);
+                                  }
+                                }
+                                if (foundShift) {
+                                  await handleAssign(row.employee_id, d, foundShift.id);
+                                }
+                              }}
+                              className="w-full text-left px-3 py-1.5 text-[10px] font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                            >
+                              <span className="w-2 h-2 rounded-full bg-slate-600" />
+                              Libur Jaga (LJ)
+                            </button>
                             <button
                               onClick={() => handleAssign(row.employee_id, d, null)}
                               className="w-full text-left px-3 py-1.5 text-[10px] font-bold text-red-500 hover:bg-red-50 flex items-center gap-2"

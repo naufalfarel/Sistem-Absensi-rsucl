@@ -31,8 +31,9 @@ class ReportController extends Controller
     public function summary(Request $request)
     {
         $today     = today()->toDateString();
-        $month     = now()->month;
-        $year      = now()->year;
+        // Terima parameter month & year dari query string, default ke bulan/tahun berjalan
+        $month     = (int)$request->query('month', now('Asia/Jakarta')->month);
+        $year      = (int)$request->query('year', now('Asia/Jakarta')->year);
         $totalEmp  = Employee::where('status', 'active')->count();
 
         // ── 1. Data absensi bulan berjalan secara real-time ──
@@ -112,17 +113,25 @@ class ReportController extends Controller
             ->where('is_holiday_work', true)->get();
         $holidayWorkTotal = $holidayWorkRecords->count();
 
-        // ── 3. Data grafik absensi harian (7 hari terakhir) ──
-        // Batasi grafik agar tidak menampilkan Alpha palsu sebelum tanggal operasional sistem dimulai
+        // ── 3. Data grafik absensi harian (7 hari terakhir dalam bulan yang dipilih) ──
+        // Jika bulan yang dipilih adalah bulan berjalan, ambil 7 hari terakhir sampai hari ini.
+        // Jika bulan lalu, ambil 7 hari terakhir dari bulan tersebut.
         $firstAttDate = \App\Models\Attendance::orderBy('date', 'asc')->value('date');
         $systemStart  = $firstAttDate ? \Carbon\Carbon::parse($firstAttDate)->startOfDay() : now();
 
         $combinedReport = $monthReportColl->merge($prevMonthColl);
+
+        // Tentukan hari terakhir untuk daily chart
+        $isCurrentMonth = ($month === (int)now('Asia/Jakarta')->month && $year === (int)now('Asia/Jakarta')->year);
+        $chartEndDate   = $isCurrentMonth
+            ? now('Asia/Jakarta')
+            : \Carbon\Carbon::create($year, $month, 1)->endOfMonth();
+
         $dailyData = [];
         for ($i = 6; $i >= 0; $i--) {
-            $dateCarbon = now('Asia/Jakarta')->subDays($i)->startOfDay();
+            $dateCarbon = $chartEndDate->copy()->subDays($i)->startOfDay();
             $date       = $dateCarbon->toDateString();
-            $dayReport  = $combinedReport->where('date', $date);
+            $dayReport  = $monthReportColl->where('date', $date);
 
             $hadirCount = $dayReport->whereIn('status', ['hadir', 'telat'])->count();
             $alphaCount = $dayReport->where('status', 'alpha')->count();
@@ -142,13 +151,14 @@ class ReportController extends Controller
             ];
         }
 
-        // ── 4. Tren bulanan (6 bulan terakhir) ──
+        // ── 4. Tren bulanan (6 bulan sebelum bulan yang dipilih + bulan dipilih) ──
         $monthlyTrend = [];
+        $selectedDate = \Carbon\Carbon::create($year, $month, 1);
         for ($i = 6; $i >= 0; $i--) {
-            $monthDate = now()->subMonths($i);
+            $monthDate = $selectedDate->copy()->subMonths($i);
             $mNum = $monthDate->month;
             $yNum = $monthDate->year;
-            $mLabel = $monthDate->locale('id')->isoFormat('MMM');
+            $mLabel = $monthDate->locale('id')->isoFormat('MMM Y');
 
             $mRep = collect(Attendance::getMonthlyReportData($mNum, $yNum));
             $mH = $mRep->where('status', 'hadir')->count();
@@ -179,16 +189,31 @@ class ReportController extends Controller
             ['name' => 'Cuti/Izin', 'value' => $cutiPct, 'color' => '#A78BFA']
         ];
 
-        // ── 6. Statistik hari terlambat mingguan (Senin-Sabtu) ──
+        // ── 6. Statistik keterlambatan per minggu dalam bulan yang dipilih ──
         $weeklyLate = [];
-        $dayLabels = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
-        $startOfWeek = now()->startOfWeek();
-        foreach ($dayLabels as $index => $label) {
-            $date = $startOfWeek->copy()->addDays($index)->toDateString();
+        $monthStart = \Carbon\Carbon::create($year, $month, 1)->startOfDay();
+        $monthEnd   = \Carbon\Carbon::create($year, $month, 1)->endOfMonth()->endOfDay();
+        // Hitung jumlah minggu dalam bulan yang dipilih (maks 6 minggu)
+        $weekNum = 1;
+        $weekCursor = $monthStart->copy()->startOfWeek(\Carbon\Carbon::MONDAY);
+        while ($weekCursor->lte($monthEnd) && $weekNum <= 6) {
+            $weekStart = $weekCursor->copy();
+            $weekEnd   = $weekCursor->copy()->endOfWeek(\Carbon\Carbon::SUNDAY);
+            // Kliping ke batas bulan
+            $effectiveStart = $weekStart->lt($monthStart) ? $monthStart->copy() : $weekStart->copy();
+            $effectiveEnd   = $weekEnd->gt($monthEnd) ? $monthEnd->copy() : $weekEnd->copy();
+            $count = $monthReportColl->filter(function ($r) use ($effectiveStart, $effectiveEnd) {
+                $d = \Carbon\Carbon::parse($r['date'])->startOfDay();
+                return $r['status'] === 'telat'
+                    && $d->gte($effectiveStart->startOfDay())
+                    && $d->lte($effectiveEnd->endOfDay());
+            })->count();
             $weeklyLate[] = [
-                'hari' => $label,
-                'count' => $combinedReport->where('date', $date)->where('status', 'telat')->count()
+                'hari'  => 'Mg ' . $weekNum,
+                'count' => $count,
             ];
+            $weekCursor->addWeek();
+            $weekNum++;
         }
 
         // ── 7. Tingkat persentase kehadiran per Departemen/Bagian Unit Kerja ──
@@ -312,11 +337,11 @@ class ReportController extends Controller
             $overtimeMinutes = 0;
             foreach ($approvedReqs as $req) {
                 $attRecord = $empRecords->first(function($r) use ($req) {
-                    $rDate = $r->date instanceof \Carbon\Carbon ? $r->date->toDateString() : $r->date;
+                    $rDate = $r['date'] instanceof \Carbon\Carbon ? $r['date']->toDateString() : $r['date'];
                     return $rDate === $req->date->toDateString();
                 });
                 if ($attRecord) {
-                    $overtimeMinutes += $attRecord->overtime_minutes ?? 0;
+                    $overtimeMinutes += $attRecord['overtime_minutes'] ?? 0;
                 }
             }
 

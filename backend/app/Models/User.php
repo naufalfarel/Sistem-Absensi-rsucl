@@ -67,13 +67,23 @@ class User extends Authenticatable
     }
 
     /**
-     * Memeriksa apakah pengguna memiliki role admin.
+     * Memeriksa apakah pengguna memiliki role admin atau super admin.
      * 
-     * @return bool True jika role adalah 'admin'
+     * @return bool True jika role adalah 'admin' atau 'super_admin'
      */
     public function isAdmin(): bool
     {
-        return $this->role === 'admin';
+        return $this->role === 'admin' || $this->role === 'super_admin';
+    }
+
+    /**
+     * Memeriksa apakah pengguna adalah Super Admin (Direktur RSUCL).
+     * 
+     * @return bool True jika role adalah 'super_admin'
+     */
+    public function isSuperAdmin(): bool
+    {
+        return $this->role === 'super_admin';
     }
 
     /**
@@ -87,13 +97,13 @@ class User extends Authenticatable
     }
 
     /**
-     * Memeriksa apakah pengguna adalah Admin ATAU PJ Bagian.
-     * Digunakan untuk gate akses endpoint yang boleh diakses keduanya.
+     * Memeriksa apakah pengguna adalah Admin, Super Admin, ATAU PJ Bagian.
+     * Digunakan untuk gate akses endpoint yang boleh diakses ketiganya.
      * 
      * @return bool
      */
     public function isPjOrAdmin(): bool
     {
-        return $this->role === 'admin' || $this->role === 'pj_bagian';
+        return $this->role === 'admin' || $this->role === 'super_admin' || $this->role === 'pj_bagian';
     }
 }

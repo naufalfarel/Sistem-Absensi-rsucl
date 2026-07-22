@@ -81,6 +81,11 @@ class AuthController extends Controller
                     'car_plate_1'   => $emp->car_plate_1,
                     'car_plate_2'   => $emp->car_plate_2,
                 ];
+                $userData['social_media'] = [
+                    'instagram' => $emp->instagram,
+                    'facebook'  => $emp->facebook,
+                    'tiktok'    => $emp->tiktok,
+                ];
             }
         }
 
@@ -140,6 +145,11 @@ class AuthController extends Controller
                     'car_plate_1'   => $emp->car_plate_1,
                     'car_plate_2'   => $emp->car_plate_2,
                 ];
+                $data['social_media'] = [
+                    'instagram' => $emp->instagram,
+                    'facebook'  => $emp->facebook,
+                    'tiktok'    => $emp->tiktok,
+                ];
             }
         }
 
@@ -179,11 +189,14 @@ class AuthController extends Controller
             'name'            => 'sometimes|string|max:255',
             'email'           => 'sometimes|email|unique:users,email,' . $user->id,
             'username'        => 'sometimes|string|max:255|unique:users,username,' . $user->id,
-            'password'        => 'sometimes|string|min:6',
+            'password'        => 'sometimes|string|regex:/^[0-9]{6,}$/',
             'old_password'    => 'sometimes|string',
             'profile_picture' => 'nullable|string', // String base64
             'phone'           => 'sometimes|nullable|string|max:20',
             'gender'          => 'sometimes|nullable|string|max:20',
+            'instagram'       => 'sometimes|nullable|string|max:100',
+            'facebook'        => 'sometimes|nullable|string|max:100',
+            'tiktok'          => 'sometimes|nullable|string|max:100',
         ]);
 
         // Perbarui atribut umum User jika dilampirkan
@@ -208,6 +221,11 @@ class AuthController extends Controller
                 ], 422);
             }
             $user->password = Hash::make($request->password);
+            
+            // Kosongkan temp_password_encrypted pada data registrasi terkait jika pegawai ganti password
+            \App\Models\EmployeeRegistration::where('user_id', $user->id)
+                ->orWhere('nik_ktp', $user->nik_ktp)
+                ->update(['temp_password_encrypted' => null]);
         }
 
         // Proses penyimpanan file foto profil jika terdapat upload Base64 baru
@@ -241,6 +259,15 @@ class AuthController extends Controller
                 if ($request->has('gender')) {
                     $emp->gender = $request->gender;
                 }
+                if ($request->has('instagram')) {
+                    $emp->instagram = $request->instagram;
+                }
+                if ($request->has('facebook')) {
+                    $emp->facebook = $request->facebook;
+                }
+                if ($request->has('tiktok')) {
+                    $emp->tiktok = $request->tiktok;
+                }
                 $emp->save();
             }
         }
@@ -271,6 +298,11 @@ class AuthController extends Controller
                     'car_plate_1'   => $emp->car_plate_1,
                     'car_plate_2'   => $emp->car_plate_2,
                 ];
+                $data['social_media'] = [
+                    'instagram' => $emp->instagram,
+                    'facebook'  => $emp->facebook,
+                    'tiktok'    => $emp->tiktok,
+                ];
             }
         }
 
@@ -297,7 +329,7 @@ class AuthController extends Controller
             'username' => 'required|string',
             'nik_ktp'  => 'required|string',
             'email'    => 'required|email',
-            'password' => 'required|string|min:6',
+            'password' => 'required|string|regex:/^[0-9]{6,}$/',
         ]);
 
         // Pastikan kombinasi username, NIK KTP, dan email benar-benar terdaftar di database
@@ -316,6 +348,11 @@ class AuthController extends Controller
         // Set password baru dan lakukan hashing
         $user->password = Hash::make($request->password);
         $user->save();
+
+        // Kosongkan temp_password_encrypted pada data registrasi terkait
+        \App\Models\EmployeeRegistration::where('user_id', $user->id)
+            ->orWhere('nik_ktp', $user->nik_ktp)
+            ->update(['temp_password_encrypted' => null]);
 
         return response()->json([
             'success' => true,

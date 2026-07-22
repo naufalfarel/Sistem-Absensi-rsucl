@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { CheckCircle2, XCircle, Clock, FileText, AlertCircle, RefreshCw } from 'lucide-react';
 import { shiftProposalApi, ShiftProposal } from '../../../services/api';
+import { MonthYearDeptFilter } from '../ui/MonthYearDeptFilter';
 
 const statusConfig = {
   pending:  { label: 'Menunggu',   color: '#D97706', bg: '#FFFBEB', border: '#FDE68A' },
@@ -11,6 +12,8 @@ const statusConfig = {
 export function ShiftProposalTab() {
   const [proposals, setProposals] = useState<ShiftProposal[]>([]);
   const [filter, setFilter] = useState<'pending' | 'approved' | 'rejected' | 'all'>('pending');
+  const [filterMonth, setFilterMonth] = useState<number>(0);
+  const [filterYear, setFilterYear]   = useState<number>(new Date().getFullYear());
   const [loading, setLoading] = useState(false);
   const [processingId, setProcessingId] = useState<number | null>(null);
 
@@ -101,6 +104,15 @@ export function ShiftProposalTab() {
           </div>
         )}
       </div>
+
+      {/* ── Month & Year Filter ──────────────────────────────────── */}
+      <MonthYearDeptFilter
+        month={filterMonth}
+        year={filterYear}
+        showAllMonthsOption={true}
+        onMonthChange={setFilterMonth}
+        onYearChange={setFilterYear}
+      />
 
       {/* Filter tabs */}
       <div className="flex gap-1 bg-white rounded-xl border border-gray-100 p-1 shadow-xs w-fit overflow-x-auto">

@@ -11,7 +11,7 @@ class StoreAssignmentLetterRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return $this->user() && $this->user()->role === 'employee';
+        return $this->user() !== null;
     }
 
     /**
@@ -28,7 +28,8 @@ class StoreAssignmentLetterRequest extends FormRequest
             'start_date'          => 'required|date',
             'end_date'            => 'required|date|after_or_equal:start_date',
             'letter_number'       => 'nullable|string|max:100',
-            'document'            => 'required|file|mimes:pdf,jpg,jpeg,png|max:2048',
+            'document'            => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
+            'attendance_proof'    => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:2048',
         ];
     }
 }

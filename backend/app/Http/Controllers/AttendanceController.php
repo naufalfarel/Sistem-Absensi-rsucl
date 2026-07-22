@@ -84,12 +84,8 @@ class AttendanceController extends Controller
             if ($approvedLetter) {
                 $dinasReason = 'Surat Tugas: ' . $approvedLetter->title;
             } else {
-                $todayDate = Carbon::today('Asia/Jakarta');
-                $dayName = AttendanceRules::dayNameFor($todayDate);
-                $sched = $employee->schedules()->wherePivot('date', $todayDate->toDateString())->first();
-                if (!$sched) {
-                    $sched = $employee->schedules()->wherePivot('day_of_week', $dayName)->wherePivotNull('date')->first();
-                }
+                $dayName = AttendanceRules::dayNameFor(Carbon::today('Asia/Jakarta'));
+                $sched = $employee->schedules()->wherePivot('day_of_week', $dayName)->first();
                 $dinasReason = 'Shift: ' . ($sched ? $sched->name : 'Dinas Luar');
             }
         }
@@ -135,14 +131,9 @@ class AttendanceController extends Controller
                 $records[] = $this->formatRecord($att, withEmployee: true);
             } else {
                 // Cari jadwal shift hari ini
-                $schedule = $emp->schedules->first(function($s) use ($todayStr) {
-                    return $s->pivot->date === $todayStr;
+                $schedule = $emp->schedules->first(function($s) use ($todayName) {
+                    return $s->pivot->day_of_week === $todayName;
                 });
-                if (!$schedule) {
-                    $schedule = $emp->schedules->first(function($s) use ($todayName) {
-                        return $s->pivot->day_of_week === $todayName && is_null($s->pivot->date);
-                    });
-                }
 
                 if (!$schedule) {
                     $status = 'tidak_ada_shift';
@@ -576,7 +567,7 @@ class AttendanceController extends Controller
         if ($status === 'telat') {
             $notifLate = \App\Models\Setting::get('notif_late', '1');
             if ($notifLate !== '0') {
-                $admins = \App\Models\User::where('role', 'admin')->get();
+                $admins = \App\Models\User::whereIn('role', ['admin', 'super_admin'])->get();
                 foreach ($admins as $admin) {
                     // Cegah duplikasi notifikasi harian untuk karyawan terlambat yang sama
                     $exists = \App\Models\Notification::where('user_id', $admin->id)
@@ -600,7 +591,7 @@ class AttendanceController extends Controller
             // Kirim notifikasi email ke admin jika diaktifkan
             $notifEmail = \App\Models\Setting::get('notif_email', '1');
             if ($notifEmail !== '0') {
-                $admins = \App\Models\User::where('role', 'admin')->get();
+                $admins = \App\Models\User::whereIn('role', ['admin', 'super_admin'])->get();
                 foreach ($admins as $admin) {
                     try {
                         \Illuminate\Support\Facades\Mail::raw(
@@ -993,13 +984,8 @@ class AttendanceController extends Controller
             3 => 'Rabu',   4 => 'Kamis', 5 => 'Jumat', 6 => 'Sabtu',
         ];
         $todayName = $dayMap[$now->dayOfWeek];
-        $schedule = $employee->schedules()->wherePivot('date', $now->toDateString())->first();
-        if (!$schedule) {
-            $schedule = $employee->schedules()
-                                 ->wherePivot('day_of_week', $todayName)
-                                 ->wherePivotNull('date')
-                                 ->first();
-        }
+        $schedule = $employee->schedules()->wherePivot('day_of_week', $todayName)->first();
+
         if (!$schedule) {
             return null;
         }
@@ -1179,24 +1165,16 @@ class AttendanceController extends Controller
             $carbonDate = \Carbon\Carbon::parse($r->date);
             $dayName = $dayMap[$carbonDate->dayOfWeek];
             
-            $dateStr = $carbonDate->toDateString();
+            // Periksa apakah relasi schedules sudah di-load untuk efisiensi kueri database (Eager Loading)
             if ($r->employee->relationLoaded('schedules')) {
-                $sched = $r->employee->schedules->first(function ($s) use ($dateStr) {
-                    return $s->pivot->date === $dateStr;
+                $sched = $r->employee->schedules->first(function ($s) use ($dayName) {
+                    return $s->pivot->day_of_week === $dayName;
                 });
-                if (!$sched) {
-                    $sched = $r->employee->schedules->first(function ($s) use ($dayName) {
-                        return $s->pivot->day_of_week === $dayName && is_null($s->pivot->date);
-                    });
-                }
                 if ($sched) {
                     $shiftName = $sched->name;
                 }
             } else {
-                $sched = $r->employee->schedules()->wherePivot('date', $dateStr)->first();
-                if (!$sched) {
-                    $sched = $r->employee->schedules()->wherePivot('day_of_week', $dayName)->wherePivotNull('date')->first();
-                }
+                $sched = $r->employee->schedules()->wherePivot('day_of_week', $dayName)->first();
                 if ($sched) {
                     $shiftName = $sched->name;
                 }
@@ -1569,14 +1547,9 @@ class AttendanceController extends Controller
             $limitDate = $carbonDate->gt($today) ? $today : $carbonDate;
 
             foreach ($employees as $emp) {
-                $matchingShift = $emp->schedules->first(function($s) use ($targetDate) {
-                    return $s->pivot->date === $targetDate;
+                $matchingShift = $emp->schedules->first(function($s) use ($dayName) {
+                    return $s->pivot->day_of_week === $dayName;
                 });
-                if (!$matchingShift) {
-                    $matchingShift = $emp->schedules->first(function($s) use ($dayName) {
-                        return $s->pivot->day_of_week === $dayName && is_null($s->pivot->date);
-                    });
-                }
                 
                 $hasShift = !empty($matchingShift);
 
@@ -1658,15 +1631,9 @@ class AttendanceController extends Controller
                 if (!$emp) continue;
                 
                 $dayName = $dayMap[$att->date->dayOfWeek];
-                $attDateStr = $att->date->toDateString();
-                $matchingShift = $emp->schedules->first(function($s) use ($attDateStr) {
-                    return $s->pivot->date === $attDateStr;
+                $matchingShift = $emp->schedules->first(function($s) use ($dayName) {
+                    return $s->pivot->day_of_week === $dayName;
                 });
-                if (!$matchingShift) {
-                    $matchingShift = $emp->schedules->first(function($s) use ($dayName) {
-                        return $s->pivot->day_of_week === $dayName && is_null($s->pivot->date);
-                    });
-                }
                 
                 $rows[] = $this->formatRowFromAttendance($att, $emp, $matchingShift);
             }
@@ -1677,15 +1644,9 @@ class AttendanceController extends Controller
 
                 $startDateCarbon = Carbon::parse($leave->start_date);
                 $dayName = $dayMap[$startDateCarbon->dayOfWeek];
-                $leaveDateStr = $leave->start_date->toDateString();
-                $matchingShift = $emp->schedules->first(function($s) use ($leaveDateStr) {
-                    return $s->pivot->date === $leaveDateStr;
+                $matchingShift = $emp->schedules->first(function($s) use ($dayName) {
+                    return $s->pivot->day_of_week === $dayName;
                 });
-                if (!$matchingShift) {
-                    $matchingShift = $emp->schedules->first(function($s) use ($dayName) {
-                        return $s->pivot->day_of_week === $dayName && is_null($s->pivot->date);
-                    });
-                }
 
                 // Row type: leave_period
                 $rows[] = $this->formatRowFromLeave($leave, $emp, $leave->start_date, $matchingShift, 'leave_period');

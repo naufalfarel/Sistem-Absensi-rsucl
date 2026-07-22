@@ -41,7 +41,7 @@ class Schedule extends Model
     public function employees()
     {
         return $this->belongsToMany(Employee::class, 'employee_schedule')
-                    ->withPivot(['day_of_week', 'date'])
+                    ->withPivot('day_of_week', 'work_date')
                     ->withTimestamps();
     }
 

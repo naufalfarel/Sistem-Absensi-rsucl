@@ -156,7 +156,7 @@ class LeaveRequestController extends Controller
             'special_leave_category_id' => 'required_if:type,cuti_khusus|exists:special_leave_categories,id',
             'posisi'                    => 'nullable|string|max:100',
             'unit_kerja'                => 'nullable|string|max:100',
-            'substitute_name'           => 'nullable|string|max:100',
+            'substitute_name'           => 'nullable|string|max:500',
             'alamat_cuti'               => 'nullable|string|max:255',
         ];
 
@@ -187,6 +187,20 @@ class LeaveRequestController extends Controller
             $endDate       = \Carbon\Carbon::parse($data['end_date']);
             $daysRequested = $startDate->diffInDays($endDate) + 1;
 
+            // ── Aturan 1: Maksimal 4 hari beruntun per pengajuan ─────────────
+            // Pegawai tidak boleh mengajukan cuti tahunan lebih dari 4 hari beruntun
+            // dalam 1 kali pengajuan.
+            if ($daysRequested > 4) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Pengajuan cuti tahunan maksimal 4 hari beruntun dalam 1 bulan. Anda mengajukan {$daysRequested} hari sekaligus. Silakan bagi menjadi beberapa pengajuan yang lebih pendek.",
+                    'errors'  => [
+                        'duration' => ["Pengajuan cuti tahunan maksimal 4 hari beruntun."],
+                    ],
+                ], 422);
+            }
+
+            // ── Aturan 2: Kuota Tahunan ──────────────────────────────────────
             if ($daysRequested > $remaining) {
                 return response()->json([
                     'success' => false,
@@ -195,6 +209,51 @@ class LeaveRequestController extends Controller
                         'quota' => ["Sisa kuota cuti Anda hanya {$remaining} hari. Anda mengajukan {$daysRequested} hari."],
                     ],
                 ], 422);
+            }
+
+            // ── Aturan 3: Maksimal 4 hari cuti per bulan kalender ────────────
+            // Hitung semua bulan yang dijangkau oleh rentang pengajuan ini,
+            // dan pastikan total hari cuti (pending+approved+baru) pada tiap bulan
+            // tidak melebihi 4 hari.
+            $monthsToCheck = [];
+            $cursor = $startDate->copy()->startOfMonth();
+            $endMonth = $endDate->copy()->startOfMonth();
+            while ($cursor->lte($endMonth)) {
+                $monthsToCheck[] = ['year' => $cursor->year, 'month' => $cursor->month];
+                $cursor->addMonth();
+            }
+
+            $indoMonths = [
+                1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
+                5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus',
+                9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember',
+            ];
+
+            foreach ($monthsToCheck as $m) {
+                $y = $m['year']; $mo = $m['month'];
+
+                // Hitung hari pengajuan baru yang jatuh di bulan ini
+                $monthStart = \Carbon\Carbon::create($y, $mo, 1)->startOfMonth();
+                $monthEnd   = \Carbon\Carbon::create($y, $mo, 1)->endOfMonth();
+                $overlapStart = $startDate->copy()->max($monthStart);
+                $overlapEnd   = $endDate->copy()->min($monthEnd);
+                $newDaysThisMonth = $overlapStart->diffInDays($overlapEnd) + 1;
+
+                // Hitung cuti yang sudah committed di bulan ini
+                $existingDaysThisMonth = LeaveQuotaHelper::committedDaysInMonth($employee, $y, $mo);
+
+                $totalThisMonth = $existingDaysThisMonth + $newDaysThisMonth;
+                $monthLabel = ($indoMonths[$mo] ?? $mo) . ' ' . $y;
+
+                if ($totalThisMonth > 4) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => "Total cuti tahunan pada bulan {$monthLabel} melebihi batas maksimal 4 hari per bulan (sudah ada {$existingDaysThisMonth} hari, pengajuan baru {$newDaysThisMonth} hari di bulan tersebut = total {$totalThisMonth} hari).",
+                        'errors'  => [
+                            'monthly_limit' => ["Batas cuti tahunan bulan {$monthLabel}: {$existingDaysThisMonth} hari sudah diajukan, maksimal 4 hari/bulan."],
+                        ],
+                    ], 422);
+                }
             }
         }
 
@@ -260,7 +319,7 @@ class LeaveRequestController extends Controller
                 ]);
             } else {
                 // Tidak ada PJ Bagian (atau pengajuan milik PJ sendiri) → notif ke admin
-                $admins = \App\Models\User::where('role', 'admin')->get();
+                $admins = \App\Models\User::whereIn('role', ['admin', 'super_admin'])->get();
                 foreach ($admins as $admin) {
                     Notification::create([
                         'user_id' => $admin->id,
@@ -277,7 +336,7 @@ class LeaveRequestController extends Controller
         // Kirim email pengajuan baru ke semua admin (jika notif_email diset aktif dan langsung di-approve/tanpa PJ)
         $notifEmail = \App\Models\Setting::get('notif_email', '1');
         if ($notifEmail !== '0' && $pjStatus === 'approved') {
-            $admins = \App\Models\User::where('role', 'admin')->get();
+            $admins = \App\Models\User::whereIn('role', ['admin', 'super_admin'])->get();
             foreach ($admins as $admin) {
                 try {
                     \Illuminate\Support\Facades\Mail::raw(
@@ -384,7 +443,7 @@ class LeaveRequestController extends Controller
                 ]);
 
                 // Kirim notifikasi sistem ke admin bahwa ada pengajuan yang di-acc PJ Bagian
-                $admins = \App\Models\User::where('role', 'admin')->get();
+                $admins = \App\Models\User::whereIn('role', ['admin', 'super_admin'])->get();
                 foreach ($admins as $admin) {
                     Notification::create([
                         'user_id' => $admin->id,
@@ -591,11 +650,12 @@ class LeaveRequestController extends Controller
             ], 403);
         }
 
-        // Hanya pengajuan berstatus 'pending' yang bisa dibatalkan
-        if ($leaveRequest->status !== 'pending') {
+        // Pegawai hanya bisa membatalkan jika status utama masih 'pending' DAN pj_status masih 'pending'.
+        // Jika sudah disetujui oleh PJ Bagian (pj_status === 'approved') atau Admin (status === 'approved'), pegawai tidak dapat membatalkan.
+        if ($leaveRequest->status !== 'pending' || $leaveRequest->pj_status !== 'pending') {
             return response()->json([
                 'success' => false,
-                'message' => 'Hanya pengajuan yang masih menunggu persetujuan yang bisa dibatalkan.',
+                'message' => 'Pengajuan yang sudah disetujui oleh PJ Bagian atau Admin tidak dapat dibatalkan oleh pegawai.',
             ], 422);
         }
 

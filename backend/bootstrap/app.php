@@ -16,10 +16,11 @@ return Application::configure(basePath: dirname(__DIR__))
         // Izinkan frontend Vite (localhost:5173) mengakses API dengan cookie/Sanctum
         $middleware->statefulApi();
 
-        // Alias middleware role admin & pj_bagian
+        // Alias middleware role admin, pj_bagian, & super_admin
         $middleware->alias([
             'admin'        => \App\Http\Middleware\EnsureIsAdmin::class,
             'pj_or_admin'  => \App\Http\Middleware\EnsurePjOrAdmin::class,
+            'super_admin'  => \App\Http\Middleware\EnsureIsSuperAdmin::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
