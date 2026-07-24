@@ -30,7 +30,7 @@ class EmployeeController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
-        $query = Employee::with(['user', 'department', 'position', 'todayAttendance']);
+        $query = Employee::with(['user', 'department', 'position', 'todayAttendance', 'disciplinarySanctions']);
 
         if ($user->role === 'pj_bagian') {
             $query->where('department_id', $user->pj_bagian_department_id);
@@ -109,7 +109,7 @@ class EmployeeController extends Controller
         if ($userFields) $employee->user->update($userFields);
 
         $empFields = array_merge([
-            'department_id' => $data['department_id'] ?? $employee->department_id,
+            'department_id' => array_key_exists('department_id', $data) ? $data['department_id'] : $employee->department_id,
             'position_id'   => $data['position_id'] ?? $employee->position_id,
             'phone'         => array_key_exists('phone', $data) ? $data['phone'] : $employee->phone,
             'gender'        => array_key_exists('gender', $data) ? $data['gender'] : $employee->gender,
@@ -324,7 +324,15 @@ class EmployeeController extends Controller
             $isIncomplete   = \App\Support\AttendanceRules::isAttendanceIncomplete($today, $e);
             $computedStatus = $isIncomplete ? 'tidak_lengkap' : $today->status;
         } else {
-            if (!$schedule) {
+            $isOffShift = false;
+            if ($schedule) {
+                $uName = strtoupper($schedule->name);
+                if (str_contains($uName, 'LIBUR') || str_contains($uName, 'LJ') || str_contains($uName, 'OFF')) {
+                    $isOffShift = true;
+                }
+            }
+
+            if (!$schedule || $isOffShift) {
                 $computedStatus = 'tidak_ada_shift';
             } else {
                 $now                = \Carbon\Carbon::now('Asia/Jakarta');
@@ -386,6 +394,16 @@ class EmployeeController extends Controller
                 'facebook'  => $e->facebook,
                 'tiktok'    => $e->tiktok,
             ],
+            'disciplinary_sanctions' => $e->relationLoaded('disciplinarySanctions') 
+                ? $e->disciplinarySanctions->map(fn($s) => [
+                    'id'             => $s->id,
+                    'type'           => $s->type,
+                    'attachment_url' => $s->attachment_url ? url($s->attachment_url) : null,
+                    'chronology_url' => $s->chronology_url ? url($s->chronology_url) : null,
+                    'admin_note'     => $s->admin_note,
+                    'created_at'     => $s->created_at->toIso8601String(),
+                ])->toArray()
+                : [],
         ];
     }
 }

@@ -102,12 +102,13 @@ class AdminEmployeeRegistrationController extends Controller
 
             // 4. Buat Akun User Baru
             $user = User::create([
-                'name'     => $registration->name,
-                'email'    => $registration->email,
-                'username' => $username,
-                'password' => Hash::make($tempPassword),
-                'nik_ktp'  => $registration->nik_ktp,
-                'role'     => 'employee',
+                'name'            => $registration->name,
+                'email'           => $registration->email,
+                'username'        => $username,
+                'password'        => Hash::make($tempPassword),
+                'nik_ktp'         => $registration->nik_ktp,
+                'role'            => 'employee',
+                'profile_picture' => $registration->getRawOriginal('profile_picture'),
             ]);
 
             // 5. Buat Record Employee Baru

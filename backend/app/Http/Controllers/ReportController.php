@@ -216,7 +216,7 @@ class ReportController extends Controller
             $weekNum++;
         }
 
-        // ── 7. Tingkat persentase kehadiran per Departemen/Bagian Unit Kerja ──
+        // ── 7. Tingkat persentase kehadiran per Unit kerja Unit Kerja ──
         $deptList = Department::with('employees')->get();
         $deptData = [];
         foreach ($deptList as $dept) {
@@ -232,9 +232,76 @@ class ReportController extends Controller
             ];
         }
 
+        // ── 8. Hitung Rangking Kedisiplinan / Kerajinan Karyawan (Tepat Waktu) ──
+        $todayDate = today()->toDateString();
+        // Rangking Harian: Karyawan yang absen paling cepat hari ini dengan status 'hadir' (tepat waktu)
+        $dailyRankingRecords = Attendance::whereDate('date', $todayDate)
+            ->where('status', 'hadir')
+            ->whereNotNull('check_in')
+            ->with(['employee.user', 'employee.department'])
+            ->orderBy('check_in', 'asc')
+            ->take(10)
+            ->get();
+
+        $dailyDiligenceRanking = [];
+        $rankIdx = 1;
+        foreach ($dailyRankingRecords as $rec) {
+            $dailyDiligenceRanking[] = [
+                'rank' => $rankIdx++,
+                'employee_id' => $rec->employee_id,
+                'name' => $rec->employee->user?->name ?? 'Karyawan',
+                'department' => $rec->employee->department?->name ?? 'Umum',
+                'check_in' => substr($rec->check_in, 0, 5),
+            ];
+        }
+
+        // Rangking Bulanan: Karyawan paling disiplin di bulan yang dipilih
+        // Diurutkan berdasarkan jumlah on-time (hadir) terbanyak, lalu keterlambatan terendah
+        $monthlyDiligenceRanking = [];
+        $groupedByEmployee = $monthReportColl->groupBy('employee_id');
+
+        foreach ($groupedByEmployee as $empId => $empRecords) {
+            $hadirCount = $empRecords->where('status', 'hadir')->count();
+            $telatCount = $empRecords->where('status', 'telat')->count();
+            $alphaCount = $empRecords->where('status', 'alpha')->count();
+            $activeDays = $hadirCount + $telatCount;
+            $punctualityRate = $activeDays > 0 ? round(($hadirCount / $activeDays) * 100) : 0;
+
+            if ($hadirCount > 0) {
+                $firstRecord = $empRecords->first();
+                $monthlyDiligenceRanking[] = [
+                    'employee_id' => $empId,
+                    'name' => $firstRecord['employee']['name'] ?? 'Karyawan',
+                    'department' => $firstRecord['employee']['department'] ?? 'Umum',
+                    'hadir_count' => $hadirCount,
+                    'telat_count' => $telatCount,
+                    'alpha_count' => $alphaCount,
+                    'punctuality_rate' => $punctualityRate,
+                ];
+            }
+        }
+
+        usort($monthlyDiligenceRanking, function($a, $b) {
+            $hadirComp = $b['hadir_count'] <=> $a['hadir_count'];
+            if ($hadirComp !== 0) return $hadirComp;
+            $telatComp = $a['telat_count'] <=> $b['telat_count'];
+            if ($telatComp !== 0) return $telatComp;
+            return $a['alpha_count'] <=> $b['alpha_count'];
+        });
+
+        $monthlyDiligenceRanking = array_slice($monthlyDiligenceRanking, 0, 10);
+        foreach ($monthlyDiligenceRanking as $idx => &$item) {
+            $item['rank'] = $idx + 1;
+        }
+        unset($item);
+
         return response()->json([
             'success' => true,
             'data'    => [
+                'diligence_ranking' => [
+                    'daily' => $dailyDiligenceRanking,
+                    'monthly' => $monthlyDiligenceRanking,
+                ],
                 'total_employees'   => $totalEmp,
                 'today' => [
                     'hadir'  => $todayHadir,

@@ -17,7 +17,8 @@ import {
   Paperclip,
   Upload,
   UserCheck,
-  Info
+  Info,
+  Trash2
 } from 'lucide-react';
 import { 
   assignmentLetterApi, 
@@ -212,6 +213,20 @@ export default function AssignmentLetterTab() {
       setAdminCreateError(err?.message ?? 'Gagal menerbitkan surat tugas.');
     } finally {
       setAdminCreateSubmitting(false);
+    }
+  };
+
+  const handleDeleteLetter = async (id: number) => {
+    if (!window.confirm("Apakah Anda yakin ingin menghapus surat tugas ini? Semua data terkait dan file dokumen akan dihapus permanen.")) return;
+
+    try {
+      const res = await assignmentLetterApi.delete(id);
+      if (res.success) {
+        alert("Surat tugas berhasil dihapus.");
+        loadLetters();
+      }
+    } catch (err: any) {
+      alert(err?.message ?? "Gagal menghapus surat tugas.");
     }
   };
 
@@ -514,35 +529,44 @@ export default function AssignmentLetterTab() {
 
                       {/* Aksi column */}
                       <td className="py-4 px-5 text-right">
-                        {letter.status === 'pending' ? (
-                          <div className="flex justify-end gap-1.5">
-                            <button
-                              onClick={() => {
-                                setSelectedLetter(letter);
-                                setActionType('approve');
-                                setAdminNote('');
-                                setReplyDocumentFile(null);
-                                setModalError('');
-                              }}
-                              className="px-3 py-1.5 bg-[#16A34A] hover:bg-[#0d9240] text-white rounded-xl text-[11px] font-bold shadow-xs transition-colors cursor-pointer"
-                            >
-                              Setujui & Balas File
-                            </button>
-                            <button
-                              onClick={() => {
-                                setSelectedLetter(letter);
-                                setActionType('reject');
-                                setAdminNote('');
-                                setModalError('');
-                              }}
-                              className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-xl text-[11px] font-bold shadow-xs transition-colors cursor-pointer"
-                            >
-                              Tolak
-                            </button>
-                          </div>
-                        ) : (
-                          <span className="text-[11px] text-gray-400 font-semibold">Tersimpan</span>
-                        )}
+                        <div className="flex items-center justify-end gap-2">
+                          {letter.status === 'pending' ? (
+                            <>
+                              <button
+                                onClick={() => {
+                                  setSelectedLetter(letter);
+                                  setActionType('approve');
+                                  setAdminNote('');
+                                  setReplyDocumentFile(null);
+                                  setModalError('');
+                                }}
+                                className="px-3 py-1.5 bg-[#16A34A] hover:bg-[#0d9240] text-white rounded-xl text-[11px] font-bold shadow-xs transition-colors cursor-pointer"
+                              >
+                                Setujui & Balas File
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setSelectedLetter(letter);
+                                  setActionType('reject');
+                                  setAdminNote('');
+                                  setModalError('');
+                                }}
+                                className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-xl text-[11px] font-bold shadow-xs transition-colors cursor-pointer"
+                              >
+                                Tolak
+                              </button>
+                            </>
+                          ) : (
+                            <span className="text-[11px] text-gray-400 font-semibold mr-1">Tersimpan</span>
+                          )}
+                          <button
+                            onClick={() => handleDeleteLetter(letter.id)}
+                            title="Hapus Surat Tugas"
+                            className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg border border-transparent hover:border-red-100 transition-all cursor-pointer flex-shrink-0"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -714,7 +738,7 @@ export default function AssignmentLetterTab() {
                   <option value="">-- Pilih Pegawai --</option>
                   {allEmployees.map(emp => (
                     <option key={emp.id} value={emp.id}>
-                      {emp.name} (NIK: {emp.nik_ktp}) - {emp.department?.name || 'Umum'}
+                      {emp.name} (NIK: {emp.nik_ktp}) - {emp.department || 'Umum'}
                     </option>
                   ))}
                 </select>

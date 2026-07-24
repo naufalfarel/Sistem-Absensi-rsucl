@@ -1015,9 +1015,9 @@ export function SettingsTab() {
                 <p className="font-bold text-gray-700 mb-1 flex items-center gap-1">🚪 Absen Pulang (Check-out)</p>
                 <div className="space-y-1 pl-3.5 border-l border-green-200">
                   <p>• Buka check-out (Sen-Jum): <span className="font-mono text-gray-800 font-bold">{getPreviewTime('17:00', checkoutOpen, 'sub')} WIB</span> <span className="text-gray-400">({checkoutOpen || 0} menit sebelum selesai)</span></p>
-                  <p>• Tutup check-out (Sen-Jum): <span className="font-mono text-gray-800 font-bold">{getPreviewTime('17:00', checkoutClose)} WIB</span> <span className="text-gray-400">({checkoutClose || 0} menit setelah selesai)</span></p>
+                  <p>• Tutup check-out (Sen-Jum): <span className="font-semibold text-[#16A34A]">Fleksibel</span> <span className="text-gray-400">(Dapat absen pulang kapan saja, terhitung lembur jika melewati shift)</span></p>
                   <p>• Buka check-out (Sabtu): <span className="font-mono text-gray-800 font-bold">{getPreviewTime('13:00', satCheckoutOpen, 'sub')} WIB</span> <span className="text-gray-400">({satCheckoutOpen || 0} menit sebelum selesai)</span></p>
-                  <p>• Tutup check-out (Sabtu): <span className="font-mono text-gray-800 font-bold">{getPreviewTime('13:00', satCheckoutClose)} WIB</span> <span className="text-gray-400">({satCheckoutClose || 0} menit setelah selesai)</span></p>
+                  <p>• Tutup check-out (Sabtu): <span className="font-semibold text-[#16A34A]">Fleksibel</span> <span className="text-gray-400">(Dapat absen pulang kapan saja)</span></p>
                 </div>
               </div>
             </div>

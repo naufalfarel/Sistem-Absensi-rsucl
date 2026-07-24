@@ -90,14 +90,21 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/assignment-letters', [\App\Http\Controllers\Api\AssignmentLetterController::class, 'index']);
     Route::post('/assignment-letters', [\App\Http\Controllers\Api\AssignmentLetterController::class, 'store']);
     Route::get('/assignment-letters/{id}', [\App\Http\Controllers\Api\AssignmentLetterController::class, 'show']);
-    Route::post('/assignment-letters/{id}/report', [\App\Http\Controllers\Api\AssignmentLetterController::class, 'uploadReport']);
-    Route::delete('/assignment-letters/{id}/cancel', [\App\Http\Controllers\Api\AssignmentLetterController::class, 'cancel']);
+    // ── Fitur Pengajuan Surat Pengunduran Diri (Resignation)
+    Route::get('/resignation-requests', [\App\Http\Controllers\Api\ResignationRequestController::class, 'index']);
+    Route::post('/resignation-requests', [\App\Http\Controllers\Api\ResignationRequestController::class, 'store']);
+    Route::delete('/resignation-requests/{id}/cancel', [\App\Http\Controllers\Api\ResignationRequestController::class, 'cancel']);
+    Route::put('/resignation-requests/{id}/review', [\App\Http\Controllers\Api\ResignationRequestController::class, 'review']);
+
+    // ── Fitur Sanksi Disiplin (Disciplinary Sanctions)
+    Route::get('/disciplinary-sanctions', [\App\Http\Controllers\Api\DisciplinarySanctionController::class, 'index']);
     
     // Endpoint Kategori Cuti Khusus (Umum untuk Karyawan & Admin)
     Route::get('/special-leave-categories', [\App\Http\Controllers\SpecialLeaveCategoryController::class, 'index']);
 
     // ── Fitur Jadwal Shift
     Route::get('/my-schedule', [ScheduleController::class, 'mySchedule']);
+    Route::get('/employee-schedules/monthly', [ScheduleController::class, 'getMonthlySchedule']);
 
     // Kalender Libur (Bisa dibaca semua karyawan)
     Route::get('/holidays', [\App\Http\Controllers\HolidayController::class, 'index']);
@@ -111,6 +118,9 @@ Route::middleware('auth:sanctum')->group(function () {
         // Persetujuan Lembur Baru (Overtime Requests)
         Route::put('/overtime-requests/{id}/approve', [\App\Http\Controllers\Api\OvertimeRequestController::class, 'approve']);
         Route::put('/overtime-requests/{id}/reject', [\App\Http\Controllers\Api\OvertimeRequestController::class, 'reject']);
+
+        // Persetujuan Resign oleh PJ Bagian
+        Route::put('/resignation-requests/{id}/pj-review', [\App\Http\Controllers\Api\ResignationRequestController::class, 'pjReview']);
 
         // Usulan Shift (Shift Assignment Proposals)
         Route::get('/shift-assignment-proposals', [\App\Http\Controllers\ShiftAssignmentProposalController::class, 'index']);
@@ -126,7 +136,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/employee-schedules/assign-department', [ScheduleController::class, 'assignDepartmentSchedule']);
 
         // Kalender bulanan (jadwal per-tanggal)
-        Route::get('/employee-schedules/monthly', [ScheduleController::class, 'getMonthlySchedule']);
         Route::post('/employee-schedules/assign-date', [ScheduleController::class, 'assignEmployeeScheduleByDate']);
         Route::post('/employee-schedules/assign-bulk-date', [ScheduleController::class, 'assignBulkByDate']);
 
@@ -148,6 +157,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/assignment-letters/{id}/approve', [\App\Http\Controllers\Api\AssignmentLetterController::class, 'approve']);
         Route::post('/assignment-letters/{id}/approve', [\App\Http\Controllers\Api\AssignmentLetterController::class, 'approve']);
         Route::put('/assignment-letters/{id}/reject', [\App\Http\Controllers\Api\AssignmentLetterController::class, 'reject']);
+        Route::delete('/assignment-letters/{id}', [\App\Http\Controllers\Api\AssignmentLetterController::class, 'destroy']);
+
+        // ── Fitur Sanksi Disiplin (Disciplinary Sanctions) - Admin
+        Route::post('/disciplinary-sanctions', [\App\Http\Controllers\Api\DisciplinarySanctionController::class, 'store']);
+        Route::delete('/disciplinary-sanctions/{id}', [\App\Http\Controllers\Api\DisciplinarySanctionController::class, 'destroy']);
 
         // ── Dashboard / Monitoring Kehadiran
         // Memonitoring status absensi seluruh karyawan hari ini secara real-time

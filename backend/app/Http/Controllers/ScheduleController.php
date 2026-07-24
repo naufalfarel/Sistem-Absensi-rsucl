@@ -25,8 +25,11 @@ class ScheduleController extends Controller
 
         if ($user->isPjBagian()) {
             $deptId = $user->pj_bagian_department_id;
-            // Saring agar PJ Bagian hanya melihat shift milik departemennya sendiri
-            $query->where('owner_department_id', $deptId);
+            // PJ Bagian hanya melihat master shift yang dimiliki oleh departemennya sendiri ATAU shift umum
+            $query->where(function ($q) use ($deptId) {
+                $q->where('owner_department_id', $deptId)
+                  ->orWhereNull('owner_department_id');
+            });
 
             // Filter relasi pegawai agar hanya mengembalikan yang satu departemen dengan PJ Bagian
             $query->with([
@@ -83,10 +86,38 @@ class ScheduleController extends Controller
         // Buat jadwal shift di database
         $schedule = Schedule::create($data);
 
-        // Jika ini adalah parent template (parent_id = null) dan start_time & end_time disediakan,
-        // buat child sub-shift (variant) pertama secara otomatis dengan jam yang sama agar langsung bisa ditugaskan
+        // Jika ada children yang dikirim dari form, buat sub-shift sesuai array
         if (!isset($data['parent_id']) || $data['parent_id'] === null) {
-            if (isset($data['start_time']) && isset($data['end_time'])) {
+            if (!empty($data['children']) && is_array($data['children'])) {
+                // User menentukan sub-shift sendiri
+                foreach ($data['children'] as $childData) {
+                    $start = strlen($childData['start_time']) === 5 ? $childData['start_time'] . ':00' : $childData['start_time'];
+                    $end   = strlen($childData['end_time'])   === 5 ? $childData['end_time']   . ':00' : $childData['end_time'];
+
+                    $childLimit = null;
+                    if ($user->isPjBagian()) {
+                        try {
+                            $childLimit = \Carbon\Carbon::createFromFormat('H:i', substr($start, 0, 5))
+                                ->addHours(5)
+                                ->format('H:i:s');
+                        } catch (\Exception $e) {}
+                    }
+
+                    Schedule::create([
+                        'parent_id'               => $schedule->id,
+                        'name'                    => $childData['name'],
+                        'start_time'              => $start,
+                        'end_time'                => $end,
+                        'color'                   => $data['color'] ?? '#16A34A',
+                        'icon'                    => $data['icon'] ?? 'sun',
+                        'shift_type'              => $data['shift_type'] ?? 'normal',
+                        'checkin_window_end_time' => $childLimit,
+                        'owner_department_id'     => $schedule->owner_department_id,
+                        'created_by'              => $user->id,
+                    ]);
+                }
+            } elseif (isset($data['start_time']) && isset($data['end_time'])) {
+                // Fallback: buat satu child otomatis jika tidak ada children
                 $childLimit = null;
                 if ($user->isPjBagian()) {
                     try {
@@ -96,16 +127,16 @@ class ScheduleController extends Controller
                     } catch (\Exception $e) {}
                 }
                 Schedule::create([
-                    'parent_id'  => $schedule->id,
-                    'name'       => 'Normal (' . substr($data['start_time'], 0, 5) . '–' . substr($data['end_time'], 0, 5) . ')',
-                    'start_time' => $data['start_time'],
-                    'end_time'   => $data['end_time'],
-                    'color'      => $data['color'] ?? '#16A34A',
-                    'icon'       => $data['icon'] ?? 'sun',
-                    'shift_type' => $data['shift_type'] ?? 'normal',
+                    'parent_id'               => $schedule->id,
+                    'name'                    => 'Normal (' . substr($data['start_time'], 0, 5) . '–' . substr($data['end_time'], 0, 5) . ')',
+                    'start_time'              => $data['start_time'],
+                    'end_time'                => $data['end_time'],
+                    'color'                   => $data['color'] ?? '#16A34A',
+                    'icon'                    => $data['icon'] ?? 'sun',
+                    'shift_type'              => $data['shift_type'] ?? 'normal',
                     'checkin_window_end_time' => $childLimit,
-                    'owner_department_id' => $schedule->owner_department_id,
-                    'created_by' => $user->id,
+                    'owner_department_id'     => $schedule->owner_department_id,
+                    'created_by'              => $user->id,
                 ]);
             }
         }
@@ -141,118 +172,12 @@ class ScheduleController extends Controller
                 return response()->json(['success' => false, 'message' => 'PJ Bagian belum ditugaskan ke departemen.'], 422);
             }
             
-            // PJ Bagian trying to edit a shift owned by another department -> tolak 403
-            if ($schedule->owner_department_id !== null && (int)$schedule->owner_department_id !== (int)$deptId) {
-                return response()->json(['success' => false, 'message' => 'Anda tidak memiliki hak untuk mengubah shift milik departemen lain.'], 403);
+            if ($schedule->owner_department_id === null || (int)$schedule->owner_department_id !== (int)$deptId) {
+                return response()->json(['success' => false, 'message' => 'Akses ditolak. Anda tidak memiliki wewenang untuk mengubah shift umum atau shift unit lain.'], 403);
             }
-
-            // Check if this shift is shared across multiple departments
-            // (assigned to employees belonging to more than one unique department)
-            $scheduleIds = [$schedule->id];
-            $childIds = $schedule->children()->pluck('id')->toArray();
-            $scheduleIds = array_merge($scheduleIds, $childIds);
-
-            $uniqueDepts = \DB::table('employee_schedule')
-                ->join('employees', 'employee_schedule.employee_id', '=', 'employees.id')
-                ->whereIn('employee_schedule.schedule_id', $scheduleIds)
-                ->whereNull('employees.deleted_at')
-                ->distinct('employees.department_id')
-                ->pluck('employees.department_id')
-                ->toArray();
-
-            $uniqueDeptsCount = count($uniqueDepts);
-            $isShared = $uniqueDeptsCount > 1;
-
-            if ($isShared) {
-                // Shared shift! Create a clone for the PJ Bagian's department.
-                // Replicate parent
-                $clonedSchedule = $schedule->replicate();
-                $deptName = $user->pjBagianDepartment ? $user->pjBagianDepartment->name : 'Dept';
-                $clonedSchedule->name = ($data['name'] ?? $schedule->name) . ' – ' . $deptName;
-                $clonedSchedule->owner_department_id = $deptId;
-                $clonedSchedule->created_by = $user->id;
-                $clonedSchedule->updated_by = $user->id;
-                
-                // If start/end times or colors were updated in parent
-                if (isset($data['start_time'])) $clonedSchedule->start_time = $data['start_time'];
-                if (isset($data['end_time'])) $clonedSchedule->end_time = $data['end_time'];
-                if (isset($data['color'])) $clonedSchedule->color = $data['color'];
-                if (isset($data['icon'])) $clonedSchedule->icon = $data['icon'];
-                if (isset($data['shift_type'])) $clonedSchedule->shift_type = $data['shift_type'];
-                
-                $clonedSchedule->save();
-
-                // Clone / create children
-                $origChildren = $schedule->children()->orderBy('id')->get();
-                $newChildren = collect();
-
-                if ($request->has('children')) {
-                    $inputChildren = $data['children'] ?? [];
-                    foreach ($inputChildren as $childData) {
-                        $start = strlen($childData['start_time']) === 5 ? $childData['start_time'] . ':00' : $childData['start_time'];
-                        $end = strlen($childData['end_time']) === 5 ? $childData['end_time'] . ':00' : $childData['end_time'];
-                        $newChild = Schedule::create([
-                            'parent_id'  => $clonedSchedule->id,
-                            'name'       => $childData['name'],
-                            'start_time' => $start,
-                            'end_time'   => $end,
-                            'color'      => $clonedSchedule->color,
-                            'icon'       => $clonedSchedule->icon,
-                            'shift_type' => $clonedSchedule->shift_type,
-                            'owner_department_id' => $deptId,
-                            'created_by' => $user->id,
-                        ]);
-                        $newChildren->push($newChild);
-                    }
-                } else {
-                    foreach ($origChildren as $origChild) {
-                        $clonedChild = $origChild->replicate();
-                        $clonedChild->parent_id = $clonedSchedule->id;
-                        $clonedChild->owner_department_id = $deptId;
-                        $clonedChild->created_by = $user->id;
-                        $clonedChild->save();
-                        $newChildren->push($clonedChild);
-                    }
-                }
-
-                // Transfer employee assignments of this department from old schedule to cloned schedule
-                // We find the employee_schedule records for employees in this department assigned to the old schedules
-                $assignments = \DB::table('employee_schedule')
-                    ->join('employees', 'employee_schedule.employee_id', '=', 'employees.id')
-                    ->whereIn('employee_schedule.schedule_id', $scheduleIds)
-                    ->where('employees.department_id', $deptId)
-                    ->select('employee_schedule.id', 'employee_schedule.schedule_id')
-                    ->get();
-
-                foreach ($assignments as $assign) {
-                    // Match which original child was assigned
-                    $origChildIndex = $origChildren->search(fn($c) => $c->id == $assign->schedule_id);
-                    if ($origChildIndex !== false && isset($newChildren[$origChildIndex])) {
-                        \DB::table('employee_schedule')
-                            ->where('id', $assign->id)
-                            ->update(['schedule_id' => $newChildren[$origChildIndex]->id]);
-                    }
-                }
-
-                $clonedSchedule->load(['creator', 'updater', 'ownerDepartment', 'children.employees' => function($q) use ($deptId) {
-                    $q->where('department_id', $deptId);
-                }, 'children.employees.user', 'children.employees.department']);
-
-                return response()->json([
-                    'success' => true,
-                    'cloned'  => true,
-                    'message' => 'Shift ini dipakai bersama departemen lain. Perubahan Anda disimpan sebagai shift baru khusus departemen Anda: "' . $clonedSchedule->name . '"',
-                    'data'    => new ScheduleResource($clonedSchedule)
-                ]);
-            } else {
-                // Not shared: PJ Bagian can modify it directly
-                // If owner_department_id is null, claim ownership
-                if ($schedule->owner_department_id === null) {
-                    $schedule->owner_department_id = $deptId;
-                }
-                $schedule->updated_by = $user->id;
-                $schedule->save();
-            }
+            
+            $schedule->updated_by = $user->id;
+            $schedule->save();
         } else {
             // Admin: set updated_by
             $schedule->updated_by = $user->id;
@@ -345,7 +270,7 @@ class ScheduleController extends Controller
     {
         $user = request()->user();
         if ($user->isPjBagian()) {
-            if ((int)$schedule->owner_department_id !== (int)$user->pj_bagian_department_id) {
+            if ($schedule->owner_department_id === null || (int)$schedule->owner_department_id !== (int)$user->pj_bagian_department_id) {
                 return response()->json(['success' => false, 'message' => 'Anda hanya dapat menghapus shift milik departemen Anda sendiri.'], 403);
             }
         }
@@ -587,17 +512,52 @@ class ScheduleController extends Controller
         $endDate   = $startDate->copy()->endOfMonth()->endOfDay();
 
         // Bangun query karyawan
-        $empQuery = \App\Models\Employee::with(['user'])->where('status', 'active');
+        $empQuery = \App\Models\Employee::with(['user.pjBagianDepartment'])->where('status', 'active');
 
         if ($user->isPjBagian()) {
             $deptId = $user->pj_bagian_department_id;
             $empQuery->where('department_id', $deptId);
+        } elseif ($user->role === 'employee') {
+            $deptId = $user->employee->department_id ?? null;
+            if ($deptId) {
+                $empQuery->where('department_id', $deptId);
+            }
         } elseif ($request->query('department_id')) {
             $empQuery->where('department_id', (int)$request->query('department_id'));
         }
 
         $employees = $empQuery->get();
         $empIds    = $employees->pluck('id')->toArray();
+
+        // Ambil semua hari libur dalam rentang bulan ini
+        $holidays = \App\Models\Holiday::whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])
+            ->get();
+
+        // Ambil penugasan kerja pada hari libur untuk karyawan-karyawan ini
+        $holidayAssignments = \App\Models\HolidayWorkAssignment::whereIn('holiday_id', $holidays->pluck('id'))
+            ->whereIn('employee_id', $empIds)
+            ->get()
+            ->groupBy('holiday_id');
+
+        // Ambil semua weekly assignments (day_of_week) untuk karyawan-karyawan ini
+        $weeklyAssignments = \Illuminate\Support\Facades\DB::table('employee_schedule')
+            ->join('schedules', 'employee_schedule.schedule_id', '=', 'schedules.id')
+            ->whereIn('employee_schedule.employee_id', $empIds)
+            ->whereNotNull('employee_schedule.day_of_week')
+            ->whereNull('employee_schedule.work_date')
+            ->select(
+                'employee_schedule.employee_id',
+                'employee_schedule.day_of_week',
+                'employee_schedule.schedule_id',
+                'schedules.name as schedule_name',
+                'schedules.color',
+                'schedules.icon',
+                'schedules.shift_type',
+                'schedules.start_time',
+                'schedules.end_time'
+            )
+            ->get()
+            ->groupBy('employee_id');
 
         // Ambil semua assignment tanggal-spesifik bulan ini sekaligus
         $dateAssignments = \Illuminate\Support\Facades\DB::table('employee_schedule')
@@ -614,7 +574,7 @@ class ScheduleController extends Controller
                 'schedules.icon',
                 'schedules.shift_type',
                 'schedules.start_time',
-                'schedules.end_time',
+                'schedules.end_time'
             )
             ->get()
             ->groupBy('employee_id');
@@ -627,10 +587,74 @@ class ScheduleController extends Controller
             ->get()
             ->groupBy('employee_id');
 
+        $dayMap = [0 => 'Minggu', 1 => 'Senin', 2 => 'Selasa', 3 => 'Rabu', 4 => 'Kamis', 5 => 'Jumat', 6 => 'Sabtu'];
+
         // Format data: satu baris per karyawan, kolom = tanggal
-        $data = $employees->map(function ($emp) use ($dateAssignments, $approvedLeaves, $startDate, $endDate) {
+        $data = $employees->map(function ($emp) use ($dateAssignments, $weeklyAssignments, $approvedLeaves, $startDate, $endDate, $dayMap, $holidays, $holidayAssignments) {
             $assignMap = [];
 
+            // Lapis 0 (Khusus PJ Bagian): Set default jam kantor reguler pada hari kerja (Senin - Sabtu)
+            $isPj = $emp->user && $emp->user->role === 'pj_bagian';
+            if ($isPj) {
+                $regulerSubShift = \App\Models\Schedule::whereNotNull('parent_id')
+                    ->where('name', 'like', '%Normal%')
+                    ->whereHas('parent', function ($q) {
+                        $q->where('name', 'like', '%Reguler%');
+                    })
+                    ->first();
+
+                $schedId = $regulerSubShift ? $regulerSubShift->id : 88888;
+                $schedName = $regulerSubShift ? $regulerSubShift->name : 'Normal';
+                $schedColor = $regulerSubShift ? $regulerSubShift->color : '#16A34A';
+                $schedIcon = $regulerSubShift ? $regulerSubShift->icon : 'sun';
+                $schedType = $regulerSubShift ? $regulerSubShift->shift_type : 'normal';
+                $schedStart = $regulerSubShift ? substr($regulerSubShift->start_time, 0, 5) : '08:30';
+                $schedEnd = $regulerSubShift ? substr($regulerSubShift->end_time, 0, 5) : '17:00';
+
+                $curr = $startDate->copy();
+                while ($curr->lte($endDate)) {
+                    if ($curr->dayOfWeek !== 0) { // Bukan hari Minggu
+                        $dateKey = $curr->toDateString();
+                        $assignMap[$dateKey] = [
+                            'schedule_id' => $schedId,
+                            'name'        => $schedName,
+                            'color'       => $schedColor,
+                            'icon'        => $schedIcon,
+                            'shift_type'  => $schedType,
+                            'start_time'  => $schedStart,
+                            'end_time'    => $schedEnd,
+                            'is_weekly'   => true,
+                        ];
+                    }
+                    $curr->addDay();
+                }
+            }
+
+            // Tier 1: Isi terlebih dahulu dari jadwal mingguan (day_of_week) untuk seluruh tanggal dalam bulan
+            if ($weeklyAssignments->has($emp->id)) {
+                $empWeekly = $weeklyAssignments->get($emp->id)->keyBy('day_of_week');
+                $curr = $startDate->copy();
+                while ($curr->lte($endDate)) {
+                    $dowName = $dayMap[$curr->dayOfWeek];
+                    if ($empWeekly->has($dowName)) {
+                        $wRow = $empWeekly->get($dowName);
+                        $dateKey = $curr->toDateString();
+                        $assignMap[$dateKey] = [
+                            'schedule_id' => $wRow->schedule_id,
+                            'name'        => $wRow->schedule_name,
+                            'color'       => $wRow->color,
+                            'icon'        => $wRow->icon,
+                            'shift_type'  => $wRow->shift_type,
+                            'start_time'  => $wRow->start_time ? substr($wRow->start_time, 0, 5) : null,
+                            'end_time'    => $wRow->end_time   ? substr($wRow->end_time, 0, 5)   : null,
+                            'is_weekly'   => true,
+                        ];
+                    }
+                    $curr->addDay();
+                }
+            }
+
+            // Tier 2: Timpa dengan penugasan per-tanggal spesifik (work_date)
             if ($dateAssignments->has($emp->id)) {
                 foreach ($dateAssignments->get($emp->id) as $row) {
                     $dateKey = $row->work_date; // YYYY-MM-DD
@@ -642,11 +666,12 @@ class ScheduleController extends Controller
                         'shift_type'  => $row->shift_type,
                         'start_time'  => $row->start_time ? substr($row->start_time, 0, 5) : null,
                         'end_time'    => $row->end_time   ? substr($row->end_time, 0, 5)   : null,
+                        'is_weekly'   => false,
                     ];
                 }
             }
 
-            // Timpa dengan Cuti/Sakit yang disetujui (Approved Leaves)
+            // Tier 3: Timpa dengan Cuti/Sakit yang disetujui (Approved Leaves)
             if ($approvedLeaves->has($emp->id)) {
                 foreach ($approvedLeaves->get($emp->id) as $leave) {
                     $curr = \Carbon\Carbon::parse($leave->start_date);
@@ -683,10 +708,35 @@ class ScheduleController extends Controller
                 }
             }
 
+            // Tier 4: Jika tanggal tersebut adalah Hari Libur Nasional (Holidays), dan pegawai TIDAK ditugaskan piket, jadikan Libur / OFF
+            foreach ($holidays as $holiday) {
+                // Pastikan $dateKey selalu string 'YYYY-MM-DD'
+                // (karena $holiday->date di-cast ke Carbon object oleh model)
+                $dateKey = \Carbon\Carbon::parse($holiday->date)->toDateString();
+                // Cek apakah pegawai ini ditugaskan piket untuk holiday ini
+                $piketAssignments = $holidayAssignments->get($holiday->id);
+                $isPiket = $piketAssignments ? $piketAssignments->contains('employee_id', $emp->id) : false;
+
+                if (!$isPiket) {
+                    // Jika bukan piket dan bukan sedang cuti/sakit approved (schedule_id !== 99999)
+                    if (isset($assignMap[$dateKey]) && $assignMap[$dateKey]['schedule_id'] !== 99999) {
+                        // Hanya hapus jika merupakan jadwal mingguan bawaan (is_weekly === true)
+                        // Jika sengaja dipasang manual (is_weekly === false), biarkan tetap ada
+                        if (isset($assignMap[$dateKey]['is_weekly']) && $assignMap[$dateKey]['is_weekly'] === true) {
+                            unset($assignMap[$dateKey]); // Hapus jadwal agar terhitung/tertampil Libur
+                        }
+                    }
+                }
+            }
+
             return [
                 'employee_id' => $emp->id,
                 'name'        => $emp->user->name ?? 'N/A',
                 'department'  => $emp->department_id,
+                'role'        => $emp->user->role ?? 'employee',
+                'pj_department_name' => ($emp->user && $emp->user->role === 'pj_bagian' && $emp->user->pjBagianDepartment)
+                    ? $emp->user->pjBagianDepartment->name
+                    : null,
                 'dates'       => (object)$assignMap,
             ];
         });
@@ -696,6 +746,7 @@ class ScheduleController extends Controller
             'year'    => $year,
             'month'   => $month,
             'days'    => $endDate->day, // jumlah hari dalam bulan
+            'holidays' => $holidays->map(fn($h) => \Carbon\Carbon::parse($h->date)->toDateString())->toArray(),
             'data'    => $data,
         ]);
     }
@@ -720,8 +771,29 @@ class ScheduleController extends Controller
 
         $emp = \App\Models\Employee::findOrFail($data['employee_id']);
 
-        if ($request->user()->role === 'pj_bagian' && $emp->department_id !== $request->user()->pj_bagian_department_id) {
-            return response()->json(['success' => false, 'message' => 'Anda hanya dapat mengatur jadwal staf di departemen Anda.'], 403);
+        if ($request->user()->role === 'pj_bagian') {
+            if ($emp->department_id !== $request->user()->pj_bagian_department_id) {
+                return response()->json(['success' => false, 'message' => 'Anda hanya dapat mengatur jadwal staf di departemen Anda.'], 403);
+            }
+
+            // Lock approved leave check
+            $hasApprovedLeave = \App\Models\LeaveRequest::where('employee_id', $emp->id)
+                ->where('status', 'approved')
+                ->whereDate('start_date', '<=', $data['work_date'])
+                ->where(function($q) use ($data) {
+                    $q->where(function($q2) use ($data) {
+                        $q2->whereNull('actual_end_date')
+                           ->whereDate('end_date', '>=', $data['work_date']);
+                    })->orWhere(function($q2) use ($data) {
+                        $q2->whereNotNull('actual_end_date')
+                           ->whereDate('actual_end_date', '>=', $data['work_date']);
+                    });
+                })
+                ->exists();
+
+            if ($hasApprovedLeave) {
+                return response()->json(['success' => false, 'message' => 'Jadwal tidak dapat diubah karena karyawan sedang dalam masa cuti/izin/sakit yang disetujui Admin.'], 422);
+            }
         }
 
         // Hapus record lama untuk tanggal yang sama (jika ada)
@@ -788,8 +860,26 @@ class ScheduleController extends Controller
             $emp = \App\Models\Employee::find($assignment['employee_id']);
             if (!$emp) continue;
 
-            // PJ Bagian hanya boleh atur staf departemennya
-            if ($deptId && $emp->department_id !== $deptId) continue;
+            // PJ Bagian hanya boleh atur staf departemennya dan tidak boleh mengoverwrite cuti/sakit/izin
+            if ($deptId) {
+                if ($emp->department_id !== $deptId) continue;
+
+                $hasApprovedLeave = \App\Models\LeaveRequest::where('employee_id', $emp->id)
+                    ->where('status', 'approved')
+                    ->whereDate('start_date', '<=', $assignment['work_date'])
+                    ->where(function($q) use ($assignment) {
+                        $q->where(function($q2) use ($assignment) {
+                            $q2->whereNull('actual_end_date')
+                               ->whereDate('end_date', '>=', $assignment['work_date']);
+                        })->orWhere(function($q2) use ($assignment) {
+                            $q2->whereNotNull('actual_end_date')
+                               ->whereDate('actual_end_date', '>=', $assignment['work_date']);
+                        });
+                    })
+                    ->exists();
+
+                if ($hasApprovedLeave) continue;
+            }
 
             // Hapus record lama tanggal itu
             \Illuminate\Support\Facades\DB::table('employee_schedule')

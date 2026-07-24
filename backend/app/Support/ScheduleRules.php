@@ -54,7 +54,7 @@ class ScheduleRules
             [$sh, $sm] = explode(':', $startTime);
             $startMins = (int)$sh * 60 + (int)$sm;
             $endMins   = (int)$h   * 60 + (int)$m;
-            if ($endMins < $startMins) {
+            if ($endMins <= $startMins) {
                 $expected->addDay();
             }
 

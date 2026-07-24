@@ -21,7 +21,12 @@ class PublicEmployeeRegistrationController extends Controller
     public function meta()
     {
         $departments = Department::select('id', 'name')->orderBy('name')->get();
-        $positions = Position::select('id', 'name')->orderBy('name')->get();
+        
+        $targetNames = ['Dokter', 'Perawat', 'Bidan', 'Non Medis', 'Medis'];
+        $positions = [];
+        foreach ($targetNames as $name) {
+            $positions[] = Position::firstOrCreate(['name' => $name]);
+        }
 
         return response()->json([
             'success' => true,
@@ -44,8 +49,8 @@ class PublicEmployeeRegistrationController extends Controller
             'email'         => 'required|email|max:255',
             'phone'         => 'required|string|max:250',
             'gender'        => 'required|in:Laki-laki,Perempuan',
-            'department_id' => 'nullable|exists:departments,id',
-            'position_id'   => 'nullable|exists:positions,id',
+            'department_id' => 'required|exists:departments,id',
+            'position_id'   => 'required|exists:positions,id',
             'motor_plate_1' => 'nullable|string|max:15',
             'motor_plate_2' => 'nullable|string|max:15',
             'car_plate_1'   => 'nullable|string|max:15',
@@ -53,6 +58,7 @@ class PublicEmployeeRegistrationController extends Controller
             'instagram'     => 'nullable|string|max:100',
             'facebook'      => 'nullable|string|max:100',
             'tiktok'        => 'nullable|string|max:100',
+            'profile_picture' => 'required|string',
         ]);
 
         $nikKtp = trim($request->nik_ktp);
@@ -85,11 +91,30 @@ class PublicEmployeeRegistrationController extends Controller
         $nextId = ($lastReg ? $lastReg->id : 0) + 1;
         $registrationNumber = 'REG-' . $year . '-' . str_pad($nextId, 6, '0', STR_PAD_LEFT);
 
+        // Proses penyimpanan file foto profil jika terdapat upload Base64
+        $profilePicturePath = null;
+        if ($request->filled('profile_picture')) {
+            $imgData = $request->input('profile_picture');
+            if (preg_match('/^data:image\/(\w+);base64,/', $imgData, $type)) {
+                $imgData = substr($imgData, strpos($imgData, ',') + 1);
+                $type = strtolower($type[1]); // png, jpg, jpeg
+                if (in_array($type, ['jpg', 'jpeg', 'png'])) {
+                    $imgData = base64_decode($imgData);
+                    if ($imgData !== false) {
+                        $fileName = 'profile_reg_' . uniqid() . '_' . time() . '.' . $type;
+                        \Illuminate\Support\Facades\Storage::disk('public')->put('profiles/' . $fileName, $imgData);
+                        $profilePicturePath = '/storage/profiles/' . $fileName;
+                    }
+                }
+            }
+        }
+
         $registration = EmployeeRegistration::create([
             'registration_number' => $registrationNumber,
             'name'                => trim($request->name),
             'nik_ktp'             => $nikKtp,
             'email'               => $email,
+            'profile_picture'     => $profilePicturePath,
             'phone'               => trim($request->phone),
             'gender'              => $request->gender,
             'department_id'       => $request->department_id,

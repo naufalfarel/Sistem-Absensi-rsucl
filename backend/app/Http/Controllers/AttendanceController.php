@@ -135,9 +135,17 @@ class AttendanceController extends Controller
                     return $s->pivot->day_of_week === $todayName;
                 });
 
-                if (!$schedule) {
+                $isOffShift = false;
+                if ($schedule) {
+                    $uName = strtoupper($schedule->name);
+                    if (str_contains($uName, 'LIBUR') || str_contains($uName, 'LJ') || str_contains($uName, 'OFF')) {
+                        $isOffShift = true;
+                    }
+                }
+
+                if (!$schedule || $isOffShift) {
                     $status = 'tidak_ada_shift';
-                    $shiftName = 'Tidak Ada Shift';
+                    $shiftName = $schedule ? $schedule->name : 'Tidak Ada Shift';
                     $note = 'Hari Libur / Tidak Ada Shift';
                 } else {
                     $shiftName = $schedule->name;
@@ -654,7 +662,7 @@ class AttendanceController extends Controller
                 if ($yesterdayShift) {
                     $shiftStart = $this->timeToMins(substr($yesterdayShift->start_time, 0, 5));
                     $shiftEnd   = $this->timeToMins(substr($yesterdayShift->end_time, 0, 5));
-                    if ($shiftEnd < $shiftStart) {
+                    if ($shiftEnd <= $shiftStart) {
                         $record = $yesterdayRecord; // Gunakan record kemarin sebagai target update checkout
                     }
                 }
@@ -1560,7 +1568,15 @@ class AttendanceController extends Controller
                     $leave = $leaves->get($emp->id);
                     $rows[] = $this->formatRowFromLeave($leave, $emp, $targetDate, $matchingShift, 'daily');
                 } else {
-                    if (!$hasShift) {
+                    $isOffShift = false;
+                    if ($matchingShift) {
+                        $uName = strtoupper($matchingShift->name);
+                        if (str_contains($uName, 'LIBUR') || str_contains($uName, 'LJ') || str_contains($uName, 'OFF')) {
+                            $isOffShift = true;
+                        }
+                    }
+
+                    if (!$hasShift || $isOffShift) {
                         continue;
                     }
 

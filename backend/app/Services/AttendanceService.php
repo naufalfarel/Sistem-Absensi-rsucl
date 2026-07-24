@@ -49,7 +49,7 @@ class AttendanceService
         [$sh, $sm] = explode(':', $startTimeStr);
         $startMins = (int)$sh * 60 + (int)$sm;
         $endMins   = (int)$h   * 60 + (int)$m;
-        if ($endMins < $startMins) {
+        if ($endMins <= $startMins) {
             $expectedCheckout->addDay();
         }
 

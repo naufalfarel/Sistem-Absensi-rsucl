@@ -99,7 +99,25 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
   const [substitute2, setSubstitute2] = useState('');
   const [substitute3, setSubstitute3] = useState('');
   const [substitute4, setSubstitute4] = useState('');
+  const [numSubstitutesSelect, setNumSubstitutesSelect] = useState(1);
   const [alamatCuti, setAlamatCuti] = useState('');
+
+  // Sync numSubstitutesSelect based on selected dates duration automatically
+  useEffect(() => {
+    const days = calcDays();
+    if (days > 0) {
+      const needed = Math.min(days, 4);
+      setNumSubstitutesSelect(needed);
+      if (needed < 4) setSubstitute4('');
+      if (needed < 3) setSubstitute3('');
+      if (needed < 2) setSubstitute2('');
+    } else {
+      setNumSubstitutesSelect(1);
+      setSubstitute2('');
+      setSubstitute3('');
+      setSubstitute4('');
+    }
+  }, [startDate, endDate]);
 
   // Sync default form custom fields when user profile loads
   useEffect(() => {
@@ -275,6 +293,11 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
         setFormError('Semua field wajib diisi termasuk kategori cuti khusus dan dokumen pendukung.');
         return;
       }
+    } else if (leaveType === 'sakit') {
+      if (!startDate || !endDate || !reason.trim() || !attachmentFile) {
+        setFormError('Semua field wajib diisi termasuk dokumen surat sakit.');
+        return;
+      }
     } else {
       if (!startDate || !endDate || !reason.trim()) {
         setFormError('Tanggal mulai, tanggal selesai, dan keterangan wajib diisi.');
@@ -297,6 +320,24 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
         setFormError(`Batas cuti tahunan 4 hari/bulan terlampaui. ${monthlyErr}`);
         return;
       }
+
+      // Validasi Rekan Kerja Pengganti wajib diisi sesuai jumlah yang dipilih
+      if (numSubstitutesSelect >= 1 && !substitute1.trim()) {
+        setFormError('Nama Rekan Kerja Pengganti 1 wajib diisi.');
+        return;
+      }
+      if (numSubstitutesSelect >= 2 && !substitute2.trim()) {
+        setFormError('Nama Rekan Kerja Pengganti 2 wajib diisi.');
+        return;
+      }
+      if (numSubstitutesSelect >= 3 && !substitute3.trim()) {
+        setFormError('Nama Rekan Kerja Pengganti 3 wajib diisi.');
+        return;
+      }
+      if (numSubstitutesSelect >= 4 && !substitute4.trim()) {
+        setFormError('Nama Rekan Kerja Pengganti 4 wajib diisi.');
+        return;
+      }
     }
     setFormError('');
     setSubmitting(true);
@@ -309,6 +350,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
       formData.append('posisi', user?.position || posisi || '-');
       formData.append('unit_kerja', user?.department || unitKerja || '-');
       const allSubstitutes = [substitute1, substitute2, substitute3, substitute4]
+        .slice(0, numSubstitutesSelect)
         .map(s => s.trim())
         .filter(Boolean)
         .join(', ');
@@ -706,84 +748,17 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
                 </div>
               )}
 
-
-
-              {/* Rekan Kerja Pengganti (4 Input Manual Opsional - Hanya untuk Cuti Tahunan) */}
-              {leaveType === 'cuti' && (
-                <div className="space-y-2 text-left">
-                  <label className="block text-[12px] font-bold text-gray-700">
-                    Rekan Kerja Pengganti <span className="text-[11px] font-normal text-gray-400">(Opsional - Maksimal 4 Orang)</span>
-                  </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    <div>
-                      <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-wider mb-1">Pengganti 1</label>
-                      <input
-                        type="text"
-                        value={substitute1}
-                        onChange={e => setSubstitute1(e.target.value)}
-                        placeholder="Nama rekan kerja pengganti 1..."
-                        className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[12.5px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all placeholder:text-gray-300 font-semibold text-gray-800"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-wider mb-1">Pengganti 2</label>
-                      <input
-                        type="text"
-                        value={substitute2}
-                        onChange={e => setSubstitute2(e.target.value)}
-                        placeholder="Nama rekan kerja pengganti 2..."
-                        className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[12.5px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all placeholder:text-gray-300 font-semibold text-gray-800"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-wider mb-1">Pengganti 3</label>
-                      <input
-                        type="text"
-                        value={substitute3}
-                        onChange={e => setSubstitute3(e.target.value)}
-                        placeholder="Nama rekan kerja pengganti 3..."
-                        className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[12.5px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all placeholder:text-gray-300 font-semibold text-gray-800"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-wider mb-1">Pengganti 4</label>
-                      <input
-                        type="text"
-                        value={substitute4}
-                        onChange={e => setSubstitute4(e.target.value)}
-                        placeholder="Nama rekan kerja pengganti 4..."
-                        className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[12.5px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all placeholder:text-gray-300 font-semibold text-gray-800"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Alamat Selama Cuti */}
-              <div className="text-left">
-                <label className="block text-[12px] font-semibold text-gray-600 mb-1.5">
-                  Alamat Selama Cuti
-                </label>
-                <input
-                  type="text"
-                  value={alamatCuti}
-                  onChange={e => setAlamatCuti(e.target.value)}
-                  placeholder="Alamat tinggal selama cuti..."
-                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all placeholder:text-gray-300 font-semibold text-gray-800"
-                />
-              </div>
-
               {/* Tanggal */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[12px] font-semibold text-gray-600 mb-1.5">Tanggal Mulai <span className="text-red-500">*</span></label>
                   <input type="date" value={startDate} onChange={e => { setStartDate(e.target.value); setFormError(''); }}
-                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all" />
+                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all font-semibold" />
                 </div>
                 <div>
                   <label className="block text-[12px] font-semibold text-gray-600 mb-1.5">Tanggal Selesai <span className="text-red-500">*</span></label>
                   <input type="date" value={endDate} min={startDate} onChange={e => { setEndDate(e.target.value); setFormError(''); }}
-                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all" />
+                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all font-semibold" />
                 </div>
               </div>
 
@@ -851,6 +826,109 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
                 </div>
               )}
 
+              {/* Rekan Kerja Pengganti (Hanya untuk Cuti Tahunan) */}
+              {leaveType === 'cuti' && (
+                <div className="space-y-3 text-left">
+                  {calcDays() > 0 ? (
+                    <>
+                      <div>
+                        <label className="block text-[12px] font-bold text-gray-700 mb-1.5 flex items-center justify-between">
+                          <span>Jumlah Rekan Kerja Pengganti <span className="text-red-500">*</span></span>
+                          <span className="text-[11px] font-semibold text-[#16A34A] bg-green-50 px-2 py-0.5 rounded-md border border-green-150">Otomatis sesuai durasi {calcDays()} hari</span>
+                        </label>
+                        <div className="relative">
+                          <select
+                            disabled
+                            value={numSubstitutesSelect}
+                            className="w-full pl-3.5 pr-9 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-100 focus:outline-none transition-all appearance-none cursor-not-allowed font-bold text-gray-500"
+                          >
+                            <option value={numSubstitutesSelect}>{numSubstitutesSelect} Orang</option>
+                          </select>
+                          <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        {numSubstitutesSelect >= 1 && (
+                          <div>
+                            <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-wider mb-1">
+                              Pengganti 1 <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={substitute1}
+                              onChange={e => setSubstitute1(e.target.value)}
+                              placeholder="Nama rekan kerja pengganti 1..."
+                              className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[12.5px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all placeholder:text-gray-300 font-semibold text-gray-800"
+                            />
+                          </div>
+                        )}
+                        {numSubstitutesSelect >= 2 && (
+                          <div>
+                            <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-wider mb-1">
+                              Pengganti 2 <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={substitute2}
+                              onChange={e => setSubstitute2(e.target.value)}
+                              placeholder="Nama rekan kerja pengganti 2..."
+                              className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[12.5px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all placeholder:text-gray-300 font-semibold text-gray-800"
+                            />
+                          </div>
+                        )}
+                        {numSubstitutesSelect >= 3 && (
+                          <div>
+                            <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-wider mb-1">
+                              Pengganti 3 <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={substitute3}
+                              onChange={e => setSubstitute3(e.target.value)}
+                              placeholder="Nama rekan kerja pengganti 3..."
+                              className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[12.5px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all placeholder:text-gray-300 font-semibold text-gray-800"
+                            />
+                          </div>
+                        )}
+                        {numSubstitutesSelect >= 4 && (
+                          <div>
+                            <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-wider mb-1">
+                              Pengganti 4 <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={substitute4}
+                              onChange={e => setSubstitute4(e.target.value)}
+                              placeholder="Nama rekan kerja pengganti 4..."
+                              className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[12.5px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all placeholder:text-gray-300 font-semibold text-gray-800"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="bg-amber-50/50 border border-amber-200/60 rounded-xl p-3.5 text-center text-amber-700 text-[11.5px] font-medium">
+                      ⚠️ Silakan tentukan tanggal mulai & selesai terlebih dahulu untuk menentukan rekan kerja pengganti.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Alamat Selama Cuti */}
+              <div className="text-left">
+                <label className="block text-[12px] font-semibold text-gray-600 mb-1.5">
+                  Alamat Selama Cuti
+                </label>
+                <input
+                  type="text"
+                  value={alamatCuti}
+                  onChange={e => setAlamatCuti(e.target.value)}
+                  placeholder="Alamat tinggal selama cuti..."
+                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all placeholder:text-gray-300 font-semibold text-gray-800"
+                />
+              </div>
+
               {/* Keterangan */}
               <div>
                 <label className="block text-[12px] font-semibold text-gray-600 mb-1.5">
@@ -865,7 +943,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
               <div>
                 <label className="block text-[12px] font-semibold text-gray-600 mb-1.5">
                   Dokumen Pendukung{' '}
-                  {leaveType === 'cuti_khusus'
+                  {leaveType === 'cuti_khusus' || leaveType === 'sakit'
                     ? <span className="text-red-500">* (Wajib)</span>
                     : <span className="text-gray-400 font-normal">(Opsional)</span>
                   }{' '}
@@ -895,7 +973,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
               {leaveType === 'sakit' && (
                 <div className="flex items-start gap-2.5 bg-blue-50 border border-blue-100 rounded-xl px-3.5 py-2.5">
                   <Info size={13} className="text-blue-500 flex-shrink-0 mt-0.5" />
-                  <p className="text-[11px] text-blue-600">Sertakan surat keterangan dokter jika sakit lebih dari 2 hari. Bisa diserahkan langsung ke admin.</p>
+                  <p className="text-[11px] text-blue-600">Wajib mengunggah surat keterangan dokter dari fasilitas kesehatan.</p>
                 </div>
               )}
 
@@ -910,7 +988,11 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
                 </button>
                 <button
                   onClick={handleSubmit}
-                  disabled={submitting || (leaveType === 'cuti_khusus' && (!selectedCategory || !attachmentFile))}
+                  disabled={
+                    submitting ||
+                    (leaveType === 'cuti_khusus' && (!selectedCategory || !attachmentFile)) ||
+                    (leaveType === 'sakit' && !attachmentFile)
+                  }
                   className="flex-1 py-3 bg-[#16A34A] hover:bg-[#0d9240] rounded-xl text-[13px] font-semibold text-white transition-all shadow-sm shadow-green-200 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
                 >
                   {submitting && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}

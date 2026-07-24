@@ -47,13 +47,24 @@ class AdminManagementController extends Controller
             'password.regex' => 'Password hanya boleh berisi angka saja (minimal 6 angka).',
         ]);
 
+        $targetRole = $request->role ?: 'admin';
+        if ($targetRole === 'admin') {
+            $adminCount = User::where('role', 'admin')->count();
+            if ($adminCount >= 4) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Batas maksimal administrator biasa adalah 4 orang. Anda tidak dapat membuat akun admin baru lagi.',
+                ], 422);
+            }
+        }
+
         $user = User::create([
             'name'     => $request->name,
             'username' => strtolower(trim($request->username)),
             'email'    => strtolower(trim($request->email)),
             'password' => Hash::make($request->password),
             'nik_ktp'  => $request->nik_ktp ?: 'ADMIN' . rand(100, 999),
-            'role'     => $request->role ?: 'admin',
+            'role'     => $targetRole,
         ]);
 
         return response()->json([
@@ -94,6 +105,16 @@ class AdminManagementController extends Controller
                 'success' => false,
                 'message' => 'Role Super Admin (Direktur RSUCL) terkunci dan tidak dapat diturunkan ke Admin biasa.',
             ], 422);
+        }
+
+        if ($request->filled('role') && $request->role === 'admin' && $adminUser->role !== 'admin') {
+            $adminCount = User::where('role', 'admin')->count();
+            if ($adminCount >= 4) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Batas maksimal administrator biasa adalah 4 orang. Anda tidak dapat mengubah peran akun ini menjadi Admin.',
+                ], 422);
+            }
         }
 
         if ($request->filled('role')) {

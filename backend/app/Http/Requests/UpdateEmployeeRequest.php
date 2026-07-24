@@ -28,7 +28,7 @@ class UpdateEmployeeRequest extends FormRequest
         return [
             'name'          => 'sometimes|string|max:100',
             'email'         => ['sometimes', 'email', Rule::unique('users', 'email')->ignore($userId)],
-            'department_id' => 'sometimes|exists:departments,id',
+            'department_id' => 'sometimes|nullable|exists:departments,id',
             'position_id'   => 'sometimes|exists:positions,id',
             'phone'         => 'nullable|string|max:20',
             'gender'        => 'nullable|in:Laki-laki,Perempuan',

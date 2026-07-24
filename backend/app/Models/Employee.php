@@ -40,7 +40,7 @@ class Employee extends Model
 
     /**
      * Relasi ke model Department.
-     * Setiap karyawan ditempatkan pada satu departemen/bagian unit kerja.
+     * Setiap karyawan ditempatkan pada satu Unit kerja unit kerja.
      */
     public function department()
     {
@@ -101,6 +101,15 @@ class Employee extends Model
     public function assignmentLetters()
     {
         return $this->hasMany(AssignmentLetter::class);
+    }
+
+    /**
+     * Relasi ke model DisciplinarySanction.
+     * Seorang karyawan dapat memiliki banyak sanksi disiplin.
+     */
+    public function disciplinarySanctions()
+    {
+        return $this->hasMany(DisciplinarySanction::class);
     }
 
     /**

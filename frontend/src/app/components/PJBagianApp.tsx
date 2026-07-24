@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Home, MapPin, History, Bell, User, LogOut, Menu, X, Clock, CheckSquare, CalendarDays, FileText, BookOpen } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Home, MapPin, History, Bell, User, LogOut, Menu, X, Clock, CheckSquare, CalendarDays, FileText, BookOpen, ShieldAlert } from 'lucide-react';
 import logoImg from '../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
 import { useAuth } from '../../context/AuthContext';
 import { AttendancePage } from './AttendancePage';
@@ -8,14 +8,17 @@ import { OvertimeRequestPage } from './OvertimeRequestPage';
 import { NotificationsPage } from './NotificationsPage';
 import { ProfilePage } from './ProfilePage';
 import { LeaveRequestPage } from './LeaveRequestPage';
+import { ResignationRequestPage } from './ResignationRequestPage';
 import { GuidePage } from './GuidePage';
 import { LeaveApprovalTab } from './pjbagian/LeaveApprovalTab';
 import { OvertimeApprovalTab } from './pjbagian/OvertimeApprovalTab';
+import { ResignationApprovalTab } from './pjbagian/ResignationApprovalTab';
 import { JadwalShiftTab } from './pjbagian/JadwalShiftTab';
 import { PJBagianDashboard } from './pjbagian/PJBagianDashboard';
-import { notificationApi, leaveApi, overtimeApi } from '../../services/api';
+import { DisciplinaryPage } from './DisciplinaryPage';
+import { notificationApi, leaveApi, overtimeApi, resignationApi } from '../../services/api';
 
-type Tab = 'dashboard' | 'attendance' | 'history' | 'overtime_personal' | 'approvals' | 'shift_proposals' | 'notifications' | 'profile' | 'leave' | 'guide';
+type Tab = 'dashboard' | 'attendance' | 'history' | 'overtime_personal' | 'approvals' | 'shift_proposals' | 'notifications' | 'profile' | 'leave' | 'resignation' | 'guide' | 'disciplinary';
 
 interface PJBagianAppProps {
   onLogout: () => void;
@@ -33,6 +36,7 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [pendingLeaveCount, setPendingLeaveCount] = useState(0);
   const [pendingOvertimeCount, setPendingOvertimeCount] = useState(0);
+  const [pendingResignationCount, setPendingResignationCount] = useState(0);
 
   const fetchUnreadCount = async () => {
     try {
@@ -56,6 +60,11 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
       if (otRes.success) {
         setPendingOvertimeCount(otRes.data.length);
       }
+
+      const resignRes = await resignationApi.list();
+      if (resignRes.success) {
+        setPendingResignationCount(resignRes.data.filter(r => r.pj_status === 'pending' && r.status === 'pending').length);
+      }
     } catch (err) {
       console.error(err);
     }
@@ -76,7 +85,7 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
     return () => clearInterval(t);
   }, []);
 
-  const totalPendingApprovals = pendingLeaveCount + pendingOvertimeCount;
+  const totalPendingApprovals = pendingLeaveCount + pendingOvertimeCount + pendingResignationCount;
   const timeStr = time.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
 
   const renderPage = () => {
@@ -86,6 +95,7 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
           <PJBagianDashboard
             pendingLeaveCount={pendingLeaveCount}
             pendingOvertimeCount={pendingOvertimeCount}
+            pendingResignationCount={pendingResignationCount}
             onNavigate={(tab) => setActiveTab(tab as Tab)}
           />
         );
@@ -101,6 +111,8 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
             <LeaveApprovalTab user={user} onUpdateCount={fetchApprovalCounts} />
             <hr className="border-gray-100" />
             <OvertimeApprovalTab user={user} onUpdateCount={fetchApprovalCounts} />
+            <hr className="border-gray-100" />
+            <ResignationApprovalTab user={user} onUpdateCount={fetchApprovalCounts} />
           </div>
         );
       case 'shift_proposals':
@@ -116,8 +128,12 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
         );
       case 'leave':
         return <LeaveRequestPage onBack={() => setActiveTab('dashboard')} />;
+      case 'resignation':
+        return <ResignationRequestPage user={{ id: user.id, name: user.name, username: user.username, nik_ktp: user.nik_ktp, department: user.pj_bagian_department, role: 'pj_bagian' }} onBack={() => setActiveTab('dashboard')} />;
       case 'guide':
         return <GuidePage />;
+      case 'disciplinary':
+        return <DisciplinaryPage />;
     }
   };
 
@@ -126,6 +142,7 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
     { id: 'attendance', icon: MapPin, label: 'Absen' },
     { id: 'history', icon: History, label: 'Riwayat Absen' },
     { id: 'notifications', icon: Bell, label: 'Notifikasi', badge: unreadNotifications },
+    { id: 'disciplinary', icon: ShieldAlert, label: 'Sanksi Disiplin' },
     { id: 'profile', icon: User, label: 'Profil Saya' },
     { id: 'guide', icon: BookOpen, label: 'Panduan App' },
   ];
@@ -133,6 +150,7 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
   const personalProposalItems: { id: Tab; icon: any; label: string; badge?: number }[] = [
     { id: 'leave', icon: FileText, label: 'Pengajuan Cuti & Sakit' },
     { id: 'overtime_personal', icon: Clock, label: 'Pengajuan Lembur' },
+    { id: 'resignation', icon: ShieldAlert, label: 'Pengajuan Resign' },
   ];
 
   const managementItems: { id: Tab; icon: any; label: string; badge?: number }[] = [
@@ -158,9 +176,21 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
                   <img src={logoUrl || logoImg} alt="Logo" className="w-8 h-8 object-contain" />
                 </div>
               )}
-              <div>
-                <p className="text-[13px] font-bold text-gray-900 leading-tight">RSUCL PJ Bagian</p>
-                <p className="text-[10px] text-gray-400 font-medium">Supervisor & Koordinator</p>
+              <div className="min-w-0">
+                <p className="text-[13px] font-bold text-gray-900 leading-tight">RSUCL</p>
+                <p className="text-[10.5px] text-[#16A34A] font-semibold truncate max-w-[145px]" title={
+                  (user?.pj_bagian_department || (user as any)?.department)
+                    ? ((user?.pj_bagian_department || (user as any)?.department).toLowerCase().startsWith('bagian')
+                        ? `PJ ${user?.pj_bagian_department || (user as any)?.department}`
+                        : `PJ Bagian ${user?.pj_bagian_department || (user as any)?.department}`)
+                    : 'PJ Bagian'
+                }>
+                  {(user?.pj_bagian_department || (user as any)?.department)
+                    ? ((user?.pj_bagian_department || (user as any)?.department).toLowerCase().startsWith('bagian')
+                        ? `PJ ${user?.pj_bagian_department || (user as any)?.department}`
+                        : `PJ Bagian ${user?.pj_bagian_department || (user as any)?.department}`)
+                    : 'PJ Bagian'}
+                </p>
               </div>
             </div>
             <button className="md:hidden text-gray-400 hover:text-gray-600" onClick={() => setSidebarOpen(false)}>

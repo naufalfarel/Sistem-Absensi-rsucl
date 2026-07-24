@@ -86,20 +86,25 @@ export function PJBagianTab() {
     }
   };
 
-  const handleRevoke = async (pj: PjBagianUser) => {
-    if (!pj.employee_id) return;
-    const confirmRevoke = window.confirm(
-      `Apakah Anda yakin ingin mencabut status PJ Bagian dari ${pj.name}? Dia akan kembali menjadi staf biasa.`
-    );
-    if (!confirmRevoke) return;
+  const [revokingPj, setRevokingPj] = useState<PjBagianUser | null>(null);
 
+  const handleRevoke = (pj: PjBagianUser) => {
+    setRevokingPj(pj);
+  };
+
+  const confirmRevokeAction = async () => {
+    if (!revokingPj || !revokingPj.employee_id) return;
+    setSubmitting(true);
     try {
-      const res = await pjBagianApi.revoke(pj.employee_id);
+      const res = await pjBagianApi.revoke(revokingPj.employee_id);
       if (res.success) {
+        setRevokingPj(null);
         loadData();
       }
     } catch (err: any) {
       alert(err?.message ?? 'Gagal mencabut wewenang.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -300,6 +305,75 @@ export function PJBagianTab() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Revoke Confirmation Modal */}
+      {revokingPj && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-xs animate-fade-in" onClick={() => setRevokingPj(null)} />
+          <div className="relative bg-white rounded-3xl p-6 shadow-2xl w-full max-w-sm z-10 border border-red-150 overflow-hidden transform transition-all animate-scale-up text-left">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-500 to-rose-600" />
+            
+            <div className="flex items-start gap-3.5 mb-4">
+              <div className="w-10 h-10 rounded-2xl bg-red-50 border border-red-100 flex items-center justify-center flex-shrink-0 text-red-650">
+                <ShieldAlert size={20} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-[14px] font-extrabold text-gray-900 leading-tight">
+                  Cabut Wewenang PJ Bagian?
+                </h3>
+                <p className="text-[10.5px] text-gray-455 mt-0.5 leading-relaxed">
+                  Tindakan ini akan mengembalikan status akun ke staf biasa.
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-red-50/40 border border-red-100/40 rounded-2xl p-3.5 space-y-2 mb-4 text-[11px]">
+              <div className="flex justify-between items-center pb-1.5 border-b border-red-100/20">
+                <span className="text-gray-400 font-medium">Pegawai</span>
+                <span className="font-bold text-gray-800">{revokingPj.name}</span>
+              </div>
+              <div className="flex justify-between items-center pb-1.5 border-b border-red-100/20">
+                <span className="text-gray-400 font-medium">NIK KTP</span>
+                <span className="font-mono font-bold text-gray-700">{revokingPj.nik_ktp}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400 font-medium">Departemen</span>
+                <span className="font-bold text-red-650 bg-red-100/40 px-2 py-0.5 rounded-lg border border-red-200/20">
+                  {revokingPj.pj_bagian_department}
+                </span>
+              </div>
+            </div>
+
+            <p className="text-[11.5px] text-gray-600 leading-relaxed mb-5">
+              Apakah Anda yakin ingin mencabut wewenang PJ dari <strong>{revokingPj.name}</strong>? Akses verifikasi jadwal & persetujuan lembur/cuti unit ini akan langsung dinonaktifkan.
+            </p>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setRevokingPj(null)}
+                disabled={submitting}
+                className="flex-1 py-2.5 border border-gray-200 hover:bg-gray-50 rounded-xl text-[11px] font-bold text-gray-600 transition-all cursor-pointer"
+              >
+                Batalkan
+              </button>
+              <button
+                type="button"
+                onClick={confirmRevokeAction}
+                disabled={submitting}
+                className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-[11px] font-bold transition-all shadow-xs active:scale-95 disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                {submitting ? (
+                  <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <Trash2 size={13} />
+                )}
+                {submitting ? 'Mencabut...' : 'Ya, Cabut'}
+              </button>
+            </div>
           </div>
         </div>
       )}

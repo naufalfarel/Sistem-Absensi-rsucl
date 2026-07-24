@@ -28,10 +28,11 @@ function haversine(lat1: number, lng1: number, lat2: number, lng2: number): numb
 interface PJBagianDashboardProps {
   pendingLeaveCount: number;
   pendingOvertimeCount: number;
+  pendingResignationCount: number;
   onNavigate: (tab: string) => void;
 }
 
-export function PJBagianDashboard({ pendingLeaveCount, pendingOvertimeCount, onNavigate }: PJBagianDashboardProps) {
+export function PJBagianDashboard({ pendingLeaveCount, pendingOvertimeCount, pendingResignationCount, onNavigate }: PJBagianDashboardProps) {
   const { user } = useAuth();
 
   const [time, setTime] = useState(new Date());
@@ -386,6 +387,15 @@ export function PJBagianDashboard({ pendingLeaveCount, pendingOvertimeCount, onN
                 </div>
                 <ChevronRight size={16} className="text-blue-400 group-hover:text-blue-600 transition-colors" />
               </button>
+              <button onClick={() => onNavigate('approvals')}
+                className="w-full flex items-center justify-between p-3 rounded-xl bg-rose-50 border border-rose-100 hover:bg-rose-100 transition-colors group text-left">
+                <div>
+                  <p className="text-[20px] font-bold text-rose-700">{pendingResignationCount}</p>
+                  <p className="text-[11px] font-semibold text-rose-800">Persetujuan Resign</p>
+                  <p className="text-[10px] text-rose-600 mt-0.5">Menunggu verifikasi</p>
+                </div>
+                <ChevronRight size={16} className="text-rose-400 group-hover:text-rose-600 transition-colors" />
+              </button>
             </div>
           </div>
 
@@ -431,7 +441,11 @@ export function PJBagianDashboard({ pendingLeaveCount, pendingOvertimeCount, onN
             </div>
             <div className="p-3 space-y-1">
               {notifications.map((n, i) => (
-                <div key={i} className={`flex items-start gap-3 p-2.5 rounded-xl ${!n.is_read ? 'bg-green-50/60' : ''}`}>
+                <div 
+                  key={i} 
+                  onClick={() => onNavigate('notifications')}
+                  className={`flex items-start gap-3 p-2.5 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors ${!n.is_read ? 'bg-green-50/60' : ''}`}
+                >
                   <span className="text-lg mt-0.5">{n.type === 'leave' ? '📅' : n.type === 'attendance' ? '⏰' : '🔔'}</span>
                   <div className="flex-1 min-w-0">
                     <p className={`text-[12px] leading-tight ${!n.is_read ? 'font-medium text-gray-800' : 'text-gray-600'}`}>{n.title}</p>

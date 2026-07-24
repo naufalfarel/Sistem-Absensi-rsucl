@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Home, MapPin, History, Bell, User, LogOut, Menu, X, BookOpen, Clock, FileText } from 'lucide-react';
+import { Home, MapPin, History, Bell, User, LogOut, Menu, X, BookOpen, Clock, FileText, Calendar, ShieldAlert } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import logoImg from '../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
 import { DashboardHome } from './DashboardHome';
@@ -11,10 +11,13 @@ import { GuidePage } from './GuidePage';
 import { OvertimeRequestPage } from './OvertimeRequestPage';
 import { LeaveRequestPage } from './LeaveRequestPage';
 import AssignmentLetterPage from './AssignmentLetterPage';
+import { EmployeeSchedulePage } from './EmployeeSchedulePage';
+import { ResignationRequestPage } from './ResignationRequestPage';
+import { DisciplinaryPage } from './DisciplinaryPage';
 import { notificationApi } from '../../services/api';
 
 // Tipe union untuk mendefinisikan tab navigasi yang valid pada dashboard karyawan
-type Tab = 'dashboard' | 'attendance' | 'history' | 'notifications' | 'profile' | 'guide' | 'overtime' | 'leave' | 'assignment';
+type Tab = 'dashboard' | 'attendance' | 'history' | 'notifications' | 'profile' | 'guide' | 'overtime' | 'leave' | 'assignment' | 'schedule' | 'resignation' | 'disciplinary';
 
 /**
  * Interface properti untuk komponen EmployeeApp.
@@ -92,16 +95,19 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
     { id: 'dashboard',     icon: Home,     label: 'Beranda' },
     { id: 'attendance',    icon: MapPin,   label: 'Absen' },
     { id: 'history',       icon: History,  label: 'Riwayat Absen' },
+    { id: 'schedule',      icon: Calendar, label: 'Jadwal Shift' },
     { id: 'notifications', icon: Bell,     label: 'Notifikasi', badge: unreadNotifications },
+    { id: 'disciplinary',  icon: ShieldAlert, label: 'Sanksi Disiplin' },
     { id: 'profile',       icon: User,     label: 'Profil Saya' },
     { id: 'guide',         icon: BookOpen, label: 'Panduan App' },
   ];
 
   // Item Navigasi Menu Pengajuan
   const proposalNavItems: { id: Tab; icon: typeof Home; label: string; badge?: number }[] = [
-    { id: 'leave',      icon: FileText, label: 'Pengajuan Cuti & Sakit' },
-    { id: 'overtime',   icon: Clock,    label: 'Pengajuan Lembur' },
-    { id: 'assignment', icon: FileText, label: 'Pengajuan Surat Tugas' },
+    { id: 'leave',      icon: FileText,   label: 'Pengajuan Cuti & Sakit' },
+    { id: 'overtime',   icon: Clock,      label: 'Pengajuan Lembur' },
+    { id: 'assignment', icon: FileText,   label: 'Pengajuan Surat Tugas' },
+    { id: 'resignation',icon: ShieldAlert, label: 'Pengajuan Resign' },
   ];
 
   const timeStr = time.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
@@ -122,9 +128,11 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
         );
       case 'attendance': return <AttendancePage />;
       case 'history': return <HistoryPage />;
+      case 'schedule': return <EmployeeSchedulePage />;
       case 'leave': return <LeaveRequestPage onBack={() => handleTabChange('dashboard')} />;
       case 'overtime': return <OvertimeRequestPage />;
       case 'assignment': return <AssignmentLetterPage />;
+      case 'resignation': return <ResignationRequestPage user={{ id: user?.id || 0, name: user?.name || 'Staf', username: user?.username || '', nik_ktp: user?.nik_ktp || '', department: user?.department, position: user?.position, role: user?.role }} onBack={() => handleTabChange('dashboard')} />;
       case 'notifications': return <NotificationsPage onUpdateCount={fetchUnreadCount} onNavigate={(tab) => handleTabChange(tab as Tab)} userRole="employee" />;
       case 'profile': 
         return (
@@ -140,6 +148,7 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
           />
         );
       case 'guide': return <GuidePage />;
+      case 'disciplinary': return <DisciplinaryPage />;
     }
   };
 

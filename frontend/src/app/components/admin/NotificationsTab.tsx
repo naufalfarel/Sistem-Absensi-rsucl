@@ -3,6 +3,7 @@ import {
   AlertTriangle, Bell, Check, Calendar, Trash2, Layers, Settings, Clock, FileText, UserCheck, ArrowRight 
 } from 'lucide-react';
 import { notificationApi, AppNotification } from '../../../services/api';
+import { MonthYearDeptFilter } from '../ui/MonthYearDeptFilter';
 
 const catFilters = [
   { key: 'all', label: 'Semua' },
@@ -31,6 +32,10 @@ export function NotificationsTab({ onUpdateCount, onNavigate }: NotificationsTab
   
   // Indikator memproses request ke server
   const [loading, setLoading] = useState(false);
+
+  // Filter Bulan & Tahun (0 = Semua)
+  const [filterMonth, setFilterMonth] = useState<number>(0);
+  const [filterYear, setFilterYear] = useState<number>(0);
 
   /**
    * Menarik daftar notifikasi terbaru admin dari API.
@@ -111,6 +116,10 @@ export function NotificationsTab({ onUpdateCount, onNavigate }: NotificationsTab
       onNavigate('schedule');
     } else if (text.includes('absen') || text.includes('keterlambatan') || type === 'attendance') {
       onNavigate('attendance');
+    } else if (text.includes('resign') || text.includes('pengunduran') || type === 'resignation') {
+      onNavigate('resignation');
+    } else if (text.includes('sanksi') || text.includes('teguran') || text.includes('peringatan') || text.includes('phk') || type === 'disciplinary' || type === 'sanction') {
+      onNavigate('disciplinary');
     }
   };
 
@@ -142,7 +151,15 @@ export function NotificationsTab({ onUpdateCount, onNavigate }: NotificationsTab
     }
   };
 
-  const filtered = notifs.filter(n => filter === 'all' || n.type === filter);
+  const filtered = notifs.filter(n => {
+    if (filter !== 'all' && n.type !== filter) return false;
+    if (n.created_at) {
+      const d = new Date(n.created_at);
+      if (filterMonth > 0 && d.getMonth() + 1 !== filterMonth) return false;
+      if (filterYear > 0 && d.getFullYear() !== filterYear) return false;
+    }
+    return true;
+  });
 
   const getIconProps = (type: string, text: string) => {
     if (text.includes('cuti') || type === 'leave') {
@@ -156,6 +173,12 @@ export function NotificationsTab({ onUpdateCount, onNavigate }: NotificationsTab
     }
     if (text.includes('onboarding') || text.includes('registrasi')) {
       return { icon: UserCheck, color: '#2563EB', bg: '#EFF6FF', label: 'Onboarding Pegawai' };
+    }
+    if (text.includes('resign') || text.includes('pengunduran') || type === 'resignation') {
+      return { icon: FileText, color: '#DC2626', bg: '#FEE2E2', label: 'Pengunduran Diri' };
+    }
+    if (text.includes('sanksi') || text.includes('teguran') || text.includes('peringatan') || text.includes('phk') || type === 'disciplinary') {
+      return { icon: AlertTriangle, color: '#EF4444', bg: '#FEF2F2', label: 'Sanksi Disiplin' };
     }
     return { icon: AlertTriangle, color: '#D97706', bg: '#FFFBEB', label: 'Monitoring Absensi' };
   };
@@ -233,6 +256,17 @@ export function NotificationsTab({ onUpdateCount, onNavigate }: NotificationsTab
           );
         })}
       </div>
+
+      {/* Filter Bulan & Tahun */}
+      <MonthYearDeptFilter
+        month={filterMonth}
+        year={filterYear}
+        showAllMonthsOption={true}
+        showAllYearsOption={true}
+        onMonthChange={setFilterMonth}
+        onYearChange={setFilterYear}
+        className="w-full mb-2"
+      />
 
       {/* Notifications list */}
       <div className="space-y-3">

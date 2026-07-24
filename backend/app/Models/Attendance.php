@@ -185,14 +185,23 @@ class Attendance extends Model
                     return $schedule->pivot->day_of_week === $dayOfWeekName;
                 });
 
-                // Jika tidak ada shift (hari libur/off), lewati pengecekan
-                if (!$hasShift) {
-                    continue;
-                }
-
                 $matchingShift = $emp->schedules->first(function($schedule) use ($dayOfWeekName) {
                     return $schedule->pivot->day_of_week === $dayOfWeekName;
                 });
+
+                $isOffShift = false;
+                if ($matchingShift) {
+                    $uName = strtoupper($matchingShift->name);
+                    if (str_contains($uName, 'LIBUR') || str_contains($uName, 'LJ') || str_contains($uName, 'OFF')) {
+                        $isOffShift = true;
+                    }
+                }
+
+                // Jika tidak ada shift (hari libur/off), lewati pengecekan
+                if (!$hasShift || $isOffShift) {
+                    continue;
+                }
+
                 $shiftName = $matchingShift ? $matchingShift->name : 'Reguler';
 
                 $key = $emp->id . '_' . $dateStr;

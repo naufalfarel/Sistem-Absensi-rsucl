@@ -296,7 +296,7 @@ export function HolidaysTab() {
         
         {/* Year Filter */}
         <div className="flex items-center gap-2 bg-white rounded-xl border border-gray-100 p-1 shadow-sm">
-          {[2025, 2026, 2027, 2028].map(yr => (
+          {Array.from({ length: 7 }, (_, i) => currentYear - 2 + i).map(yr => (
             <button
               key={yr}
               onClick={() => setSelectedYear(yr)}

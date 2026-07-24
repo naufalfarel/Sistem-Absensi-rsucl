@@ -105,6 +105,11 @@ export function AdminManagementTab() {
       return;
     }
 
+    if (formRole === 'admin' && (!editingAdmin || editingAdmin.role !== 'admin') && regularAdminCount >= 4) {
+      setErrorMsg('Batas maksimal administrator biasa adalah 4 orang. Anda tidak dapat membuat akun admin baru lagi.');
+      return;
+    }
+
     setErrorMsg('');
     setSubmitting(true);
 

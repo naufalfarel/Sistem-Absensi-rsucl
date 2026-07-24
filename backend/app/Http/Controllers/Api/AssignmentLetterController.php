@@ -406,4 +406,35 @@ class AssignmentLetterController extends Controller
             'message' => 'Pengajuan surat tugas berhasil dibatalkan.',
         ]);
     }
+
+    /**
+     * Menghapus surat tugas (Admin).
+     */
+    public function destroy(Request $request, $id)
+    {
+        if (!$request->user()->isAdmin()) {
+            return response()->json(['success' => false, 'message' => 'Akses ditolak.'], 403);
+        }
+
+        $letter = AssignmentLetter::findOrFail($id);
+
+        // Hapus file dokumen pendukung jika ada
+        if ($letter->document_url) {
+            $path = str_replace('/storage/', '', $letter->document_url);
+            Storage::disk('public')->delete($path);
+        }
+
+        // Hapus file bukti kehadiran jika ada
+        if ($letter->attendance_proof_url) {
+            $path = str_replace('/storage/', '', $letter->attendance_proof_url);
+            Storage::disk('public')->delete($path);
+        }
+
+        $letter->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Surat tugas berhasil dihapus.',
+        ]);
+    }
 }

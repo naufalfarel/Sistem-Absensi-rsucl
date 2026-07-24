@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 /**
  * Model Department
  * 
- * Merepresentasikan departemen/bagian unit kerja di rumah sakit (misal: Keperawatan, IGD, Keuangan, dll).
+ * Merepresentasikan Unit kerja unit kerja di rumah sakit (misal: Keperawatan, IGD, Keuangan, dll).
  */
 class Department extends Model
 {

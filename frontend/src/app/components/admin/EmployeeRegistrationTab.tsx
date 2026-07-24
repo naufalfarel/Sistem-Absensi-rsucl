@@ -240,7 +240,7 @@ export function EmployeeRegistrationTab() {
                 <th className="px-4 py-3">No. Referensi / Tanggal</th>
                 <th className="px-4 py-3">Nama & NIK KTP</th>
                 <th className="px-4 py-3">Kontak (Email / HP)</th>
-                <th className="px-4 py-3">Departemen / Jabatan</th>
+                <th className="px-4 py-3">Departemen / Posisi</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3 text-right">Aksi</th>
               </tr>
@@ -281,8 +281,21 @@ export function EmployeeRegistrationTab() {
                         </td>
 
                         <td className="px-4 py-3.5">
-                          <p className="font-bold text-gray-900">{reg.name}</p>
-                          <p className="font-mono text-[11px] text-gray-400">NIK: {reg.nik_ktp}</p>
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-xl bg-gray-100 overflow-hidden flex-shrink-0 border border-gray-100 flex items-center justify-center">
+                              {reg.profile_picture ? (
+                                <img src={reg.profile_picture} alt={reg.name} className="w-full h-full object-cover" />
+                              ) : (
+                                <span className="text-[10px] text-gray-400 font-bold">
+                                  {reg.name.substring(0, 1).toUpperCase()}
+                                </span>
+                              )}
+                            </div>
+                            <div>
+                              <p className="font-bold text-gray-900">{reg.name}</p>
+                              <p className="font-mono text-[11px] text-gray-400">NIK: {reg.nik_ktp}</p>
+                            </div>
+                          </div>
                         </td>
 
                         <td className="px-4 py-3.5 text-[12px]">
@@ -356,8 +369,14 @@ export function EmployeeRegistrationTab() {
                       </tr>
                       {isExpanded && (
                         <tr className="bg-gray-50/50">
-                          <td colSpan={6} className="px-6 py-3 border-b border-gray-150">
-                            <div className="flex flex-col gap-3 text-[12px] py-1">
+                          <td colSpan={6} className="px-6 py-4 border-b border-gray-150">
+                            <div className="flex gap-5 items-start">
+                              {reg.profile_picture && (
+                                <div className="w-20 h-20 rounded-2xl overflow-hidden border border-gray-200 shadow-xs flex-shrink-0 bg-white">
+                                  <img src={reg.profile_picture} alt={reg.name} className="w-full h-full object-cover" />
+                                </div>
+                              )}
+                              <div className="flex-1 flex flex-col gap-3 text-[12px] py-1">
                               {/* Plat Kendaraan */}
                               <div className="flex flex-wrap gap-x-8 gap-y-2">
                                 <div className="flex items-center gap-2">
@@ -394,8 +413,9 @@ export function EmployeeRegistrationTab() {
                                 </div>
                               </div>
                             </div>
-                          </td>
-                        </tr>
+                          </div>
+                        </td>
+                      </tr>
                       )}
                     </Fragment>
                   );
@@ -425,10 +445,20 @@ export function EmployeeRegistrationTab() {
               </div>
 
               <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100 text-[12px] space-y-2">
-                <p><strong>Nama:</strong> {approvingReg.name}</p>
-                <p><strong>NIK KTP:</strong> {approvingReg.nik_ktp}</p>
-                <p><strong>Email:</strong> {approvingReg.email}</p>
-                <p><strong>Departemen:</strong> {approvingReg.department?.name || '—'}</p>
+                <div className="flex gap-4 items-start">
+                  {approvingReg.profile_picture && (
+                    <div className="w-16 h-16 rounded-xl overflow-hidden border border-gray-200 shadow-xs flex-shrink-0 bg-white">
+                      <img src={approvingReg.profile_picture} alt={approvingReg.name} className="w-full h-full object-cover" />
+                    </div>
+                  )}
+                  <div className="flex-1 space-y-1">
+                    <p><strong>Nama:</strong> {approvingReg.name}</p>
+                    <p><strong>NIK KTP:</strong> {approvingReg.nik_ktp}</p>
+                    <p><strong>Email:</strong> {approvingReg.email}</p>
+                    <p><strong>Departemen:</strong> {approvingReg.department?.name || '—'}</p>
+                    <p><strong>Posisi:</strong> {approvingReg.position?.name || '—'}</p>
+                  </div>
+                </div>
                 
                 <div className="h-px bg-gray-200 my-1" />
                 <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Sosial Media</p>

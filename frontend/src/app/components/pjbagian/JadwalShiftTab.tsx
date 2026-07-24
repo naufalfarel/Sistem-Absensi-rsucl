@@ -2,12 +2,16 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Sun, Sunset, Moon, Star, Zap, Plus, X, Calendar as CalendarIcon,
   Trash2, Edit2, Check, AlertCircle, ChevronLeft, ChevronRight,
-  Users, Save, Loader2, Coffee
+  Users, Save, Loader2, Coffee, FileText, Search
 } from 'lucide-react';
 import {
   scheduleApi, employeeApi, ShiftSchedule, EmployeeMonthlySchedule
 } from '../../../services/api';
 import { MonthYearDeptFilter } from '../ui/MonthYearDeptFilter';
+import { useAuth } from '../../../context/AuthContext';
+import logoImg from '../../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
+import rsLogoImg from '../../../imports/rsucl_wide_logo.png';
+import logoRsucl2019 from '../../../imports/logo_rsucl_2019.png';
 
 interface JadwalShiftTabProps {
   user: {
@@ -51,42 +55,84 @@ function getPresetByHex(hex: string) {
 }
 
 // Warna label hari berdasarkan hari dalam seminggu (0=Sun, 6=Sat)
-function getDayHeaderStyle(dayOfWeek: number) {
-  if (dayOfWeek === 0) return { color: '#E11D48', fontWeight: 700 }; // Minggu - merah
-  if (dayOfWeek === 6) return { color: '#2563EB', fontWeight: 600 }; // Sabtu - biru
+function getDayHeaderStyle(dayOfWeek: number, isHoliday?: boolean) {
+  if (dayOfWeek === 0 || isHoliday) return { color: '#E11D48', fontWeight: 700 }; // Minggu/Libur - merah
   return { color: '#374151', fontWeight: 500 };
 }
 
 // ── Add Shift Modal ────────────────────────────────────────────────────
+interface SubShiftEntry {
+  id: string;
+  name: string;
+  start: string;
+  end: string;
+}
+
 function AddShiftModal({ onClose, onAdd }: { onClose: () => void; onAdd: (s: ShiftSchedule) => void }) {
   const [name, setName]       = useState('');
-  const [start, setStart]     = useState('07:00');
-  const [end, setEnd]         = useState('15:00');
   const [icon, setIcon]       = useState<IconKey>('sun');
   const [colorId, setColorId] = useState('green');
   const [shiftType, setShiftType] = useState<'normal' | 'dinas_luar'>('normal');
   const [loading, setLoading] = useState(false);
+
+  // Sub-shifts state — default 1 sub-shift terisi sebagai 'Normal'
+  const [subShifts, setSubShifts] = useState<SubShiftEntry[]>([
+    { id: 'initial', name: 'Normal', start: '08:00', end: '14:00' },
+  ]);
+
+  const addSubShift = () => {
+    const lastSub = subShifts[subShifts.length - 1];
+    const nextStart = lastSub ? lastSub.start : '08:00';
+    const nextEnd = lastSub ? lastSub.end : '14:00';
+    setSubShifts(prev => [...prev, { id: Date.now().toString(), name: '', start: nextStart, end: nextEnd }]);
+  };
+  const removeSubShift = (id: string) => {
+    setSubShifts(prev => prev.filter(s => s.id !== id));
+  };
+  const updateSubShift = (id: string, field: keyof SubShiftEntry, value: string) => {
+    setSubShifts(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s));
+  };
 
   const preset = COLOR_PRESETS.find(c => c.id === colorId)!;
   const IconComp = ICON_MAP[icon].component;
 
   const handleSubmit = async () => {
     if (!name.trim()) return;
+    if (subShifts.length === 0) {
+      alert("Harus ada minimal 1 sub-waktu shift.");
+      return;
+    }
+    const hasEmptyName = subShifts.some(s => !s.name.trim());
+    if (hasEmptyName) {
+      alert("Nama semua sub-waktu shift harus diisi.");
+      return;
+    }
+
     setLoading(true);
     try {
+      const filledChildren = subShifts.map(s => ({
+        name: s.name.trim(),
+        start_time: s.start,
+        end_time: s.end
+      }));
+
       const res = await scheduleApi.create({
         name: name.trim(),
-        start_time: start,
-        end_time: end,
+        start_time: subShifts[0].start,
+        end_time: subShifts[0].end,
         color: preset.color,
         icon,
         shift_type: shiftType,
+        children: filledChildren,
       } as any);
       if (res.success) { onAdd(res.data); onClose(); }
     } catch (err: any) {
       alert(err?.message ?? 'Gagal membuat shift baru.');
     } finally { setLoading(false); }
   };
+
+  const previewStart = subShifts[0]?.start ?? '08:00';
+  const previewEnd = subShifts[0]?.end ?? '14:00';
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
@@ -111,30 +157,81 @@ function AddShiftModal({ onClose, onAdd }: { onClose: () => void; onAdd: (s: Shi
             </div>
             <div>
               <p className="text-[14px] font-bold" style={{ color: preset.color }}>{name || 'Nama Shift'}</p>
-              <p className="text-[11px] text-gray-500">{start} – {end}</p>
+              <p className="text-[11px] text-gray-500">{previewStart} – {previewEnd}</p>
             </div>
           </div>
         </div>
 
         <div className="space-y-4">
+          {/* Nama Shift */}
           <div>
-            <label className="block text-[12px] font-semibold text-gray-700 mb-1.5">Nama Shift</label>
+            <label className="block text-[12px] font-semibold text-gray-700 mb-1.5">Nama Shift (Template)</label>
             <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Contoh: Shift Pagi, Shift Siang"
               maxLength={40}
               className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all" />
           </div>
 
-          <div className="flex gap-3">
-            <div className="flex-1">
-              <label className="block text-[12px] font-semibold text-gray-700 mb-1.5">Jam Masuk</label>
-              <input type="time" value={start} onChange={e => setStart(e.target.value)}
-                className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-[13px] font-mono bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all" />
+          {/* ── Sub-Waktu Shift ─────────────────────────────────────────── */}
+          <div className="rounded-xl border border-dashed border-[#16A34A]/40 bg-green-50/30 p-3">
+            <div className="flex items-center justify-between mb-2.5">
+              <div>
+                <p className="text-[12px] font-semibold text-gray-700">Sub-Waktu Shift</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">Varian waktu yang dapat ditugaskan ke staf</p>
+              </div>
+              <button
+                type="button"
+                onClick={addSubShift}
+                className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-[#16A34A]/50 rounded-lg text-[11px] font-semibold text-[#16A34A] hover:bg-green-50 transition-colors shadow-xs"
+              >
+                <Plus size={12} /> Tambah
+              </button>
             </div>
-            <div className="flex-1">
-              <label className="block text-[12px] font-semibold text-gray-700 mb-1.5">Jam Pulang</label>
-              <input type="time" value={end} onChange={e => setEnd(e.target.value)}
-                className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-[13px] font-mono bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all" />
+
+            <div className="space-y-2">
+              {subShifts.map((ss, idx) => (
+                <div
+                  key={ss.id}
+                  className="flex items-center gap-2 p-2 bg-white border border-gray-200 rounded-xl shadow-xs"
+                >
+                  <div className="w-5 h-5 flex items-center justify-center rounded-full border border-[#16A34A]/30 text-[9px] font-bold text-[#16A34A] flex-shrink-0 bg-green-50">
+                    {idx + 1}
+                  </div>
+                  <input
+                    type="text"
+                    value={ss.name}
+                    onChange={e => updateSubShift(ss.id, 'name', e.target.value)}
+                    placeholder="Nama sub-shift (contoh: Pagi)"
+                    maxLength={60}
+                    className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-[12px] bg-gray-50 focus:outline-none focus:border-[#16A34A] min-w-0"
+                  />
+                  <input
+                    type="time"
+                    value={ss.start}
+                    onChange={e => updateSubShift(ss.id, 'start', e.target.value)}
+                    className="px-2 py-1.5 border border-gray-200 rounded-lg text-[11px] font-mono bg-gray-50 focus:outline-none focus:border-[#16A34A] w-[84px]"
+                  />
+                  <span className="text-gray-300 text-[10px] flex-shrink-0">–</span>
+                  <input
+                    type="time"
+                    value={ss.end}
+                    onChange={e => updateSubShift(ss.id, 'end', e.target.value)}
+                    className="px-2 py-1.5 border border-gray-200 rounded-lg text-[11px] font-mono bg-gray-50 focus:outline-none focus:border-[#16A34A] w-[84px]"
+                  />
+                  {idx > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => removeSubShift(ss.id)}
+                      className="w-5 h-5 flex items-center justify-center rounded-full bg-red-50 text-red-400 hover:bg-red-100 transition-colors flex-shrink-0"
+                    >
+                      <X size={10} />
+                    </button>
+                  )}
+                </div>
+              ))}
             </div>
+            <p className="text-[10px] text-gray-400 mt-1.5">
+              💡 Baris yang namanya kosong tidak akan disimpan.
+            </p>
           </div>
 
           {/* Tipe Shift khusus diset normal secara default untuk PJ Bagian */}
@@ -179,6 +276,7 @@ function AddShiftModal({ onClose, onAdd }: { onClose: () => void; onAdd: (s: Shi
   );
 }
 
+
 // ── Delete Confirmation Modal ──────────────────────────────────────────
 function DeleteModal({ shift, onClose, onConfirm }: { shift: ShiftSchedule; onClose: () => void; onConfirm: () => void }) {
   const pr = getPresetByHex(shift.color);
@@ -198,7 +296,7 @@ function DeleteModal({ shift, onClose, onConfirm }: { shift: ShiftSchedule; onCl
           </div>
           <div>
             <p className="text-[13px] font-semibold" style={{ color: shift.color }}>{shift.name}</p>
-            <p className="text-[11px] text-gray-500">{shift.start_time?.substring(0, 5)} – {shift.end_time?.substring(0, 5)}</p>
+            <p className="text-[11px] text-gray-500">{shift.start_time ? shift.start_time.substring(0, 5) : "--:--"} – {shift.end_time ? shift.end_time.substring(0, 5) : "--:--"}</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -212,6 +310,7 @@ function DeleteModal({ shift, onClose, onConfirm }: { shift: ShiftSchedule; onCl
 
 // ── Bulk Assign Modal — pilih shift lalu klik rentang tanggal ──────────
 interface BulkAssignModalProps {
+  user: JadwalShiftTabProps['user'];
   shifts: ShiftSchedule[];
   employees: any[];
   year: number;
@@ -221,9 +320,9 @@ interface BulkAssignModalProps {
   onSaved: () => void;
 }
 
-function BulkAssignModal({ shifts, employees, year, month, daysInMonth, onClose, onSaved }: BulkAssignModalProps) {
+function BulkAssignModal({ user, shifts, employees, year, month, daysInMonth, onClose, onSaved }: BulkAssignModalProps) {
   const [selectedEmpIds, setSelectedEmpIds] = useState<number[]>([]);
-  const [selectedShiftId, setSelectedShiftId] = useState<number | 'libur' | ''>('');
+  const [selectedShiftId, setSelectedShiftId] = useState<number | 'libur' | 'lj' | ''>('');
   const [selectedDates, setSelectedDates] = useState<number[]>([]); // day numbers 1..31
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
@@ -260,7 +359,6 @@ function BulkAssignModal({ shifts, employees, year, month, daysInMonth, onClose,
           } as any);
           if (createRes.success) {
             foundShift = createRes.data;
-            setShifts(prev => [...prev, createRes.data]);
           }
         }
         schedId = foundShift ? foundShift.id : null;
@@ -353,18 +451,23 @@ function BulkAssignModal({ shifts, employees, year, month, daysInMonth, onClose,
               <option value="">-- Pilih Shift --</option>
               <option value="libur" className="text-gray-500">⬜ Libur / OFF</option>
               <option value="lj" className="text-slate-700 font-semibold">🌙 Libur Jaga (LJ)</option>
-              {shifts.map(parent => (
-                <optgroup key={parent.id} label={parent.name}>
-                  {parent.children && parent.children.length > 0
-                    ? parent.children.map(child => (
-                        <option key={child.id} value={child.id}>
-                          {child.name} ({child.start_time?.substring(0, 5)} – {child.end_time?.substring(0, 5)})
-                        </option>
-                      ))
-                    : <option value={parent.id}>{parent.name} ({parent.start_time?.substring(0, 5)} – {parent.end_time?.substring(0, 5)})</option>
-                  }
-                </optgroup>
-              ))}
+              {shifts
+                .filter(s => {
+                  const n = s.name.toLowerCase();
+                  return !n.includes('cuti') && !n.includes('sakit') && !n.includes('izin') && !n.includes('dinas luar') && !n.includes('libur jaga') && n !== 'lj';
+                })
+                .map(parent => (
+                  <optgroup key={parent.id} label={parent.name}>
+                    {parent.children && parent.children.length > 0
+                      ? parent.children.map(child => (
+                          <option key={child.id} value={child.id}>
+                            {child.name} ({child.start_time?.substring(0, 5)} – {child.end_time?.substring(0, 5)})
+                          </option>
+                        ))
+                      : <option value={parent.id}>{parent.name} ({parent.start_time?.substring(0, 5)} – {parent.end_time?.substring(0, 5)})</option>
+                    }
+                  </optgroup>
+                ))}
             </select>
           </div>
 
@@ -459,7 +562,7 @@ interface ShiftPopoverProps {
   shifts: ShiftSchedule[];
   currentScheduleId?: number;
   onSelect: (scheduleId: number | null) => void;
-  onSelectSpecial: (type: 'cuti' | 'sakit' | 'dinas_luar' | 'izin' | 'lj') => void;
+  onSelectSpecial: (type: 'lj') => void;
   onClose: () => void;
   style?: React.CSSProperties;
 }
@@ -479,8 +582,8 @@ function ShiftPopover({ shifts, currentScheduleId, onSelect, onSelectSpecial, on
           </button>
         </div>
 
-        {/* Section 1: Libur & Status Khusus (Cuti, Sakit, Dinas, Izin) */}
-        <p className="text-[9px] font-bold text-gray-400 px-3 pt-2 pb-1 uppercase tracking-wider">Status & Izin Staf</p>
+        {/* Section 1: Libur & Status Staf (Hanya Libur dan Libur Jaga) */}
+        <p className="text-[9px] font-bold text-gray-400 px-3 pt-2 pb-1 uppercase tracking-wider">Status Libur Staf</p>
         
         {/* Libur */}
         <button
@@ -492,50 +595,6 @@ function ShiftPopover({ shifts, currentScheduleId, onSelect, onSelectSpecial, on
           </span>
           <span>Libur / OFF</span>
           {!currentScheduleId && <Check size={13} className="ml-auto text-[#16A34A]" />}
-        </button>
-
-        {/* Cuti */}
-        <button
-          onClick={() => onSelectSpecial('cuti')}
-          className="w-full text-left px-3 py-1.5 text-[11.5px] font-semibold text-orange-700 hover:bg-orange-50 flex items-center gap-2 transition-colors cursor-pointer"
-        >
-          <span className="w-5 h-5 rounded-md bg-orange-100 border border-orange-200 text-orange-700 font-bold text-[10px] flex items-center justify-center">
-            C
-          </span>
-          <span>Cuti Tahunan (C)</span>
-        </button>
-
-        {/* Sakit */}
-        <button
-          onClick={() => onSelectSpecial('sakit')}
-          className="w-full text-left px-3 py-1.5 text-[11.5px] font-semibold text-amber-800 hover:bg-amber-50 flex items-center gap-2 transition-colors cursor-pointer"
-        >
-          <span className="w-5 h-5 rounded-md bg-amber-100 border border-amber-200 text-amber-800 font-bold text-[10px] flex items-center justify-center">
-            SK
-          </span>
-          <span>Izin Sakit (SK)</span>
-        </button>
-
-        {/* Dinas Luar */}
-        <button
-          onClick={() => onSelectSpecial('dinas_luar')}
-          className="w-full text-left px-3 py-1.5 text-[11.5px] font-semibold text-purple-700 hover:bg-purple-50 flex items-center gap-2 transition-colors cursor-pointer"
-        >
-          <span className="w-5 h-5 rounded-md bg-purple-100 border border-purple-200 text-purple-700 font-bold text-[10px] flex items-center justify-center">
-            DL
-          </span>
-          <span>Dinas Luar (DL)</span>
-        </button>
-
-        {/* Izin */}
-        <button
-          onClick={() => onSelectSpecial('izin')}
-          className="w-full text-left px-3 py-1.5 text-[11.5px] font-semibold text-cyan-700 hover:bg-cyan-50 flex items-center gap-2 transition-colors cursor-pointer"
-        >
-          <span className="w-5 h-5 rounded-md bg-cyan-100 border border-cyan-200 text-cyan-700 font-bold text-[10px] flex items-center justify-center">
-            IZ
-          </span>
-          <span>Izin Resmi (IZ)</span>
         </button>
 
         {/* Libur Jaga (LJ) */}
@@ -592,6 +651,7 @@ function ShiftPopover({ shifts, currentScheduleId, onSelect, onSelectSpecial, on
 
 // ── Main JadwalShiftTab Component ──────────────────────────────────────
 export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
+  const { logoUrl } = useAuth();
   const today = new Date();
   const [viewYear, setViewYear]   = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth() + 1); // 1-12
@@ -601,6 +661,7 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
   const [monthlyData, setMonthlyData] = useState<EmployeeMonthlySchedule[]>([]);
   const [employees, setEmployees]   = useState<any[]>([]);
   const [loading, setLoading]       = useState(false);
+  const [holidays, setHolidays] = useState<string[]>([]);
   const [saving, setSaving]         = useState<string | null>(null); // "empId-date" key being saved
   const [pendingChanges, setPendingChanges] = useState<Record<string, { employee_id: number; work_date: string; schedule_id: number | null }>>({});
   const [savingAll, setSavingAll]   = useState(false);
@@ -618,6 +679,83 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
   const [searchQuery, setSearchQuery] = useState('');
 
   const tableRef = useRef<HTMLDivElement>(null);
+
+  // States untuk edit master shift
+  const [expandedShift, setExpandedShift] = useState<number | null>(null);
+  const [editingId, setEditingId]         = useState<number | null>(null);
+  const [editName, setEditName]           = useState('');
+  const [editChildren, setEditChildren]   = useState<any[]>([]);
+
+  const startEdit = (shift: ShiftSchedule) => {
+    setEditingId(shift.id);
+    setEditName(shift.name);
+    setEditChildren(
+      shift.children?.map(c => ({
+        id: c.id,
+        name: c.name,
+        start_time: c.start_time.substring(0, 5),
+        end_time: c.end_time.substring(0, 5),
+        checkin_window_end_time: c.checkin_window_end_time ? c.checkin_window_end_time.substring(0, 5) : null,
+      })) ?? []
+    );
+  };
+
+  const handleAddEditChild = () => {
+    setEditChildren(prev => [
+      ...prev,
+      { id: null, name: `Shift ${prev.length + 1}`, start_time: '08:00', end_time: '15:00', checkin_window_end_time: null }
+    ]);
+  };
+
+  const handleRemoveEditChild = (index: number) => {
+    setEditChildren(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleUpdateEditChild = (index: number, key: string, val: any) => {
+    setEditChildren(prev => prev.map((item, i) => i === index ? { ...item, [key]: val } : item));
+  };
+
+  const saveEdit = async (id: number) => {
+    if (!editName.trim()) return;
+    try {
+      const res = await scheduleApi.update(id, {
+        name: editName.trim(),
+        shift_type: 'normal', // Selalu 'normal' (GPS Wajib) untuk PJ Bagian
+        owner_department_id: user.pj_bagian_department_id || null, // Otomatis ke departemen PJ Bagian
+        children: editChildren.map(c => ({
+          id: c.id,
+          name: c.name,
+          start_time: c.start_time,
+          end_time: c.end_time,
+          checkin_window_end_time: c.checkin_window_end_time || null,
+          color: '#2563EB',
+          icon: 'sun'
+        }))
+      });
+      if (res.success) {
+        setEditingId(null);
+        loadData();
+      }
+    } catch (err: any) {
+      alert(err?.message ?? 'Gagal memperbarui shift.');
+    }
+  };
+
+  const handleRemoveEmployeeFromShift = async (empId: number, days: string[]) => {
+    if (confirm('Apakah Anda yakin ingin menghapus karyawan dari shift ini untuk hari-hari terpilih?')) {
+      try {
+        const assignments = days.map(day => ({
+          employee_id: empId,
+          work_date: day,
+          schedule_id: null
+        }));
+        await scheduleApi.assignBulkByDate(assignments);
+        loadData();
+      } catch (err: any) {
+        alert(err?.message ?? 'Gagal menghapus penugasan.');
+      }
+    }
+  };
 
   // Navigation
   const prevMonth = () => {
@@ -641,6 +779,7 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
       if (mRes.success) {
         setMonthlyData(mRes.data);
         setDaysInMonth(mRes.days);
+        setHolidays(mRes.holidays || []);
       }
       if (eRes.success) {
         const filtered = eRes.data.filter((e: any) =>
@@ -763,16 +902,12 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
     loadData();
   };
 
-  // Assign status khusus (Cuti, Sakit, Dinas Luar, Izin)
-  const handleAssignSpecial = async (type: 'cuti' | 'sakit' | 'dinas_luar' | 'izin' | 'lj') => {
+  // Assign status khusus (Hanya Libur Jaga (LJ))
+  const handleAssignSpecial = async (type: 'lj') => {
     if (!popover) return;
 
     const specConfig: Record<string, { name: string; color: string; icon: string; shift_type: 'normal' | 'dinas_luar' }> = {
-      cuti:       { name: 'Cuti Tahunan', color: '#EA580C', icon: 'zap',  shift_type: 'normal' },
-      sakit:      { name: 'Izin Sakit',   color: '#D97706', icon: 'zap',  shift_type: 'normal' },
-      dinas_luar: { name: 'Dinas Luar',   color: '#7C3AED', icon: 'star', shift_type: 'dinas_luar' },
-      izin:       { name: 'Izin Resmi',   color: '#0891B2', icon: 'zap',  shift_type: 'normal' },
-      lj:         { name: 'Libur Jaga (LJ)', color: '#475569', icon: 'moon', shift_type: 'normal' },
+      lj: { name: 'Libur Jaga (LJ)', color: '#475569', icon: 'moon', shift_type: 'normal' },
     };
 
     const targetConfig = specConfig[type];
@@ -835,8 +970,241 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
     return name.trim().charAt(0).toUpperCase();
   };
 
+  const getBase64Image = async (imgUrl: string): Promise<string> => {
+    try {
+      const response = await fetch(imgUrl);
+      const blob = await response.blob();
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (err) {
+      console.error(err);
+      return "";
+    }
+  };
+
+  const handlePrintPDF = async () => {
+    if (filteredMonthlyData.length === 0) {
+      alert("Tidak ada data jadwal untuk dicetak.");
+      return;
+    }
+
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      alert("Mohon izinkan popup blocker untuk mencetak laporan.");
+      return;
+    }
+
+    try {
+      const logoPath = logoRsucl2019;
+      let base64Logo = "";
+      if (logoPath) {
+        try {
+          base64Logo = await getBase64Image(logoPath);
+        } catch (e) {
+          console.error("Failed to load base64 logo", e);
+        }
+      }
+
+      const shortDays = ['MG', 'SN', 'SL', 'RB', 'KM', 'JM', 'SB'];
+      const months = [
+        'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+        'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+      ];
+      const monthLabel = months[viewMonth - 1];
+      const deptName = user.pj_bagian_department || 'Bagian';
+
+      // Generate table header columns
+      let dateColsHtml = "";
+      let dayColsHtml = "";
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dateObj = new Date(viewYear, viewMonth - 1, d);
+        const dayName = shortDays[dateObj.getDay()];
+        const isSunday = dateObj.getDay() === 0;
+        
+        const colStyle = isSunday 
+          ? 'color: #DC2626; font-weight: bold; background-color: #FEF2F2;' 
+          : '';
+
+        dateColsHtml += `<th style="text-align: center; font-size: 9px; padding: 4px 2px; border: 1px solid #000; min-width: 22px; ${colStyle}">${d}</th>`;
+        dayColsHtml += `<th style="text-align: center; font-size: 8px; padding: 4px 2px; border: 1px solid #000; min-width: 22px; ${colStyle}">${dayName}</th>`;
+      }
+
+      // Generate table rows
+      let rowsHtml = "";
+      filteredMonthlyData.forEach((row, idx) => {
+        let cellsHtml = "";
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dateStr = `${viewYear}-${String(viewMonth).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+          const assign = row.dates[dateStr];
+          
+          const dateObj = new Date(viewYear, viewMonth - 1, d);
+          const isSunday = dateObj.getDay() === 0;
+          
+          let code = "–";
+          let cellBg = isSunday ? "#FEF2F2" : "#FFFFFF";
+          let cellColor = isSunday ? "#DC2626" : "#000000";
+          let isBold = false;
+
+          if (assign) {
+            const nameLower = assign.name.toLowerCase();
+            isBold = true;
+            if (nameLower.includes("pagi")) {
+              code = "P";
+              cellBg = "#E6F4EA";
+              cellColor = "#137333";
+            } else if (nameLower.includes("siang")) {
+              code = "S";
+              cellBg = "#E8F0FE";
+              cellColor = "#1A73E8";
+            } else if (nameLower.includes("malam")) {
+              code = "M";
+              cellBg = "#F3E8FF";
+              cellColor = "#681DA8";
+            } else if (nameLower.includes("normal") || nameLower.includes("reguler")) {
+              code = "N";
+              cellBg = "#FFFFFF";
+              cellColor = "#374151";
+            } else if (nameLower.includes("cuti")) {
+              code = "C";
+              cellBg = "#FCE8E6";
+              cellColor = "#C5221F";
+            } else if (nameLower.includes("sakit")) {
+              code = "Skt";
+              cellBg = "#FEF7E0";
+              cellColor = "#B06000";
+            } else if (nameLower.includes("libur")) {
+              code = "L";
+              cellBg = "#F1F3F4";
+              cellColor = "#5F6368";
+            } else {
+              code = assign.name.split(" ").map(w => w[0]).join("").toUpperCase().substring(0, 3);
+              cellBg = assign.color || "#F1F3F4";
+              cellColor = "#000000";
+            }
+          }
+
+          cellsHtml += `
+            <td style="text-align: center; font-size: 9px; font-weight: ${isBold ? 'bold' : 'normal'}; padding: 4px 2px; border: 1px solid #000000; background-color: ${cellBg}; color: ${cellColor};">
+              ${code}
+            </td>
+          `;
+        }
+
+        const isSelfPj =
+          (row as any).employee_id && (user as any)?.employee_id
+            ? Number((row as any).employee_id) === Number((user as any).employee_id)
+            : false;
+
+        const roleBadge = isSelfPj 
+          ? `<span style="font-size: 7px; font-weight: bold; background-color: #FEF3C7; color: #D97706; padding: 1px 3px; border-radius: 3px; margin-left: 4px; border: 1px solid #FDE68A;">PJ</span>` 
+          : '';
+
+        rowsHtml += `
+          <tr style="border: 1px solid #000000;">
+            <td style="font-size: 9px; font-weight: bold; padding: 5px 8px; border: 1px solid #000000; color: #000000; white-space: nowrap; ${isSelfPj ? 'background-color: #E6F4EA;' : ''}">
+              ${idx + 1}. ${row.name} ${isSelfPj ? '<b>(Anda)</b>' : ''} ${roleBadge}
+            </td>
+            ${cellsHtml}
+          </tr>
+        `;
+      });
+
+      const titleLabel = `JADWAL JAGA ${deptName.toUpperCase()} RUMAH SAKIT UMUM CEMPAKA LIMA`;
+
+      const content = `
+        <html>
+        <head>
+          <title>${titleLabel}</title>
+          <style>
+            body { font-family: 'Arial', sans-serif; color: #000000; padding: 20px; margin: 0; }
+            .header-table { width: 100%; border-bottom: 2px solid #000000; padding-bottom: 6px; margin-bottom: 15px; }
+            .company-name { font-size: 11px; font-weight: bold; color: #15803D; margin: 0 0 1px 0; text-transform: uppercase; letter-spacing: 0.5px; }
+            .hospital-name { font-size: 16px; font-weight: bold; color: #DC2626; margin: 0; text-transform: uppercase; letter-spacing: 0.5px; }
+            .hospital-sub { font-size: 9px; color: #15803D; margin: 2px 0 0 0; font-weight: 500; line-height: 1.3; }
+            .company-city { font-size: 10px; font-weight: bold; color: #15803D; margin: 2px 0 0 0; text-transform: uppercase; }
+            .title { font-size: 11px; font-weight: bold; text-transform: uppercase; margin: 15px 0 15px 0; text-align: center; letter-spacing: 0.5px; text-decoration: underline; }
+            .data-table { width: 100%; border-collapse: collapse; border: 1px solid #000000; }
+            .data-table th { background-color: #F1F3F4; color: #000000; font-weight: bold; padding: 4px; border: 1px solid #000000; font-size: 9px; text-transform: uppercase; }
+            @media print {
+              @page { size: landscape; margin: 0.4cm; }
+              body { padding: 0; margin: 0; }
+            }
+          </style>
+        </head>
+        <body>
+          <table class="header-table" style="width: 100%; border-collapse: collapse;">
+            <tr>
+              <td style="width: 160px; text-align: left; vertical-align: middle; padding: 0;">
+                <img src="${base64Logo || logoPath}" style="height: 42px; width: auto; object-fit: contain; display: block;" />
+              </td>
+              <td style="text-align: center; vertical-align: middle; padding: 0;">
+                <p class="company-name" style="margin: 0; font-size: 11px; font-weight: bold; color: #15803D; text-transform: uppercase; letter-spacing: 0.5px;">PT. CEMPAKA LIMA UTAMA</p>
+                <h1 class="hospital-name" style="margin: 2px 0; font-size: 15px; font-weight: bold; color: #DC2626; text-transform: uppercase; letter-spacing: 0.5px;">RUMAH SAKIT UMUM CEMPAKA LIMA</h1>
+                <p class="hospital-sub" style="margin: 1px 0; font-size: 8.5px; color: #15803D; font-weight: 550; line-height: 1.3;">Jln. Politeknik, Gp. Beurawe, Kecamatan Kuta Alam, Kode Pos 23124, Telp. (0651)3619999,</p>
+                <p class="hospital-sub" style="margin: 1px 0; font-size: 8.5px; color: #15803D; font-weight: 550; line-height: 1.3;">Fax. (0651)3619999, email: rsu@cempakalima.co.id</p>
+                <p class="company-city" style="margin: 2px 0 0 0; font-size: 9.5px; font-weight: bold; color: #15803D; text-transform: uppercase; letter-spacing: 0.5px;">BANDA ACEH</p>
+              </td>
+              <td style="width: 160px; padding: 0;"></td>
+            </tr>
+          </table>
+          
+          <h2 class="title">${titleLabel} <br/> PERIODE ${monthLabel.toUpperCase()} ${viewYear}</h2>
+
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th rowspan="2" style="text-align: left; padding-left: 8px; border: 1px solid #000000; font-size: 9px;">NAMA PEGAWAI</th>
+                <th colspan="${daysInMonth}" style="border: 1px solid #000000; font-size: 9px; letter-spacing: 1px;">TANGGAL</th>
+              </tr>
+              <tr>
+                ${dateColsHtml}
+              </tr>
+              <tr>
+                <th style="text-align: left; padding-left: 8px; border: 1px solid #000000; font-size: 9px;">HARI</th>
+                ${dayColsHtml}
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+          </table>
+          
+          <div style="font-size: 9px; color: #000000; margin-top: 15px; display: flex; gap: 15px; font-weight: bold; border-top: 1px solid #E5E7EB; padding-top: 8px;">
+            <span>Keterangan Shift:</span>
+            <span>[P] Pagi</span>
+            <span>[S] Siang</span>
+            <span>[M] Malam</span>
+            <span>[N] Normal / Kantor</span>
+            <span>[C] Cuti</span>
+            <span>[Skt] Sakit</span>
+            <span>[–] Libur / OFF</span>
+          </div>
+
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(function() { window.close(); }, 500);
+            }
+          </script>
+        </body>
+        </html>
+      `;
+
+      printWindow.document.write(content);
+      printWindow.document.close();
+    } catch (err) {
+      console.error(err);
+      alert("Terjadi kesalahan saat mencetak PDF.");
+      printWindow.close();
+    }
+  };
+
   return (
-    <div className="space-y-5 font-sans">
+    <div className="space-y-5 font-sans pb-32">
       {/* Clone Warning */}
       {cloneInfo && (
         <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3">
@@ -869,10 +1237,314 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
         </div>
       </div>
 
+      {/* Shift cards grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {loading && (
+          <div className="col-span-2 text-center py-5 text-gray-400 text-[12px]">Memuat data shift...</div>
+        )}
+        {!loading && shifts.length === 0 && (
+          <div className="col-span-2 text-center py-8 text-gray-400 text-[12px] bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+            Belum ada master shift untuk unit Anda. Klik "+ Tambah Shift Baru" untuk membuat.
+          </div>
+        )}
+        {shifts
+          .filter(s => {
+            const n = s.name.toLowerCase();
+            return !n.includes('cuti') && !n.includes('sakit') && !n.includes('izin') && !n.includes('dinas luar') && !n.includes('libur jaga') && n !== 'lj';
+          })
+          .map(shift => {
+            const IconComp = ICON_MAP[shift.icon as IconKey]?.component ?? Sun;
+            const pr = getPresetByHex(shift.color);
+            const isExpanded = expandedShift === shift.id;
+
+          return (
+            <div key={shift.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden group">
+              <div className="p-4 border-b border-gray-50">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: pr.bg, border: `1.5px solid ${pr.border}` }}>
+                      <IconComp size={17} style={{ color: shift.color }} />
+                    </div>
+                    <div>
+                      <p className="text-[14px] font-semibold text-gray-800 leading-tight">{shift.name}</p>
+                      <div className="flex flex-wrap gap-1.5 mt-1 items-center">
+                        {shift.owner_department_id ? (
+                          <span className="inline-block text-[9px] font-semibold px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200">
+                            Unit: {user.pj_bagian_department || 'Unit Kerja'}
+                          </span>
+                        ) : (
+                          <span className="inline-block text-[9px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                            Shift Umum
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    {/* Delete button */}
+                    {shift.owner_department_id && editingId !== shift.id && (
+                      <button
+                        onClick={() => setDeleteTarget(shift)}
+                        className="w-7 h-7 rounded-lg bg-red-50 border border-red-100 flex items-center justify-center hover:bg-red-100 transition-colors opacity-0 group-hover:opacity-100"
+                        title="Hapus shift"
+                      >
+                        <Trash2 size={13} className="text-red-400" />
+                      </button>
+                    )}
+                    {/* Edit / Save-Cancel buttons */}
+                    {shift.owner_department_id && (
+                      editingId !== shift.id ? (
+                        <button onClick={() => startEdit(shift)} className="w-7 h-7 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center hover:bg-gray-100 transition-colors">
+                          <Edit2 size={13} className="text-gray-400" />
+                        </button>
+                      ) : (
+                        <div className="flex gap-1">
+                          <button onClick={() => saveEdit(shift.id)} className="w-7 h-7 rounded-lg bg-green-50 border border-green-100 flex items-center justify-center hover:bg-green-100 transition-colors">
+                            <Check size={13} className="text-[#16A34A]" />
+                          </button>
+                          <button onClick={() => setEditingId(null)} className="w-7 h-7 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center hover:bg-gray-100 transition-colors">
+                            <X size={13} className="text-gray-400" />
+                          </button>
+                        </div>
+                      )
+                    )}
+                  </div>
+                </div>
+
+                {editingId === shift.id ? (
+                  <div className="space-y-3 font-sans">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-gray-600 mb-1">Nama Shift Utama</label>
+                      <input type="text" value={editName} onChange={e => setEditName(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all" />
+                    </div>
+
+                    <div className="border-t border-gray-100 pt-3 mt-3 space-y-2">
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-[11px] font-bold text-gray-600 uppercase tracking-wider">Sub-Waktu Kerja</span>
+                        <button
+                          type="button"
+                          onClick={handleAddEditChild}
+                          className="px-2 py-1 bg-green-50 border border-green-100 hover:bg-green-100 text-[#16A34A] text-[10px] font-bold rounded-lg transition-all"
+                        >
+                          + Tambah Waktu
+                        </button>
+                      </div>
+
+                      {editChildren.map((child, index) => (
+                        <div key={index} className="flex flex-col gap-2 bg-gray-50 p-2.5 rounded-xl border border-gray-200/50">
+                          <div className="flex gap-2 items-center">
+                            <div className="flex-1 min-w-0">
+                              <input
+                                type="text"
+                                placeholder="Nama sub-shift (misal: Pagi)"
+                                value={child.name}
+                                onChange={e => handleUpdateEditChild(index, 'name', e.target.value)}
+                                className="w-full px-2 py-1 border border-gray-200 rounded-lg text-[11.5px] bg-white focus:outline-none focus:border-[#16A34A]"
+                              />
+                            </div>
+                            <div className="flex gap-1 items-center">
+                              <input
+                                type="time"
+                                value={child.start_time}
+                                onChange={e => handleUpdateEditChild(index, 'start_time', e.target.value)}
+                                className="px-1.5 py-1 border border-gray-200 rounded-lg text-[11.5px] font-mono bg-white focus:outline-none focus:border-[#16A34A]"
+                              />
+                              <span className="text-gray-400 text-[10px]">-</span>
+                              <input
+                                type="time"
+                                value={child.end_time}
+                                onChange={e => handleUpdateEditChild(index, 'end_time', e.target.value)}
+                                className="px-1.5 py-1 border border-gray-200 rounded-lg text-[11.5px] font-mono bg-white focus:outline-none focus:border-[#16A34A]"
+                              />
+                            </div>
+                            {editChildren.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveEditChild(index)}
+                                className="p-1 hover:bg-red-50 text-red-500 rounded-lg transition-all"
+                                title="Hapus sub-shift"
+                              >
+                                <X size={14} />
+                              </button>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-[10px] text-gray-400 font-semibold uppercase">Limit Absen:</span>
+                            <input
+                              type="time"
+                              value={child.checkin_window_end_time || ''}
+                              onChange={e => handleUpdateEditChild(index, 'checkin_window_end_time', e.target.value)}
+                              className="px-2 py-1 border border-gray-200 rounded-lg text-[11px] font-mono bg-white focus:outline-none focus:border-[#16A34A] w-24"
+                            />
+                            {!child.checkin_window_end_time && (
+                              <span className="text-[9px] text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded border border-amber-200/50">
+                                Fallback aktif
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5 mt-1 font-sans">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Daftar Sub-Waktu</p>
+                    {shift.children && shift.children.length > 0 ? (
+                      shift.children.map(child => {
+                        const hasNoWindow = !child.checkin_window_end_time;
+                        const fallbackVal = (() => {
+                          if (!hasNoWindow) return '';
+                          try {
+                            const [sh, sm] = child.start_time.split(':').map(Number);
+                            const [eh, em] = child.end_time.split(':').map(Number);
+                            let startM = sh * 60 + sm;
+                            let endM = eh * 60 + em;
+                            if (endM < startM) endM += 1440;
+                            const dur = endM - startM;
+                            const half = Math.floor(dur / 2);
+                            const fallM = (startM + half) % 1440;
+                            const hh = String(Math.floor(fallM / 60)).padStart(2, '0');
+                            const mm = String(fallM % 60).padStart(2, '0');
+                            return `${hh}:${mm}`;
+                          } catch {
+                            return '--:--';
+                          }
+                        })();
+
+                        return (
+                          <div key={child.id} className="flex flex-col gap-1 w-full border-b border-gray-50 pb-2 last:border-0 last:pb-0">
+                            <div className="flex justify-between items-center text-[12px] py-1.5 px-3 rounded-xl bg-gray-50 border border-gray-100/50 font-medium">
+                              <span className="text-gray-600 text-[11px] truncate max-w-[150px]">{child.name}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-black font-semibold bg-white border border-gray-100 px-2 py-0.5 rounded-lg text-[11px]">
+                                  {child.start_time.substring(0, 5)} – {child.end_time.substring(0, 5)}
+                                </span>
+                                {child.checkin_window_end_time ? (
+                                  <span className="text-[10px] text-gray-500 font-mono bg-gray-100 border border-gray-200 px-1.5 py-0.5 rounded-lg" title="Batas absen masuk">
+                                    Batas: {child.checkin_window_end_time.substring(0, 5)}
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-amber-600 font-bold font-mono bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-lg" title="Menggunakan batas bawaan/sementara">
+                                    Batas: {fallbackVal}*
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <p className="text-[11px] text-gray-400 italic">Belum ada sub-waktu diatur.</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Audit details */}
+                {(shift.created_by_name || shift.updated_by_name) && (
+                  <div className="mt-4 pt-3 border-t border-gray-100 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-400">
+                    {shift.created_by_name && (
+                      <span>Dibuat: <strong className="text-gray-600 font-semibold">{shift.created_by_name}</strong></span>
+                    )}
+                    {shift.updated_by_name && (
+                      <span>Diubah: <strong className="text-gray-600 font-semibold">{shift.updated_by_name}</strong></span>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Employee list toggle */}
+              <button onClick={() => setExpandedShift(isExpanded ? null : shift.id)}
+                className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 transition-colors border-b border-gray-50">
+                <div className="flex items-center gap-2">
+                  <Users size={13} className="text-gray-400" />
+                  <span className="text-[12px] text-gray-500">{shift.employees_count || 0} karyawan</span>
+                </div>
+                <span className="text-[11px] text-gray-400">{isExpanded ? '▲' : '▼'}</span>
+              </button>
+
+              {/* Expanded Employee List */}
+              {isExpanded && (
+                <div className="p-4 bg-gray-50/50 space-y-3 font-sans">
+                  <div className="space-y-2">
+                    {(() => {
+                      const distinctEmployees = Array.from(
+                        new Map(
+                          shift.children?.flatMap(child => child.employees ?? [])?.map(emp => [emp.id, emp]) ?? []
+                        ).values()
+                      );
+
+                      if (distinctEmployees.length === 0) {
+                        return <p className="text-[11px] text-gray-400 text-center py-2">Belum ada karyawan ditugaskan di shift ini.</p>;
+                      }
+
+                      return distinctEmployees.map(emp => {
+                        const days = shift.children?.flatMap(child => 
+                          child.employees
+                            ?.filter(e => e.id === emp.id && ((e.pivot as any)?.day_of_week || (e.pivot as any)?.work_date))
+                            .map(e => {
+                              const subName = child.name.split(' ')[0];
+                              const p = e.pivot as any;
+                              if (p?.day_of_week) return `${p.day_of_week} (${subName})`;
+                              if (p?.work_date) {
+                                try {
+                                  const formattedDate = new Date(p.work_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+                                  return `${formattedDate} (${subName})`;
+                                } catch {
+                                  return `${p.work_date} (${subName})`;
+                                }
+                              }
+                              return `(${subName})`;
+                            }) ?? []
+                        ) ?? [];
+
+                        const daysLabel = days.length > 0 ? ` · ${days.join(', ')}` : '';
+
+                        return (
+                          <div key={emp.id} className="flex items-center justify-between bg-white px-3.5 py-2.5 rounded-xl border border-gray-100 shadow-sm">
+                            <div>
+                              <p className="text-[12.5px] font-bold text-gray-800">{emp.user?.name}</p>
+                              <p className="text-[10px] text-gray-400">{emp.department?.name || 'Tanpa Dept'}{daysLabel}</p>
+                            </div>
+                            <button
+                              onClick={() => handleRemoveEmployeeFromShift(emp.id, shift.children?.flatMap(c => c.employees?.filter(e => e.id === emp.id).map(e => ((e.pivot as any)?.day_of_week || (e.pivot as any)?.work_date) as string) ?? []) ?? [])}
+                              className="text-[11px] text-red-500 hover:text-red-700 font-semibold px-2 py-1 rounded-lg hover:bg-red-50 transition-colors"
+                            >
+                              Hapus
+                            </button>
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
       {/* Calendar Section */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        {/* Header Filter Terpadu */}
-        <div className="p-4 border-b border-gray-100 bg-slate-50/30">
+      <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden font-sans">
+        <style>{`
+          .custom-scrollbar::-webkit-scrollbar {
+            height: 6px;
+          }
+          .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+          }
+          .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #CBD5E1;
+            border-radius: 4px;
+          }
+          .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94A3B8;
+          }
+        `}</style>
+
+        {/* Integration Header Filter */}
+        <div className="p-5 border-b border-slate-100 bg-slate-50/20">
           <MonthYearDeptFilter
             month={viewMonth}
             year={viewYear}
@@ -883,79 +1555,70 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
           />
         </div>
 
-        {/* Calendar Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gradient-to-r from-green-50 to-white">
+        {/* Calendar Title Bar */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-150 bg-gradient-to-r from-green-50/50 to-white flex-wrap gap-3">
           <div className="flex items-center gap-3">
             <CalendarIcon size={18} className="text-[#16A34A]" />
             <div>
-              <p className="text-[15px] font-bold text-gray-900">
+              <p className="text-[14.5px] font-bold text-gray-900">
                 {MONTH_NAMES[viewMonth - 1]} {viewYear}
               </p>
-              <p className="text-[11px] text-gray-400">{daysInMonth} hari · Klik sel untuk atur shift</p>
+              <p className="text-[11px] text-gray-400">{daysInMonth} hari · Klik sel karyawan untuk mengubah shift kerja</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {/* Search */}
-            <input type="text" placeholder="Cari karyawan..." value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="hidden sm:block px-3 py-1.5 border border-gray-200 rounded-lg text-[12px] bg-white focus:outline-none focus:border-[#16A34A] w-36" />
+            {/* Search Input */}
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Cari nama..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="pl-8 pr-3 py-1.5 border border-slate-200 rounded-xl text-[12px] bg-white focus:outline-none focus:border-[#16A34A] w-40 font-medium"
+              />
+            </div>
+            <button
+              onClick={handlePrintPDF}
+              className="flex items-center gap-1.5 px-4 py-1.8 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl text-[11px] font-bold text-blue-700 transition-colors shadow-2xs cursor-pointer active:scale-95"
+            >
+              <FileText size={12} /> Cetak Jadwal
+            </button>
           </div>
         </div>
 
-        {/* Legend */}
-        <div className="px-5 py-2 border-b border-gray-50 flex items-center gap-4 flex-wrap">
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Keterangan:</p>
-          {shifts.slice(0, 5).map(s => {
-            const badge = getShiftBadge(s.name);
-            const pr = getPresetByHex(s.color);
-            return (
-              <div key={s.id} className="flex items-center gap-1.5">
-                <span className="inline-flex items-center justify-center w-6 h-6 rounded-md text-[10px] font-bold border"
-                  style={{ background: pr.bg, borderColor: pr.border, color: s.color }}>
-                  {badge}
-                </span>
-                <span className="text-[10px] text-gray-500">{s.name}</span>
-              </div>
-            );
-          })}
-          <div className="flex items-center gap-1.5">
-            <span className="inline-flex items-center justify-center w-6 h-6 rounded-md text-[10px] font-bold border border-gray-200 bg-gray-100 text-gray-400">
-              –
-            </span>
-            <span className="text-[10px] text-gray-500">Libur</span>
-          </div>
-        </div>
 
         {/* Calendar Grid Table */}
         {loading ? (
-          <div className="flex items-center justify-center py-16 gap-3 text-gray-400">
-            <Loader2 size={22} className="animate-spin text-[#16A34A]" />
-            <span className="text-[13px]">Memuat jadwal...</span>
+          <div className="flex flex-col items-center justify-center py-20 gap-3 text-slate-400">
+            <Loader2 size={24} className="animate-spin text-[#16A34A]" />
+            <span className="text-[13px] font-medium">Sinkronisasi jadwal kerja dinas...</span>
           </div>
         ) : (
-          <div ref={tableRef} className="overflow-x-auto pb-2">
-            <table className="text-[11px] border-collapse" style={{ minWidth: `${Math.max(800, 140 + daysInMonth * 44)}px` }}>
+          <div ref={tableRef} className="overflow-x-auto custom-scrollbar pb-1">
+            <table className="text-[11px] border-collapse" style={{ minWidth: `${Math.max(800, 150 + daysInMonth * 44)}px` }}>
               <thead>
-                <tr className="border-b border-gray-100">
-                  {/* Sticky name column */}
-                  <th className="sticky left-0 z-10 bg-gray-50 text-left px-4 py-3 min-w-[130px] font-semibold text-gray-500 uppercase tracking-wider text-[10px] border-r border-gray-100">
+                <tr className="border-b border-slate-100 bg-slate-50/40">
+                  <th className="sticky left-0 z-20 bg-[#F8FAFC] text-left px-5 py-4 min-w-[150px] font-semibold text-slate-500 uppercase tracking-wider text-[10px] border-r border-slate-200/80 shadow-[3px_0_6px_-2px_rgba(0,0,0,0.05)]">
                     <div className="flex items-center gap-1.5">
-                      <Users size={12} className="text-gray-400" />
+                      <Users size={13} className="text-slate-400" />
                       Karyawan
                     </div>
                   </th>
                   {days.map(day => {
                     const dateStr = `${viewYear}-${String(viewMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                    const dow = new Date(viewYear, viewMonth - 1, day).getDay(); // 0=Sun
+                    const dow = new Date(viewYear, viewMonth - 1, day).getDay();
                     const isToday = dateStr === today_str;
+                    const isHoliday = holidays.includes(dateStr);
+                    const isSunday = dow === 0;
                     return (
                       <th key={day}
-                        className={`text-center py-2 px-1 font-semibold text-[10px] ${isToday ? 'bg-green-50' : ''}`}
-                        style={{ minWidth: '40px', ...getDayHeaderStyle(dow) }}>
+                        className={`text-center py-2 px-1 font-semibold text-[10px] ${isToday ? 'bg-green-50/50' : ''}`}
+                        style={{ minWidth: '42px', ...getDayHeaderStyle(dow, isHoliday) }}>
                         <div className="flex flex-col items-center">
-                          <span>{DAY_ABBR[dow]}</span>
-                          <span className={`mt-0.5 w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold ${
-                            isToday ? 'bg-[#16A34A] text-white' : ''
+                          <span className={`text-[9px] uppercase tracking-wider font-semibold ${isSunday || isHoliday ? 'text-red-500/80' : 'opacity-75'}`}>{DAY_ABBR[dow]}</span>
+                          <span className={`mt-1 w-5 h-5 rounded-full flex items-center justify-center text-[10.5px] font-extrabold ${
+                            isToday ? 'bg-[#16A34A] text-white shadow-xs shadow-green-150' : isSunday || isHoliday ? 'text-red-600' : 'text-slate-700'
                           }`}>{day}</span>
                         </div>
                       </th>
@@ -966,25 +1629,31 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
               <tbody>
                 {filteredMonthlyData.length === 0 ? (
                   <tr>
-                    <td colSpan={daysInMonth + 1} className="text-center py-10 text-gray-400 text-[12px] italic">
+                    <td colSpan={daysInMonth + 1} className="text-center py-14 text-slate-400 text-[12px] italic">
                       {searchQuery ? 'Karyawan tidak ditemukan.' : 'Belum ada karyawan di unit Anda.'}
                     </td>
                   </tr>
                 ) : (
                   filteredMonthlyData.map((row, ri) => {
                     const isSelfPj =
-                      row.employee_id === user.id ||
-                      row.name.toLowerCase().trim() === user.name.toLowerCase().trim();
+                      row.employee_id && (user as any)?.employee_id
+                        ? Number(row.employee_id) === Number((user as any).employee_id)
+                        : false;
 
                     return (
                       <tr key={row.employee_id}
-                        className={`border-b border-gray-50 ${ri % 2 === 0 ? 'bg-white' : 'bg-gray-50/40'} hover:bg-green-50/30 transition-colors`}>
-                        {/* Sticky name */}
-                        <td className="sticky left-0 z-10 bg-inherit px-4 py-2 border-r border-gray-100">
-                          <div className="flex items-center gap-1.5">
-                            <p className="font-semibold text-gray-800 whitespace-nowrap text-[12px]">{row.name}</p>
+                        className="border-b border-slate-50 group hover:bg-slate-50/30 transition-colors">
+                        <td className={`sticky left-0 z-20 ${
+                          isSelfPj 
+                            ? 'bg-[#F2FBF4]' 
+                            : ri % 2 === 0 
+                              ? 'bg-white' 
+                              : 'bg-[#F8FAFC]/60'
+                        } group-hover:bg-[#F0FDF4] px-5 py-3 border-r border-slate-200/80 shadow-[3px_0_6px_-2px_rgba(0,0,0,0.04)] transition-colors`}>
+                          <div className="flex items-center gap-2">
+                            <p className="font-bold text-slate-800 whitespace-nowrap text-[12.5px] tracking-wide">{row.name}</p>
                             {isSelfPj && (
-                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200/80 whitespace-nowrap">
+                              <span className="text-[8px] font-extrabold px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 border border-green-200/50 uppercase tracking-wider">
                                 Anda (PJ)
                               </span>
                             )}
@@ -999,9 +1668,18 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
                           const isPending = !!pendingChanges[`${row.employee_id}-${dateStr}`];
                           const pr = assigned ? getPresetByHex(assigned.color) : null;
                           const badge = assigned ? getShiftBadge(assigned.name) : null;
+                          const isLeave = assigned && (
+                            (assigned as any).is_approved_leave ||
+                            ['cuti', 'sakit', 'izin', 'dinas', 'tugas'].some(keyword => assigned.name.toLowerCase().includes(keyword))
+                          );
+
+                          const isSunday = dow === 0;
+                          const isHoliday = holidays.includes(dateStr);
 
                           return (
-                            <td key={day} className={`px-0.5 py-1 text-center relative ${isToday ? 'bg-green-50/50' : ''}`}>
+                            <td key={day} className={`text-center py-2 px-0.5 border-r border-slate-100 relative ${
+                              isToday ? 'bg-green-50/20' : ''
+                            } ${isSunday || isHoliday ? 'bg-red-50/10' : ''}`}>
                               {isSaving ? (
                                 <div className="flex items-center justify-center h-7">
                                   <Loader2 size={12} className="animate-spin text-[#16A34A]" />
@@ -1011,12 +1689,10 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
                                 <div className="relative inline-block">
                                   <button
                                     disabled
-                                    className={`w-8 h-7 mx-auto rounded-lg text-[10px] font-bold border flex items-center justify-center cursor-not-allowed opacity-95 ${
+                                    className={`w-8 h-7 mx-auto rounded-lg text-[10px] font-extrabold border flex items-center justify-center cursor-not-allowed opacity-90 ${
                                       assigned
-                                        ? 'shadow-sm font-extrabold'
-                                        : dow === 0
-                                          ? 'border-gray-200 bg-gray-100 text-gray-400'
-                                          : 'border-green-300 bg-green-50 text-green-700 font-extrabold shadow-2xs'
+                                        ? 'shadow-sm'
+                                        : 'border-[#BBF7D0] bg-[#F0FDF4] text-[#16A34A] shadow-2xs'
                                     }`}
                                     style={assigned && pr ? {
                                       background: pr.bg,
@@ -1026,28 +1702,38 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
                                     title={
                                       assigned
                                         ? `[DISETUJUI] ${assigned.name}`
-                                        : dow === 0
-                                          ? "Hari Minggu — Libur Reguler"
-                                          : "Jam Kantor Biasa (08:30 - 17:00). Akun PJ Bagian otomatis mengikuti Jam Kantor."
+                                        : "Jam Kantor Biasa (08:30 - 17:00). Akun PJ Bagian otomatis mengikuti Jam Kantor."
                                     }
                                   >
-                                    {assigned ? badge : (dow === 0 ? '-' : 'K')}
+                                    {assigned ? badge : 'N'}
+                                  </button>
+                                </div>
+                              ) : isLeave ? (
+                                /* Sel dikunci karena merupakan Cuti / Sakit / Izin dari Admin */
+                                <div className="relative inline-block">
+                                  <button
+                                    disabled
+                                    className={`w-8 h-7 mx-auto rounded-lg text-[10px] font-extrabold border flex items-center justify-center cursor-not-allowed opacity-90 shadow-sm`}
+                                    style={assigned && pr ? {
+                                      background: pr.bg,
+                                      borderColor: pr.border,
+                                      color: assigned.color,
+                                    } : {}}
+                                    title={`[DIKUNCI ADMIN] ${assigned.name}\nHanya Admin yang dapat mengubah.`}
+                                  >
+                                    {badge}
                                   </button>
                                 </div>
                               ) : (
                                 <div className="relative inline-block">
                                   <button
                                     onClick={e => handleCellClick(e, row.employee_id, dateStr)}
-                                    className={`w-8 h-7 mx-auto rounded-lg text-[10px] font-bold transition-all hover:scale-110 active:scale-95 border flex items-center justify-center ${
+                                    className={`w-8 h-7 mx-auto rounded-lg text-[10px] font-extrabold transition-all hover:scale-110 active:scale-95 border flex items-center justify-center ${
                                       isPending
-                                        ? 'ring-2 ring-blue-500 border-blue-400 shadow-md font-extrabold animate-pulse'
+                                        ? 'ring-2 ring-blue-500 border-blue-400 shadow-md animate-pulse'
                                         : assigned
                                           ? 'shadow-sm hover:shadow-md'
-                                          : dow === 0
-                                            ? 'border-red-100 bg-red-50/50 text-red-300 hover:bg-red-100'
-                                            : dow === 6
-                                              ? 'border-blue-100 bg-blue-50/50 text-blue-300 hover:bg-blue-100'
-                                              : 'border-gray-100 bg-gray-50 text-gray-300 hover:bg-gray-100'
+                                          : 'border-slate-100 bg-slate-50 text-slate-400 hover:bg-slate-100'
                                     }`}
                                     style={assigned && pr ? {
                                       background: pr.bg,
@@ -1121,6 +1807,7 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
       {showAddModal && <AddShiftModal onClose={() => setShowAddModal(false)} onAdd={handleAdd} />}
       {showBulkModal && (
         <BulkAssignModal
+          user={user}
           shifts={shifts}
           employees={employees}
           year={viewYear}

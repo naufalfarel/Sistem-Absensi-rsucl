@@ -71,7 +71,8 @@ class ScheduleResource extends JsonResource
                         'username' => $emp->user->username
                     ] : null,
                     'pivot'      => [
-                        'day_of_week' => $emp->pivot?->day_of_week
+                        'day_of_week' => $emp->pivot?->day_of_week,
+                        'work_date'   => $emp->pivot?->work_date,
                     ]
                 ];
             });

@@ -28,7 +28,11 @@ class StoreScheduleRequest extends FormRequest
             'color'      => 'required|string|max:10',
             'icon'       => 'required|string|max:20',
             'shift_type' => 'sometimes|in:normal,dinas_luar',
-            'owner_department_id' => 'nullable|exists:departments,id',
+            'owner_department_id'     => 'nullable|exists:departments,id',
+            'children'               => 'sometimes|array',
+            'children.*.name'        => 'required_with:children|string|max:60',
+            'children.*.start_time'  => 'required_with:children|date_format:H:i',
+            'children.*.end_time'    => 'required_with:children|date_format:H:i',
         ];
     }
 }

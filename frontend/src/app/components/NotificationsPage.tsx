@@ -3,6 +3,7 @@ import {
   Bell, Check, Calendar, Trash2, Clock, AlertTriangle, Layers, Settings, ChevronRight, FileText, UserCheck, ArrowRight
 } from 'lucide-react';
 import { notificationApi, AppNotification } from '../../services/api';
+import { MonthYearDeptFilter } from './ui/MonthYearDeptFilter';
 
 const filterOptions = ['Semua', 'Belum Dibaca'];
 
@@ -27,6 +28,10 @@ export function NotificationsPage({ onUpdateCount, onNavigate, userRole = 'emplo
   
   // Indikator memuat request
   const [loading, setLoading] = useState(false);
+
+  // Filter Bulan & Tahun (0 = Semua)
+  const [filterMonth, setFilterMonth] = useState<number>(0);
+  const [filterYear, setFilterYear] = useState<number>(0);
 
   /**
    * Menarik daftar notifikasi terbaru dari API backend.
@@ -114,6 +119,10 @@ export function NotificationsPage({ onUpdateCount, onNavigate, userRole = 'emplo
         onNavigate('shift_proposals');
       } else if (text.includes('absen') || type === 'attendance') {
         onNavigate('history');
+      } else if (text.includes('resign') || text.includes('pengunduran') || type === 'resignation') {
+        onNavigate('resignation');
+      } else if (text.includes('sanksi') || text.includes('teguran') || text.includes('peringatan') || text.includes('phk') || type === 'disciplinary' || type === 'sanction') {
+        onNavigate('disciplinary');
       }
     } else {
       // Pegawai biasa
@@ -127,6 +136,10 @@ export function NotificationsPage({ onUpdateCount, onNavigate, userRole = 'emplo
         onNavigate('history');
       } else if (text.includes('shift') || text.includes('jadwal') || type === 'schedule') {
         onNavigate('history');
+      } else if (text.includes('resign') || text.includes('pengunduran') || type === 'resignation') {
+        onNavigate('resignation');
+      } else if (text.includes('sanksi') || text.includes('teguran') || text.includes('peringatan') || text.includes('phk') || type === 'disciplinary' || type === 'sanction') {
+        onNavigate('disciplinary');
       }
     }
   };
@@ -160,7 +173,12 @@ export function NotificationsPage({ onUpdateCount, onNavigate, userRole = 'emplo
   };
 
   const filtered = notifications.filter(n => {
-    if (activeFilter === 'Belum Dibaca') return !n.is_read;
+    if (activeFilter === 'Belum Dibaca' && n.is_read) return false;
+    if (n.created_at) {
+      const d = new Date(n.created_at);
+      if (filterMonth > 0 && d.getMonth() + 1 !== filterMonth) return false;
+      if (filterYear > 0 && d.getFullYear() !== filterYear) return false;
+    }
     return true;
   });
 
@@ -176,6 +194,12 @@ export function NotificationsPage({ onUpdateCount, onNavigate, userRole = 'emplo
     }
     if (text.includes('absen') || type === 'attendance') {
       return { icon: Clock, color: '#2563EB', bg: '#EFF6FF', label: 'Absensi' };
+    }
+    if (text.includes('resign') || text.includes('pengunduran') || type === 'resignation') {
+      return { icon: FileText, color: '#DC2626', bg: '#FEE2E2', label: 'Pengunduran Diri' };
+    }
+    if (text.includes('sanksi') || text.includes('teguran') || text.includes('peringatan') || text.includes('phk') || type === 'disciplinary') {
+      return { icon: AlertTriangle, color: '#EF4444', bg: '#FEF2F2', label: 'Sanksi Disiplin' };
     }
     return { icon: Bell, color: '#6B7280', bg: '#F3F4F6', label: 'Info' };
   };
@@ -243,6 +267,17 @@ export function NotificationsPage({ onUpdateCount, onNavigate, userRole = 'emplo
           </button>
         ))}
       </div>
+
+      {/* Filter Bulan & Tahun */}
+      <MonthYearDeptFilter
+        month={filterMonth}
+        year={filterYear}
+        showAllMonthsOption={true}
+        showAllYearsOption={true}
+        onMonthChange={setFilterMonth}
+        onYearChange={setFilterYear}
+        className="w-full mb-2"
+      />
 
       {/* Notifications list */}
       <div className="space-y-3">

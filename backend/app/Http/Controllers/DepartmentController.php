@@ -8,7 +8,7 @@ use Illuminate\Http\Request;
 /**
  * Class DepartmentController
  * 
- * Mengelola operasi CRUD untuk entitas Departemen/Bagian Unit Kerja.
+ * Mengelola operasi CRUD untuk entitas Unit kerja Unit Kerja.
  * Hanya dapat diakses oleh administrator (berdasarkan konfigurasi routing api.php).
  */
 class DepartmentController extends Controller
@@ -44,9 +44,9 @@ class DepartmentController extends Controller
         $data = $request->validate([
             'name' => 'required|string|max:100|unique:departments,name',
         ], [
-            'name.required' => 'Nama departemen/bagian wajib diisi.',
-            'name.unique'   => 'Nama departemen/bagian sudah terdaftar.',
-            'name.max'      => 'Nama departemen/bagian maksimal 100 karakter.',
+            'name.required' => 'Nama Unit kerja wajib diisi.',
+            'name.unique'   => 'Nama Unit kerja sudah terdaftar.',
+            'name.max'      => 'Nama Unit kerja maksimal 100 karakter.',
         ]);
 
         // Simpan ke database
@@ -56,7 +56,7 @@ class DepartmentController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Departemen/Bagian berhasil ditambahkan.',
+            'message' => 'Unit kerja berhasil ditambahkan.',
             'data'    => $department,
         ], 201);
     }
@@ -94,9 +94,9 @@ class DepartmentController extends Controller
         $data = $request->validate([
             'name' => 'required|string|max:100|unique:departments,name,' . $department->id,
         ], [
-            'name.required' => 'Nama departemen/bagian wajib diisi.',
-            'name.unique'   => 'Nama departemen/bagian sudah terdaftar.',
-            'name.max'      => 'Nama departemen/bagian maksimal 100 karakter.',
+            'name.required' => 'Nama Unit kerja wajib diisi.',
+            'name.unique'   => 'Nama Unit kerja sudah terdaftar.',
+            'name.max'      => 'Nama Unit kerja maksimal 100 karakter.',
         ]);
 
         // Update data di database
@@ -106,7 +106,7 @@ class DepartmentController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Departemen/Bagian berhasil diperbarui.',
+            'message' => 'Unit kerja berhasil diperbarui.',
             'data'    => $department,
         ]);
     }
@@ -126,7 +126,7 @@ class DepartmentController extends Controller
         if ($department->employees()->count() > 0) {
             return response()->json([
                 'success' => false,
-                'message' => 'Departemen/Bagian tidak dapat dihapus karena masih memiliki pegawai aktif.',
+                'message' => 'Unit kerja tidak dapat dihapus karena masih memiliki pegawai aktif.',
             ], 422);
         }
 
@@ -135,7 +135,7 @@ class DepartmentController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Departemen/Bagian berhasil dihapus.',
+            'message' => 'Unit kerja berhasil dihapus.',
         ]);
     }
 }

@@ -115,11 +115,6 @@ class NotificationController extends Controller
             return response()->json(['success' => false, 'message' => 'Akses ditolak.'], 403);
         }
 
-        // Cegah penghapusan jika belum dibaca
-        if ($notification->read_at === null) {
-            return response()->json(['success' => false, 'message' => 'Hanya notifikasi yang telah dibaca yang dapat dihapus.'], 422);
-        }
-
         $notification->delete();
 
         return response()->json(['success' => true, 'message' => 'Notifikasi berhasil dihapus.']);

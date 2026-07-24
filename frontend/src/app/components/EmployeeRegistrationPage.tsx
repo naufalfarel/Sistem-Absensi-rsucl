@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { UserPlus, ArrowLeft, CheckCircle2, Copy, Check, FileText, Building2, User, Mail, Phone, ShieldCheck, AlertCircle, Search, Instagram, Facebook, Car } from 'lucide-react';
+import { UserPlus, ArrowLeft, CheckCircle2, Copy, Check, FileText, Building2, User, Mail, Phone, ShieldCheck, AlertCircle, Search, Instagram, Facebook, Car, Plus, Camera } from 'lucide-react';
 import { employeeRegistrationApi } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import logoImg from '../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
@@ -22,6 +22,7 @@ export function EmployeeRegistrationPage({ onBack, onGoToCheckStatus }: Registra
     name: '',
     nik_ktp: '',
     email: '',
+    profile_picture: '',
     phone: '',
     gender: 'Laki-laki',
     department_id: '',
@@ -34,6 +35,24 @@ export function EmployeeRegistrationPage({ onBack, onGoToCheckStatus }: Registra
     facebook: '',
     tiktok: '',
   });
+
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setErrorMsg("File harus berupa gambar.");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setErrorMsg("Ukuran file foto profil maksimal 2MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setForm(prev => ({ ...prev, profile_picture: reader.result as string }));
+    };
+    reader.readAsDataURL(file);
+  };
 
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -63,6 +82,18 @@ export function EmployeeRegistrationPage({ onBack, onGoToCheckStatus }: Registra
       setErrorMsg('Nama Lengkap, NIK KTP, Email, dan Nomor HP wajib diisi.');
       return;
     }
+    if (!form.department_id) {
+      setErrorMsg('Departemen / Bagian Unit Kerja wajib dipilih.');
+      return;
+    }
+    if (!form.position_id) {
+      setErrorMsg('Posisi wajib dipilih.');
+      return;
+    }
+    if (!form.profile_picture) {
+      setErrorMsg('Foto Profil wajib diunggah.');
+      return;
+    }
 
     setSubmitting(true);
     setErrorMsg(null);
@@ -83,6 +114,7 @@ export function EmployeeRegistrationPage({ onBack, onGoToCheckStatus }: Registra
         instagram: form.instagram.trim() || null,
         facebook: form.facebook.trim() || null,
         tiktok: form.tiktok.trim() || null,
+        profile_picture: form.profile_picture || null,
       });
 
       if (res.success) {
@@ -178,6 +210,32 @@ export function EmployeeRegistrationPage({ onBack, onGoToCheckStatus }: Registra
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Foto Profil */}
+                <div className="md:col-span-2 flex flex-col items-center justify-center p-4 bg-gray-50 border border-dashed border-gray-200 rounded-2xl mb-2">
+                  <span className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-2.5 self-start font-bold">
+                    Foto Profil <span className="text-red-500">*</span>
+                  </span>
+                  <div className="relative group">
+                    <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-md bg-gray-200 flex items-center justify-center relative">
+                      {form.profile_picture ? (
+                        <img src={form.profile_picture} alt="Preview Foto" className="w-full h-full object-cover" />
+                      ) : (
+                        <User size={36} className="text-gray-400" />
+                      )}
+                    </div>
+                    <label className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-[#16A34A] hover:bg-[#0d9240] text-white flex items-center justify-center shadow-md cursor-pointer transition-transform group-hover:scale-105 active:scale-95">
+                      <Plus size={16} />
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handlePhotoChange}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                  <p className="text-[10px] text-gray-400 mt-2">Format: JPG, JPEG, PNG. Maks: 2MB.</p>
+                </div>
+
                 {/* Nama Lengkap */}
                 <div className="md:col-span-2 space-y-1.5">
                   <label className="block text-[11.5px] font-bold text-gray-700 uppercase tracking-wider">
@@ -266,17 +324,17 @@ export function EmployeeRegistrationPage({ onBack, onGoToCheckStatus }: Registra
                   </select>
                 </div>
 
-                {/* Department */}
+                 {/* Department */}
                 <div className="space-y-1.5">
                   <label className="block text-[11.5px] font-bold text-gray-700 uppercase tracking-wider">
-                    Departemen / Bagian Unit Kerja
+                    Departemen / Bagian Unit Kerja <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={form.department_id}
                     onChange={(e) => setForm({ ...form, department_id: e.target.value })}
-                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:bg-white focus:ring-2 focus:ring-[#16A34A]/15 text-gray-800 font-medium transition-all cursor-pointer"
+                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:bg-white focus:ring-2 focus:ring-[#16A34A]/15 text-gray-800 font-bold transition-all cursor-pointer"
                   >
-                    <option value="">Pilih Departemen (Opsional)</option>
+                    <option value="">Pilih Departemen</option>
                     {departments.map((d) => (
                       <option key={d.id} value={d.id}>{d.name}</option>
                     ))}
@@ -286,14 +344,14 @@ export function EmployeeRegistrationPage({ onBack, onGoToCheckStatus }: Registra
                 {/* Position */}
                 <div className="space-y-1.5">
                   <label className="block text-[11.5px] font-bold text-gray-700 uppercase tracking-wider">
-                    Jabatan
+                    Posisi <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={form.position_id}
                     onChange={(e) => setForm({ ...form, position_id: e.target.value })}
-                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:bg-white focus:ring-2 focus:ring-[#16A34A]/15 text-gray-800 font-medium transition-all cursor-pointer"
+                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:bg-white focus:ring-2 focus:ring-[#16A34A]/15 text-gray-800 font-bold transition-all cursor-pointer"
                   >
-                    <option value="">Pilih Jabatan (Opsional)</option>
+                    <option value="">Pilih Posisi</option>
                     {positions.map((p) => (
                       <option key={p.id} value={p.id}>{p.name}</option>
                     ))}

@@ -175,15 +175,13 @@ function getWindow(
     if (mins <= closeMins) return "checkin";
     if (mins < breakEn) return "break";
     if (mins < checkoutOpen) return "working";
-    if (mins <= checkoutCls) return "checkout";
-    return "ended";
+    return "checkout";
   }
   if (day === 6) {
     if (mins < openMins) return "too_early";
     if (mins <= closeMins) return "checkin";
-    if (mins < parseMins(s.sat_checkout_open)) return "late_locked";
-    if (mins <= parseMins(s.sat_checkout_close)) return "checkout";
-    return "ended";
+    if (mins < parseMins(s.sat_checkout_open)) return "working";
+    return "checkout";
   }
   return "ended";
 }
@@ -270,16 +268,16 @@ const windowConfig: Record<
     bg: "#FEF2F2",
     border: "#FECACA",
     title: "Waktu Absen Berakhir",
-    desc: "Batas akhir check-out pukul 18:00 WIB.",
-    sub: "Absensi hari ini sudah ditutup.",
+    desc: "Tidak ada jadwal absen aktif saat ini.",
+    sub: "Silakan hubungi admin jika ada kendala.",
   },
   checkout: {
     icon: Sunset,
     iconColor: "#EA580C",
     bg: "#FFF7ED",
     border: "#FED7AA",
-    title: "Waktu Check-Out",
-    desc: "Silakan lakukan check-out sekarang.",
+    title: "Waktu Check-Out (Fleksibel)",
+    desc: "Dapat melakukan check-out kapan saja setelah jam kerja selesai.",
     sub: "Terima kasih atas dedikasi Anda hari ini!",
   },
   no_shift: {
@@ -1311,8 +1309,15 @@ export function AttendancePage() {
     return d;
   })();
 
+  const isLiburShift = todayShift
+    ? (() => {
+        const u = todayShift.name.toUpperCase();
+        return u.includes("LIBUR") || u.includes("OFF") || u === "LJ";
+      })()
+    : false;
+
   const attendanceWindow =
-    todayShift === null ? "no_shift" : getWindow(current, shiftSettings);
+    (todayShift === null || isLiburShift) ? "no_shift" : getWindow(current, shiftSettings);
   const wc = windowConfig[attendanceWindow];
   const dayId = DAYS_ID[current.getDay()];
   const isSaturday = current.getDay() === 6;
@@ -1721,19 +1726,19 @@ export function AttendancePage() {
       {todayShift !== undefined && (
         <div
           className={`mb-4 flex items-center gap-3 px-4 py-3 rounded-xl border text-[12px] font-medium ${
-            todayShift
+            todayShift && !isLiburShift
               ? "border-green-200 bg-green-50 text-green-800"
               : "border-gray-200 bg-gray-50 text-gray-500"
           }`}
         >
           <div
             className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-            style={{ background: todayShift?.color ?? "#E5E7EB" }}
+            style={{ background: todayShift && !isLiburShift ? todayShift.color : "#E5E7EB" }}
           >
             <Clock size={13} className="text-white" />
           </div>
           <div className="flex-1">
-            {todayShift ? (
+            {todayShift && !isLiburShift ? (
               <>
                 <span className="font-semibold">Shift {todayShift.name}</span>
                 <span className="text-green-600 ml-2">
@@ -1742,17 +1747,17 @@ export function AttendancePage() {
                 </span>
               </>
             ) : (
-              <span>Tidak ada jadwal shift hari ini</span>
+              <span>Tidak ada jadwal shift hari ini {todayShift ? `(${todayShift.name})` : ''}</span>
             )}
           </div>
           <span
             className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-              todayShift
+              todayShift && !isLiburShift
                 ? "bg-green-200 text-green-800"
                 : "bg-gray-200 text-gray-600"
             }`}
           >
-            {todayShift ? "Aktif" : "Libur"}
+            {todayShift && !isLiburShift ? "Aktif" : "Libur"}
           </span>
         </div>
       )}
@@ -1896,12 +1901,12 @@ export function AttendancePage() {
           <div className="text-center py-6 px-4 bg-gray-50/50 rounded-2xl border border-dashed border-gray-200">
             <Moon size={22} className="text-slate-400 mx-auto mb-2" />
             <p className="text-[12.5px] text-gray-700 font-bold">
-              {todayShift?.name?.toLowerCase().includes('libur jaga') || todayShift?.name?.toUpperCase() === 'LJ'
+              {(todayShift as any)?.name?.toLowerCase().includes('libur jaga') || (todayShift as any)?.name?.toUpperCase() === 'LJ'
                 ? 'Libur Jaga (LJ) — Bebas Tugas'
                 : 'Tidak Ada Jadwal Absensi'}
             </p>
             <p className="text-[11px] text-gray-400 mt-1 max-w-[280px] mx-auto leading-relaxed">
-              {todayShift?.name?.toLowerCase().includes('libur jaga') || todayShift?.name?.toUpperCase() === 'LJ'
+              {(todayShift as any)?.name?.toLowerCase().includes('libur jaga') || (todayShift as any)?.name?.toUpperCase() === 'LJ'
                 ? 'Hari ini Anda mendapat Libur Jaga setelah menyelesaikan tugas dinas. Tidak diperlukan absensi.'
                 : 'Hari ini adalah hari libur Anda. Jadwal absensi harian akan otomatis mengikuti jadwal shift dinas.'}
             </p>

@@ -14,6 +14,7 @@ class EmployeeRegistration extends Model
         'name',
         'nik_ktp',
         'email',
+        'profile_picture',
         'phone',
         'gender',
         'department_id',
@@ -50,5 +51,10 @@ class EmployeeRegistration extends Model
     public function employee()
     {
         return $this->belongsTo(Employee::class);
+    }
+
+    public function getProfilePictureAttribute($value)
+    {
+        return $value ? url($value) : null;
     }
 }

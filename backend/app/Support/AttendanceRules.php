@@ -193,7 +193,7 @@ class AttendanceRules
                         // Fallback setengah durasi
                         $s = Carbon::parse($child->start_time);
                         $e = Carbon::parse($child->end_time);
-                        if ($e->lt($s)) {
+                        if ($e->lte($s)) {
                             $e->addDay();
                         }
                         $duration = $s->diffInMinutes($e);
@@ -338,7 +338,7 @@ class AttendanceRules
         // Penanganan jika shift start > shift end (shift malam melewati tengah malam)
         $startTimeStr = $todayShift ? $todayShift->start_time : '08:30:00';
         $shiftStart = Carbon::parse($attendanceDate->toDateString() . ' ' . $startTimeStr);
-        if ($shiftEnd->lt($shiftStart)) {
+        if ($shiftEnd->lte($shiftStart)) {
             $shiftEnd->addDay();
         }
 

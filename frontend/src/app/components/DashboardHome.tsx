@@ -536,7 +536,11 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
             </div>
             <div className="p-3 space-y-1">
               {notifications.map((n, i) => (
-                <div key={i} className={`flex items-start gap-3 p-2.5 rounded-xl ${!n.is_read ? 'bg-green-50/60' : ''}`}>
+                <div 
+                  key={i} 
+                  onClick={() => onNavigate('notifications')}
+                  className={`flex items-start gap-3 p-2.5 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors ${!n.is_read ? 'bg-green-50/60' : ''}`}
+                >
                   <span className="text-lg mt-0.5">{n.type === 'leave' ? '📅' : n.type === 'attendance' ? '⏰' : '🔔'}</span>
                   <div className="flex-1 min-w-0">
                     <p className={`text-[12px] leading-tight ${!n.is_read ? 'font-medium text-gray-800' : 'text-gray-600'}`}>{n.title}</p>
