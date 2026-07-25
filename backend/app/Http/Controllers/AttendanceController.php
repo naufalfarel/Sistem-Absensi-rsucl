@@ -270,31 +270,16 @@ class AttendanceController extends Controller
             }
 
             if ($existing->check_in) {
-                // Mendukung mode simulasi waktu untuk keperluan testing di frontend/development
-                if ($request->has('simulated_time')) {
-                    $existing->delete();
-                    $existing = null;
-                } else {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Anda sudah melakukan check-in hari ini pukul ' . substr($existing->check_in, 0, 5) . '.',
-                        'errors' => null,
-                    ], 409);
-                }
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Anda sudah melakukan check-in hari ini pukul ' . substr($existing->check_in, 0, 5) . '.',
+                    'errors' => null,
+                ], 409);
             }
         }
 
-        // 4. Tentukan waktu check-in (mendukung simulasi)
+        // 4. Tentukan waktu check-in
         $now = Carbon::now('Asia/Jakarta');
-        if ($request->has('simulated_time')) {
-            $simTime = $request->input('simulated_time');
-            try {
-                $parts = explode(':', $simTime);
-                if (count($parts) >= 2) {
-                    $now->setTime((int)$parts[0], (int)$parts[1], (int)($parts[2] ?? 0));
-                }
-            } catch (\Exception $e) {}
-        }
 
         // Pastikan karyawan memiliki jadwal shift dinas hari ini
         $todayShift = AttendanceRules::resolveShiftFor($employee, $now);
@@ -487,13 +472,8 @@ class AttendanceController extends Controller
                     }
 
                     if ($lockedExisting->check_in) {
-                        if ($request->has('simulated_time')) {
-                            $lockedExisting->delete();
-                            $lockedExisting = null;
-                        } else {
-                            $timeStr = substr($lockedExisting->check_in, 0, 5);
-                            throw new \Exception("Anda sudah melakukan check-in hari ini pukul {$timeStr}.", 409);
-                        }
+                        $timeStr = substr($lockedExisting->check_in, 0, 5);
+                        throw new \Exception("Anda sudah melakukan check-in hari ini pukul {$timeStr}.", 409);
                     }
                 }
 
@@ -733,17 +713,8 @@ class AttendanceController extends Controller
             }
         }
 
-        // Tentukan waktu check-out (mendukung simulasi)
+        // Tentukan waktu check-out
         $now = Carbon::now('Asia/Jakarta');
-        if ($request->has('simulated_time')) {
-            $simTime = $request->input('simulated_time');
-            try {
-                $parts = explode(':', $simTime);
-                if (count($parts) >= 2) {
-                    $now->setTime((int)$parts[0], (int)$parts[1], (int)($parts[2] ?? 0));
-                }
-            } catch (\Exception $e) {}
-        }
 
         $shiftStart    = substr($todayShift->start_time, 0, 5);
         $shiftEnd      = substr($todayShift->end_time,   0, 5);

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Search, Calendar, ChevronDown, CheckCircle2, XCircle, Clock, X, Filter, AlertCircle, Printer } from 'lucide-react';
+import { Search, Calendar, ChevronDown, CheckCircle2, XCircle, Clock, X, Filter, AlertCircle, Printer, Trash2 } from 'lucide-react';
 import { overtimeApi, departmentApi, OvertimeRequest, DepartmentModel } from '../../../services/api';
+import { useAuth } from '../../../context/AuthContext';
 import { MonthYearDeptFilter } from '../ui/MonthYearDeptFilter';
 import qrCodeImg from '../../../imports/qr_code_cempaka_lima.png';
 import qrHrdImg from '../../../imports/qr_hrd_rsucl.png';
@@ -16,6 +17,8 @@ interface OvertimeTabProps {
 }
 
 export function OvertimeTab({ onUpdateCount }: OvertimeTabProps) {
+  const { user } = useAuth();
+  const isAdminOrSuperAdmin = user?.role === 'admin' || user?.role === 'super_admin';
   // Ambil tanggal awal & akhir bulan ini untuk default filter
   const getMonthBoundaries = () => {
     const date = new Date();
@@ -166,6 +169,24 @@ export function OvertimeTab({ onUpdateCount }: OvertimeTabProps) {
       }
     } catch (err: any) {
       alert(err?.data?.message ?? err?.message ?? 'Gagal menyetujui lembur.');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  // Handle Delete Action (Admin & Super Admin)
+  const handleDelete = async (id: number) => {
+    if (!window.confirm('Apakah Anda yakin ingin menghapus data pengajuan lembur ini secara permanen?')) return;
+    setProcessingId(id);
+    try {
+      const res = await overtimeApi.delete(id);
+      if (res.success) {
+        setRecords(prev => prev.filter(r => r.id !== id));
+        loadSummary();
+        onUpdateCount?.();
+      }
+    } catch (err: any) {
+      alert(err?.data?.message ?? err?.message ?? 'Gagal menghapus pengajuan lembur.');
     } finally {
       setProcessingId(null);
     }
@@ -482,7 +503,7 @@ export function OvertimeTab({ onUpdateCount }: OvertimeTabProps) {
 
                     <div className="flex items-center justify-between gap-3">
                       {status === 'pending' ? (
-                        <div className="flex gap-2 w-full">
+                        <div className="flex items-center gap-2 w-full">
                           <button
                             onClick={() => openRejectionModal(r)}
                             disabled={processingId === r.id}
@@ -497,6 +518,16 @@ export function OvertimeTab({ onUpdateCount }: OvertimeTabProps) {
                           >
                             Setujui
                           </button>
+                          {isAdminOrSuperAdmin && (
+                            <button
+                              onClick={() => handleDelete(r.id)}
+                              disabled={processingId === r.id}
+                              title="Hapus Pengajuan Lembur"
+                              className="px-3 py-2.5 bg-red-50 hover:bg-red-100 text-red-600 font-bold rounded-xl text-[12px] border border-red-200 transition-colors flex items-center justify-center cursor-pointer"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          )}
                         </div>
                       ) : (
                         <div className="text-[11.5px] text-gray-500 w-full space-y-2">
@@ -508,15 +539,28 @@ export function OvertimeTab({ onUpdateCount }: OvertimeTabProps) {
                               <strong>Catatan Admin:</strong> {r.admin_note}
                             </p>
                           )}
-                          {status === 'approved' && (
-                            <button
-                              type="button"
-                              onClick={() => setSelectedSplRecord(r)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100 rounded-xl text-[11px] font-bold mt-2 transition-all w-fit cursor-pointer"
-                            >
-                              <Printer size={12} /> Lihat SPL & QR Code
-                            </button>
-                          )}
+                          <div className="flex items-center justify-between gap-2 mt-2">
+                            {status === 'approved' && (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedSplRecord(r)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100 rounded-xl text-[11px] font-bold transition-all w-fit cursor-pointer"
+                              >
+                                <Printer size={12} /> Lihat SPL & QR Code
+                              </button>
+                            )}
+                            {isAdminOrSuperAdmin && (
+                              <button
+                                type="button"
+                                onClick={() => handleDelete(r.id)}
+                                disabled={processingId === r.id}
+                                title="Hapus Data Lembur"
+                                className="flex items-center gap-1 px-3 py-1.5 bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 rounded-xl text-[11px] font-bold transition-all ml-auto cursor-pointer"
+                              >
+                                <Trash2 size={13} /> Hapus
+                              </button>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>

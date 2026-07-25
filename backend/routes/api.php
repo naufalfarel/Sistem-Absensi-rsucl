@@ -186,6 +186,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/attendance/{id}/overtime/approve', [AttendanceController::class, 'approveOvertime']);
         // Tolak laporan lembur (admin_note wajib)
         Route::put('/attendance/{id}/overtime/reject', [AttendanceController::class, 'rejectOvertime']);
+        // Menghapus data pengajuan lembur (admin / super_admin)
+        Route::delete('/overtime-requests/{id}', [\App\Http\Controllers\Api\OvertimeRequestController::class, 'destroy']);
+        // Menghapus data pengajuan pengunduran diri (admin / super_admin)
+        Route::delete('/resignation-requests/{id}', [\App\Http\Controllers\Api\ResignationRequestController::class, 'destroy']);
 
         // ── CRUD Karyawan & Onboarding Draf Registrasi (Admin)
         Route::get('/employee-registrations', [AdminEmployeeRegistrationController::class, 'index']);
@@ -193,6 +197,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/employee-registrations/{id}/approve', [AdminEmployeeRegistrationController::class, 'approve']);
         Route::put('/employee-registrations/{id}/reject', [AdminEmployeeRegistrationController::class, 'reject']);
         Route::put('/employee-registrations/{id}/revision', [AdminEmployeeRegistrationController::class, 'requestRevision']);
+        Route::delete('/employee-registrations/{id}', [AdminEmployeeRegistrationController::class, 'destroy']);
 
         // Mendapatkan data meta pendukung (list department/position) untuk registrasi karyawan
         Route::get('/employees/meta',   [EmployeeController::class, 'meta']);

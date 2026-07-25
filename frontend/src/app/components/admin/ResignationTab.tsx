@@ -13,11 +13,15 @@ import {
   MessageSquare,
   AlertTriangle,
   Building2,
-  ShieldAlert
+  ShieldAlert,
+  Trash2
 } from 'lucide-react';
 import { resignationApi, ResignationRequest } from '../../../services/api';
+import { useAuth } from '../../../context/AuthContext';
 
 export const ResignationTab: React.FC = () => {
+  const { user } = useAuth();
+  const isAdminOrSuperAdmin = user?.role === 'admin' || user?.role === 'super_admin';
   const [requests, setRequests] = useState<ResignationRequest[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -84,6 +88,19 @@ export const ResignationTab: React.FC = () => {
       alert(err?.response?.data?.message || "Gagal memproses peninjauan.");
     } finally {
       setReviewing(false);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!window.confirm("Apakah Anda yakin ingin menghapus data pengajuan pengunduran diri ini secara permanen?")) return;
+    try {
+      const res = await resignationApi.delete(id);
+      if (res.success) {
+        alert("Pengajuan pengunduran diri berhasil dihapus.");
+        fetchAllRequests();
+      }
+    } catch (err: any) {
+      alert(err?.response?.data?.message || err?.data?.message || err?.message || "Gagal menghapus pengajuan pengunduran diri.");
     }
   };
 
@@ -272,6 +289,17 @@ export const ResignationTab: React.FC = () => {
                             <XCircle size={14} /> Tolak
                           </button>
                         </div>
+                      )}
+
+                      {/* ACTION BUTTON HAPUS UNTUK ADMIN / SUPER ADMIN */}
+                      {isAdminOrSuperAdmin && (
+                        <button
+                          onClick={() => handleDelete(item.id)}
+                          title="Hapus Pengajuan Resign"
+                          className="px-3 py-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200 font-bold text-[12px] rounded-xl transition-all shadow-xs flex items-center gap-1 cursor-pointer"
+                        >
+                          <Trash2 size={14} /> Hapus
+                        </button>
                       )}
                     </div>
                   </div>

@@ -243,4 +243,33 @@ class AdminEmployeeRegistrationController extends Controller
 
         return $pass;
     }
+
+    /**
+     * DELETE /api/employee-registrations/{id}
+     * Menghapus data pendaftaran calon pegawai (khusus Admin).
+     */
+    public function destroy($id)
+    {
+        $registration = EmployeeRegistration::findOrFail($id);
+
+        if ($registration->status === 'approved') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Pengajuan yang sudah disetujui tidak dapat dihapus.',
+            ], 422);
+        }
+
+        // Hapus foto profil dari storage jika ada
+        if ($registration->profile_picture) {
+            $path = str_replace('/storage/', '', $registration->getRawOriginal('profile_picture'));
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($path);
+        }
+
+        $registration->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Pengajuan pendaftaran calon pegawai berhasil dihapus.',
+        ]);
+    }
 }

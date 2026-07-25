@@ -475,4 +475,29 @@ class OvertimeRequestController extends Controller
             'message' => 'Pengajuan lembur berhasil dibatalkan.',
         ]);
     }
+
+    /**
+     * Menghapus data pengajuan lembur oleh Admin / Super Admin.
+     */
+    public function destroy(Request $request, $id)
+    {
+        $user = $request->user();
+        if (!$user->isAdmin()) {
+            return response()->json(['success' => false, 'message' => 'Akses ditolak. Fitur ini khusus Administrator/HRD/Super Admin.'], 403);
+        }
+
+        $overtime = OvertimeRequest::findOrFail($id);
+
+        if ($overtime->photo_url) {
+            $path = str_replace('/storage/', '', $overtime->photo_url);
+            Storage::disk('public')->delete($path);
+        }
+
+        $overtime->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Pengajuan lembur berhasil dihapus oleh Admin.',
+        ]);
+    }
 }

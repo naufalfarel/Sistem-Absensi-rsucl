@@ -416,4 +416,29 @@ class ResignationRequestController extends Controller
             'data'    => $resignation->load(['employee.user', 'employee.department', 'reviewer', 'pjReviewer']),
         ]);
     }
+
+    /**
+     * Menghapus pengajuan pengunduran diri oleh Admin / Super Admin.
+     */
+    public function destroy(Request $request, $id)
+    {
+        $user = $request->user();
+        if (!$user->isAdmin()) {
+            return response()->json(['success' => false, 'message' => 'Akses ditolak. Fitur ini khusus Administrator/HRD/Super Admin.'], 403);
+        }
+
+        $resignation = ResignationRequest::findOrFail($id);
+
+        if ($resignation->attachment_url) {
+            $path = str_replace('/storage/', '', $resignation->attachment_url);
+            Storage::disk('public')->delete($path);
+        }
+
+        $resignation->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Pengajuan pengunduran diri berhasil dihapus oleh Admin.',
+        ]);
+    }
 }

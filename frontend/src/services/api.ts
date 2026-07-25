@@ -464,13 +464,12 @@ export const attendanceApi = {
       "/attendance/history" +
         (month && year ? `?month=${month}&year=${year}` : ""),
     ),
-  // Mengirim absensi masuk beserta parameter geolokasi, foto wajah, waktu simulasi, dan catatan lokasi
+  // Mengirim absensi masuk beserta parameter geolokasi, foto wajah, dan catatan lokasi
   checkIn: (
     lat?: number,
     lng?: number,
     accuracy?: number,
     photo?: File | Blob,
-    simulatedTime?: string,
     locationNote?: string,
   ) => {
     const formData = new FormData();
@@ -481,7 +480,6 @@ export const attendanceApi = {
     if (accuracy !== undefined && accuracy !== null)
       formData.append("accuracy", String(accuracy));
     if (photo) formData.append("photo", photo);
-    if (simulatedTime) formData.append("simulated_time", simulatedTime);
     if (locationNote) formData.append("location_note", locationNote);
     return api.post<{
       success: boolean;
@@ -489,13 +487,12 @@ export const attendanceApi = {
       data: AttendanceRecord;
     }>("/attendance/check-in", formData);
   },
-  // Mengirim absensi pulang beserta parameter geolokasi, foto wajah, waktu simulasi, catatan lokasi, alasan pulang cepat, dan catatan lembur
+  // Mengirim absensi pulang beserta parameter geolokasi, foto wajah, catatan lokasi, alasan pulang cepat, dan catatan lembur
   checkOut: (
     lat?: number,
     lng?: number,
     accuracy?: number,
     photo?: File | Blob,
-    simulatedTime?: string,
     locationNote?: string,
     earlyCheckoutReason?: string,
     overtimeNote?: string,
@@ -509,7 +506,6 @@ export const attendanceApi = {
     if (accuracy !== undefined && accuracy !== null)
       formData.append("accuracy", String(accuracy));
     if (photo) formData.append("photo", photo);
-    if (simulatedTime) formData.append("simulated_time", simulatedTime);
     if (locationNote) formData.append("location_note", locationNote);
     if (earlyCheckoutReason)
       formData.append("early_checkout_reason", earlyCheckoutReason);
@@ -1523,6 +1519,12 @@ export const overtimeApi = {
       `/overtime-requests/${id}/cancel`,
     );
   },
+
+  delete: (id: number) => {
+    return api.delete<{ success: boolean; message: string }>(
+      `/overtime-requests/${id}`,
+    );
+  },
 };
 
 // ─────────────────────────────────────────────────────────────────────
@@ -1912,6 +1914,12 @@ export const employeeRegistrationApi = {
       data: EmployeeRegistration;
     }>(`/employee-registrations/${id}/revision`, { admin_note: adminNote });
   },
+
+  delete: (id: number) => {
+    return api.delete<{ success: boolean; message: string }>(
+      `/employee-registrations/${id}`,
+    );
+  },
 };
 
 export const resignationApi = {
@@ -1957,6 +1965,13 @@ export const resignationApi = {
       message: string;
       data: ResignationRequest;
     }>(`/resignation-requests/${id}/pj-review`, { status, pj_note: pjNote });
+  },
+
+  delete: (id: number) => {
+    return api.delete<{
+      success: boolean;
+      message: string;
+    }>(`/resignation-requests/${id}`);
   },
 };
 

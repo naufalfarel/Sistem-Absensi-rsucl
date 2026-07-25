@@ -28,15 +28,6 @@ class CheckInRequest extends FormRequest
 
         if ($employee) {
             $time = Carbon::now('Asia/Jakarta');
-            if ($this->has('simulated_time')) {
-                $simTime = $this->input('simulated_time');
-                try {
-                    $parts = explode(':', $simTime);
-                    if (count($parts) >= 2) {
-                        $time->setTime((int)$parts[0], (int)$parts[1], (int)($parts[2] ?? 0));
-                    }
-                } catch (\Exception $e) {}
-            }
             $shiftType = AttendanceRules::shiftTypeFor($employee, $time);
         }
 
@@ -48,7 +39,6 @@ class CheckInRequest extends FormRequest
             'latitude'      => $geoRule,
             'longitude'     => $geoRule,
             'accuracy'      => 'nullable|numeric',
-            'simulated_time'=> 'nullable|string',
         ];
     }
 

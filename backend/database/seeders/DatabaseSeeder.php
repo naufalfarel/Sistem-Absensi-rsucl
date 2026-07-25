@@ -55,67 +55,6 @@ class DatabaseSeeder extends Seeder
             'username' => 'admin',
         ]);
 
-        // ── 4. Karyawan ────────────────────────────────────────────────
-        $employees = [
-            [
-                'name'     => 'Dr. Rina Kusumawati',
-                'email'    => 'rina.k@rsucl.id',
-                'nik_ktp'  => '198501012010012001',
-                'username' => 'rina.kusumawati',
-                'password' => '123456',
-                'dept'     => 'Poli Umum',
-                'pos'      => 'Dokter Umum',
-                'phone'    => '081234567890',
-                'gender'   => 'Perempuan',
-                'join'     => '2010-03-01',
-            ],
-            [
-                'name'     => 'Ns. Ahmad Fauzi',
-                'email'    => 'ahmad.f@rsucl.id',
-                'nik_ktp'  => '198805122012011002',
-                'username' => 'ahmad.fauzi',
-                'password' => '123456',
-                'dept'     => 'ICU',
-                'pos'      => 'Perawat',
-                'phone'    => '082345678901',
-                'gender'   => 'Laki-laki',
-                'join'     => '2012-07-15',
-            ],
-            [
-                'name'     => 'Rini Handayani',
-                'email'    => 'rini.h@rsucl.id',
-                'nik_ktp'  => '199508152018012007',
-                'username' => 'rini.handayani',
-                'password' => '123456',
-                'dept'     => 'Farmasi',
-                'pos'      => 'Apoteker',
-                'phone'    => '087890123456',
-                'gender'   => 'Perempuan',
-                'join'     => '2018-09-01',
-            ],
-        ];
-
-        foreach ($employees as $emp) {
-            $user = User::create([
-                'name'     => $emp['name'],
-                'email'    => $emp['email'],
-                'password' => Hash::make($emp['password']),
-                'role'     => 'employee',
-                'nik_ktp'  => $emp['nik_ktp'],
-                'username' => $emp['username'],
-            ]);
-
-            Employee::create([
-                'user_id'       => $user->id,
-                'department_id' => $deptMap[$emp['dept']],
-                'position_id'   => $posMap[$emp['pos']],
-                'nik_ktp'       => $emp['nik_ktp'],
-                'phone'         => $emp['phone'],
-                'gender'        => $emp['gender'],
-                'join_date'     => $emp['join'],
-            ]);
-        }
-
         // ── 5. Jadwal Shift Default (14 Shift Templates & Sub-shifts) ──
         $shiftsData = [
             [

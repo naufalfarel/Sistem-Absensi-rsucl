@@ -55,7 +55,6 @@ class CheckOutRequest extends FormRequest
             'latitude'               => $geoRule,
             'longitude'              => $geoRule,
             'accuracy'               => 'nullable|numeric',
-            'simulated_time'         => 'nullable|string',
             'early_checkout_reason'  => 'nullable|string',
             'overtime_note'          => 'nullable|string',
             'keterangan_lembur'      => 'nullable|string',

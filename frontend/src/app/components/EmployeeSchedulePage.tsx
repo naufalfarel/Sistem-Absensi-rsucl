@@ -225,6 +225,55 @@ export function EmployeeSchedulePage() {
         `;
       });
 
+      // Collect unique custom shifts from monthlyData
+      const uniqueShiftsMap = new Map<string, { code: string; name: string }>();
+      monthlyData.forEach(row => {
+        Object.values(row.dates).forEach((assign: any) => {
+          if (assign && assign.name) {
+            const nameLower = assign.name.toLowerCase();
+            let code = "–";
+            if (nameLower.includes("pagi")) {
+              code = "P";
+            } else if (nameLower.includes("siang")) {
+              code = "S";
+            } else if (nameLower.includes("malam")) {
+              code = "M";
+            } else if (nameLower.includes("normal") || nameLower.includes("reguler")) {
+              code = "N";
+            } else if (nameLower.includes("cuti")) {
+              code = "C";
+            } else if (nameLower.includes("sakit")) {
+              code = "Skt";
+            } else if (nameLower.includes("libur")) {
+              code = "L";
+            } else {
+              code = assign.name.split(" ").map((w: string) => w[0]).join("").toUpperCase().substring(0, 3);
+            }
+            if (code !== "–" && code !== "L") {
+              uniqueShiftsMap.set(assign.name, { code, name: assign.name });
+            }
+          }
+        });
+      });
+
+      let legendHtml = `
+        <span>Keterangan Shift:</span>
+        <span>[P] Pagi</span>
+        <span>[S] Siang</span>
+        <span>[M] Malam</span>
+        <span>[N] Normal / Kantor</span>
+        <span>[C] Cuti</span>
+        <span>[Skt] Sakit</span>
+        <span>[–] Libur / OFF</span>
+      `;
+
+      uniqueShiftsMap.forEach((val) => {
+        const stdCodes = ["P", "S", "M", "N", "C", "Skt"];
+        if (!stdCodes.includes(val.code)) {
+          legendHtml += `<span>[${val.code}] ${val.name}</span>`;
+        }
+      });
+
       const titleLabel = `JADWAL JAGA ${deptName.toUpperCase()} RUMAH SAKIT UMUM CEMPAKA LIMA`;
 
       const content = `
@@ -285,15 +334,8 @@ export function EmployeeSchedulePage() {
             </tbody>
           </table>
           
-          <div style="font-size: 9px; color: #000000; margin-top: 15px; display: flex; gap: 15px; font-weight: bold; border-top: 1px solid #E5E7EB; padding-top: 8px;">
-            <span>Keterangan Shift:</span>
-            <span>[P] Pagi</span>
-            <span>[S] Siang</span>
-            <span>[M] Malam</span>
-            <span>[N] Normal / Kantor</span>
-            <span>[C] Cuti</span>
-            <span>[Skt] Sakit</span>
-            <span>[–] Libur / OFF</span>
+          <div style="font-size: 9px; color: #000000; margin-top: 15px; display: flex; gap: 15px; font-weight: bold; border-top: 1px solid #E5E7EB; padding-top: 8px; flex-wrap: wrap;">
+            ${legendHtml}
           </div>
 
           <script>
@@ -324,6 +366,47 @@ export function EmployeeSchedulePage() {
 
   const today_str = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
+  const uniqueShifts = (() => {
+    const uniqueShiftsMap = new Map<string, { code: string; name: string; color: string }>();
+    monthlyData.forEach(row => {
+      Object.values(row.dates).forEach((assign: any) => {
+        if (assign && assign.name) {
+          const nameLower = assign.name.toLowerCase();
+          let code = "–";
+          let color = assign.color || "#475569";
+          if (nameLower.includes("pagi")) {
+            code = "P";
+            color = "#16A34A";
+          } else if (nameLower.includes("siang")) {
+            code = "S";
+            color = "#2563EB";
+          } else if (nameLower.includes("malam")) {
+            code = "M";
+            color = "#7C3AED";
+          } else if (nameLower.includes("normal") || nameLower.includes("reguler")) {
+            code = "N";
+            color = "#0F172A";
+          } else if (nameLower.includes("cuti")) {
+            code = "C";
+            color = "#EA580C";
+          } else if (nameLower.includes("sakit")) {
+            code = "Skt";
+            color = "#D97706";
+          } else if (nameLower.includes("libur")) {
+            code = "L";
+            color = "#64748B";
+          } else {
+            code = assign.name.split(" ").map((w: string) => w[0]).join("").toUpperCase().substring(0, 3);
+          }
+          if (code !== "–" && code !== "L") {
+            uniqueShiftsMap.set(assign.name, { code, name: assign.name, color });
+          }
+        }
+      });
+    });
+    return Array.from(uniqueShiftsMap.values());
+  })();
+
   return (
     <div className="max-w-6xl mx-auto space-y-6 px-3 md:px-0 py-4 md:py-6 font-sans">
       <style>{`
@@ -341,7 +424,7 @@ export function EmployeeSchedulePage() {
           background: #94A3B8;
         }
       `}</style>
-
+      
       {/* Modern Title Banner */}
       <div className="bg-gradient-to-r from-[#16A34A] to-[#0D9240] rounded-3xl p-6 md:p-8 text-white shadow-md relative overflow-hidden">
         <div className="absolute right-0 top-0 w-64 h-64 bg-white/5 rounded-full blur-2xl -translate-y-12 translate-x-12 pointer-events-none" />
@@ -435,6 +518,15 @@ export function EmployeeSchedulePage() {
               <div className="flex items-center gap-1 bg-gray-50 text-gray-500 px-2 py-1 rounded-lg border border-gray-200 font-bold">
                 <span>–</span> <span className="text-[9px] text-slate-350 font-normal">Libur</span>
               </div>
+              {uniqueShifts.map(us => {
+                const stdCodes = ["P", "S", "M", "N", "C", "Skt"];
+                if (stdCodes.includes(us.code)) return null;
+                return (
+                  <div key={us.name} className="flex items-center gap-1 px-2 py-1 rounded-lg border font-bold" style={{ backgroundColor: `${us.color}10`, color: us.color, borderColor: `${us.color}30` }}>
+                    <span>{us.code}</span> <span className="text-[9px] text-slate-500 font-normal">{us.name}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>

@@ -1212,6 +1212,55 @@ export function ScheduleTab() {
         `;
       });
 
+      // Collect unique custom shifts from monthlyData
+      const uniqueShiftsMap = new Map<string, { code: string; name: string }>();
+      monthlyData.forEach(row => {
+        Object.values(row.dates).forEach((assign: any) => {
+          if (assign && assign.name) {
+            const nameLower = assign.name.toLowerCase();
+            let code = "–";
+            if (nameLower.includes("pagi")) {
+              code = "P";
+            } else if (nameLower.includes("siang")) {
+              code = "S";
+            } else if (nameLower.includes("malam")) {
+              code = "M";
+            } else if (nameLower.includes("normal") || nameLower.includes("reguler")) {
+              code = "N";
+            } else if (nameLower.includes("cuti")) {
+              code = "C";
+            } else if (nameLower.includes("sakit")) {
+              code = "Skt";
+            } else if (nameLower.includes("libur")) {
+              code = "L";
+            } else {
+              code = assign.name.split(" ").map((w: string) => w[0]).join("").toUpperCase().substring(0, 3);
+            }
+            if (code !== "–" && code !== "L") {
+              uniqueShiftsMap.set(assign.name, { code, name: assign.name });
+            }
+          }
+        });
+      });
+
+      let legendHtml = `
+        <span>Keterangan Shift:</span>
+        <span>[P] Pagi</span>
+        <span>[S] Siang</span>
+        <span>[M] Malam</span>
+        <span>[N] Normal / Kantor</span>
+        <span>[C] Cuti</span>
+        <span>[Skt] Sakit</span>
+        <span>[–] Libur / OFF</span>
+      `;
+
+      uniqueShiftsMap.forEach((val) => {
+        const stdCodes = ["P", "S", "M", "N", "C", "Skt"];
+        if (!stdCodes.includes(val.code)) {
+          legendHtml += `<span>[${val.code}] ${val.name}</span>`;
+        }
+      });
+
       const titleLabel = `JADWAL JAGA ${deptName.toUpperCase()} RUMAH SAKIT UMUM CEMPAKA LIMA`;
 
       const content = `
@@ -1252,7 +1301,7 @@ export function ScheduleTab() {
           </table>
           
           <h2 class="title">${titleLabel} <br/> PERIODE ${monthLabel.toUpperCase()} ${viewYear}</h2>
-
+ 
           <table class="data-table">
             <thead>
               <tr>
@@ -1272,15 +1321,8 @@ export function ScheduleTab() {
             </tbody>
           </table>
           
-          <div style="font-size: 9px; color: #000000; margin-top: 15px; display: flex; gap: 15px; font-weight: bold; border-top: 1px solid #E5E7EB; padding-top: 8px;">
-            <span>Keterangan Shift:</span>
-            <span>[P] Pagi</span>
-            <span>[S] Siang</span>
-            <span>[M] Malam</span>
-            <span>[N] Normal / Kantor</span>
-            <span>[C] Cuti</span>
-            <span>[Skt] Sakit</span>
-            <span>[–] Libur / OFF</span>
+          <div style="font-size: 9px; color: #000000; margin-top: 15px; display: flex; gap: 15px; font-weight: bold; border-top: 1px solid #E5E7EB; padding-top: 8px; flex-wrap: wrap;">
+            ${legendHtml}
           </div>
 
           <script>

@@ -34,8 +34,7 @@ import {
   MyShiftSchedule,
 } from "../../services/api";
 import { Alert, AlertDescription } from "./ui/alert";
-// ── [DEV] Simulasi Waktu — hapus baris ini saat production ──────────────
-import { SimulationPanel } from "../dev/SimulationPanel";
+
 
 // Fix Leaflet default marker icon broken by bundlers
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -977,8 +976,7 @@ export function AttendancePage() {
     };
   }, []);
 
-  // [DEV] State waktu simulasi: string "HH:mm" atau null jika pakai jam real
-  const [simulatedTime, setSimulatedTime] = useState<string | null>(null);
+
 
   // State jam sistem yang berjalan secara realtime
   const [now, setNow] = useState(new Date());
@@ -1300,14 +1298,7 @@ export function AttendancePage() {
     return () => clearInterval(t);
   }, []);
 
-  // [DEV] Terapkan waktu simulasi ke `current` jika aktif
-  const current = (() => {
-    if (!simulatedTime) return now;
-    const d = new Date(now);
-    const [hh, mm] = simulatedTime.split(":").map(Number);
-    d.setHours(hh, mm, 0, 0);
-    return d;
-  })();
+  const current = now;
 
   const isLiburShift = todayShift
     ? (() => {
@@ -1408,8 +1399,6 @@ export function AttendancePage() {
       const lngVal = userLocation?.lng ?? HOSP_LNG;
       const accVal = userLocation?.accuracy ?? undefined;
 
-      // [DEV] Kirim waktu simulasi ke backend jika aktif
-      const simTimeArg = simulatedTime ?? undefined;
       const earlyReasonStr =
         typeof earlyReason === "string" ? earlyReason : undefined;
 
@@ -1444,7 +1433,6 @@ export function AttendancePage() {
           lngVal,
           accVal,
           photoFile,
-          simTimeArg,
           locationNote,
         );
         if (res.success && res.data.check_in) {
@@ -1469,7 +1457,6 @@ export function AttendancePage() {
           lngVal,
           accVal,
           photoFile,
-          simTimeArg,
           locationNote,
           earlyReasonStr || undefined,
           undefined,
@@ -1656,13 +1643,7 @@ export function AttendancePage() {
         </Alert>
       )}
 
-      {/* [DEV] Simulation Panel — hapus blok ini saat production */}
-      <SimulationPanel
-        onTimeChange={setSimulatedTime}
-        shiftStart={todayShift?.start_time ?? "08:00:00"}
-        shiftEnd={todayShift?.end_time ?? "17:00:00"}
-        currentSimTime={simulatedTime}
-      />
+
 
       {/* Header */}
       <div className="flex items-start justify-between mb-5">

@@ -1,5 +1,5 @@
 import { useState, useEffect, Fragment } from 'react';
-import { Search, UserPlus, CheckCircle2, XCircle, AlertTriangle, Clock, RefreshCw, Eye, Check, X, Shield, Copy, UserCheck, Lock } from 'lucide-react';
+import { Search, UserPlus, CheckCircle2, XCircle, AlertTriangle, Clock, RefreshCw, Eye, Check, X, Shield, Copy, UserCheck, Lock, Trash2 } from 'lucide-react';
 import { employeeRegistrationApi, EmployeeRegistration } from '../../../services/api';
 
 export function EmployeeRegistrationTab() {
@@ -126,6 +126,19 @@ export function EmployeeRegistrationTab() {
       alert(err?.data?.message ?? err?.message ?? 'Gagal meminta revisi.');
     } finally {
       setSubmittingAction(false);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!window.confirm('Apakah Anda yakin ingin menghapus permanen draf pengajuan calon pegawai ini?')) return;
+    try {
+      const res = await employeeRegistrationApi.delete(id);
+      if (res.success) {
+        alert('Draf pengajuan pendaftaran berhasil dihapus.');
+        loadData();
+      }
+    } catch (err: any) {
+      alert(err?.data?.message ?? err?.message ?? 'Gagal menghapus draf pengajuan.');
     }
   };
 
@@ -357,6 +370,14 @@ export function EmployeeRegistrationTab() {
                                 title="Tolak Pengajuan"
                               >
                                 Tolak
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDelete(reg.id)}
+                                className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl text-[11px] font-bold border border-rose-200 transition-all cursor-pointer flex items-center justify-center"
+                                title="Hapus Pengajuan"
+                              >
+                                <Trash2 size={13} />
                               </button>
                             </div>
                           )}
