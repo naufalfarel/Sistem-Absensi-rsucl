@@ -428,6 +428,7 @@ export function ProfilePage({
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [categories, setCategories] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState("");
+  const [customCategoryOther, setCustomCategoryOther] = useState("");
 
   const loadCategories = async () => {
     try {
@@ -564,15 +565,20 @@ export function ProfilePage({
 
     // Validasi input khusus Cuti Khusus vs Cuti/Izin/Sakit biasa
     if (leaveType === "cuti_khusus") {
+      const isLainnya = () => {
+        const cat = categories.find(c => String(c.id) === selectedCategory);
+        return cat && cat.name.toLowerCase() === 'lainnya';
+      };
       if (
         !startDate ||
         !endDate ||
         !reason.trim() ||
         !selectedCategory ||
-        !attachmentFile
+        !attachmentFile ||
+        (isLainnya() && !customCategoryOther.trim())
       ) {
         setFormError(
-          "Semua field wajib diisi, termasuk kategori cuti khusus dan dokumen pendukung (lampiran).",
+          "Semua field wajib diisi, termasuk kategori cuti khusus, keterangan lainnya (jika memilih Lainnya), dan dokumen pendukung (lampiran).",
         );
         return;
       }
@@ -599,6 +605,11 @@ export function ProfilePage({
       formData.append("reason", reason.trim());
       if (leaveType === "cuti_khusus") {
         formData.append("special_leave_category_id", selectedCategory);
+        const cat = categories.find(c => String(c.id) === selectedCategory);
+        const isLainnya = cat && cat.name.toLowerCase() === 'lainnya';
+        if (isLainnya) {
+          formData.append("special_leave_category_other", customCategoryOther.trim());
+        }
       }
       if (attachmentFile) {
         formData.append("attachment", attachmentFile);
@@ -615,6 +626,7 @@ export function ProfilePage({
         setReason("");
         setLeaveType("cuti");
         setSelectedCategory("");
+        setCustomCategoryOther("");
         setAttachmentName("");
         setAttachmentBase64(null);
         setAttachmentFile(null);
@@ -1309,9 +1321,8 @@ export function ProfilePage({
                         </div>
                         <div>
                           <span className="text-[13px] font-semibold text-gray-800">
-                            {req.type === "cuti_khusus" &&
-                            req.special_leave_category
-                              ? `Cuti Khusus (${req.special_leave_category.name})`
+                            {req.type === "cuti_khusus" && req.special_leave_category
+                              ? `Cuti Khusus (${req.special_leave_category.name}${req.special_leave_category.name.toLowerCase() === 'lainnya' && req.special_leave_category_other ? ` - ${req.special_leave_category_other}` : ''})`
                               : tc.label}
                           </span>
                           <p className="text-[11px] text-gray-400 mt-0.5">
@@ -1533,6 +1544,7 @@ export function ProfilePage({
                       value={selectedCategory}
                       onChange={(e) => {
                         setSelectedCategory(e.target.value);
+                        setCustomCategoryOther("");
                         setFormError("");
                       }}
                       className="w-full pl-3.5 pr-9 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all text-gray-700 font-medium cursor-pointer appearance-none"
@@ -1549,6 +1561,24 @@ export function ProfilePage({
                       className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
                     />
                   </div>
+                </div>
+              )}
+
+              {leaveType === "cuti_khusus" && (() => {
+                const cat = categories.find(c => String(c.id) === selectedCategory);
+                return cat && cat.name.toLowerCase() === 'lainnya';
+              })() && (
+                <div className="space-y-1.5 mt-3">
+                  <label className="block text-[12px] font-medium text-gray-600">
+                    Nama / Keterangan Cuti Khusus Lainnya <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={customCategoryOther}
+                    onChange={(e) => setCustomCategoryOther(e.target.value)}
+                    placeholder="Contoh: Khitanan Anak, Menikahkan Anak, dll."
+                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all font-semibold"
+                  />
                 </div>
               )}
 

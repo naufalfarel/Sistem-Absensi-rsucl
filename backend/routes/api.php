@@ -151,6 +151,7 @@ Route::middleware('auth:sanctum')->group(function () {
         // Endpoint CRUD Kategori Cuti Khusus (Hanya Admin)
         Route::post('/special-leave-categories', [\App\Http\Controllers\SpecialLeaveCategoryController::class, 'store']);
         Route::put('/special-leave-categories/{id}', [\App\Http\Controllers\SpecialLeaveCategoryController::class, 'update']);
+        Route::delete('/special-leave-categories/{id}', [\App\Http\Controllers\SpecialLeaveCategoryController::class, 'destroy']);
 
         // Persetujuan & Penerbitan Surat Tugas
         Route::post('/assignment-letters/admin-create', [\App\Http\Controllers\Api\AssignmentLetterController::class, 'adminStore']);
@@ -239,6 +240,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/reports/monthly-rekap', [ReportController::class, 'monthlyRekap']);
         // Mengekspor data plat nomor kendaraan seluruh pegawai ke file Excel (.xlsx)
         Route::get('/reports/vehicles/export', [ReportController::class, 'exportVehicles']);
+        // Mengekspor data media sosial seluruh pegawai ke file Excel (.xlsx)
+        Route::get('/reports/social-media/export', [ReportController::class, 'exportSocialMedia']);
 
         // ── Pengaturan Sistem
         // Mengubah parameter pengaturan global (koordinat geofence, radius, dll)

@@ -119,18 +119,22 @@ class LeaveQuotaHelper
      */
     public static function remainingDays(Employee $employee, Carbon $now, ?int $excludeId = null): int
     {
-        $quota     = self::quotaDays();
+        $quota     = self::quotaDays($employee);
         $committed = self::committedDays($employee, $now, $excludeId);
         return max(0, $quota - $committed);
     }
 
     /**
-     * Mengambil jumlah hari kuota cuti tahunan dari setting.
+     * Mengambil jumlah hari kuota cuti tahunan dari setting or custom employee quota.
      *
+     * @param Employee|null $employee
      * @return int Jumlah hari kuota (default: 12)
      */
-    public static function quotaDays(): int
+    public static function quotaDays(?Employee $employee = null): int
     {
+        if ($employee && $employee->custom_leave_quota !== null) {
+            return (int) $employee->custom_leave_quota;
+        }
         return (int) Setting::get('annual_leave_quota_days', '12');
     }
 
@@ -148,7 +152,7 @@ class LeaveQuotaHelper
      */
     public static function quotaInfo(Employee $employee, Carbon $now): array
     {
-        $quota       = self::quotaDays();
+        $quota       = self::quotaDays($employee);
         $used        = self::usedDays($employee, $now);
         $committed   = self::committedDays($employee, $now);
         $pending     = max(0, $committed - $used);

@@ -5,7 +5,7 @@ import {
   Paperclip, Loader2, Building2, User, Info, ExternalLink, Download
 } from 'lucide-react';
 import { disciplinarySanctionApi, DisciplinarySanction, departmentApi, employeeApi, Employee } from '../../../services/api';
-import logoImg from "../../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg";
+import rsLogoImg from "../../../imports/rsucl_wide_logo.png";
 import { useAuth } from "../../../context/AuthContext";
 
 const typeLabels: Record<string, string> = {
@@ -82,7 +82,7 @@ export const DisciplinaryTab: React.FC = () => {
     try {
       let base64Logo = "";
       try {
-        const response = await fetch(logoUrl && logoUrl !== "none" ? logoUrl : logoImg);
+        const response = await fetch(logoUrl && logoUrl !== "none" ? logoUrl : rsLogoImg);
         const blob = await response.blob();
         base64Logo = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();

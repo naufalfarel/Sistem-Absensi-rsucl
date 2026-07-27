@@ -28,7 +28,13 @@ interface PJBagianAppProps {
 export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
   const { user: authUser, logoUrl } = useAuth();
   const user = authUser || propUser;
-  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
+    return (localStorage.getItem("pj_active_tab") as Tab) || 'dashboard';
+  });
+
+  useEffect(() => {
+    localStorage.setItem("pj_active_tab", activeTab);
+  }, [activeTab]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [time, setTime] = useState(new Date());
   

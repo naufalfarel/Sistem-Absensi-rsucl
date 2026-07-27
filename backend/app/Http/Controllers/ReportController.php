@@ -7,6 +7,7 @@ use App\Models\Employee;
 use App\Models\LeaveRequest;
 use App\Models\Department;
 use App\Exports\VehicleExport;
+use App\Exports\SocialMediaExport;
 use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Http\Request;
 
@@ -446,5 +447,17 @@ class ReportController extends Controller
     public function exportVehicles()
     {
         return Excel::download(new VehicleExport, 'Data_Kendaraan_Pegawai_RSUCL.xlsx');
+    }
+
+    /**
+     * GET /api/reports/social-media/export
+     *
+     * Mengekspor data media sosial seluruh pegawai ke file Excel (.xlsx).
+     *
+     * @return \Symfony\Component\HttpFoundation\BinaryFileResponse
+     */
+    public function exportSocialMedia()
+    {
+        return Excel::download(new SocialMediaExport, 'Data_Media_Sosial_Pegawai_RSUCL.xlsx');
     }
 }

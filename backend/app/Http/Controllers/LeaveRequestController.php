@@ -142,7 +142,13 @@ class LeaveRequestController extends Controller
      */
     public function store(Request $request)
     {
-        $employee = $request->user()->employee;
+        $user = $request->user();
+        if ($user->isAdmin() && $request->filled('employee_id')) {
+            $employee = \App\Models\Employee::findOrFail($request->input('employee_id'));
+        } else {
+            $employee = $user->employee;
+        }
+
         if (!$employee) {
             return response()->json(['success' => false, 'message' => 'Data karyawan tidak ditemukan.'], 404);
         }
@@ -150,10 +156,11 @@ class LeaveRequestController extends Controller
         // Validasi input data pengajuan cuti
         $rules = [
             'type'                      => 'required|in:cuti,izin,sakit,cuti_khusus',
-            'start_date'                => 'required|date|after_or_equal:today',
+            'start_date'                => 'required|date' . ($user->isAdmin() ? '' : '|after_or_equal:today'),
             'end_date'                  => 'required|date|after_or_equal:start_date',
             'reason'                    => 'required|string|max:500',
             'special_leave_category_id' => 'required_if:type,cuti_khusus|exists:special_leave_categories,id',
+            'special_leave_category_other' => 'nullable|string|max:255',
             'posisi'                    => 'nullable|string|max:100',
             'unit_kerja'                => 'nullable|string|max:100',
             'substitute_name'           => 'nullable|string|max:500',
@@ -180,7 +187,8 @@ class LeaveRequestController extends Controller
 
         // ── Validasi Kuota Cuti Tahunan ──────────────────────────────────────
         // Hanya berlaku untuk pengajuan bertipe 'cuti'. Izin, sakit, dan cuti_khusus tidak dibatasi.
-        if ($data['type'] === 'cuti') {
+        // Jika Admin, validasi ini dilewati agar admin bisa mencatat cuti lama / melakukan penyesuaian historis
+        if ($data['type'] === 'cuti' && !$user->isAdmin()) {
             $now           = \Carbon\Carbon::now();
             $remaining     = LeaveQuotaHelper::remainingDays($employee, $now);
             $startDate     = \Carbon\Carbon::parse($data['start_date']);
@@ -188,8 +196,6 @@ class LeaveRequestController extends Controller
             $daysRequested = $startDate->diffInDays($endDate) + 1;
 
             // ── Aturan 1: Maksimal 4 hari beruntun per pengajuan ─────────────
-            // Pegawai tidak boleh mengajukan cuti tahunan lebih dari 4 hari beruntun
-            // dalam 1 kali pengajuan.
             if ($daysRequested > 4) {
                 return response()->json([
                     'success' => false,
@@ -212,9 +218,6 @@ class LeaveRequestController extends Controller
             }
 
             // ── Aturan 3: Maksimal 4 hari cuti per bulan kalender ────────────
-            // Hitung semua bulan yang dijangkau oleh rentang pengajuan ini,
-            // dan pastikan total hari cuti (pending+approved+baru) pada tiap bulan
-            // tidak melebihi 4 hari.
             $monthsToCheck = [];
             $cursor = $startDate->copy()->startOfMonth();
             $endMonth = $endDate->copy()->startOfMonth();
@@ -281,73 +284,102 @@ class LeaveRequestController extends Controller
 
         // Tentukan pj_status secara otomatis
         $pjStatus = 'pending';
-        if (!$pjBagian || $pjBagian->id === $request->user()->id) {
+        if ($user->isAdmin()) {
+            $pjStatus = 'approved';
+        } else if (!$pjBagian || $pjBagian->id === $request->user()->id) {
             $pjStatus = 'approved';
         }
 
-        // Buat record pengajuan berstatus 'pending'
+        // Buat record pengajuan
         $lr = LeaveRequest::create([
             'employee_id'               => $employee->id,
             'type'                      => $data['type'],
             'special_leave_category_id' => $data['special_leave_category_id'] ?? null,
+            'special_leave_category_other' => $data['special_leave_category_other'] ?? null,
             'start_date'                => $data['start_date'],
             'end_date'                  => $data['end_date'],
             'reason'                    => $data['reason'],
             'attachment_url'            => $attachmentUrl,
-            'status'                    => 'pending',
+            'status'                    => $user->isAdmin() ? 'approved' : 'pending',
             'pj_status'                 => $pjStatus,
+            'reviewed_by'               => $user->isAdmin() ? $user->id : null,
+            'reviewed_at'               => $user->isAdmin() ? now() : null,
             'posisi'                    => $data['posisi'] ?? null,
             'unit_kerja'                => $data['unit_kerja'] ?? null,
             'substitute_name'           => $data['substitute_name'] ?? null,
             'alamat_cuti'               => $data['alamat_cuti'] ?? null,
         ]);
 
-        // Kirim notifikasi sistem ke PJ Bagian departemen karyawan (jika ada),
-        // atau ke admin jika departemen tidak memiliki PJ Bagian.
-        $notifLeave = \App\Models\Setting::get('notif_leave', '1');
-        if ($notifLeave !== '0') {
-
-            // Jika ada PJ Bagian DAN pengajuan bukan milik PJ itu sendiri, notif ke PJ
-            if ($pjBagian && $pjBagian->id !== $request->user()->id) {
-                Notification::create([
-                    'user_id' => $pjBagian->id,
-                    'title'   => 'Pengajuan ' . ucfirst($data['type']) . ' Baru',
-                    'body'    => ($employee->user?->name ?? 'Karyawan') . ' mengajukan ' . $data['type'] .
-                                 ' dari ' . $data['start_date'] . ' s/d ' . $data['end_date'] . '.',
-                    'type'    => 'leave',
-                    'data'    => ['leave_request_id' => $lr->id],
-                ]);
-            } else {
-                // Tidak ada PJ Bagian (atau pengajuan milik PJ sendiri) → notif ke admin
-                $admins = \App\Models\User::whereIn('role', ['admin', 'super_admin'])->get();
-                foreach ($admins as $admin) {
+        if ($user->isAdmin()) {
+            // Generate attendance records immediately
+            $start = \Carbon\Carbon::parse($lr->start_date);
+            $end = \Carbon\Carbon::parse($lr->end_date);
+            for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
+                $dateStr = $date->toDateString();
+                \App\Models\Attendance::updateOrCreate(
+                    [
+                        'employee_id' => $lr->employee_id,
+                        'date'        => $dateStr,
+                    ],
+                    [
+                        'status'             => $lr->type === 'cuti_khusus' ? 'cuti' : $lr->type,
+                        'check_in'           => null,
+                        'check_out'          => null,
+                        'note'               => "Masa " . ucfirst($lr->type) . ": " . $lr->reason . " (Diinput Admin)",
+                        'latitude'           => null,
+                        'longitude'          => null,
+                        'accuracy'           => null,
+                        'is_within_geofence' => false,
+                        'image_check_in'     => null,
+                        'image_check_out'    => null,
+                    ]
+                );
+            }
+        } else {
+            // Kirim notifikasi sistem ke PJ Bagian departemen karyawan (jika ada),
+            // atau ke admin jika departemen tidak memiliki PJ Bagian.
+            $notifLeave = \App\Models\Setting::get('notif_leave', '1');
+            if ($notifLeave !== '0') {
+                if ($pjBagian && $pjBagian->id !== $request->user()->id) {
                     Notification::create([
-                        'user_id' => $admin->id,
+                        'user_id' => $pjBagian->id,
                         'title'   => 'Pengajuan ' . ucfirst($data['type']) . ' Baru',
                         'body'    => ($employee->user?->name ?? 'Karyawan') . ' mengajukan ' . $data['type'] .
                                      ' dari ' . $data['start_date'] . ' s/d ' . $data['end_date'] . '.',
                         'type'    => 'leave',
                         'data'    => ['leave_request_id' => $lr->id],
                     ]);
+                } else {
+                    $admins = \App\Models\User::whereIn('role', ['admin', 'super_admin'])->get();
+                    foreach ($admins as $admin) {
+                        Notification::create([
+                            'user_id' => $admin->id,
+                            'title'   => 'Pengajuan ' . ucfirst($data['type']) . ' Baru',
+                            'body'    => ($employee->user?->name ?? 'Karyawan') . ' mengajukan ' . $data['type'] .
+                                         ' dari ' . $data['start_date'] . ' s/d ' . $data['end_date'] . '.',
+                            'type'    => 'leave',
+                            'data'    => ['leave_request_id' => $lr->id],
+                        ]);
+                    }
                 }
             }
-        }
 
-        // Kirim email pengajuan baru ke semua admin (jika notif_email diset aktif dan langsung di-approve/tanpa PJ)
-        $notifEmail = \App\Models\Setting::get('notif_email', '1');
-        if ($notifEmail !== '0' && $pjStatus === 'approved') {
-            $admins = \App\Models\User::whereIn('role', ['admin', 'super_admin'])->get();
-            foreach ($admins as $admin) {
-                try {
-                    \Illuminate\Support\Facades\Mail::raw(
-                        "Halo {$admin->name},\n\nAda pengajuan " . $data['type'] . " baru dari " . ($employee->user?->name ?? 'Karyawan') . ".\n\nDetail:\n- Jenis: " . ucfirst($data['type']) . "\n- Tanggal: " . $data['start_date'] . " s/d " . $data['end_date'] . "\n- Alasan: " . $data['reason'] . "\n\nSilakan masuk ke panel admin RSUCL untuk memproses pengajuan ini.",
-                        function ($message) use ($admin, $data) {
-                            $message->to($admin->email)
-                                    ->subject('Pengajuan ' . ucfirst($data['type']) . ' Baru - RSUCL');
-                        }
-                    );
-                } catch (\Exception $e) {
-                    \Illuminate\Support\Facades\Log::error('Gagal mengirim email pengajuan cuti: ' . $e->getMessage());
+            // Kirim email pengajuan baru ke semua admin (jika notif_email diset aktif dan langsung di-approve/tanpa PJ)
+            $notifEmail = \App\Models\Setting::get('notif_email', '1');
+            if ($notifEmail !== '0' && $pjStatus === 'approved') {
+                $admins = \App\Models\User::whereIn('role', ['admin', 'super_admin'])->get();
+                foreach ($admins as $admin) {
+                    try {
+                        \Illuminate\Support\Facades\Mail::raw(
+                            "Halo {$admin->name},\n\nAda pengajuan " . $data['type'] . " baru dari " . ($employee->user?->name ?? 'Karyawan') . ".\n\nDetail:\n- Jenis: " . ucfirst($data['type']) . "\n- Tanggal: " . $data['start_date'] . " s/d " . $data['end_date'] . "\n- Alasan: " . $data['reason'] . "\n\nSilakan masuk ke panel admin RSUCL untuk memproses pengajuan ini.",
+                            function ($message) use ($admin, $data) {
+                                $message->to($admin->email)
+                                        ->subject('Pengajuan ' . ucfirst($data['type']) . ' Baru - RSUCL');
+                            }
+                        );
+                    } catch (\Exception $e) {
+                        \Illuminate\Support\Facades\Log::error('Gagal mengirim email pengajuan cuti: ' . $e->getMessage());
+                    }
                 }
             }
         }
@@ -523,7 +555,7 @@ class LeaveRequestController extends Controller
             if ($newStatus === 'approved' && $lr->type === 'cuti') {
                 $employee      = $lr->employee;
                 $now           = \Carbon\Carbon::now();
-                $quota         = LeaveQuotaHelper::quotaDays();
+                $quota         = LeaveQuotaHelper::quotaDays($employee);
                 $alreadyUsed   = LeaveQuotaHelper::usedDays($employee, $now);
                 $daysThisReq   = \Carbon\Carbon::parse($lr->start_date)->diffInDays(\Carbon\Carbon::parse($lr->end_date)) + 1;
 
@@ -893,6 +925,7 @@ class LeaveRequestController extends Controller
                 'id'   => $lr->specialLeaveCategory->id,
                 'name' => $lr->specialLeaveCategory->name,
             ] : null,
+            'special_leave_category_other' => $lr->special_leave_category_other,
             'start_date'         => $lr->start_date?->toDateString(),
             'end_date'           => $lr->end_date?->toDateString(),
             'actual_end_date'    => $lr->actual_end_date?->toDateString(),

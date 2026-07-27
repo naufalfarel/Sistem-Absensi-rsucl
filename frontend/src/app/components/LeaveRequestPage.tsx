@@ -88,6 +88,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
   const [endDate, setEndDate]       = useState('');
   const [reason, setReason]         = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
+  const [customCategoryOther, setCustomCategoryOther] = useState('');
   const [formError, setFormError]   = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
@@ -289,8 +290,12 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
   const handleSubmit = async () => {
     if (submitting) return;
     if (leaveType === 'cuti_khusus') {
-      if (!startDate || !endDate || !reason.trim() || !selectedCategory || !attachmentFile) {
-        setFormError('Semua field wajib diisi termasuk kategori cuti khusus dan dokumen pendukung.');
+      const isLainnya = () => {
+        const cat = categories.find(c => String(c.id) === selectedCategory);
+        return cat && cat.name.toLowerCase() === 'lainnya';
+      };
+      if (!startDate || !endDate || !reason.trim() || !selectedCategory || !attachmentFile || (isLainnya() && !customCategoryOther.trim())) {
+        setFormError('Semua field wajib diisi termasuk kategori cuti khusus, keterangan lainnya (jika memilih Lainnya), dan dokumen pendukung.');
         return;
       }
     } else if (leaveType === 'sakit') {
@@ -356,7 +361,14 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
         .join(', ');
       formData.append('substitute_name', allSubstitutes);
       formData.append('alamat_cuti', alamatCuti.trim());
-      if (leaveType === 'cuti_khusus') formData.append('special_leave_category_id', selectedCategory);
+      if (leaveType === 'cuti_khusus') {
+        formData.append('special_leave_category_id', selectedCategory);
+        const cat = categories.find(c => String(c.id) === selectedCategory);
+        const isLainnya = cat && cat.name.toLowerCase() === 'lainnya';
+        if (isLainnya) {
+          formData.append('special_leave_category_other', customCategoryOther.trim());
+        }
+      }
       if (attachmentFile) formData.append('attachment', attachmentFile);
       else if (attachmentBase64) formData.append('attachment', attachmentBase64);
       const res = await leaveApi.create(formData);
@@ -364,7 +376,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
         setRequests(prev => [res.data, ...prev]);
         setShowForm(false);
         setStartDate(''); setEndDate(''); setReason('');
-        setLeaveType('cuti'); setSelectedCategory('');
+        setLeaveType('cuti'); setSelectedCategory(''); setCustomCategoryOther('');
         setSubstitute1(''); setSubstitute2(''); setSubstitute3(''); setSubstitute4('');
         setAlamatCuti('');
         clearAttachment();
@@ -650,7 +662,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
                 </div>
               </div>
               <button
-                onClick={() => { setShowForm(false); setFormError(''); clearAttachment(); setStartDate(''); setEndDate(''); setReason(''); setSelectedCategory(''); }}
+                onClick={() => { setShowForm(false); setFormError(''); clearAttachment(); setStartDate(''); setEndDate(''); setReason(''); setSelectedCategory(''); setCustomCategoryOther(''); }}
                 className="w-8 h-8 rounded-xl bg-white/80 hover:bg-white flex items-center justify-center border border-gray-200 transition-colors"
               >
                 <X size={14} className="text-gray-500" />
@@ -718,7 +730,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
                   </div>
                   {/* Switch ke reguler */}
                   <button
-                    onClick={() => { setLeaveType('cuti'); setSelectedCategory(''); clearAttachment(); }}
+                    onClick={() => { setLeaveType('cuti'); setSelectedCategory(''); setCustomCategoryOther(''); clearAttachment(); }}
                     className="mt-2 text-[11px] text-[#2563EB] font-semibold hover:underline"
                   >
                     ← Kembali ke Cuti / Sakit biasa
@@ -735,7 +747,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
                   <div className="relative">
                     <select
                       value={selectedCategory}
-                      onChange={e => { setSelectedCategory(e.target.value); setFormError(''); }}
+                      onChange={e => { setSelectedCategory(e.target.value); setCustomCategoryOther(''); setFormError(''); }}
                       className="w-full pl-3.5 pr-9 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/15 transition-all appearance-none cursor-pointer"
                     >
                       <option value="">-- Pilih Kategori --</option>
@@ -745,6 +757,24 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
                     </select>
                     <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                   </div>
+                </div>
+              )}
+
+              {leaveType === 'cuti_khusus' && (() => {
+                const cat = categories.find(c => String(c.id) === selectedCategory);
+                return cat && cat.name.toLowerCase() === 'lainnya';
+              })() && (
+                <div className="space-y-1.5 mt-3">
+                  <label className="block text-[12px] font-semibold text-gray-600 mb-1.5">
+                    Nama / Keterangan Cuti Khusus Lainnya <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={customCategoryOther}
+                    onChange={(e) => setCustomCategoryOther(e.target.value)}
+                    placeholder="Contoh: Khitanan Anak, Menikahkan Anak, dll."
+                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/15 transition-all font-semibold"
+                  />
                 </div>
               )}
 
@@ -980,7 +1010,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
               {/* Submit & Cancel */}
               <div className="flex gap-2.5 pt-1">
                 <button
-                  onClick={() => { setShowForm(false); setFormError(''); clearAttachment(); setStartDate(''); setEndDate(''); setReason(''); setSelectedCategory(''); }}
+                  onClick={() => { setShowForm(false); setFormError(''); clearAttachment(); setStartDate(''); setEndDate(''); setReason(''); setSelectedCategory(''); setCustomCategoryOther(''); }}
                   disabled={submitting}
                   className="flex-1 py-3 border border-gray-200 rounded-xl text-[13px] font-medium text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
                 >
@@ -990,7 +1020,14 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
                   onClick={handleSubmit}
                   disabled={
                     submitting ||
-                    (leaveType === 'cuti_khusus' && (!selectedCategory || !attachmentFile)) ||
+                    (leaveType === 'cuti_khusus' && (
+                      !selectedCategory || 
+                      !attachmentFile || 
+                      ((() => {
+                        const cat = categories.find(c => String(c.id) === selectedCategory);
+                        return cat && cat.name.toLowerCase() === 'lainnya';
+                      })() && !customCategoryOther.trim())
+                    )) ||
                     (leaveType === 'sakit' && !attachmentFile)
                   }
                   className="flex-1 py-3 bg-[#16A34A] hover:bg-[#0d9240] rounded-xl text-[13px] font-semibold text-white transition-all shadow-sm shadow-green-200 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
@@ -1074,7 +1111,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
                         <div>
                           <span className="text-[13px] font-bold text-gray-800">
                             {req.type === 'cuti_khusus' && req.special_leave_category
-                              ? `Cuti Khusus (${req.special_leave_category.name})`
+                              ? `Cuti Khusus (${req.special_leave_category.name}${req.special_leave_category.name.toLowerCase() === 'lainnya' && req.special_leave_category_other ? ` - ${req.special_leave_category_other}` : ''})`
                               : tc.label}
                           </span>
                           <p className="text-[11px] text-gray-400 mt-0.5">Diajukan: {formatDate(req.created_at)}</p>

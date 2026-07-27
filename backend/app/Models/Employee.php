@@ -21,7 +21,7 @@ class Employee extends Model
         'user_id', 'department_id', 'position_id',
         'nik_ktp', 'phone', 'gender', 'join_date', 'status',
         'motor_plate_1', 'motor_plate_2', 'car_plate_1', 'car_plate_2',
-        'instagram', 'facebook', 'tiktok',
+        'instagram', 'facebook', 'tiktok', 'custom_leave_quota',
     ];
 
     // Cast tipe data otomatis

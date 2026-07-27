@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { CheckCircle2, XCircle, Clock, FileText, Trash2, Paperclip, AlertCircle, Calendar, ChevronDown, Search, X, Printer } from 'lucide-react';
-import { leaveApi, LeaveRequest, departmentApi, DepartmentModel } from '../../../services/api';
+import { leaveApi, LeaveRequest, departmentApi, DepartmentModel, employeeApi, Employee } from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
 import { MonthYearDeptFilter } from '../ui/MonthYearDeptFilter';
 import { LeaveFormPrintModal } from '../ui/LeaveFormPrintModal';
@@ -102,6 +102,68 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
   
   // Indikator loading request
   const [loading, setLoading] = useState(false);
+
+  // States & handlers untuk Tambah Cuti (On Behalf) oleh Admin
+  const [showAddLeaveModal, setShowAddLeaveModal] = useState(false);
+  const [employeesList, setEmployeesList] = useState<Employee[]>([]);
+  const [loadingEmployees, setLoadingEmployees] = useState(false);
+  
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+  const [leaveType, setLeaveType] = useState<'cuti' | 'izin' | 'sakit' | 'cuti_khusus'>('cuti');
+  const [leaveStart, setLeaveStart] = useState('');
+  const [leaveEnd, setLeaveEnd] = useState('');
+  const [leaveReason, setLeaveReason] = useState('');
+  const [addLeaveError, setAddLeaveError] = useState('');
+  const [submittingAddLeave, setSubmittingAddLeave] = useState(false);
+
+  const loadEmployees = async () => {
+    setLoadingEmployees(true);
+    try {
+      const res = await employeeApi.list();
+      if (res.success) {
+        const sorted = [...res.data].sort((a, b) => a.name.localeCompare(b.name));
+        setEmployeesList(sorted);
+        if (sorted.length > 0) {
+          setSelectedEmployeeId(sorted[0].id.toString());
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingEmployees(false);
+    }
+  };
+
+  const handleAddLeaveSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedEmployeeId || !leaveStart || !leaveEnd || !leaveReason.trim()) {
+      setAddLeaveError('Semua field wajib diisi.');
+      return;
+    }
+    setAddLeaveError('');
+    setSubmittingAddLeave(true);
+    try {
+      const res = await leaveApi.create({
+        employee_id: Number(selectedEmployeeId),
+        type: leaveType,
+        start_date: leaveStart,
+        end_date: leaveEnd,
+        reason: leaveReason,
+      } as any);
+      if (res.success) {
+        setShowAddLeaveModal(false);
+        setLeaveStart('');
+        setLeaveEnd('');
+        setLeaveReason('');
+        loadRequests();
+        if (onUpdateCount) onUpdateCount();
+      }
+    } catch (err: any) {
+      setAddLeaveError(err?.message ?? 'Gagal mencatat cuti.');
+    } finally {
+      setSubmittingAddLeave(false);
+    }
+  };
 
   /**
    * Menarik seluruh daftar pengajuan cuti masuk dari API backend.
@@ -308,12 +370,23 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
           <h2 className="text-[16px] font-bold text-gray-900">Pengajuan Cuti & Sakit</h2>
           <p className="text-[12px] text-gray-400 mt-0.5">Kelola permintaan cuti, sakit, dan cuti khusus karyawan</p>
         </div>
-        {pending > 0 && (
-          <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3.5 py-2">
-            <Clock size={14} className="text-amber-600" />
-            <span className="text-[12px] font-semibold text-amber-700">{pending} pengajuan menunggu persetujuan</span>
-          </div>
-        )}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => {
+              setShowAddLeaveModal(true);
+              loadEmployees();
+            }}
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-[#16A34A] text-white rounded-xl text-[12px] font-semibold hover:bg-[#0d9240] transition-all shadow-sm shadow-green-200"
+          >
+            + Catat Cuti Pegawai
+          </button>
+          {pending > 0 && (
+            <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3.5 py-2">
+              <Clock size={14} className="text-amber-600" />
+              <span className="text-[12px] font-semibold text-amber-700">{pending} pengajuan</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Catatan Pengingat Tetap (Banner) */}
@@ -553,7 +626,7 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
                         <p className="text-[14px] font-semibold text-gray-900">{req.employee?.name}</p>
                         <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ color: tc.color, background: tc.bg }}>
                           {req.type === 'cuti_khusus' && req.special_leave_category
-                            ? `Cuti Khusus (${req.special_leave_category.name})`
+                            ? `Cuti Khusus (${req.special_leave_category.name}${req.special_leave_category.name.toLowerCase() === 'lainnya' && req.special_leave_category_other ? ` - ${req.special_leave_category_other}` : ''})`
                             : tc.label}
                         </span>
                         <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ color: sc.color, background: sc.bg }}>{sc.label}</span>
@@ -838,6 +911,115 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
           request={selectedLeaveForPrint}
           onClose={() => setSelectedLeaveForPrint(null)}
         />
+      )}
+
+      {/* ─── ADD LEAVE ON BEHALF MODAL ─────────────────────────────────────────── */}
+      {showAddLeaveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowAddLeaveModal(false)} />
+          <div className="relative bg-white rounded-2xl p-6 shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-3">
+              <h3 className="text-[14px] font-bold text-gray-900">Catat Cuti Historis Pegawai</h3>
+              <button onClick={() => setShowAddLeaveModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={16} />
+              </button>
+            </div>
+            
+            {addLeaveError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-100 text-red-600 rounded-xl text-[11px]">
+                {addLeaveError}
+              </div>
+            )}
+            
+            <form onSubmit={handleAddLeaveSubmit} className="space-y-4">
+              <div>
+                <label className="block text-[12px] font-medium text-gray-600 mb-1.5">Pilih Pegawai</label>
+                <div className="relative">
+                  {loadingEmployees ? (
+                    <div className="text-[12px] text-gray-400 py-2">Memuat daftar pegawai...</div>
+                  ) : (
+                    <select
+                      value={selectedEmployeeId}
+                      onChange={(e) => setSelectedEmployeeId(e.target.value)}
+                      className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all cursor-pointer font-semibold"
+                    >
+                      {employeesList.map((emp) => (
+                        <option key={emp.id} value={emp.id}>
+                          {emp.name} ({emp.department})
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[12px] font-medium text-gray-600 mb-1.5">Jenis Cuti</label>
+                  <select
+                    value={leaveType}
+                    onChange={(e) => setLeaveType(e.target.value as any)}
+                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all cursor-pointer font-semibold"
+                  >
+                    <option value="cuti">Cuti Tahunan</option>
+                    <option value="sakit">Sakit</option>
+                    <option value="cuti_khusus">Cuti Khusus</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-[12px] font-medium text-gray-600 mb-1.5">Alasan/Keterangan</label>
+                  <input
+                    type="text"
+                    value={leaveReason}
+                    onChange={(e) => setLeaveReason(e.target.value)}
+                    placeholder="Sakit, Cuti mudik, dll."
+                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all"
+                  />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[12px] font-medium text-gray-600 mb-1.5">Tanggal Mulai</label>
+                  <input
+                    type="date"
+                    value={leaveStart}
+                    onChange={(e) => setLeaveStart(e.target.value)}
+                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-[12px] font-medium text-gray-600 mb-1.5">Tanggal Selesai</label>
+                  <input
+                    type="date"
+                    value={leaveEnd}
+                    onChange={(e) => setLeaveEnd(e.target.value)}
+                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all"
+                  />
+                </div>
+              </div>
+              
+              <div className="flex gap-2 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setShowAddLeaveModal(false)}
+                  className="flex-1 py-2.5 border border-gray-200 rounded-xl text-[13px] font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingAddLeave}
+                  className="flex-1 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#16A34A] hover:bg-[#0d9240] transition-all disabled:opacity-50"
+                >
+                  {submittingAddLeave ? 'Menyimpan...' : 'Catat & Kurangi Kuota'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   User, Mail, Lock, Eye, EyeOff, CheckCircle2, Save, Shield, MapPin, Clock,
-  Bell, ToggleLeft, ToggleRight, Power, Upload, RotateCcw, AlertTriangle, ImageIcon, Trash2, Sparkles, Calendar
+  Bell, ToggleLeft, ToggleRight, Power, Upload, RotateCcw, AlertTriangle, ImageIcon, Trash2, Sparkles, Calendar, Edit2
 } from 'lucide-react';
 import logoImg from '../../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
 import { settingApi, profileApi } from '../../../services/api';
@@ -139,6 +139,8 @@ export function SettingsTab() {
   const [categoryError, setCategoryError]               = useState('');
   const [categorySaved, setCategorySaved]               = useState(false);
   const [categoryLoading, setCategoryLoading]           = useState(false);
+  const [editingCategoryId, setEditingCategoryId]       = useState<number | null>(null);
+  const [editingCategoryName, setEditingCategoryName]   = useState('');
 
   // ── States Pengendali Preview & File Logo Rumah Sakit ──
   const [logoPreview, setLogoPreview] = useState<string>(logoImg);
@@ -243,16 +245,51 @@ export function SettingsTab() {
     }
   };
 
-  const handleToggleCategory = async (id: number, catName: string, currentActive: boolean) => {
+  const handleEditClick = (id: number, currentName: string) => {
+    setEditingCategoryId(id);
+    setEditingCategoryName(currentName);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingCategoryId(null);
+    setEditingCategoryName('');
+  };
+
+  const handleUpdateCategory = async (id: number) => {
+    if (!editingCategoryName.trim()) return;
     setCategoryError('');
+    setCategorySaved(false);
+    setCategoryLoading(true);
     try {
       const { specialLeaveApi } = await import('../../../services/api');
-      const res = await specialLeaveApi.update(id, catName, !currentActive);
+      const res = await specialLeaveApi.update(id, editingCategoryName.trim(), true);
+      if (res.success) {
+        setEditingCategoryId(null);
+        setEditingCategoryName('');
+        fetchCategories();
+      }
+    } catch (err: any) {
+      setCategoryError(err?.message ?? 'Gagal memperbarui kategori.');
+    } finally {
+      setCategoryLoading(false);
+    }
+  };
+
+  const handleDeleteCategory = async (id: number) => {
+    if (!window.confirm('Apakah Anda yakin ingin menghapus kategori cuti khusus ini?')) return;
+    setCategoryError('');
+    setCategorySaved(false);
+    setCategoryLoading(true);
+    try {
+      const { specialLeaveApi } = await import('../../../services/api');
+      const res = await specialLeaveApi.delete(id);
       if (res.success) {
         fetchCategories();
       }
     } catch (err: any) {
-      setCategoryError(err?.message ?? 'Gagal mengubah status kategori.');
+      setCategoryError(err?.message ?? 'Gagal menghapus kategori.');
+    } finally {
+      setCategoryLoading(false);
     }
   };
 
@@ -974,15 +1011,52 @@ export function SettingsTab() {
             ) : (
               categories.map((c) => (
                 <div key={c.id} className="flex items-center justify-between px-4 py-3 bg-gray-50/10 hover:bg-gray-50/30 transition-colors">
-                  <div>
-                    <span className={`text-[12px] font-semibold ${c.is_active ? 'text-gray-800' : 'text-gray-400 line-through'}`}>
-                      {c.name}
-                    </span>
-                    <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-semibold ${c.is_active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                      {c.is_active ? 'Aktif' : 'Nonaktif'}
-                    </span>
-                  </div>
-                  <Toggle value={c.is_active} onChange={() => handleToggleCategory(c.id, c.name, c.is_active)} />
+                  {editingCategoryId === c.id ? (
+                    <div className="flex items-center gap-2 w-full">
+                      <input
+                        type="text"
+                        value={editingCategoryName}
+                        onChange={(e) => setEditingCategoryName(e.target.value)}
+                        className="flex-1 px-3 py-1.5 border border-gray-200 rounded-xl text-[12px] bg-white focus:outline-none focus:border-[#EA580C]"
+                      />
+                      <button
+                        onClick={() => handleUpdateCategory(c.id)}
+                        className="px-3 py-1.5 bg-[#EA580C] hover:bg-[#d44f0b] text-white rounded-lg text-[11px] font-semibold transition-all"
+                      >
+                        Simpan
+                      </button>
+                      <button
+                        onClick={handleCancelEdit}
+                        className="px-3 py-1.5 border border-gray-200 text-gray-600 rounded-lg text-[11px] font-semibold hover:bg-gray-50 transition-all"
+                      >
+                        Batal
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div>
+                        <span className="text-[12px] font-semibold text-gray-800">
+                          {c.name}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleEditClick(c.id, c.name)}
+                          className="p-1 text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                          title="Ubah Nama"
+                        >
+                          <Edit2 size={14} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteCategory(c.id)}
+                          className="p-1 text-red-650 hover:bg-red-50 rounded-lg transition-all"
+                          title="Hapus Kategori"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               ))
             )}

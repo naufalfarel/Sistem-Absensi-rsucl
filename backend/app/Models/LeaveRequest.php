@@ -20,7 +20,7 @@ class LeaveRequest extends Model
         'actual_end_date', 'shortened_by', 'shortened_at', 'shortened_reason',
         'cancelled_by', 'cancelled_at', 'cancellation_reason',
         'pj_status', 'pj_reviewed_by', 'pj_reviewed_at', 'pj_note',
-        'posisi', 'unit_kerja', 'substitute_name', 'alamat_cuti',
+        'posisi', 'unit_kerja', 'substitute_name', 'alamat_cuti', 'special_leave_category_other',
     ];
 
     // Cast tipe data otomatis

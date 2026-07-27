@@ -271,6 +271,7 @@ export interface Employee {
   gender?: string;
   join_date?: string;
   status: "active" | "inactive";
+  custom_leave_quota?: number | null;
   today_attendance?: {
     check_in: string;
     check_out: string;
@@ -705,6 +706,7 @@ export interface LeaveRequest {
   type: "cuti" | "izin" | "sakit" | "cuti_khusus";
   special_leave_category_id?: number;
   special_leave_category?: { id: number; name: string } | null;
+  special_leave_category_other?: string | null;
   start_date: string;
   end_date: string;
   days: number;
@@ -853,6 +855,10 @@ export const specialLeaveApi = {
     api.put<{ success: boolean; message: string; data: SpecialLeaveCategory }>(
       `/special-leave-categories/${id}`,
       { name, is_active },
+    ),
+  delete: (id: number) =>
+    api.delete<{ success: boolean; message: string }>(
+      `/special-leave-categories/${id}`,
     ),
 };
 

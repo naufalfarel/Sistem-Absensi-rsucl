@@ -91,4 +91,28 @@ class SpecialLeaveCategoryController extends Controller
             'data' => $category
         ]);
     }
+
+    /**
+     * DELETE /api/special-leave-categories/{id}
+     * 
+     * Menghapus kategori cuti khusus.
+     * Hanya dapat diakses oleh administrator.
+     */
+    public function destroy($id)
+    {
+        $category = SpecialLeaveCategory::find($id);
+        if (!$category) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Kategori cuti khusus tidak ditemukan.'
+            ], 404);
+        }
+
+        $category->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Kategori cuti khusus berhasil dihapus.'
+        ]);
+    }
 }

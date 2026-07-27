@@ -40,9 +40,10 @@ class UpdateEmployeeRequest extends FormRequest
             'motor_plate_2' => 'nullable|string|max:15',
             'car_plate_1'   => 'nullable|string|max:15',
             'car_plate_2'   => 'nullable|string|max:15',
-            'instagram'     => 'nullable|string|max:100',
-            'facebook'      => 'nullable|string|max:100',
-            'tiktok'        => 'nullable|string|max:100',
+            'instagram'          => 'nullable|string|max:100',
+            'facebook'           => 'nullable|string|max:100',
+            'tiktok'             => 'nullable|string|max:100',
+            'custom_leave_quota' => 'nullable|integer|min:0|max:365',
         ];
     }
 }

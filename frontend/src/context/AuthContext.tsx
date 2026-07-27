@@ -29,7 +29,14 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
  * Provider Komponen untuk membungkus aplikasi React dan menyebarkan state auth.
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(() => {
+    const stored = localStorage.getItem('auth_user');
+    try {
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
   const [token, setTokenState] = useState<string | null>(getToken());
   const [loading, setLoading] = useState(true);
   const [logoUrl, setLogoUrl] = useState<string | null>(localStorage.getItem('hospital_logo'));
@@ -61,6 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await authApi.me();
       if (res.success) {
         setUser(res.data);
+        localStorage.setItem('auth_user', JSON.stringify(res.data));
       } else {
         handleLogoutLocal();
       }
@@ -95,6 +103,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setTokenState(null);
     clearToken();
+    localStorage.removeItem('auth_user');
+    localStorage.removeItem('admin_active_tab');
+    localStorage.removeItem('pj_active_tab');
+    localStorage.removeItem('employee_active_tab');
   };
 
   /**
@@ -110,6 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setToken(res.data.token);
         setTokenState(res.data.token);
         setUser(res.data.user);
+        localStorage.setItem('auth_user', JSON.stringify(res.data.user));
         return { success: true };
       }
       return { success: false, message: 'Username atau Password tidak sesuai.' };

@@ -74,6 +74,7 @@ class EmployeeController extends Controller
             'instagram'     => $data['instagram'] ?? null,
             'facebook'      => $data['facebook'] ?? null,
             'tiktok'        => $data['tiktok'] ?? null,
+            'custom_leave_quota' => $data['custom_leave_quota'] ?? null,
         ]);
 
         $employee->load(['user', 'department', 'position']);
@@ -122,6 +123,7 @@ class EmployeeController extends Controller
             'instagram'     => array_key_exists('instagram', $data) ? $data['instagram'] : $employee->instagram,
             'facebook'      => array_key_exists('facebook', $data) ? $data['facebook'] : $employee->facebook,
             'tiktok'        => array_key_exists('tiktok', $data) ? $data['tiktok'] : $employee->tiktok,
+            'custom_leave_quota' => array_key_exists('custom_leave_quota', $data) ? $data['custom_leave_quota'] : $employee->custom_leave_quota,
         ]);
         $employee->update($empFields);
 
@@ -378,6 +380,7 @@ class EmployeeController extends Controller
             'gender'           => $e->gender,
             'join_date'        => $e->join_date?->toDateString(),
             'status'           => $e->status,
+            'custom_leave_quota'=> $e->custom_leave_quota,
             'today_attendance' => [
                 'check_in'  => $today?->check_in,
                 'check_out' => $today?->check_out,

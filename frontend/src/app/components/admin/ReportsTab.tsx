@@ -488,6 +488,45 @@ export function ReportsTab() {
     }
   };
 
+  const handleExportSocialMedia = async () => {
+    setExporting(true);
+    try {
+      const token = getToken();
+      const getApiUrl = () => {
+        const envVal = import.meta.env.VITE_API_URL;
+        if (envVal === "") return "";
+        return envVal ?? "http://localhost:8000";
+      };
+      const apiUrl = getApiUrl();
+      const response = await fetch(`${apiUrl}/api/reports/social-media/export`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) {
+        throw new Error(
+          "Gagal mengekspor data media sosial. Pastikan Anda masuk sebagai Admin.",
+        );
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "Data_Media_Sosial_Pegawai_RSUCL.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || "Terjadi kesalahan saat mengekspor Excel.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const handleExportPrestasiExcel = async () => {
     setExporting(true);
     try {
@@ -1059,6 +1098,26 @@ export function ReportsTab() {
             >
               <Download size={12} />{" "}
               {exporting ? "Memproses..." : "Export Kendaraan"}
+            </button>
+          </div>
+
+          {/* Kelompok Laporan Media Sosial */}
+          <div className="flex items-center gap-2 p-1.5 bg-gray-50/60 rounded-xl border border-gray-100 shadow-sm">
+            <div className="text-left px-2 hidden sm:block">
+              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">
+                Media Sosial
+              </p>
+              <p className="text-[8.5px] text-gray-400 leading-none mt-0.5">
+                Instagram, FB, TikTok
+              </p>
+            </div>
+            <button
+              onClick={handleExportSocialMedia}
+              disabled={exporting}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#EA580C] hover:bg-[#d44f0b] rounded-lg text-[11px] font-medium text-white transition-colors disabled:opacity-50"
+            >
+              <Download size={12} />{" "}
+              {exporting ? "Memproses..." : "Export Medsos"}
             </button>
           </div>
         </div>

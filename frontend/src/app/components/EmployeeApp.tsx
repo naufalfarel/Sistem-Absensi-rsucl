@@ -39,7 +39,13 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
   const { user, logoUrl } = useAuth();
   
   // State untuk melacak tab aktif
-  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
+    return (localStorage.getItem("employee_active_tab") as Tab) || 'dashboard';
+  });
+
+  useEffect(() => {
+    localStorage.setItem("employee_active_tab", activeTab);
+  }, [activeTab]);
   
   // State drawer sidebar pada tampilan mobile
   const [sidebarOpen, setSidebarOpen] = useState(false);

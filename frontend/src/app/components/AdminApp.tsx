@@ -140,6 +140,7 @@ const emptyForm = {
   instagram: "",
   facebook: "",
   tiktok: "",
+  custom_leave_quota: "",
 };
 
 interface AdminAppProps {
@@ -159,7 +160,13 @@ export function AdminApp({ onLogout }: AdminAppProps) {
   const { user, logoUrl } = useAuth();
 
   // Tab menu aktif di sidebar (default: 'dashboard')
-  const [activeTab, setActiveTab] = useState("dashboard");
+  const [activeTab, setActiveTab] = useState(() => {
+    return localStorage.getItem("admin_active_tab") || "dashboard";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("admin_active_tab", activeTab);
+  }, [activeTab]);
 
   // Pengontrol buka/tutup laci sidebar pada tampilan layar kecil (mobile)
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -348,6 +355,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
       instagram: emp.social_media?.instagram || "",
       facebook: emp.social_media?.facebook || "",
       tiktok: emp.social_media?.tiktok || "",
+      custom_leave_quota: emp.custom_leave_quota !== null && emp.custom_leave_quota !== undefined ? emp.custom_leave_quota.toString() : "",
     });
     setFormError("");
     setSelectedEmp(emp);
@@ -565,6 +573,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
           instagram: form.instagram || undefined,
           facebook: form.facebook || undefined,
           tiktok: form.tiktok || undefined,
+          custom_leave_quota: form.custom_leave_quota !== "" ? Number(form.custom_leave_quota) : null,
         } as any);
         if (res.success) {
           setEmployees((prev) => [res.data, ...prev]);
@@ -585,6 +594,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
           instagram: form.instagram || null,
           facebook: form.facebook || null,
           tiktok: form.tiktok || null,
+          custom_leave_quota: form.custom_leave_quota !== "" ? Number(form.custom_leave_quota) : null,
         };
         if (form.password.trim()) {
           updateData.password = form.password;
@@ -2021,6 +2031,21 @@ export function AdminApp({ onLogout }: AdminAppProps) {
                     onChange={(e) =>
                       setForm((f) => ({ ...f, joinDate: e.target.value }))
                     }
+                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all"
+                  />
+                </div>
+                {/* Kuota Cuti Tahunan */}
+                <div>
+                  <label className="block text-[12px] font-medium text-gray-600 mb-1.5">
+                    Kuota Cuti Tahunan (Hari)
+                  </label>
+                  <input
+                    type="number"
+                    value={form.custom_leave_quota}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, custom_leave_quota: e.target.value }))
+                    }
+                    placeholder="Bawaan sistem (default)"
                     className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all"
                   />
                 </div>
