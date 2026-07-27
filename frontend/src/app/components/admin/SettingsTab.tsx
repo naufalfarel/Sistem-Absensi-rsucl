@@ -403,6 +403,11 @@ export function SettingsTab() {
   const handleSaveConfig = async () => {
     setConfigSaved(false);
     setConfigError('');
+    const parsedRadius = Number(radius);
+    if (parsedRadius < 10 || parsedRadius > 25) {
+      setConfigError('Radius Geofence GPS harus bernilai antara 10 hingga 25 meter.');
+      return;
+    }
     try {
       const res = await settingApi.update({
         gps_radius: radius,
@@ -1006,9 +1011,10 @@ export function SettingsTab() {
                 <p className="font-bold text-gray-700 mb-1 flex items-center gap-1">⏱️ Absen Masuk (Check-in)</p>
                 <div className="space-y-1 pl-3.5 border-l border-green-200">
                   <p>• Buka check-in mulai: <span className="font-mono text-gray-800 font-bold">{getPreviewTime('08:00', checkinOpen, 'sub')} WIB</span> <span className="text-gray-400">({checkinOpen || 0} menit sebelum shift)</span></p>
-                  <p>• Tepat waktu: <span className="font-mono text-[#16A34A] font-bold">{getPreviewTime('08:00', '0')} - {getPreviewTime('08:00', lateLimit)} WIB</span> <span className="text-gray-400">({lateLimit || 0} menit pertama)</span></p>
-                  <p>• Terlambat (tetap Hadir): <span className="font-mono text-amber-600 font-bold">{getPreviewTime('08:00', lateLimit)} - {getPreviewTime('08:00', closeCheckin)} WIB</span></p>
-                  <p>• Tutup check-in / Alpha: <span className="font-mono text-red-600 font-bold">Lewat dari {getPreviewTime('08:00', closeCheckin)} WIB</span> <span className="text-gray-400">({closeCheckin || 0} menit setelah shift)</span></p>
+                  <p>• Tepat waktu: <span className="font-mono text-[#16A34A] font-bold">{getPreviewTime('08:00', checkinOpen, 'sub')} - {getPreviewTime('08:00', lateLimit)} WIB</span> <span className="text-gray-400">(sampai {lateLimit || 0} menit setelah shift)</span></p>
+                  <p>• Hadir dengan Toleransi: <span className="font-mono text-amber-600 font-bold">{getPreviewTime('08:00', String((Number(lateLimit) || 0) + 1))} - {getPreviewTime('08:00', checkinTolerance)} WIB</span> <span className="text-gray-400">(sampai {checkinTolerance || 0} menit setelah shift)</span></p>
+                  <p>• Terlambat (tetap Hadir): <span className="font-mono text-red-500 font-bold">{getPreviewTime('08:00', String((Number(checkinTolerance) || 0) + 1))} WIB</span> s.d. Batas Absen masing-masing shift <span className="text-gray-400">(contoh Shift Reguler: s.d. {getPreviewTime('08:00', closeCheckin)} WIB)</span></p>
+                  <p>• Tutup check-in / Alpha: Lewat dari Batas Absen masing-masing shift <span className="text-gray-400">(contoh Shift Reguler: lewat dari {getPreviewTime('08:00', closeCheckin)} WIB)</span></p>
                 </div>
               </div>
               <div>
@@ -1219,7 +1225,7 @@ export function SettingsTab() {
             <label className="block text-[12px] font-medium text-gray-600 mb-1.5">Radius Geofence GPS (meter)</label>
             <div className="relative">
               <MapPin size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input type="number" value={radius} onChange={e => setRadius(e.target.value)} min="10" max="1000"
+              <input type="number" value={radius} onChange={e => setRadius(e.target.value)} min="10" max="25"
                 className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all" />
             </div>
             <p className="text-[11px] text-gray-400 mt-1">Karyawan hanya dapat absen dalam radius {radius}m dari RSUCL</p>

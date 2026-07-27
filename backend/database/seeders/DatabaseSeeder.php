@@ -72,7 +72,7 @@ class DatabaseSeeder extends Seeder
                 ]
             ],
             [
-                'parent' => ['name' => 'Poliklinik Rawat Jalan', 'color' => '#10B981', 'icon' => 'sun'],
+                'parent' => ['name' => 'Instalasi Rawat Jalan', 'color' => '#10B981', 'icon' => 'sun'],
                 'children' => [
                     ['name' => 'Pagi (07:45–15:00)', 'start_time' => '07:45:00', 'end_time' => '15:00:00', 'color' => '#10B981', 'icon' => 'sun'],
                     ['name' => 'Siang (15:00–22:00)', 'start_time' => '15:00:00', 'end_time' => '22:00:00', 'color' => '#0284C7', 'icon' => 'sunset'],
@@ -100,7 +100,7 @@ class DatabaseSeeder extends Seeder
                 ]
             ],
             [
-                'parent' => ['name' => 'Farmasi Rawat Jalan', 'color' => '#D97706', 'icon' => 'sunrise'],
+                'parent' => ['name' => 'Farmasi Poli Rawat Jalan', 'color' => '#D97706', 'icon' => 'sunrise'],
                 'children' => [
                     ['name' => 'Pagi (08:00–15:00)', 'start_time' => '08:00:00', 'end_time' => '15:00:00', 'color' => '#D97706', 'icon' => 'sunrise'],
                     ['name' => 'Siang (15:00–22:00)', 'start_time' => '15:00:00', 'end_time' => '22:00:00', 'color' => '#2563EB', 'icon' => 'sunset'],
@@ -163,6 +163,196 @@ class DatabaseSeeder extends Seeder
                     ['name' => 'Libur Jaga (00:00–00:00)', 'start_time' => '00:00:00', 'end_time' => '00:00:00', 'color' => '#475569', 'icon' => 'moon'],
                 ]
             ],
+            [
+                'parent' => ['name' => 'Kasir', 'color' => '#3B82F6', 'icon' => 'sun'],
+                'children' => [
+                    ['name' => 'Pagi (08:00–14:00)', 'start_time' => '08:00:00', 'end_time' => '14:00:00', 'color' => '#D97706', 'icon' => 'sunrise'],
+                    ['name' => 'Siang (14:00–20:00)', 'start_time' => '14:00:00', 'end_time' => '20:00:00', 'color' => '#2563EB', 'icon' => 'sunset'],
+                    ['name' => 'Malam (20:00–08:00)', 'start_time' => '20:00:00', 'end_time' => '08:00:00', 'color' => '#7C3AED', 'icon' => 'moon'],
+                ]
+            ],
+            [
+                'parent' => ['name' => 'Instalasi Gawat Darurat', 'color' => '#EF4444', 'icon' => 'zap'],
+                'children' => [
+                    ['name' => 'Pagi (08:00–14:00)', 'start_time' => '08:00:00', 'end_time' => '14:00:00', 'color' => '#D97706', 'icon' => 'sunrise'],
+                    ['name' => 'Siang (14:00–20:00)', 'start_time' => '14:00:00', 'end_time' => '20:00:00', 'color' => '#2563EB', 'icon' => 'sunset'],
+                    ['name' => 'Malam (20:00–08:00)', 'start_time' => '20:00:00', 'end_time' => '08:00:00', 'color' => '#7C3AED', 'icon' => 'moon'],
+                ]
+            ],
+            [
+                'parent' => ['name' => 'Rawat Inap Jeumpa A', 'color' => '#3B82F6', 'icon' => 'sun'],
+                'children' => [
+                    ['name' => 'Pagi (08:00–14:00)', 'start_time' => '08:00:00', 'end_time' => '14:00:00', 'color' => '#D97706', 'icon' => 'sunrise'],
+                    ['name' => 'Siang (14:00–20:00)', 'start_time' => '14:00:00', 'end_time' => '20:00:00', 'color' => '#2563EB', 'icon' => 'sunset'],
+                    ['name' => 'Malam (20:00–08:00)', 'start_time' => '20:00:00', 'end_time' => '08:00:00', 'color' => '#7C3AED', 'icon' => 'moon'],
+                ]
+            ],
+            [
+                'parent' => ['name' => 'Rawat Inap Jeumpa B', 'color' => '#3B82F6', 'icon' => 'sun'],
+                'children' => [
+                    ['name' => 'Pagi (08:00–14:00)', 'start_time' => '08:00:00', 'end_time' => '14:00:00', 'color' => '#D97706', 'icon' => 'sunrise'],
+                    ['name' => 'Siang (14:00–20:00)', 'start_time' => '14:00:00', 'end_time' => '20:00:00', 'color' => '#2563EB', 'icon' => 'sunset'],
+                    ['name' => 'Malam (20:00–08:00)', 'start_time' => '20:00:00', 'end_time' => '08:00:00', 'color' => '#7C3AED', 'icon' => 'moon'],
+                ]
+            ],
+            [
+                'parent' => ['name' => 'Rawat Inap Seulanga', 'color' => '#3B82F6', 'icon' => 'sun'],
+                'children' => [
+                    ['name' => 'Pagi (08:00–14:00)', 'start_time' => '08:00:00', 'end_time' => '14:00:00', 'color' => '#D97706', 'icon' => 'sunrise'],
+                    ['name' => 'Siang (14:00–20:00)', 'start_time' => '14:00:00', 'end_time' => '20:00:00', 'color' => '#2563EB', 'icon' => 'sunset'],
+                    ['name' => 'Malam (20:00–08:00)', 'start_time' => '20:00:00', 'end_time' => '08:00:00', 'color' => '#7C3AED', 'icon' => 'moon'],
+                ]
+            ],
+            [
+                'parent' => ['name' => 'Rawat Inap Meulu', 'color' => '#3B82F6', 'icon' => 'sun'],
+                'children' => [
+                    ['name' => 'Pagi (08:00–14:00)', 'start_time' => '08:00:00', 'end_time' => '14:00:00', 'color' => '#D97706', 'icon' => 'sunrise'],
+                    ['name' => 'Siang (14:00–20:00)', 'start_time' => '14:00:00', 'end_time' => '20:00:00', 'color' => '#2563EB', 'icon' => 'sunset'],
+                    ['name' => 'Malam (20:00–08:00)', 'start_time' => '20:00:00', 'end_time' => '08:00:00', 'color' => '#7C3AED', 'icon' => 'moon'],
+                ]
+            ],
+            [
+                'parent' => ['name' => 'Rawat Inap Kupula', 'color' => '#3B82F6', 'icon' => 'sun'],
+                'children' => [
+                    ['name' => 'Pagi (08:00–14:00)', 'start_time' => '08:00:00', 'end_time' => '14:00:00', 'color' => '#D97706', 'icon' => 'sunrise'],
+                    ['name' => 'Siang (14:00–20:00)', 'start_time' => '14:00:00', 'end_time' => '20:00:00', 'color' => '#2563EB', 'icon' => 'sunset'],
+                    ['name' => 'Malam (20:00–08:00)', 'start_time' => '20:00:00', 'end_time' => '08:00:00', 'color' => '#7C3AED', 'icon' => 'moon'],
+                ]
+            ],
+            [
+                'parent' => ['name' => 'Rawat Inap Transit', 'color' => '#3B82F6', 'icon' => 'sun'],
+                'children' => [
+                    ['name' => 'Pagi (08:00–14:00)', 'start_time' => '08:00:00', 'end_time' => '14:00:00', 'color' => '#D97706', 'icon' => 'sunrise'],
+                    ['name' => 'Siang (14:00–20:00)', 'start_time' => '14:00:00', 'end_time' => '20:00:00', 'color' => '#2563EB', 'icon' => 'sunset'],
+                    ['name' => 'Malam (20:00–08:00)', 'start_time' => '20:00:00', 'end_time' => '08:00:00', 'color' => '#7C3AED', 'icon' => 'moon'],
+                ]
+            ],
+            [
+                'parent' => ['name' => 'Instalasi Kamar Bersalin', 'color' => '#EC4899', 'icon' => 'heart'],
+                'children' => [
+                    ['name' => 'Pagi (08:00–14:00)', 'start_time' => '08:00:00', 'end_time' => '14:00:00', 'color' => '#D97706', 'icon' => 'sunrise'],
+                    ['name' => 'Siang (14:00–20:00)', 'start_time' => '14:00:00', 'end_time' => '20:00:00', 'color' => '#2563EB', 'icon' => 'sunset'],
+                    ['name' => 'Malam (20:00–08:00)', 'start_time' => '20:00:00', 'end_time' => '08:00:00', 'color' => '#7C3AED', 'icon' => 'moon'],
+                ]
+            ],
+            [
+                'parent' => ['name' => 'ICU', 'color' => '#EF4444', 'icon' => 'activity'],
+                'children' => [
+                    ['name' => 'Pagi (08:00–14:00)', 'start_time' => '08:00:00', 'end_time' => '14:00:00', 'color' => '#D97706', 'icon' => 'sunrise'],
+                    ['name' => 'Siang (14:00–20:00)', 'start_time' => '14:00:00', 'end_time' => '20:00:00', 'color' => '#2563EB', 'icon' => 'sunset'],
+                    ['name' => 'Malam (20:00–08:00)', 'start_time' => '20:00:00', 'end_time' => '08:00:00', 'color' => '#7C3AED', 'icon' => 'moon'],
+                ]
+            ],
+            [
+                'parent' => ['name' => 'NICU', 'color' => '#F59E0B', 'icon' => 'heart'],
+                'children' => [
+                    ['name' => 'Pagi (08:00–14:00)', 'start_time' => '08:00:00', 'end_time' => '14:00:00', 'color' => '#D97706', 'icon' => 'sunrise'],
+                    ['name' => 'Siang (14:00–20:00)', 'start_time' => '14:00:00', 'end_time' => '20:00:00', 'color' => '#2563EB', 'icon' => 'sunset'],
+                    ['name' => 'Malam (20:00–08:00)', 'start_time' => '20:00:00', 'end_time' => '08:00:00', 'color' => '#7C3AED', 'icon' => 'moon'],
+                ]
+            ],
+            [
+                'parent' => ['name' => 'Rekam Medis dan Penyimpanan', 'color' => '#16A34A', 'icon' => 'sun'],
+                'children' => [
+                    ['name' => 'Normal (08:30–17:00)', 'start_time' => '08:30:00', 'end_time' => '17:00:00', 'color' => '#16A34A', 'icon' => 'sun'],
+                ]
+            ],
+            [
+                'parent' => ['name' => 'Bagian Mobile JKN', 'color' => '#16A34A', 'icon' => 'sun'],
+                'children' => [
+                    ['name' => 'Senin–Jumat (08:00–16:00)', 'start_time' => '08:00:00', 'end_time' => '16:00:00', 'color' => '#16A34A', 'icon' => 'sun'],
+                    ['name' => 'Sabtu (08:00–13:00)', 'start_time' => '08:00:00', 'end_time' => '13:00:00', 'color' => '#F59E0B', 'icon' => 'calendar'],
+                ]
+            ],
+            [
+                'parent' => ['name' => 'Bagian Pembuatan Akta Kelahiran', 'color' => '#16A34A', 'icon' => 'sun'],
+                'children' => [
+                    ['name' => 'Senin–Jumat (08:00–16:00)', 'start_time' => '08:00:00', 'end_time' => '16:00:00', 'color' => '#16A34A', 'icon' => 'sun'],
+                    ['name' => 'Sabtu (08:00–13:00)', 'start_time' => '08:00:00', 'end_time' => '13:00:00', 'color' => '#F59E0B', 'icon' => 'calendar'],
+                ]
+            ],
+            [
+                'parent' => ['name' => 'Rekam Medis IGD', 'color' => '#EF4444', 'icon' => 'zap'],
+                'children' => [
+                    ['name' => 'Pagi (08:00–14:00)', 'start_time' => '08:00:00', 'end_time' => '14:00:00', 'color' => '#D97706', 'icon' => 'sunrise'],
+                    ['name' => 'Siang (14:00–20:00)', 'start_time' => '14:00:00', 'end_time' => '20:00:00', 'color' => '#2563EB', 'icon' => 'sunset'],
+                    ['name' => 'Malam (20:00–08:00)', 'start_time' => '20:00:00', 'end_time' => '08:00:00', 'color' => '#7C3AED', 'icon' => 'moon'],
+                ]
+            ],
+            [
+                'parent' => ['name' => 'Depo 1', 'color' => '#3B82F6', 'icon' => 'sun'],
+                'children' => [
+                    ['name' => 'Pagi (08:00–14:00)', 'start_time' => '08:00:00', 'end_time' => '14:00:00', 'color' => '#D97706', 'icon' => 'sunrise'],
+                    ['name' => 'Siang (14:00–20:00)', 'start_time' => '14:00:00', 'end_time' => '20:00:00', 'color' => '#2563EB', 'icon' => 'sunset'],
+                    ['name' => 'Malam (20:00–08:00)', 'start_time' => '20:00:00', 'end_time' => '08:00:00', 'color' => '#7C3AED', 'icon' => 'moon'],
+                ]
+            ],
+            [
+                'parent' => ['name' => 'Depo 2', 'color' => '#3B82F6', 'icon' => 'sun'],
+                'children' => [
+                    ['name' => 'Pagi (08:00–14:00)', 'start_time' => '08:00:00', 'end_time' => '14:00:00', 'color' => '#D97706', 'icon' => 'sunrise'],
+                    ['name' => 'Siang (14:00–20:00)', 'start_time' => '14:00:00', 'end_time' => '20:00:00', 'color' => '#2563EB', 'icon' => 'sunset'],
+                    ['name' => 'Malam (20:00–08:00)', 'start_time' => '20:00:00', 'end_time' => '08:00:00', 'color' => '#7C3AED', 'icon' => 'moon'],
+                ]
+            ],
+            [
+                'parent' => ['name' => 'Depo 3', 'color' => '#3B82F6', 'icon' => 'sun'],
+                'children' => [
+                    ['name' => 'Pagi (08:00–14:00)', 'start_time' => '08:00:00', 'end_time' => '14:00:00', 'color' => '#D97706', 'icon' => 'sunrise'],
+                    ['name' => 'Siang (14:00–20:00)', 'start_time' => '14:00:00', 'end_time' => '20:00:00', 'color' => '#2563EB', 'icon' => 'sunset'],
+                    ['name' => 'Malam (20:00–08:00)', 'start_time' => '20:00:00', 'end_time' => '08:00:00', 'color' => '#7C3AED', 'icon' => 'moon'],
+                ]
+            ],
+            [
+                'parent' => ['name' => 'Depo 4', 'color' => '#3B82F6', 'icon' => 'sun'],
+                'children' => [
+                    ['name' => 'Pagi (08:00–14:00)', 'start_time' => '08:00:00', 'end_time' => '14:00:00', 'color' => '#D97706', 'icon' => 'sunrise'],
+                    ['name' => 'Siang (14:00–20:00)', 'start_time' => '14:00:00', 'end_time' => '20:00:00', 'color' => '#2563EB', 'icon' => 'sunset'],
+                    ['name' => 'Malam (20:00–08:00)', 'start_time' => '20:00:00', 'end_time' => '08:00:00', 'color' => '#7C3AED', 'icon' => 'moon'],
+                ]
+            ],
+            [
+                'parent' => ['name' => 'Gudang Farmasi', 'color' => '#D97706', 'icon' => 'sunrise'],
+                'children' => [
+                    ['name' => 'Pagi 1 (08:00–17:00)', 'start_time' => '08:00:00', 'end_time' => '17:00:00', 'color' => '#D97706', 'icon' => 'sunrise'],
+                    ['name' => 'Pagi 2 (09:00–15:00)', 'start_time' => '09:00:00', 'end_time' => '15:00:00', 'color' => '#D97706', 'icon' => 'sunrise'],
+                    ['name' => 'Pagi 3 (09:00–12:00)', 'start_time' => '09:00:00', 'end_time' => '12:00:00', 'color' => '#D97706', 'icon' => 'sunrise'],
+                    ['name' => 'Siang (15:00–22:00)', 'start_time' => '15:00:00', 'end_time' => '22:00:00', 'color' => '#2563EB', 'icon' => 'sunset'],
+                    ['name' => 'Sore (18:00–22:00)', 'start_time' => '18:00:00', 'end_time' => '22:00:00', 'color' => '#EF4444', 'icon' => 'clock'],
+                ]
+            ],
+            [
+                'parent' => ['name' => 'Instalasi Laboratorium', 'color' => '#0891B2', 'icon' => 'activity'],
+                'children' => [
+                    ['name' => 'Pagi (08:00–14:00)', 'start_time' => '08:00:00', 'end_time' => '14:00:00', 'color' => '#D97706', 'icon' => 'sunrise'],
+                    ['name' => 'Siang (14:00–20:00)', 'start_time' => '14:00:00', 'end_time' => '20:00:00', 'color' => '#2563EB', 'icon' => 'sunset'],
+                    ['name' => 'Malam (20:00–08:00)', 'start_time' => '20:00:00', 'end_time' => '08:00:00', 'color' => '#7C3AED', 'icon' => 'moon'],
+                ]
+            ],
+            [
+                'parent' => ['name' => 'Instalasi Bedah Sentral', 'color' => '#EF4444', 'icon' => 'activity'],
+                'children' => [
+                    ['name' => 'Pagi (08:00–14:00)', 'start_time' => '08:00:00', 'end_time' => '14:00:00', 'color' => '#D97706', 'icon' => 'sunrise'],
+                    ['name' => 'Siang (14:00–20:00)', 'start_time' => '14:00:00', 'end_time' => '20:00:00', 'color' => '#2563EB', 'icon' => 'sunset'],
+                    ['name' => 'Malam (20:00–08:00)', 'start_time' => '20:00:00', 'end_time' => '08:00:00', 'color' => '#7C3AED', 'icon' => 'moon'],
+                ]
+            ],
+            [
+                'parent' => ['name' => 'Instalasi CSSD', 'color' => '#3B82F6', 'icon' => 'sun'],
+                'children' => [
+                    ['name' => 'Pagi (08:00–14:00)', 'start_time' => '08:00:00', 'end_time' => '14:00:00', 'color' => '#D97706', 'icon' => 'sunrise'],
+                    ['name' => 'Siang (14:00–20:00)', 'start_time' => '14:00:00', 'end_time' => '20:00:00', 'color' => '#2563EB', 'icon' => 'sunset'],
+                    ['name' => 'Malam (20:00–08:00)', 'start_time' => '20:00:00', 'end_time' => '08:00:00', 'color' => '#7C3AED', 'icon' => 'moon'],
+                ]
+            ],
+            [
+                'parent' => ['name' => 'Instalasi Radiologi', 'color' => '#0891B2', 'icon' => 'activity'],
+                'children' => [
+                    ['name' => 'Pagi (08:00–14:00)', 'start_time' => '08:00:00', 'end_time' => '14:00:00', 'color' => '#D97706', 'icon' => 'sunrise'],
+                    ['name' => 'Siang (14:00–20:00)', 'start_time' => '14:00:00', 'end_time' => '20:00:00', 'color' => '#2563EB', 'icon' => 'sunset'],
+                    ['name' => 'Malam (20:00–08:00)', 'start_time' => '20:00:00', 'end_time' => '08:00:00', 'color' => '#7C3AED', 'icon' => 'moon'],
+                ]
+            ],
         ];
 
         foreach ($shiftsData as $data) {
@@ -209,7 +399,7 @@ class DatabaseSeeder extends Seeder
         // ── 6. Pengaturan Default ──────────────────────────────────────
         $defaults = [
             'system_active'      => '1',
-            'checkin_open'       => '0',
+            'checkin_open'       => '120',
             'late_limit'         => '30',
             'close_checkin'      => '60',
             'checkout_open'      => '0',

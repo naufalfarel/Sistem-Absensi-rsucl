@@ -5,7 +5,7 @@ import logoImg from '../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.
 import { useAuth } from '../../context/AuthContext';
 
 export const DisciplinaryPage: React.FC = () => {
-  const { logoUrl } = useAuth();
+  const { logoUrl, user } = useAuth();
   const [sanctions, setSanctions] = useState<DisciplinarySanction[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [showWarningModal, setShowWarningModal] = useState<boolean>(true);
@@ -160,7 +160,7 @@ export const DisciplinaryPage: React.FC = () => {
                           <FileText size={12} /> Buka {style.label} <ExternalLink size={10} />
                         </a>
                       )}
-                      {san.chronology_url && (
+                      {san.chronology_url && (user?.role === 'admin' || user?.role === 'super_admin') && (
                         <a
                           href={san.chronology_url}
                           target="_blank"

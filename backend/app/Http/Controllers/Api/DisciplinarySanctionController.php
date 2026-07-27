@@ -37,6 +37,12 @@ class DisciplinarySanctionController extends Controller
 
             $items = $query->get();
 
+            if (!$user->isAdmin()) {
+                foreach ($items as $item) {
+                    $item->chronology_url = null;
+                }
+            }
+
             return response()->json([
                 'success' => true,
                 'data'    => $items,
@@ -83,10 +89,17 @@ class DisciplinarySanctionController extends Controller
         }
 
         $paginated = $query->paginate(15);
+        $items = $paginated->items();
+
+        if (!$user->isAdmin()) {
+            foreach ($items as $item) {
+                $item->chronology_url = null;
+            }
+        }
 
         return response()->json([
             'success' => true,
-            'data'    => $paginated->items(),
+            'data'    => $items,
             'meta'    => [
                 'current_page' => $paginated->currentPage(),
                 'last_page'    => $paginated->lastPage(),

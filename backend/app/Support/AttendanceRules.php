@@ -256,21 +256,23 @@ class AttendanceRules
      * @param Carbon $checkinTime Waktu absen
      * @param Carbon $shiftStart Jam mulai shift
      * @param Carbon $checkinWindowEnd Jam tutup jendela absen
-     * @param int $toleranceMinutes Toleransi keterlambatan (menit)
+     * @param int $tepatWaktuMinutes Batas tepat waktu setelah shift mulai (menit, misal: 30)
+     * @param int $toleranceMinutes Batas toleransi setelah shift mulai (menit, misal: 40)
      * @return array ['status' => string, 'punctuality' => string, 'effective_checkin_time' => string]
      */
-    public static function classifyCheckin(Carbon $checkinTime, Carbon $shiftStart, Carbon $checkinWindowEnd, int $toleranceMinutes): array
+    public static function classifyCheckin(Carbon $checkinTime, Carbon $shiftStart, Carbon $checkinWindowEnd, int $tepatWaktuMinutes, int $toleranceMinutes): array
     {
         $checkinSec = $checkinTime->timestamp;
         $startSec = $shiftStart->timestamp;
         $endSec = $checkinWindowEnd->timestamp;
+        $tepatWaktuSec = $startSec + ($tepatWaktuMinutes * 60);
         $toleranceSec = $startSec + ($toleranceMinutes * 60);
 
-        if ($checkinSec <= $startSec) {
+        if ($checkinSec <= $tepatWaktuSec) {
             return [
                 'status' => 'hadir',
                 'punctuality' => 'tepat_waktu',
-                'effective_checkin_time' => $shiftStart->format('H:i:s'),
+                'effective_checkin_time' => $checkinTime->lt($shiftStart) ? $shiftStart->format('H:i:s') : $checkinTime->format('H:i:s'),
             ];
         } elseif ($checkinSec <= $toleranceSec) {
             return [

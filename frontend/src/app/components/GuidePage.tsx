@@ -29,6 +29,7 @@ import {
   UserPlus,
   ShieldCheck,
   Search,
+  ShieldAlert,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import logoImg from '../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
@@ -232,6 +233,70 @@ const sections: Section[] = [
     ],
   },
   {
+    id: 'resignation',
+    category: 'employee',
+    icon: LogOut,
+    title: 'Pengajuan Pengunduran Diri (Resign)',
+    subtitle: 'Prosedur permohonan pengunduran diri secara resmi bagi pegawai',
+    steps: [
+      {
+        icon: FileText,
+        title: 'Buka Menu Pengajuan Resign',
+        desc: 'Pilih menu "Pengajuan Resign" di sidebar kelompok menu pengajuan Anda.',
+      },
+      {
+        icon: ClipboardList,
+        title: 'Lengkapi Tanggal Efektif & Alasan',
+        desc: 'Tentukan tanggal efektif mulai berhenti bekerja dan jelaskan alasan pengunduran diri Anda secara formal.',
+      },
+      {
+        icon: Paperclip,
+        title: 'Unggah Surat Resmi (Opsional)',
+        desc: 'Lampirkan file PDF/Gambar Surat Pengunduran Diri resmi bertanda tangan sebagai berkas pelengkap.',
+      },
+      {
+        icon: Send,
+        title: 'Kirim Permohonan',
+        desc: 'Ketuk "Kirim Pengajuan". Permohonan akan ditinjau oleh PJ Bagian sebelum diproses persetujuan akhir oleh Admin/Manajemen.',
+      },
+    ],
+    tips: [
+      { type: 'info', text: 'Disarankan mengajukan pengunduran diri minimal 30 hari sebelum tanggal efektif (One Month Notice) demi kelancaran serah terima tugas.' },
+    ],
+  },
+  {
+    id: 'disciplinary_guide',
+    category: 'employee',
+    icon: ShieldAlert,
+    title: 'Pemantauan Sanksi Disiplin',
+    subtitle: 'Prosedur melihat surat teguran dan surat peringatan resmi',
+    steps: [
+      {
+        icon: ShieldAlert,
+        title: 'Buka Menu Sanksi Disiplin',
+        desc: 'Pilih menu "Sanksi Disiplin" pada kelompok menu utama.',
+      },
+      {
+        icon: Info,
+        title: 'Pahami Ketentuan & Peraturan',
+        desc: 'Saat pertama kali diakses, baca dengan teliti peraturan tata tertib disiplin RSUCL yang berlaku.',
+      },
+      {
+        icon: CheckCircle2,
+        title: 'Konfirmasi Pemahaman',
+        desc: 'Centang kotak persetujuan tanda Anda memahami tata tertib untuk membuka dan melihat riwayat sanksi Anda.',
+      },
+      {
+        icon: FileText,
+        title: 'Tinjau & Buka Surat Sanksi',
+        desc: 'Tinjau catatan pelanggaran dari admin. Jika ada berkas surat sanksi resmi, ketuk "Buka Surat" untuk mengunduh dokumen keputusan sanksi.',
+      },
+    ],
+    tips: [
+      { type: 'warning', text: 'Dokumen bukti pendukung atau kronologi pelanggaran bersifat rahasia dan hanya dapat diakses oleh Admin atau Super Admin.' },
+    ],
+  },
+  {
     id: 'pj_approvals',
     category: 'pj_bagian',
     icon: CheckSquare,
@@ -303,6 +368,8 @@ const sections: Section[] = [
       { icon: FileText, label: 'Pengajuan Cuti & Sakit', desc: 'Mengajukan permohonan cuti/sakit, memantau sisa kuota, serta mencetak dokumen resmi Form Cuti ber-QR Code.' },
       { icon: Clock, label: 'Pengajuan Lembur', desc: 'Mengajukan jam kerja lembur harian dan memantau persetujuan PJ Bagian & Admin.' },
       { icon: FileText, label: 'Pengajuan Surat Tugas', desc: 'Mengajukan permohonan dinas luar dengan melampirkan surat undangan dan bukti foto kehadiran.' },
+      { icon: LogOut, label: 'Pengajuan Resign', desc: 'Mengajukan permohonan pengunduran diri secara resmi beserta pengunggahan berkas pendukung.' },
+      { icon: ShieldAlert, label: 'Sanksi Disiplin', desc: 'Halaman pemantauan surat teguran atau surat peringatan resmi yang diterbitkan oleh manajemen.' },
       { icon: Bell, label: 'Notifikasi', desc: 'Pusat pemberitahuan otomatis yang terhubung langsung dengan halaman persetujuan modul.' },
       { icon: User, label: 'Profil Saya', desc: 'Kelola informasi biodata pribadi, ganti kata sandi, dan input nomor plat kendaraan operasional.' },
       { icon: BookOpen, label: 'Panduan App', desc: 'Halaman dokumentasi operasional resmi aplikasi Sistem Absensi RSUCL.' },

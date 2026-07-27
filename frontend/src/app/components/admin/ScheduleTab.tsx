@@ -39,12 +39,15 @@ interface SubShiftEntry {
 }
 
 function AddShiftModal({ onClose, onAdd, departments }: { onClose: () => void; onAdd: (s: ShiftSchedule) => void; departments: any[] }) {
+  const { user } = useAuth();
   const [name, setName]       = useState('');
   const [windowEnd, setWindowEnd] = useState('');
   const [icon, setIcon]       = useState<IconKey>('sun');
   const [colorId, setColorId] = useState('amber');
   const [shiftType, setShiftType] = useState<'normal' | 'dinas_luar'>('normal');
-  const [ownerDeptId, setOwnerDeptId] = useState<number | ''>('');
+  const [ownerDeptId, setOwnerDeptId] = useState<number | ''>(
+    user?.role === 'pj_bagian' ? (user.pj_bagian_department_id || '') : ''
+  );
   const [loading, setLoading] = useState(false);
 
   // Sub-shifts state — default 1 sub-shift terisi sebagai 'Normal'
@@ -245,19 +248,21 @@ function AddShiftModal({ onClose, onAdd, departments }: { onClose: () => void; o
           </div>
 
           {/* Unit Kerja Pemilik */}
-          <div>
-            <label className="block text-[12px] font-semibold text-gray-700 mb-1.5">Unit Kerja Pemilik Shift</label>
-            <select
-              value={ownerDeptId}
-              onChange={e => setOwnerDeptId(e.target.value === '' ? '' : Number(e.target.value))}
-              className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all cursor-pointer font-semibold"
-            >
-              <option value="">Office (Bisa Diakses Semua Unit)</option>
-              {departments.map(d => (
-                <option key={d.id} value={d.id}>{d.name}</option>
-              ))}
-            </select>
-          </div>
+          {user?.role !== 'pj_bagian' && (
+            <div>
+              <label className="block text-[12px] font-semibold text-gray-700 mb-1.5">Unit Kerja Pemilik Shift</label>
+              <select
+                value={ownerDeptId}
+                onChange={e => setOwnerDeptId(e.target.value === '' ? '' : Number(e.target.value))}
+                className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all cursor-pointer font-semibold"
+              >
+                <option value="">Office (Bisa Diakses Semua Unit)</option>
+                {[...departments].sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(d => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Batas Akhir Jendela Absen */}
           <div>
@@ -615,7 +620,7 @@ function AssignDepartmentModal({
               className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all cursor-pointer"
             >
               {departments.length === 0 && <option value="">Memuat data unit kerja...</option>}
-              {departments.map(dept => (
+              {[...departments].sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(dept => (
                 <option key={dept.id} value={dept.id}>{dept.name}</option>
               ))}
             </select>
@@ -692,7 +697,7 @@ function AssignDepartmentModal({
  * visualisasi tabel matriks mingguan (Senin-Minggu) status shift karyawan, dan popover untuk mengubah/libur shift secara langsung.
  */
 export function ScheduleTab() {
-  const { logoUrl } = useAuth();
+  const { user, logoUrl } = useAuth();
   // Daftar shift yang terdaftar di database
   const [shifts, setShifts]           = useState<ShiftSchedule[]>([]);
   
@@ -1394,7 +1399,7 @@ export function ScheduleTab() {
           >
             <option value="all">Semua Pemilik Shift</option>
             <option value="umum">Office (Tidak Ada Pemilik)</option>
-            {departments.map(d => (
+            {[...departments].sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(d => (
               <option key={d.id} value={d.id}>{d.name}</option>
             ))}
           </select>
@@ -1422,6 +1427,7 @@ export function ScheduleTab() {
           const IconComp = ICON_MAP[shift.icon as IconKey]?.component ?? Sun;
           const pr = getPresetByHex(shift.color);
           const isExpanded = expandedShift === shift.id;
+          const isReadOnlyForPJ = user?.role === 'pj_bagian' && (shift.owner_department_id === null || shift.name.toLowerCase().includes('office') || shift.name.toLowerCase().includes('reguler'));
 
           return (
             <div key={shift.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden group">
@@ -1452,7 +1458,7 @@ export function ScheduleTab() {
 
                   <div className="flex items-center gap-1">
                     {/* Delete button */}
-                    {editingId !== shift.id && (
+                    {editingId !== shift.id && !isReadOnlyForPJ && (
                       <button
                         onClick={() => setDeleteTarget(shift)}
                         className="w-7 h-7 rounded-lg bg-red-50 border border-red-100 flex items-center justify-center hover:bg-red-100 transition-colors opacity-0 group-hover:opacity-100"
@@ -1463,9 +1469,11 @@ export function ScheduleTab() {
                     )}
                     {/* Edit / Save-Cancel buttons */}
                     {editingId !== shift.id ? (
-                      <button onClick={() => startEdit(shift)} className="w-7 h-7 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center hover:bg-gray-100 transition-colors">
-                        <Edit2 size={13} className="text-gray-400" />
-                      </button>
+                      !isReadOnlyForPJ && (
+                        <button onClick={() => startEdit(shift)} className="w-7 h-7 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center hover:bg-gray-100 transition-colors">
+                          <Edit2 size={13} className="text-gray-400" />
+                        </button>
+                      )
                     ) : (
                       <div className="flex gap-1">
                         <button onClick={() => saveEdit(shift.id)} className="w-7 h-7 rounded-lg bg-green-50 border border-green-100 flex items-center justify-center hover:bg-green-100 transition-colors">
@@ -1495,19 +1503,21 @@ export function ScheduleTab() {
                       </select>
                     </div>
 
-                    <div>
-                      <label className="block text-[11px] font-semibold text-gray-600 mb-1">Unit Kerja Pemilik</label>
-                      <select
-                        value={editOwnerDeptId}
-                        onChange={e => setEditOwnerDeptId(e.target.value === '' ? '' : Number(e.target.value))}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all cursor-pointer font-semibold"
-                      >
-                        <option value="">Office (Bisa Diakses Semua Unit)</option>
-                        {departments.map(d => (
-                          <option key={d.id} value={d.id}>{d.name}</option>
-                        ))}
-                      </select>
-                    </div>
+                    {user?.role !== 'pj_bagian' && (
+                      <div>
+                        <label className="block text-[11px] font-semibold text-gray-600 mb-1">Unit Kerja Pemilik</label>
+                        <select
+                          value={editOwnerDeptId}
+                          onChange={e => setEditOwnerDeptId(e.target.value === '' ? '' : Number(e.target.value))}
+                          className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all cursor-pointer font-semibold"
+                        >
+                          <option value="">Office (Bisa Diakses Semua Unit)</option>
+                          {[...departments].sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(d => (
+                            <option key={d.id} value={d.id}>{d.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
 
                     <div className="border-t border-gray-100 pt-3 mt-3 space-y-2">
                       <div className="flex justify-between items-center mb-1">

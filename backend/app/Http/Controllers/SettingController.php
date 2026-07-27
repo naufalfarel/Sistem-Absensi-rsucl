@@ -98,7 +98,7 @@ class SettingController extends Controller
             'checkout_close'          => 'sometimes|integer|min:0|max:1440',
             'sat_checkout_open'       => 'sometimes|integer|min:0|max:1440',
             'sat_checkout_close'      => 'sometimes|integer|min:0|max:1440',
-            'gps_radius'              => 'sometimes|integer|min:10|max:1000',
+            'gps_radius'              => 'sometimes|integer|min:10|max:25',
             'hospital_lat'            => 'sometimes|numeric',
             'hospital_lng'            => 'sometimes|numeric',
             'logo_url'                => 'sometimes|string|nullable',
@@ -116,7 +116,7 @@ class SettingController extends Controller
             // GPS Wajib (Baru)
             'hospital_latitude'               => 'sometimes|numeric',
             'hospital_longitude'              => 'sometimes|numeric',
-            'attendance_radius_meters'        => 'sometimes|integer|min:10|max:1000',
+            'attendance_radius_meters'        => 'sometimes|integer|min:10|max:25',
             // Toleransi Check-in & Jendela Absen Baru
             'checkin_tolerance_minutes'       => 'sometimes|integer|min:0|max:1440',
             'early_checkin_window_minutes'    => 'sometimes|integer|min:0|max:1440',
@@ -232,7 +232,7 @@ class SettingController extends Controller
     {
         return match ($key) {
             'system_active'           => '1',
-            'checkin_open'            => '0',
+            'checkin_open'            => '120',
             'late_limit'              => '30',
             'close_checkin'           => '60',
             'break_start'             => '12:30',
@@ -259,8 +259,8 @@ class SettingController extends Controller
             'early_checkout_grace_minutes'    => '15',
             'overtime_grace_minutes'          => '15',
             // Toleransi Check-in & Jendela Absen Baru
-            'checkin_tolerance_minutes'       => '10',
-            'early_checkin_window_minutes'    => '150',
+            'checkin_tolerance_minutes'       => '40',
+            'early_checkin_window_minutes'    => '120',
             'checkin_open_time'               => '08:00',
             'checkin_late_after_time'         => '08:30',
             'checkin_close_time'              => '09:00',

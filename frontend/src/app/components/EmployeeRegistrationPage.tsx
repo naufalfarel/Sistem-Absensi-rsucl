@@ -188,16 +188,16 @@ export function EmployeeRegistrationPage({ onBack, onGoToCheckStatus }: Registra
                 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-[11px] text-slate-300">
                   <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700/60">
-                    <span className="font-bold text-emerald-400 block mb-0.5">1. Isi Formulir</span>
-                    Lengkapi NIK KTP, Nama, Email, dan No HP resmi Anda pada formulir di bawah ini.
+                    <span className="font-bold text-emerald-400 block mb-0.5">1. Isi Data Wajib & Tambahan</span>
+                    Lengkapi data wajib seperti <strong>Foto Profil, Nama, NIK, Email, No HP, Departemen, & Posisi</strong>. Bagian Sosial Media & Data Kendaraan boleh dikosongkan jika tidak ada.
                   </div>
                   <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700/60">
-                    <span className="font-bold text-emerald-400 block mb-0.5">2. Simpan Kode Ref</span>
-                    Setelah submit, simpan Nomor Referensi Pendaftaran yang diterbitkan sistem.
+                    <span className="font-bold text-emerald-400 block mb-0.5">2. Simpan Nomor Referensi</span>
+                    Setelah mengirim formulir pendaftaran, pastikan Anda <strong>menyalin & menyimpan Nomor Referensi Pendaftaran</strong> unik yang diterbitkan oleh sistem.
                   </div>
                   <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700/60">
-                    <span className="font-bold text-emerald-400 block mb-0.5">3. Pantau & Login</span>
-                    Cek status draf berkala. Setelah disetujui Admin RSUCL, akun aktif dan siap digunakan.
+                    <span className="font-bold text-emerald-400 block mb-0.5">3. Pantau & Dapatkan Password</span>
+                    Lakukan pengecekan berkala di menu <strong>Cek Status</strong> menggunakan NIK & Nomor Referensi. Setelah disetujui oleh Admin, akun aktif dan password login Anda akan tampil.
                   </div>
                 </div>
               </div>
@@ -360,7 +360,7 @@ export function EmployeeRegistrationPage({ onBack, onGoToCheckStatus }: Registra
 
                 {/* Sosial Media Section */}
                 <div className="md:col-span-2 pt-3 border-t border-gray-100">
-                  <p className="text-[12.5px] font-bold text-gray-700 uppercase tracking-wider border-l-2 border-[#16A34A] pl-2 mb-3">Sosial Media (Opsional)</p>
+                  <p className="text-[12.5px] font-bold text-gray-700 uppercase tracking-wider border-l-2 border-[#16A34A] pl-2 mb-3">Sosial Media</p>
                 </div>
 
                 {/* Instagram */}
@@ -419,8 +419,8 @@ export function EmployeeRegistrationPage({ onBack, onGoToCheckStatus }: Registra
 
                 {/* Data Kendaraan Section */}
                 <div className="md:col-span-2 pt-3 border-t border-gray-100">
-                  <p className="text-[12.5px] font-bold text-gray-700 uppercase tracking-wider border-l-2 border-[#16A34A] pl-2 mb-1">Data Kendaraan Staf (Opsional)</p>
-                  <p className="text-[11px] text-gray-400 mb-3">Masukkan plat nomor kendaraan Anda (maksimal 2 motor dan 2 mobil, bersifat opsional).</p>
+                  <p className="text-[12.5px] font-bold text-gray-700 uppercase tracking-wider border-l-2 border-[#16A34A] pl-2 mb-1">Data Kendaraan Staf</p>
+                  <p className="text-[11px] text-gray-400 mb-3">Masukkan plat nomor kendaraan Anda (maksimal 2 motor dan 2 mobil).</p>
                 </div>
 
                 {/* Motor 1 */}

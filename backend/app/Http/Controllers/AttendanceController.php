@@ -427,7 +427,8 @@ class AttendanceController extends Controller
         }
 
         // Jalankan klasifikasi check-in menggunakan helper baru
-        $classification = AttendanceRules::classifyCheckin($now, $shiftStartCarbon, $windowEnd, $toleranceMinutes);
+        $tepatWaktuMinutes = $isFallback ? 0 : (int) Setting::get('late_limit', '30');
+        $classification = AttendanceRules::classifyCheckin($now, $shiftStartCarbon, $windowEnd, $tepatWaktuMinutes, $toleranceMinutes);
 
         if ($classification['status'] === 'closed') {
             $closeStr = $windowEnd->format('H:i');
