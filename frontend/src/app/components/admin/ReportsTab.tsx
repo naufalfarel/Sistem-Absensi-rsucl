@@ -12,6 +12,10 @@ import {
   BarChart3,
   Trophy,
   Award,
+  Briefcase,
+  UserMinus,
+  Shield,
+  ClipboardList,
 } from "lucide-react";
 import {
   BarChart,
@@ -31,6 +35,11 @@ import {
   AttendanceRecord,
   departmentApi,
   getToken,
+  overtimeApi,
+  leaveApi,
+  assignmentLetterApi,
+  resignationApi,
+  disciplinarySanctionApi,
 } from "../../../services/api";
 import { MonthYearDeptFilter } from "../ui/MonthYearDeptFilter";
 import logoImg from "../../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg";
@@ -990,6 +999,484 @@ export function ReportsTab() {
     }
   };
 
+  // ── State Filter Laporan Manajemen SDM ──────────────────────────
+  const [hrReportMonth, setHrReportMonth] = useState<number>(currentDate.getMonth() + 1);
+  const [hrReportYear, setHrReportYear] = useState<number>(currentDate.getFullYear());
+  const [hrReportDept, setHrReportDept] = useState<string>("all");
+  const [hrExporting, setHrExporting] = useState<string | null>(null); // nama laporan yang sedang diekspor
+
+  // ── Helper: Header HTML untuk semua laporan SDM ──────────────────
+  const buildHrHtmlHeader = (logoB64: string, title: string, period: string) => {
+    const logoHtml = logoB64
+      ? `<img src="${logoB64}" width="140" height="54" style="display:block;" />`
+      : '<span style="font-size:11pt;font-weight:bold;color:#16A34A;">RSUCL</span>';
+    return `
+      <table style="border:none;margin-bottom:8px;border-collapse:collapse;">
+        <tr style="height:22px;">
+          <td rowspan="3" colspan="2" style="border:none;vertical-align:middle;padding:4px;width:140px;">${logoHtml}</td>
+          <td colspan="8" style="font-size:13pt;font-weight:bold;color:#111827;text-align:right;vertical-align:bottom;border:none;padding:2px 4px;">${title}</td>
+        </tr>
+        <tr style="height:18px;"><td colspan="8" style="font-size:10pt;font-weight:bold;color:#374151;text-align:right;vertical-align:middle;border:none;padding:2px 4px;">RUMAH SAKIT UMUM CEMPAKA LIMA</td></tr>
+        <tr style="height:16px;"><td colspan="8" style="font-size:9pt;color:#6B7280;text-align:right;vertical-align:top;border:none;padding:2px 4px;">${period}</td></tr>
+        <tr style="height:3px;"><td colspan="10" style="height:3px;border:none;border-bottom:2px solid #000000;padding:0;font-size:1px;">\u00a0</td></tr>
+      </table>`;
+  };
+
+  const buildHrPdfHeader = (logoB64: string, title: string, period: string) => {
+    return `
+      <table style="width:100%;border-collapse:collapse;border-bottom:3px double #16A34A;padding-bottom:12px;margin-bottom:15px;">
+        <tr>
+          <td style="width:80px;text-align:left;vertical-align:middle;padding:0;">
+            <img src="${logoB64}" style="width:60px;height:60px;object-fit:contain;display:block;" />
+          </td>
+          <td style="text-align:center;vertical-align:middle;padding:0;">
+            <p style="font-size:15px;font-weight:800;color:#16A34A;margin:0 0 2px 0;text-transform:uppercase;">PT. CEMPAKA LIMA UTAMA</p>
+            <h1 style="font-size:22px;font-weight:800;color:#DC2626;margin:0;text-transform:uppercase;">RUMAH SAKIT UMUM CEMPAKA LIMA</h1>
+            <p style="font-size:13px;color:#000000;margin:3px 0 0 0;">Jl. Politeknik Aceh No.23, Beurawe, Kec. Kuta Alam, Banda Aceh</p>
+          </td>
+          <td style="width:80px;"></td>
+        </tr>
+      </table>
+      <h2 style="font-size:14px;font-weight:700;text-transform:uppercase;text-align:center;margin:20px 0 5px 0;">${title}</h2>
+      <div style="font-size:12px;font-weight:600;text-align:center;margin-bottom:8px;color:#374151;">Periode: ${period}</div>
+      <div style="font-size:9px;text-align:right;color:#6B7280;margin-bottom:10px;">Dicetak: ${new Date().toLocaleString("id-ID", { dateStyle: "long", timeStyle: "medium" })}</div>`;
+  };
+
+  const excelWrapperHr = (sheetName: string, bodyHtml: string) => `
+    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+    <head>
+      <meta http-equiv="content-type" content="application/vnd.ms-excel; charset=UTF-8" />
+      <!--[if gte mso 9]><xml>
+       <x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>
+        <x:Name>${sheetName}</x:Name>
+        <x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+       </x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook>
+      </xml><![endif]-->
+      <style>
+        body { font-family: Calibri, Arial, sans-serif; }
+        table { border-collapse: collapse; }
+        th { background-color: #16A34A; color: #FFFFFF; font-weight: bold; font-size: 10pt; text-align: center; vertical-align: middle; border: 1px solid #000000; padding: 6px 8px; }
+        td { font-size: 10pt; border: 1px solid #000000; vertical-align: middle; padding: 5px 8px; color: #1F2937; }
+        .dept-row td { background-color: #E5E7EB; font-weight: bold; font-size: 10pt; }
+        .center { text-align: center; }
+        .bold { font-weight: bold; }
+        .badge-approved { background-color: #D1FAE5; color: #065F46; font-weight: bold; text-align: center; }
+        .badge-pending  { background-color: #FEF9C3; color: #92400E; font-weight: bold; text-align: center; }
+        .badge-rejected { background-color: #FEE2E2; color: #991B1B; font-weight: bold; text-align: center; }
+      </style>
+    </head>
+    <body>${bodyHtml}</body>
+    </html>`;
+
+  const triggerHrDownload = (html: string, filename: string) => {
+    const blob = new Blob(["\uFEFF" + html], { type: "application/vnd.ms-excel;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.style.display = "none";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  };
+
+  const loadLogoBase64 = async (): Promise<string> => {
+    const logoPath = logoUrl && logoUrl !== "none" ? logoUrl : rsLogoImg;
+    try {
+      const res = await fetch(logoPath);
+      const blob = await res.blob();
+      return new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch { return ""; }
+  };
+
+  const getMonthsLabel = (month: number, year: number) => {
+    const names = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
+    return `${names[month - 1]} ${year}`;
+  };
+
+  const statusBadge = (status: string) => {
+    if (status === "approved" || status === "completed") return `<td class="badge-approved">${status.toUpperCase()}</td>`;
+    if (status === "pending") return `<td class="badge-pending">${status.toUpperCase()}</td>`;
+    return `<td class="badge-rejected">${status.toUpperCase()}</td>`;
+  };
+ 
+  const cleanDateStr = (dateStr: string) => {
+    if (!dateStr) return "--";
+    if (dateStr.includes("T")) {
+      return dateStr.split("T")[0];
+    }
+    return dateStr;
+  };
+
+  // ── 1. EKSPOR LEMBUR ────────────────────────────────────────────
+  const handleExportOvertimeExcel = async () => {
+    setHrExporting("lembur");
+    try {
+      const logo = await loadLogoBase64();
+      const period = getMonthsLabel(hrReportMonth, hrReportYear);
+      const startDate = `${hrReportYear}-${String(hrReportMonth).padStart(2,"0")}-01`;
+      const lastDay = new Date(hrReportYear, hrReportMonth, 0).getDate();
+      const endDate = `${hrReportYear}-${String(hrReportMonth).padStart(2,"0")}-${String(lastDay).padStart(2,"0")}`;
+      const res = await overtimeApi.list({ date_from: startDate, date_to: endDate, per_page: 9999 });
+      if (!res.success) { alert("Gagal memuat data lembur."); return; }
+      const data = res.data.filter(r => {
+        const deptOk = hrReportDept === "all" || r.employee?.department === hrReportDept;
+        return r.status === "approved" && deptOk;
+      });
+      let rows = ""; let no = 1;
+      data.forEach(r => {
+        const emp = r.employee;
+        rows += `<tr>
+          <td class="center">${no++}</td>
+          <td class="center" x:str>${emp?.nik_ktp ?? "--"}</td>
+          <td class="bold">${emp?.name ?? "--"}</td>
+          <td>${emp?.department ?? "--"}</td>
+          <td class="center">${r.date ?? "--"}</td>
+          <td class="center">${r.start_time ?? "--"}</td>
+          <td class="center">${r.end_time ?? "--"}</td>
+          <td>${r.reason ?? "--"}</td>
+          <td>${r.tasks ?? "--"}</td>
+          ${statusBadge(r.status)}
+          <td>${r.admin_note ?? "--"}</td>
+        </tr>`;
+      });
+      const body = buildHrHtmlHeader(logo, "REKAP PENGAJUAN LEMBUR", period) +
+        `<table><thead><tr>
+          <th style="width:35px">No</th><th>NIK KTP</th><th>Nama</th><th>Unit Kerja</th><th>Tanggal</th><th>Jam Mulai</th><th>Jam Selesai</th><th>Alasan/Tujuan</th><th>Tugas</th><th>Status</th><th>Catatan Admin</th>
+        </tr></thead><tbody>${rows || '<tr><td colspan="11" style="text-align:center;padding:20px;color:#9CA3AF;">Tidak ada data lembur pada periode ini.</td></tr>'}</tbody></table>`;
+      triggerHrDownload(excelWrapperHr("Rekap Lembur", body), `Rekap_Lembur_RSUCL_${hrReportYear}_${String(hrReportMonth).padStart(2,"0")}.xls`);
+    } catch(e) { alert("Gagal ekspor data lembur."); } finally { setHrExporting(null); }
+  };
+
+  const handleExportOvertimePDF = async () => {
+    setHrExporting("lembur-pdf");
+    const pw = window.open("", "_blank");
+    if (!pw) { alert("Izinkan popup untuk mencetak."); setHrExporting(null); return; }
+    try {
+      const logo = await loadLogoBase64();
+      const period = getMonthsLabel(hrReportMonth, hrReportYear);
+      const startDate = `${hrReportYear}-${String(hrReportMonth).padStart(2,"0")}-01`;
+      const lastDay = new Date(hrReportYear, hrReportMonth, 0).getDate();
+      const endDate = `${hrReportYear}-${String(hrReportMonth).padStart(2,"0")}-${String(lastDay).padStart(2,"0")}`;
+      const res = await overtimeApi.list({ date_from: startDate, date_to: endDate, per_page: 9999 });
+      if (!res.success) { pw.close(); return; }
+      const data = res.data.filter(r => {
+        const deptOk = hrReportDept === "all" || r.employee?.department === hrReportDept;
+        return r.status === "approved" && deptOk;
+      });
+      let rows = ""; let no = 1;
+      data.forEach(r => {
+        const emp = r.employee;
+        const statusColor = r.status === "approved" ? "#D1FAE5" : r.status === "pending" ? "#FEF9C3" : "#FEE2E2";
+        const statusText = r.status === "approved" ? "#065F46" : r.status === "pending" ? "#92400E" : "#991B1B";
+        rows += `<tr style="border-bottom:1px solid #E5E7EB;font-size:10px;">
+          <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${no++}</td>
+          <td style="padding:6px;border-right:1px solid #E5E7EB;">${emp?.nik_ktp ?? "--"}</td>
+          <td style="padding:6px;font-weight:bold;border-right:1px solid #E5E7EB;">${emp?.name ?? "--"}</td>
+          <td style="padding:6px;border-right:1px solid #E5E7EB;">${emp?.department ?? "--"}</td>
+          <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${r.date ?? "--"}</td>
+          <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${r.start_time ?? "--"}</td>
+          <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${r.end_time ?? "--"}</td>
+          <td style="padding:6px;border-right:1px solid #E5E7EB;">${r.reason ?? "--"}</td>
+          <td style="padding:6px;text-align:center;font-weight:bold;background-color:${statusColor};color:${statusText};border-right:1px solid #E5E7EB;">${r.status.toUpperCase()}</td>
+          <td style="padding:6px;">${r.admin_note ?? "--"}</td>
+        </tr>`;
+      });
+      pw.document.write(`<html><head><title>Rekap Lembur</title><style>body{font-family:Arial,sans-serif;padding:20px;} table{width:100%;border-collapse:collapse;border:1px solid #E5E7EB;} th{background:#16A34A;color:#fff;font-size:10px;padding:8px;text-align:left;} @media print{@page{margin:1cm;}}</style></head><body>${buildHrPdfHeader(logo,"REKAP PENGAJUAN LEMBUR",`Periode: ${period}`)}<table><thead><tr><th style="width:30px;">No</th><th>NIK KTP</th><th>Nama</th><th>Unit Kerja</th><th>Tanggal</th><th>Jam Mulai</th><th>Jam Selesai</th><th>Alasan</th><th>Status</th><th>Catatan Admin</th></tr></thead><tbody>${rows || '<tr><td colspan="10" style="text-align:center;padding:20px;">Tidak ada data.</td></tr>'}</tbody></table><script>window.onload=function(){window.print();setTimeout(function(){window.close();},500);}<\/script></body></html>`);
+      pw.document.close();
+    } catch(e) { pw.close(); } finally { setHrExporting(null); }
+  };
+
+  // ── 2. EKSPOR CUTI / SAKIT ───────────────────────────────────────
+  const handleExportLeaveExcel = async () => {
+    setHrExporting("cuti");
+    try {
+      const logo = await loadLogoBase64();
+      const period = getMonthsLabel(hrReportMonth, hrReportYear);
+      const res = await leaveApi.list();
+      if (!res.success) { alert("Gagal memuat data cuti."); return; }
+      const startDate = new Date(hrReportYear, hrReportMonth - 1, 1);
+      const endDate = new Date(hrReportYear, hrReportMonth, 0);
+      const data = res.data.filter(r => {
+        const d = new Date(r.start_date);
+        const deptOk = hrReportDept === "all" || r.employee?.department === hrReportDept;
+        return r.status === "approved" && d >= startDate && d <= endDate && deptOk;
+      });
+      const typeLabel = (t: string) => ({ cuti: "Cuti Tahunan", sakit: "Izin Sakit", cuti_khusus: "Cuti Khusus", izin: "Izin" }[t] ?? t);
+      let rows = ""; let no = 1;
+      data.forEach(r => {
+        rows += `<tr>
+          <td class="center">${no++}</td>
+          <td class="center" x:str>${r.employee?.nik_ktp ?? "--"}</td>
+          <td class="bold">${r.employee?.name ?? "--"}</td>
+          <td>${r.employee?.department ?? "--"}</td>
+          <td class="center">${typeLabel(r.type)}</td>
+          <td class="center">${r.start_date}</td>
+          <td class="center">${r.end_date}</td>
+          <td class="center">${r.days} hari</td>
+          <td>${r.reason ?? "--"}</td>
+          ${statusBadge(r.status)}
+          <td>${r.reviewer?.name ?? "--"}</td>
+        </tr>`;
+      });
+      const body = buildHrHtmlHeader(logo, "REKAP PENGAJUAN CUTI / IZIN / SAKIT", period) +
+        `<table><thead><tr>
+          <th style="width:35px">No</th><th>NIK KTP</th><th>Nama</th><th>Unit Kerja</th><th>Jenis</th><th>Tgl Mulai</th><th>Tgl Selesai</th><th>Durasi</th><th>Alasan</th><th>Status</th><th>Disetujui Oleh</th>
+        </tr></thead><tbody>${rows || '<tr><td colspan="11" style="text-align:center;padding:20px;color:#9CA3AF;">Tidak ada data pada periode ini.</td></tr>'}</tbody></table>`;
+      triggerHrDownload(excelWrapperHr("Rekap Cuti", body), `Rekap_Cuti_RSUCL_${hrReportYear}_${String(hrReportMonth).padStart(2,"0")}.xls`);
+    } catch(e) { alert("Gagal ekspor data cuti."); } finally { setHrExporting(null); }
+  };
+
+  const handleExportLeavePDF = async () => {
+    setHrExporting("cuti-pdf");
+    const pw = window.open("", "_blank");
+    if (!pw) { alert("Izinkan popup untuk mencetak."); setHrExporting(null); return; }
+    try {
+      const logo = await loadLogoBase64();
+      const period = getMonthsLabel(hrReportMonth, hrReportYear);
+      const res = await leaveApi.list();
+      if (!res.success) { pw.close(); return; }
+      const startDate = new Date(hrReportYear, hrReportMonth - 1, 1);
+      const endDate = new Date(hrReportYear, hrReportMonth, 0);
+      const typeLabel = (t: string) => ({ cuti: "Cuti Tahunan", sakit: "Izin Sakit", cuti_khusus: "Cuti Khusus", izin: "Izin" }[t] ?? t);
+      const data = res.data.filter(r => {
+        const d = new Date(r.start_date);
+        const deptOk = hrReportDept === "all" || r.employee?.department === hrReportDept;
+        return r.status === "approved" && d >= startDate && d <= endDate && deptOk;
+      });
+      let rows = ""; let no = 1;
+      data.forEach(r => {
+        const sc = r.status === "approved" ? "#D1FAE5" : r.status === "pending" ? "#FEF9C3" : "#FEE2E2";
+        const st = r.status === "approved" ? "#065F46" : r.status === "pending" ? "#92400E" : "#991B1B";
+        rows += `<tr style="border-bottom:1px solid #E5E7EB;font-size:10px;">
+          <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${no++}</td>
+          <td style="padding:6px;border-right:1px solid #E5E7EB;">${r.employee?.nik_ktp ?? "--"}</td>
+          <td style="padding:6px;font-weight:bold;border-right:1px solid #E5E7EB;">${r.employee?.name ?? "--"}</td>
+          <td style="padding:6px;border-right:1px solid #E5E7EB;">${r.employee?.department ?? "--"}</td>
+          <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${typeLabel(r.type)}</td>
+          <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${r.start_date}</td>
+          <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${r.end_date}</td>
+          <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${r.days} hari</td>
+          <td style="padding:6px;text-align:center;font-weight:bold;background-color:${sc};color:${st};border-right:1px solid #E5E7EB;">${r.status.toUpperCase()}</td>
+          <td style="padding:6px;">${r.reviewer?.name ?? "--"}</td>
+        </tr>`;
+      });
+      pw.document.write(`<html><head><title>Rekap Cuti</title><style>body{font-family:Arial,sans-serif;padding:20px;} table{width:100%;border-collapse:collapse;border:1px solid #E5E7EB;} th{background:#16A34A;color:#fff;font-size:10px;padding:8px;text-align:left;} @media print{@page{margin:1cm;}}</style></head><body>${buildHrPdfHeader(logo,"REKAP PENGAJUAN CUTI / IZIN / SAKIT",`Periode: ${period}`)}<table><thead><tr><th>No</th><th>NIK KTP</th><th>Nama</th><th>Unit Kerja</th><th>Jenis</th><th>Tgl Mulai</th><th>Tgl Selesai</th><th>Durasi</th><th>Status</th><th>Disetujui Oleh</th></tr></thead><tbody>${rows || '<tr><td colspan="10" style="text-align:center;padding:20px;">Tidak ada data.</td></tr>'}</tbody></table><script>window.onload=function(){window.print();setTimeout(function(){window.close();},500);}<\/script></body></html>`);
+      pw.document.close();
+    } catch(e) { pw.close(); } finally { setHrExporting(null); }
+  };
+
+  // ── 3. EKSPOR SURAT TUGAS ────────────────────────────────────────
+  const handleExportAssignmentExcel = async () => {
+    setHrExporting("surat-tugas");
+    try {
+      const logo = await loadLogoBase64();
+      const period = getMonthsLabel(hrReportMonth, hrReportYear);
+      const startDate = `${hrReportYear}-${String(hrReportMonth).padStart(2,"0")}-01`;
+      const lastDay = new Date(hrReportYear, hrReportMonth, 0).getDate();
+      const endDate = `${hrReportYear}-${String(hrReportMonth).padStart(2,"0")}-${String(lastDay).padStart(2,"0")}`;
+      const res = await assignmentLetterApi.list({ start_date: startDate, end_date: endDate, department_id: hrReportDept !== "all" ? hrReportDept : undefined, per_page: 9999 } as any);
+      if (!res.success) { alert("Gagal memuat data surat tugas."); return; }
+      const data = res.data.filter(r => r.status === "approved" || r.status === "completed");
+      let rows = ""; let no = 1;
+      data.forEach(r => {
+        rows += `<tr>
+          <td class="center">${no++}</td>
+          <td class="center" x:str>${r.employee?.nik_ktp ?? "--"}</td>
+          <td class="bold">${r.employee?.name ?? "--"}</td>
+          <td>${r.employee?.department ?? "--"}</td>
+          <td>${r.title ?? "--"}</td>
+          <td>${r.issuing_institution ?? "--"}</td>
+          <td>${r.purpose ?? "--"}</td>
+          <td class="center">${r.start_date}</td>
+          <td class="center">${r.end_date}</td>
+          ${statusBadge(r.status)}
+        </tr>`;
+      });
+      const body = buildHrHtmlHeader(logo, "REKAP SURAT TUGAS", period) +
+        `<table><thead><tr>
+          <th style="width:35px">No</th><th>NIK KTP</th><th>Nama</th><th>Unit Kerja</th><th>Judul Surat</th><th>Institusi</th><th>Tujuan</th><th>Tgl Mulai</th><th>Tgl Selesai</th><th>Status</th>
+        </tr></thead><tbody>${rows || '<tr><td colspan="10" style="text-align:center;padding:20px;color:#9CA3AF;">Tidak ada data surat tugas pada periode ini.</td></tr>'}</tbody></table>`;
+      triggerHrDownload(excelWrapperHr("Surat Tugas", body), `Rekap_Surat_Tugas_RSUCL_${hrReportYear}_${String(hrReportMonth).padStart(2,"0")}.xls`);
+    } catch(e) { alert("Gagal ekspor data surat tugas."); } finally { setHrExporting(null); }
+  };
+
+  const handleExportAssignmentPDF = async () => {
+    setHrExporting("surat-tugas-pdf");
+    const pw = window.open("", "_blank");
+    if (!pw) { alert("Izinkan popup untuk mencetak."); setHrExporting(null); return; }
+    try {
+      const logo = await loadLogoBase64();
+      const period = getMonthsLabel(hrReportMonth, hrReportYear);
+      const startDate = `${hrReportYear}-${String(hrReportMonth).padStart(2,"0")}-01`;
+      const lastDay = new Date(hrReportYear, hrReportMonth, 0).getDate();
+      const endDate = `${hrReportYear}-${String(hrReportMonth).padStart(2,"0")}-${String(lastDay).padStart(2,"0")}`;
+      const res = await assignmentLetterApi.list({ start_date: startDate, end_date: endDate, department_id: hrReportDept !== "all" ? hrReportDept : undefined, per_page: 9999 } as any);
+      if (!res.success) { pw.close(); return; }
+      const data = res.data.filter(r => r.status === "approved" || r.status === "completed");
+      let rows = ""; let no = 1;
+      data.forEach(r => {
+        const sc = r.status === "approved" || r.status === "completed" ? "#D1FAE5" : r.status === "pending" ? "#FEF9C3" : "#FEE2E2";
+        const st = r.status === "approved" || r.status === "completed" ? "#065F46" : r.status === "pending" ? "#92400E" : "#991B1B";
+        rows += `<tr style="border-bottom:1px solid #E5E7EB;font-size:10px;">
+          <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${no++}</td>
+          <td style="padding:6px;border-right:1px solid #E5E7EB;">${r.employee?.nik_ktp ?? "--"}</td>
+          <td style="padding:6px;font-weight:bold;border-right:1px solid #E5E7EB;">${r.employee?.name ?? "--"}</td>
+          <td style="padding:6px;border-right:1px solid #E5E7EB;">${r.employee?.department ?? "--"}</td>
+          <td style="padding:6px;border-right:1px solid #E5E7EB;">${r.title}</td>
+          <td style="padding:6px;border-right:1px solid #E5E7EB;">${r.issuing_institution}</td>
+          <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${r.start_date}</td>
+          <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${r.end_date}</td>
+          <td style="padding:6px;text-align:center;font-weight:bold;background-color:${sc};color:${st};">${r.status.toUpperCase()}</td>
+        </tr>`;
+      });
+      pw.document.write(`<html><head><title>Rekap Surat Tugas</title><style>body{font-family:Arial,sans-serif;padding:20px;} table{width:100%;border-collapse:collapse;border:1px solid #E5E7EB;} th{background:#16A34A;color:#fff;font-size:10px;padding:8px;text-align:left;} @media print{@page{margin:1cm;}}</style></head><body>${buildHrPdfHeader(logo,"REKAP SURAT TUGAS",`Periode: ${period}`)}<table><thead><tr><th>No</th><th>NIK KTP</th><th>Nama</th><th>Unit Kerja</th><th>Judul Surat</th><th>Institusi</th><th>Tgl Mulai</th><th>Tgl Selesai</th><th>Status</th></tr></thead><tbody>${rows || '<tr><td colspan="9" style="text-align:center;padding:20px;">Tidak ada data.</td></tr>'}</tbody></table><script>window.onload=function(){window.print();setTimeout(function(){window.close();},500);}<\/script></body></html>`);
+      pw.document.close();
+    } catch(e) { pw.close(); } finally { setHrExporting(null); }
+  };
+
+  // ── 4. EKSPOR PENGUNDURAN DIRI ───────────────────────────────────
+  const handleExportResignationExcel = async () => {
+    setHrExporting("resign");
+    try {
+      const logo = await loadLogoBase64();
+      const period = getMonthsLabel(hrReportMonth, hrReportYear);
+      const res = await resignationApi.list({ department_id: hrReportDept !== "all" ? Number(hrReportDept) : undefined });
+      if (!res.success) { alert("Gagal memuat data pengunduran diri."); return; }
+      const data = res.data.filter(r => {
+        const d = new Date(r.request_date);
+        return r.status === "approved" && d.getFullYear() === hrReportYear && d.getMonth() + 1 === hrReportMonth;
+      });
+      let rows = ""; let no = 1;
+      data.forEach(r => {
+        rows += `<tr>
+          <td class="center">${no++}</td>
+          <td class="center" x:str>${r.employee?.nik_ktp ?? "--"}</td>
+          <td class="bold">${r.employee?.user?.name ?? "--"}</td>
+          <td>${r.employee?.department?.name ?? "--"}</td>
+          <td>${r.posisi ?? "--"}</td>
+          <td class="center">${cleanDateStr(r.request_date)}</td>
+          <td class="center">${cleanDateStr(r.effective_date)}</td>
+          <td>${r.reason ?? "--"}</td>
+          ${statusBadge(r.status)}
+        </tr>`;
+      });
+      const body = buildHrHtmlHeader(logo, "REKAP PENGUNDURAN DIRI", period) +
+        `<table><thead><tr>
+          <th style="width:35px">No</th><th>NIK KTP</th><th>Nama</th><th>Unit Kerja</th><th>Jabatan</th><th>Tgl Pengajuan</th><th>Tgl Efektif</th><th>Alasan</th><th>Status</th>
+        </tr></thead><tbody>${rows || '<tr><td colspan="9" style="text-align:center;padding:20px;color:#9CA3AF;">Tidak ada data pengunduran diri pada periode ini.</td></tr>'}</tbody></table>`;
+      triggerHrDownload(excelWrapperHr("Pengunduran Diri", body), `Rekap_Pengunduran_Diri_RSUCL_${hrReportYear}_${String(hrReportMonth).padStart(2,"0")}.xls`);
+    } catch(e) { alert("Gagal ekspor data pengunduran diri."); } finally { setHrExporting(null); }
+  };
+
+  const handleExportResignationPDF = async () => {
+    setHrExporting("resign-pdf");
+    const pw = window.open("", "_blank");
+    if (!pw) { alert("Izinkan popup untuk mencetak."); setHrExporting(null); return; }
+    try {
+      const logo = await loadLogoBase64();
+      const period = getMonthsLabel(hrReportMonth, hrReportYear);
+      const res = await resignationApi.list({ department_id: hrReportDept !== "all" ? Number(hrReportDept) : undefined });
+      if (!res.success) { pw.close(); return; }
+      const data = res.data.filter(r => {
+        const d = new Date(r.request_date);
+        return r.status === "approved" && d.getFullYear() === hrReportYear && d.getMonth() + 1 === hrReportMonth;
+      });
+      let rows = ""; let no = 1;
+      data.forEach(r => {
+        const sc = r.status === "approved" ? "#D1FAE5" : r.status === "pending" ? "#FEF9C3" : "#FEE2E2";
+        const st = r.status === "approved" ? "#065F46" : r.status === "pending" ? "#92400E" : "#991B1B";
+        rows += `<tr style="border-bottom:1px solid #E5E7EB;font-size:10px;">
+          <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${no++}</td>
+          <td style="padding:6px;border-right:1px solid #E5E7EB;">${r.employee?.nik_ktp ?? "--"}</td>
+          <td style="padding:6px;font-weight:bold;border-right:1px solid #E5E7EB;">${r.employee?.user?.name ?? "--"}</td>
+          <td style="padding:6px;border-right:1px solid #E5E7EB;">${r.employee?.department?.name ?? "--"}</td>
+          <td style="padding:6px;border-right:1px solid #E5E7EB;">${r.posisi ?? "--"}</td>
+          <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${cleanDateStr(r.request_date)}</td>
+          <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${cleanDateStr(r.effective_date)}</td>
+          <td style="padding:6px;border-right:1px solid #E5E7EB;">${r.reason ?? "--"}</td>
+          <td style="padding:6px;text-align:center;font-weight:bold;background-color:${sc};color:${st};">${r.status.toUpperCase()}</td>
+        </tr>`;
+      });
+      pw.document.write(`<html><head><title>Rekap Pengunduran Diri</title><style>body{font-family:Arial,sans-serif;padding:20px;} table{width:100%;border-collapse:collapse;border:1px solid #E5E7EB;} th{background:#16A34A;color:#fff;font-size:10px;padding:8px;text-align:left;} @media print{@page{margin:1cm;}}</style></head><body>${buildHrPdfHeader(logo,"REKAP PENGUNDURAN DIRI",`Periode: ${period}`)}<table><thead><tr><th>No</th><th>NIK KTP</th><th>Nama</th><th>Unit Kerja</th><th>Jabatan</th><th>Tgl Pengajuan</th><th>Tgl Efektif</th><th>Alasan</th><th>Status</th></tr></thead><tbody>${rows || '<tr><td colspan="9" style="text-align:center;padding:20px;">Tidak ada data.</td></tr>'}</tbody></table><script>window.onload=function(){window.print();setTimeout(function(){window.close();},500);}<\/script></body></html>`);
+      pw.document.close();
+    } catch(e) { pw.close(); } finally { setHrExporting(null); }
+  };
+
+  // ── 5. EKSPOR SANKSI DISIPLIN ────────────────────────────────────
+  const handleExportDisciplinaryExcel = async () => {
+    setHrExporting("disiplin");
+    try {
+      const logo = await loadLogoBase64();
+      const period = getMonthsLabel(hrReportMonth, hrReportYear);
+      const res = await disciplinarySanctionApi.list({ department_id: hrReportDept !== "all" ? Number(hrReportDept) : undefined });
+      if (!res.success) { alert("Gagal memuat data sanksi disiplin."); return; }
+      const data = res.data.filter(r => {
+        const d = new Date(r.created_at);
+        return d.getFullYear() === hrReportYear && d.getMonth() + 1 === hrReportMonth;
+      });
+      const typeLabel = (t: string) => ({ teguran: "Teguran", sp1: "SP 1", sp2: "SP 2", phk: "PHK" }[t] ?? t.toUpperCase());
+      const typeColor = (t: string) => ({ teguran: "#FEF9C3", sp1: "#FED7AA", sp2: "#FEE2E2", phk: "#FECACA" }[t] ?? "#F3F4F6");
+      let rows = ""; let no = 1;
+      data.forEach(r => {
+        rows += `<tr>
+          <td class="center">${no++}</td>
+          <td class="center" x:str>${r.employee?.nik_ktp ?? "--"}</td>
+          <td class="bold">${r.employee?.user?.name ?? "--"}</td>
+          <td>${r.employee?.department?.name ?? "--"}</td>
+          <td class="center bold" style="background-color:${typeColor(r.type)};color:#7C2D12;">${typeLabel(r.type)}</td>
+          <td class="center">${new Date(r.created_at).toLocaleDateString("id-ID")}</td>
+          <td>${r.admin_note ?? "--"}</td>
+          <td>${r.creator?.name ?? "--"}</td>
+        </tr>`;
+      });
+      const body = buildHrHtmlHeader(logo, "REKAP SANKSI DISIPLIN", period) +
+        `<table><thead><tr>
+          <th style="width:35px">No</th><th>NIK KTP</th><th>Nama</th><th>Unit Kerja</th><th>Jenis Sanksi</th><th>Tanggal</th><th>Catatan / Kronologi</th><th>Ditetapkan Oleh</th>
+        </tr></thead><tbody>${rows || '<tr><td colspan="8" style="text-align:center;padding:20px;color:#9CA3AF;">Tidak ada sanksi disiplin pada periode ini.</td></tr>'}</tbody></table>`;
+      triggerHrDownload(excelWrapperHr("Sanksi Disiplin", body), `Rekap_Sanksi_Disiplin_RSUCL_${hrReportYear}_${String(hrReportMonth).padStart(2,"0")}.xls`);
+    } catch(e) { alert("Gagal ekspor data sanksi disiplin."); } finally { setHrExporting(null); }
+  };
+
+  const handleExportDisciplinaryPDF = async () => {
+    setHrExporting("disiplin-pdf");
+    const pw = window.open("", "_blank");
+    if (!pw) { alert("Izinkan popup untuk mencetak."); setHrExporting(null); return; }
+    try {
+      const logo = await loadLogoBase64();
+      const period = getMonthsLabel(hrReportMonth, hrReportYear);
+      const res = await disciplinarySanctionApi.list({ department_id: hrReportDept !== "all" ? Number(hrReportDept) : undefined });
+      if (!res.success) { pw.close(); return; }
+      const data = res.data.filter(r => {
+        const d = new Date(r.created_at);
+        return d.getFullYear() === hrReportYear && d.getMonth() + 1 === hrReportMonth;
+      });
+      const typeLabel = (t: string) => ({ teguran: "Teguran", sp1: "SP 1", sp2: "SP 2", phk: "PHK" }[t] ?? t.toUpperCase());
+      const typeColor = (t: string) => ({ teguran: "#FEF9C3", sp1: "#FED7AA", sp2: "#FEE2E2", phk: "#FECACA" }[t] ?? "#F3F4F6");
+      let rows = ""; let no = 1;
+      data.forEach(r => {
+        rows += `<tr style="border-bottom:1px solid #E5E7EB;font-size:10px;">
+          <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${no++}</td>
+          <td style="padding:6px;border-right:1px solid #E5E7EB;">${r.employee?.nik_ktp ?? "--"}</td>
+          <td style="padding:6px;font-weight:bold;border-right:1px solid #E5E7EB;">${r.employee?.user?.name ?? "--"}</td>
+          <td style="padding:6px;border-right:1px solid #E5E7EB;">${r.employee?.department?.name ?? "--"}</td>
+          <td style="padding:6px;text-align:center;font-weight:bold;background-color:${typeColor(r.type)};color:#7C2D12;border-right:1px solid #E5E7EB;">${typeLabel(r.type)}</td>
+          <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${new Date(r.created_at).toLocaleDateString("id-ID")}</td>
+          <td style="padding:6px;border-right:1px solid #E5E7EB;">${r.admin_note ?? "--"}</td>
+          <td style="padding:6px;">${r.creator?.name ?? "--"}</td>
+        </tr>`;
+      });
+      pw.document.write(`<html><head><title>Rekap Sanksi Disiplin</title><style>body{font-family:Arial,sans-serif;padding:20px;} table{width:100%;border-collapse:collapse;border:1px solid #E5E7EB;} th{background:#B91C1C;color:#fff;font-size:10px;padding:8px;text-align:left;} @media print{@page{margin:1cm;}}</style></head><body>${buildHrPdfHeader(logo,"REKAP SANKSI DISIPLIN",`Periode: ${period}`)}<table><thead><tr><th>No</th><th>NIK KTP</th><th>Nama</th><th>Unit Kerja</th><th>Jenis Sanksi</th><th>Tanggal</th><th>Catatan</th><th>Ditetapkan Oleh</th></tr></thead><tbody>${rows || '<tr><td colspan="8" style="text-align:center;padding:20px;">Tidak ada data.</td></tr>'}</tbody></table><script>window.onload=function(){window.print();setTimeout(function(){window.close();},500);}<\/script></body></html>`);
+      pw.document.close();
+    } catch(e) { pw.close(); } finally { setHrExporting(null); }
+  };
+
   useEffect(() => {
     loadSummary(chartMonth, chartYear);
     const fetchDepts = async () => {
@@ -1155,6 +1642,235 @@ export function ReportsTab() {
           onYearChange={setSelectedYear}
           onDeptChange={setSelectedDepartment}
         />
+      </div>
+
+      {/* ══════════════════════════════════════════════════════════════════
+           SECTION: LAPORAN MANAJEMEN SDM
+         ══════════════════════════════════════════════════════════════════ */}
+      <div className="bg-white rounded-2xl border border-blue-100 shadow-sm overflow-hidden">
+        {/* Header Section */}
+        <div className="px-5 py-4 border-b border-blue-50 bg-gradient-to-r from-blue-50/60 to-indigo-50/40">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
+              <ClipboardList size={15} className="text-blue-700" />
+            </div>
+            <div>
+              <h3 className="text-[13px] font-bold text-gray-900">Laporan Manajemen SDM</h3>
+              <p className="text-[10.5px] text-gray-400 mt-0.5">Cetak & ekspor laporan lembur, cuti, surat tugas, pengunduran diri, dan sanksi disiplin</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Filter Periode & Departemen */}
+        <div className="px-5 py-4 border-b border-gray-50 bg-gray-50/30">
+          <div className="flex flex-wrap gap-3 items-end">
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bulan</label>
+              <select
+                value={hrReportMonth}
+                onChange={e => setHrReportMonth(Number(e.target.value))}
+                className="appearance-none pl-3 pr-8 py-2 border border-gray-200 rounded-xl text-[12px] bg-white focus:outline-none focus:border-blue-400 text-gray-700 font-semibold cursor-pointer shadow-sm"
+              >
+                {["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"].map((m, i) => (
+                  <option key={i+1} value={i+1}>{m}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Tahun</label>
+              <select
+                value={hrReportYear}
+                onChange={e => setHrReportYear(Number(e.target.value))}
+                className="appearance-none pl-3 pr-8 py-2 border border-gray-200 rounded-xl text-[12px] bg-white focus:outline-none focus:border-blue-400 text-gray-700 font-semibold cursor-pointer shadow-sm"
+              >
+                {Array.from({length: new Date().getFullYear() - 2022 + 1}, (_,i) => 2022 + i).reverse().map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Unit Kerja</label>
+              <select
+                value={hrReportDept}
+                onChange={e => setHrReportDept(e.target.value)}
+                className="appearance-none pl-3 pr-8 py-2 border border-gray-200 rounded-xl text-[12px] bg-white focus:outline-none focus:border-blue-400 text-gray-700 font-semibold cursor-pointer shadow-sm min-w-[160px]"
+              >
+                <option value="all">Semua Departemen</option>
+                {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Grid Laporan */}
+        <div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+
+          {/* Card 1: Lembur */}
+          <div className="bg-amber-50/50 rounded-xl border border-amber-100 p-4 flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
+                <Clock size={13} className="text-amber-700" />
+              </div>
+              <div>
+                <p className="text-[12px] font-bold text-gray-800">Rekap Lembur</p>
+                <p className="text-[10px] text-gray-400">Data pengajuan lembur karyawan</p>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-auto">
+              <button
+                id="btn-export-lembur-excel"
+                onClick={handleExportOvertimeExcel}
+                disabled={hrExporting !== null}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                <Download size={11} />{hrExporting === "lembur" ? "..." : "Excel"}
+              </button>
+              <button
+                id="btn-export-lembur-pdf"
+                onClick={handleExportOvertimePDF}
+                disabled={hrExporting !== null}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                <FileText size={11} />{hrExporting === "lembur-pdf" ? "..." : "PDF"}
+              </button>
+            </div>
+          </div>
+
+          {/* Card 2: Cuti / Izin / Sakit */}
+          <div className="bg-green-50/50 rounded-xl border border-green-100 p-4 flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
+                <Calendar size={13} className="text-green-700" />
+              </div>
+              <div>
+                <p className="text-[12px] font-bold text-gray-800">Rekap Cuti / Izin / Sakit</p>
+                <p className="text-[10px] text-gray-400">Semua jenis pengajuan ketidakhadiran</p>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-auto">
+              <button
+                id="btn-export-cuti-excel"
+                onClick={handleExportLeaveExcel}
+                disabled={hrExporting !== null}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                <Download size={11} />{hrExporting === "cuti" ? "..." : "Excel"}
+              </button>
+              <button
+                id="btn-export-cuti-pdf"
+                onClick={handleExportLeavePDF}
+                disabled={hrExporting !== null}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                <FileText size={11} />{hrExporting === "cuti-pdf" ? "..." : "PDF"}
+              </button>
+            </div>
+          </div>
+
+          {/* Card 3: Surat Tugas */}
+          <div className="bg-blue-50/50 rounded-xl border border-blue-100 p-4 flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+                <Briefcase size={13} className="text-blue-700" />
+              </div>
+              <div>
+                <p className="text-[12px] font-bold text-gray-800">Rekap Surat Tugas</p>
+                <p className="text-[10px] text-gray-400">Data penugasan dinas luar karyawan</p>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-auto">
+              <button
+                id="btn-export-surat-tugas-excel"
+                onClick={handleExportAssignmentExcel}
+                disabled={hrExporting !== null}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                <Download size={11} />{hrExporting === "surat-tugas" ? "..." : "Excel"}
+              </button>
+              <button
+                id="btn-export-surat-tugas-pdf"
+                onClick={handleExportAssignmentPDF}
+                disabled={hrExporting !== null}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                <FileText size={11} />{hrExporting === "surat-tugas-pdf" ? "..." : "PDF"}
+              </button>
+            </div>
+          </div>
+
+          {/* Card 4: Pengunduran Diri */}
+          <div className="bg-rose-50/50 rounded-xl border border-rose-100 p-4 flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-rose-100 flex items-center justify-center flex-shrink-0">
+                <UserMinus size={13} className="text-rose-700" />
+              </div>
+              <div>
+                <p className="text-[12px] font-bold text-gray-800">Rekap Pengunduran Diri</p>
+                <p className="text-[10px] text-gray-400">Pengajuan resign karyawan</p>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-auto">
+              <button
+                id="btn-export-resign-excel"
+                onClick={handleExportResignationExcel}
+                disabled={hrExporting !== null}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                <Download size={11} />{hrExporting === "resign" ? "..." : "Excel"}
+              </button>
+              <button
+                id="btn-export-resign-pdf"
+                onClick={handleExportResignationPDF}
+                disabled={hrExporting !== null}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                <FileText size={11} />{hrExporting === "resign-pdf" ? "..." : "PDF"}
+              </button>
+            </div>
+          </div>
+
+          {/* Card 5: Sanksi Disiplin */}
+          <div className="bg-red-50/50 rounded-xl border border-red-100 p-4 flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-red-100 flex items-center justify-center flex-shrink-0">
+                <Shield size={13} className="text-red-700" />
+              </div>
+              <div>
+                <p className="text-[12px] font-bold text-gray-800">Rekap Sanksi Disiplin</p>
+                <p className="text-[10px] text-gray-400">Teguran, SP1, SP2, dan PHK</p>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-auto">
+              <button
+                id="btn-export-disiplin-excel"
+                onClick={handleExportDisciplinaryExcel}
+                disabled={hrExporting !== null}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                <Download size={11} />{hrExporting === "disiplin" ? "..." : "Excel"}
+              </button>
+              <button
+                id="btn-export-disiplin-pdf"
+                onClick={handleExportDisciplinaryPDF}
+                disabled={hrExporting !== null}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                <FileText size={11} />{hrExporting === "disiplin-pdf" ? "..." : "PDF"}
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+        {/* Footer info */}
+        {hrExporting !== null && (
+          <div className="px-5 pb-4">
+            <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-xl border border-blue-100">
+              <div className="w-3.5 h-3.5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+              <span className="text-[11px] text-blue-700 font-medium">Sedang memproses laporan, mohon tunggu...</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Filter Diagram / Grafik ──────────────────────── */}

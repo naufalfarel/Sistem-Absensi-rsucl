@@ -232,6 +232,11 @@ export const ResignationRequestPage: React.FC<ResignationRequestPageProps> = ({ 
       return;
     }
 
+    if (!attachment) {
+      setErrorMsg("Berkas surat resign fisik (PDF) wajib diunggah.");
+      return;
+    }
+
     setSubmitting(true);
 
     try {
@@ -641,7 +646,7 @@ export const ResignationRequestPage: React.FC<ResignationRequestPageProps> = ({ 
               {/* Upload Surat Resign Fisik */}
               <div>
                 <label className="block text-[12px] font-bold text-slate-800 mb-1">
-                  Unggah Berkas Surat Resign Fisik (PDF saja)
+                  Unggah Berkas Surat Resign Fisik (PDF saja) <span className="text-rose-600">*</span>
                 </label>
                 <div className="border border-dashed border-slate-300 rounded-2xl p-3.5 bg-slate-50 hover:bg-slate-100/80 transition-colors text-center cursor-pointer relative">
                   <input

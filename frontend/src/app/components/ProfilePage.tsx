@@ -560,27 +560,200 @@ export function ProfilePage({
     return Math.max(1, Math.floor(diff / 86400000) + 1);
   };
 
+  const getDateLimits = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const formatDateForInput = (d: Date) => {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    let minStr = '';
+    let maxStr = '';
+
+    if (leaveType === 'cuti_khusus') {
+      const cat = categories.find(c => String(c.id) === selectedCategory);
+      if (cat) {
+        const catName = cat.name.toLowerCase();
+        if (catName.includes('menikah')) {
+          const minDate = new Date(today);
+          minDate.setDate(today.getDate() + 14);
+          minStr = formatDateForInput(minDate);
+        } else if (catName.includes('melahirkan') || catName.includes('keguguran')) {
+          const minDate = new Date(today);
+          minDate.setDate(today.getDate() - 2);
+          minStr = formatDateForInput(minDate);
+        } else if (catName.includes('meninggal') || catName.includes('duka') || catName.includes('kepergian')) {
+          const minDate = new Date(today);
+          minDate.setDate(today.getDate() - 2);
+          minStr = formatDateForInput(minDate);
+        } else if (catName.includes('haji')) {
+          minStr = formatDateForInput(today);
+        } else if (catName.includes('sakit')) {
+          const minDate = new Date(today);
+          minDate.setDate(today.getDate() - 3);
+          minStr = formatDateForInput(minDate);
+        }
+      }
+    } else if (leaveType === 'cuti') {
+      const minDate = new Date(today);
+      minDate.setDate(today.getDate() + 14);
+      minStr = formatDateForInput(minDate);
+    } else {
+      minStr = formatDateForInput(today);
+    }
+
+    return { min: minStr, max: maxStr };
+  };
+
+  const getEndDateLimits = () => {
+    if (!startDate) return { min: '', max: '' };
+
+    const start = new Date(startDate);
+    const formatDateForInput = (d: Date) => {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    let maxStr = '';
+
+    if (leaveType === 'cuti_khusus') {
+      const cat = categories.find(c => String(c.id) === selectedCategory);
+      if (cat) {
+        const catName = cat.name.toLowerCase();
+        if (catName.includes('menikah')) {
+          const maxDate = new Date(start);
+          maxDate.setDate(start.getDate() + 2);
+          maxStr = formatDateForInput(maxDate);
+        } else if (catName.includes('melahirkan') || catName.includes('keguguran')) {
+          const maxDate = new Date(start);
+          maxDate.setDate(start.getDate() + 89);
+          maxStr = formatDateForInput(maxDate);
+        } else if (catName.includes('meninggal') || catName.includes('duka') || catName.includes('kepergian')) {
+          const maxDate = new Date(start);
+          maxDate.setDate(start.getDate() + 2);
+          maxStr = formatDateForInput(maxDate);
+        }
+      }
+    } else if (leaveType === 'cuti') {
+      const maxDate = new Date(start);
+      maxDate.setDate(start.getDate() + 3);
+      maxStr = formatDateForInput(maxDate);
+    } else if (leaveType === 'sakit') {
+      const maxDate = new Date(start);
+      maxDate.setDate(start.getDate() + 2);
+      maxStr = formatDateForInput(maxDate);
+    }
+
+    return { min: startDate, max: maxStr };
+  };
+
   const handleSubmit = async () => {
     if (submitting) return;
 
+    // Cek syarat masa kerja minimal
+    const joinDateStr = user?.join_date;
+    if (!joinDateStr) {
+      setFormError("Tanggal masuk pertama Anda belum diatur oleh Admin. Silakan hubungi Admin.");
+      return;
+    }
+
+    const jd = new Date(joinDateStr);
+    const todayDate = new Date();
+    const diffTime = todayDate.getTime() - jd.getTime();
+    const daysWorked = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+    let requiredDays = 365; // Default 1 tahun
+    let leaveLabel = "Cuti/Izin/Sakit/Cuti Khusus";
+
+    if (daysWorked < requiredDays) {
+      const daysRemaining = requiredDays - Math.max(0, daysWorked);
+      setFormError(`Anda baru bekerja selama ${Math.max(0, daysWorked)} hari. Pengajuan ${leaveLabel} hanya dapat dilakukan setelah bekerja minimal 1 tahun (365 hari). Kurang ${daysRemaining} hari lagi.`);
+      return;
+    }
+
     // Validasi input khusus Cuti Khusus vs Cuti/Izin/Sakit biasa
     if (leaveType === "cuti_khusus") {
-      const isLainnya = () => {
-        const cat = categories.find(c => String(c.id) === selectedCategory);
-        return cat && cat.name.toLowerCase() === 'lainnya';
-      };
+      const cat = categories.find(c => String(c.id) === selectedCategory);
+      const isLainnya = cat && cat.name.toLowerCase() === 'lainnya';
       if (
         !startDate ||
         !endDate ||
         !reason.trim() ||
         !selectedCategory ||
         !attachmentFile ||
-        (isLainnya() && !customCategoryOther.trim())
+        (isLainnya && !customCategoryOther.trim())
       ) {
         setFormError(
           "Semua field wajib diisi, termasuk kategori cuti khusus, keterangan lainnya (jika memilih Lainnya), dan dokumen pendukung (lampiran).",
         );
         return;
+      }
+
+      if (cat) {
+        const catName = cat.name.toLowerCase();
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const diffTime = Math.abs(end.getTime() - start.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        start.setHours(0, 0, 0, 0);
+
+        // Menikah
+        if (catName.includes('menikah')) {
+          const timeDiff = start.getTime() - today.getTime();
+          const daysDiff = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+          if (daysDiff < 14) {
+            setFormError("Pengajuan Cuti Menikah harus diajukan paling lambat 2 minggu (14 hari) sebelum tanggal pelaksanaan.");
+            return;
+          }
+          if (diffDays > 3) {
+            setFormError("Durasi Cuti Menikah tidak boleh lebih dari 3 hari.");
+            return;
+          }
+        }
+        // Melahirkan / Keguguran
+        else if (catName.includes('melahirkan') || catName.includes('keguguran')) {
+          const timeDiff = today.getTime() - start.getTime();
+          const daysPast = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+          if (daysPast > 2) {
+            setFormError("Permohonan Cuti Melahirkan/Keguguran harus diajukan paling lambat 2 hari setelah kejadian.");
+            return;
+          }
+          if (diffDays > 90) {
+            setFormError("Durasi Cuti Melahirkan/Keguguran tidak boleh lebih dari 90 hari (3 bulan).");
+            return;
+          }
+        }
+        // Duka / Meninggal
+        else if (catName.includes('meninggal') || catName.includes('duka') || catName.includes('kepergian')) {
+          const timeDiff = today.getTime() - start.getTime();
+          const daysPast = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+          if (daysPast > 2) {
+            setFormError("Pengajuan Cuti Duka/Kematian Keluarga harus diajukan paling lambat 2 hari setelah tanggal kejadian.");
+            return;
+          }
+          if (diffDays > 3) {
+            setFormError("Durasi Cuti Duka/Kematian Keluarga tidak boleh lebih dari 3 hari.");
+            return;
+          }
+        }
+
+        // Sakit Kekhususan
+        else if (catName.includes('sakit')) {
+          const timeDiff = today.getTime() - start.getTime();
+          const daysPast = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+          if (daysPast > 3) {
+            setFormError("Pengajuan Sakit Kekhususan harus diajukan paling lambat 3 hari dari tanggal mulai sakit.");
+            return;
+          }
+        }
       }
     } else {
       if (!startDate || !endDate || !reason.trim()) {
@@ -594,6 +767,27 @@ export function ProfilePage({
     if (new Date(endDate) < new Date(startDate)) {
       setFormError("Tanggal selesai tidak boleh sebelum tanggal mulai.");
       return;
+    }
+
+    if (leaveType === 'cuti') {
+      const start = new Date(startDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      start.setHours(0, 0, 0, 0);
+      const timeDiff = start.getTime() - today.getTime();
+      const daysDiff = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+      if (daysDiff < 14) {
+        setFormError("Pengajuan Cuti Tahunan harus diajukan paling lambat 2 minggu (14 hari) sebelum tanggal pelaksanaan.");
+        return;
+      }
+    }
+
+    if (leaveType === 'sakit') {
+      const days = calcDays();
+      if (days > 3) {
+        setFormError("Pengajuan sakit biasa maksimal 3 hari per pengajuan. Silakan sesuaikan tanggal atau ajukan Sakit Kekhususan jika memiliki rekomendasi dokter untuk penyakit jangka panjang.");
+        return;
+      }
     }
     setFormError("");
     setSubmitting(true);
@@ -1591,8 +1785,11 @@ export function ProfilePage({
                   <input
                     type="date"
                     value={startDate}
+                    min={getDateLimits().min}
+                    max={getDateLimits().max}
                     onChange={(e) => {
                       setStartDate(e.target.value);
+                      setEndDate("");
                       setFormError("");
                     }}
                     className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all"
@@ -1605,7 +1802,8 @@ export function ProfilePage({
                   <input
                     type="date"
                     value={endDate}
-                    min={startDate}
+                    min={getEndDateLimits().min}
+                    max={getEndDateLimits().max}
                     onChange={(e) => {
                       setEndDate(e.target.value);
                       setFormError("");

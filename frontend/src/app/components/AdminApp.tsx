@@ -159,6 +159,38 @@ interface AdminAppProps {
 export function AdminApp({ onLogout }: AdminAppProps) {
   const { user, logoUrl } = useAuth();
 
+  const getWorkDuration = (joinDateStr?: string) => {
+    if (!joinDateStr) return "—";
+    try {
+      const joinDate = new Date(joinDateStr);
+      const now = new Date();
+      
+      let years = now.getFullYear() - joinDate.getFullYear();
+      let months = now.getMonth() - joinDate.getMonth();
+      let days = now.getDate() - joinDate.getDate();
+      
+      if (days < 0) {
+        months -= 1;
+        const prevMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+        days += prevMonth.getDate();
+      }
+      
+      if (months < 0) {
+        years -= 1;
+        months += 12;
+      }
+
+      const parts = [];
+      if (years > 0) parts.push(`${years} Tahun`);
+      if (months > 0) parts.push(`${months} Bulan`);
+      if (days > 0 || parts.length === 0) parts.push(`${days} Hari`);
+      
+      return parts.join(" ");
+    } catch (e) {
+      return "—";
+    }
+  };
+
   // Tab menu aktif di sidebar (default: 'dashboard')
   const [activeTab, setActiveTab] = useState(() => {
     return localStorage.getItem("admin_active_tab") || "dashboard";
@@ -1483,6 +1515,11 @@ export function AdminApp({ onLogout }: AdminAppProps) {
                                     <p className="text-[11px] text-gray-400">
                                       {emp.email}
                                     </p>
+                                    {emp.join_date && (
+                                      <p className="text-[10px] text-emerald-600 font-bold mt-0.5 whitespace-nowrap">
+                                        Masuk: {emp.join_date} ({getWorkDuration(emp.join_date)})
+                                      </p>
+                                    )}
                                   </div>
                                 </div>
                               </td>
@@ -2308,6 +2345,11 @@ export function AdminApp({ onLogout }: AdminAppProps) {
                 <div>
                   <span className="text-[10px] text-gray-400 font-bold uppercase block">Tanggal Bergabung</span>
                   <span className="text-gray-800 font-medium">{detailModalEmp.join_date || "—"}</span>
+                  {detailModalEmp.join_date && (
+                    <span className="text-[10px] text-emerald-600 font-bold block mt-0.5">
+                      Lama Bekerja: {getWorkDuration(detailModalEmp.join_date)}
+                    </span>
+                  )}
                 </div>
                 <div>
                   <span className="text-[10px] text-gray-400 font-bold uppercase block">Status Akun</span>

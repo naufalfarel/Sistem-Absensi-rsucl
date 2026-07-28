@@ -1200,7 +1200,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
                       </div>
                     )}
 
-                    {req.status === 'pending' && req.pj_status === 'pending' && (
+                    {req.status === 'pending' && (
                       <div className="mt-3 pt-3 border-t border-amber-100">
                         <button
                           onClick={() => setCancelId(req.id)}

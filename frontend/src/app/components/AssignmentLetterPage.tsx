@@ -378,8 +378,8 @@ export default function AssignmentLetterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submitting) return;
-    if (!title.trim() || !issuingInstitution.trim() || !startDate || !endDate || !purpose.trim()) {
-      setFormError('Semua field bertanda (*) wajib diisi.'); return;
+    if (!title.trim() || !issuingInstitution.trim() || !startDate || !endDate || !purpose.trim() || !documentFile) {
+      setFormError('Semua field bertanda (*) wajib diisi/diunggah.'); return;
     }
     if (new Date(endDate) < new Date(startDate)) {
       setFormError('Tanggal selesai tidak boleh sebelum tanggal mulai.'); return;
@@ -616,7 +616,7 @@ export default function AssignmentLetterPage() {
             {/* Upload Surat Undangan */}
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">
-                Lampiran Surat / Undangan <span className="text-gray-400 font-normal">(Opsional)</span>
+                Lampiran Surat / Undangan <span className="text-red-500">*</span>
               </label>
               <label className="flex items-center gap-3 w-full border border-dashed border-gray-200 rounded-xl px-4 py-3 cursor-pointer bg-gray-50 hover:bg-gray-100 hover:border-green-300 transition-all">
                 <Paperclip size={16} className="text-gray-400 flex-shrink-0" />

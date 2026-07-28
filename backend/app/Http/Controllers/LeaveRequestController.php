@@ -153,6 +153,34 @@ class LeaveRequestController extends Controller
             return response()->json(['success' => false, 'message' => 'Data karyawan tidak ditemukan.'], 404);
         }
 
+        // Cek syarat minimal bekerja untuk mengajukan cuti, izin, sakit, cuti_khusus
+        if (!$user->isAdmin()) {
+            if (!$employee->join_date) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Tanggal masuk pertama Anda belum diatur oleh Admin. Silakan hubungi Admin untuk memperbarui profil Anda.',
+                    'errors'  => [
+                        'join_date' => ['Tanggal masuk pertama belum diatur.'],
+                    ],
+                ], 422);
+            }
+
+            $joinDate = \Carbon\Carbon::parse($employee->join_date);
+            $now = \Carbon\Carbon::now();
+            $daysWorked = $joinDate->diffInDays($now, false);
+
+            if ($daysWorked < 365) {
+                $daysRemaining = 365 - max(0, $daysWorked);
+                return response()->json([
+                    'success' => false,
+                    'message' => "Anda baru bekerja selama " . max(0, $daysWorked) . " hari. Pengajuan cuti/izin/sakit/cuti khusus hanya dapat dilakukan setelah bekerja minimal 1 tahun (365 hari). Kurang {$daysRemaining} hari lagi.",
+                    'errors'  => [
+                        'join_date' => ["Syarat pengajuan minimal bekerja 1 tahun (365 hari)."],
+                    ],
+                ], 422);
+            }
+        }
+
         // Validasi input data pengajuan cuti
         $rules = [
             'type'                      => 'required|in:cuti,izin,sakit,cuti_khusus',
@@ -194,6 +222,19 @@ class LeaveRequestController extends Controller
             $startDate     = \Carbon\Carbon::parse($data['start_date']);
             $endDate       = \Carbon\Carbon::parse($data['end_date']);
             $daysRequested = $startDate->diffInDays($endDate) + 1;
+
+            // ── Aturan Baru: Diajukan paling lambat 2 minggu (14 hari) sebelum pelaksanaan ──
+            $today = \Carbon\Carbon::today();
+            $daysDiff = $today->diffInDays($startDate, false);
+            if ($daysDiff < 14) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Pengajuan Cuti Tahunan harus diajukan paling lambat 2 minggu (14 hari) sebelum tanggal pelaksanaan.",
+                    'errors'  => [
+                        'start_date' => ["Pengajuan Cuti Tahunan minimal diajukan 14 hari sebelum hari pelaksanaan."],
+                    ],
+                ], 422);
+            }
 
             // ── Aturan 1: Maksimal 4 hari beruntun per pengajuan ─────────────
             if ($daysRequested > 4) {
@@ -256,6 +297,188 @@ class LeaveRequestController extends Controller
                             'monthly_limit' => ["Batas cuti tahunan bulan {$monthLabel}: {$existingDaysThisMonth} hari sudah diajukan, maksimal 4 hari/bulan."],
                         ],
                     ], 422);
+                }
+            }
+        }
+
+        // ── Validasi Kuota Sakit Biasa ───────────────────────────────────────
+        // Hanya berlaku untuk pengajuan bertipe 'sakit' (regular Sakit).
+        // Jika Admin, validasi ini dilewati agar admin bisa mencatat sakit lama / melakukan penyesuaian historis
+        if ($data['type'] === 'sakit' && !$user->isAdmin()) {
+            $startDate     = \Carbon\Carbon::parse($data['start_date']);
+            $endDate       = \Carbon\Carbon::parse($data['end_date']);
+            $daysRequested = $startDate->diffInDays($endDate) + 1;
+
+            // ── Aturan 1: Maksimal 3 hari per pengajuan ──────────────────────
+            if ($daysRequested > 3) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Pengajuan sakit biasa maksimal 3 hari per pengajuan. Anda mengajukan {$daysRequested} hari. Silakan sesuaikan tanggal atau ajukan Sakit Kekhususan jika memiliki surat rekomendasi dokter untuk penyakit jangka panjang.",
+                    'errors'  => [
+                        'duration' => ["Pengajuan sakit biasa maksimal 3 hari."],
+                    ],
+                ], 422);
+            }
+
+            // ── Aturan 2: Kuota Bulanan (Maks. 3 hari/bulan) ─────────────────
+            $monthsToCheck = [];
+            $cursor = $startDate->copy()->startOfMonth();
+            $endMonth = $endDate->copy()->startOfMonth();
+            while ($cursor->lte($endMonth)) {
+                $monthsToCheck[] = ['year' => $cursor->year, 'month' => $cursor->month];
+                $cursor->addMonth();
+            }
+
+            $indoMonths = [
+                1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
+                5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus',
+                9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember',
+            ];
+
+            foreach ($monthsToCheck as $m) {
+                $y = $m['year']; $mo = $m['month'];
+
+                // Hitung hari pengajuan baru yang jatuh di bulan ini
+                $monthStart = \Carbon\Carbon::create($y, $mo, 1)->startOfMonth();
+                $monthEnd   = \Carbon\Carbon::create($y, $mo, 1)->endOfMonth();
+                $overlapStart = $startDate->copy()->max($monthStart);
+                $overlapEnd   = $endDate->copy()->min($monthEnd);
+                $newDaysThisMonth = $overlapStart->diffInDays($overlapEnd) + 1;
+
+                // Hitung sakit yang sudah committed di bulan ini
+                $q = $employee->leaveRequests()
+                    ->where('type', 'sakit')
+                    ->whereIn('status', ['pending', 'approved'])
+                    ->where('start_date', '<=', $monthEnd->toDateString())
+                    ->where('end_date',   '>=', $monthStart->toDateString());
+
+                $sakitRequests = $q->get();
+                $existingDaysThisMonth = 0;
+                foreach ($sakitRequests as $sr) {
+                    $srStart = \Carbon\Carbon::parse(max($sr->start_date->toDateString(), $monthStart->toDateString()));
+                    $srEnd   = \Carbon\Carbon::parse(min($sr->end_date->toDateString(), $monthEnd->toDateString()));
+                    $existingDaysThisMonth += $srStart->diffInDays($srEnd) + 1;
+                }
+
+                $totalThisMonth = $existingDaysThisMonth + $newDaysThisMonth;
+                $monthLabel = ($indoMonths[$mo] ?? $mo) . ' ' . $y;
+
+                if ($totalThisMonth > 3) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => "Total sakit biasa pada bulan {$monthLabel} melebihi batas maksimal 3 hari per bulan (sudah ada {$existingDaysThisMonth} hari, pengajuan baru {$newDaysThisMonth} hari di bulan tersebut = total {$totalThisMonth} hari). Silakan ajukan Sakit Kekhususan jika memiliki surat rekomendasi dokter untuk penyakit jangka panjang.",
+                        'errors'  => [
+                            'monthly_limit' => ["Batas sakit biasa bulan {$monthLabel}: {$existingDaysThisMonth} hari sudah diajukan, maksimal 3 hari/bulan."],
+                        ],
+                    ], 422);
+                }
+            }
+        }
+
+        // ── Validasi Batas Pengajuan Cuti Khusus ─────────────────────────────
+        // Hanya berlaku jika bukan Admin
+        if ($data['type'] === 'cuti_khusus' && !$user->isAdmin()) {
+            $category = \App\Models\SpecialLeaveCategory::find($data['special_leave_category_id']);
+            if ($category) {
+                $categoryName = strtolower($category->name);
+                $startDate = \Carbon\Carbon::parse($data['start_date']);
+                $endDate = \Carbon\Carbon::parse($data['end_date']);
+                $daysRequested = $startDate->diffInDays($endDate) + 1;
+                $today = \Carbon\Carbon::today();
+
+                // 1. Validasi Cuti Menikah
+                if (str_contains($categoryName, 'menikah')) {
+                    // Batas waktu pengajuan: paling lambat 2 minggu (14 hari) sebelum pelaksanaan
+                    $daysDiff = $today->diffInDays($startDate, false);
+                    if ($daysDiff < 14) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => "Pengajuan Cuti Menikah harus diajukan paling lambat 2 minggu (14 hari) sebelum tanggal pelaksanaan.",
+                            'errors'  => [
+                                'start_date' => ["Pengajuan Cuti Menikah minimal diajukan 14 hari sebelum hari pelaksanaan."],
+                            ],
+                        ], 422);
+                    }
+
+                    // Durasi cuti menikah maksimal 3 hari
+                    if ($daysRequested > 3) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => "Durasi Cuti Menikah maksimal adalah 3 hari.",
+                            'errors'  => [
+                                'duration' => ["Durasi Cuti Menikah maksimal 3 hari."],
+                            ],
+                        ], 422);
+                    }
+                }
+
+                // 2. Validasi Cuti Melahirkan
+                elseif (str_contains($categoryName, 'melahirkan') || str_contains($categoryName, 'keguguran')) {
+                    // Batas waktu pengajuan: paling lambat 2 hari setelah kejadian
+                    $daysPast = $startDate->diffInDays($today, false);
+                    if ($daysPast > 2) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => "Permohonan Cuti Melahirkan/Keguguran harus diajukan paling lambat 2 hari setelah kejadian.",
+                            'errors'  => [
+                                'start_date' => ["Cuti Melahirkan/Keguguran paling lambat diajukan 2 hari setelah kejadian."],
+                            ],
+                        ], 422);
+                    }
+
+                    // Durasi cuti melahirkan maksimal 90 hari (3 bulan)
+                    if ($daysRequested > 90) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => "Durasi Cuti Melahirkan/Keguguran maksimal adalah 90 hari.",
+                            'errors'  => [
+                                'duration' => ["Durasi Cuti Melahirkan/Keguguran maksimal 90 hari."],
+                            ],
+                        ], 422);
+                    }
+                }
+
+                // 3. Validasi Duka / Meninggal Keluarga
+                elseif (str_contains($categoryName, 'meninggal') || str_contains($categoryName, 'duka') || str_contains($categoryName, 'kepergian')) {
+                    // Diajukan paling lambat 2 hari setelah kejadian
+                    $daysPast = $startDate->diffInDays($today, false);
+                    if ($daysPast > 2) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => "Pengajuan Cuti Duka/Kematian Keluarga harus diajukan paling lambat 2 hari setelah tanggal kejadian.",
+                            'errors'  => [
+                                'start_date' => ["Cuti duka/kematian keluarga paling lambat diajukan 2 hari setelah kejadian."],
+                            ],
+                        ], 422);
+                    }
+
+                    // Durasi cuti duka maksimal 3 hari
+                    if ($daysRequested > 3) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => "Durasi Cuti Duka/Kematian Keluarga maksimal adalah 3 hari.",
+                            'errors'  => [
+                                'duration' => ["Durasi maksimal 3 hari."],
+                            ],
+                        ], 422);
+                    }
+                }
+
+
+
+                // 5. Validasi Sakit Kekhususan
+                elseif (str_contains($categoryName, 'sakit')) {
+                    // Diajukan paling lambat 3 hari dari tanggal mulai sakit
+                    $daysPast = $startDate->diffInDays($today, false);
+                    if ($daysPast > 3) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => "Pengajuan Sakit Kekhususan harus diajukan paling lambat 3 hari dari tanggal mulai sakit.",
+                            'errors'  => [
+                                'start_date' => ["Pengajuan sakit kekhususan paling lambat diajukan 3 hari dari tanggal mulai."],
+                            ],
+                        ], 422);
+                    }
                 }
             }
         }
@@ -605,17 +828,33 @@ class LeaveRequestController extends Controller
                         ]
                     );
                 }
+
+                // Hapus penugasan shift tanggal-spesifik (work_date) yang konflik dengan masa cuti/sakit ini.
+                // Ini memastikan kalender bulanan konsisten: shift manual tidak menimpa status cuti yang sudah disetujui.
+                // Logika kalender (Tier 3) dan mySchedule (Prioritas 0) akan secara otomatis
+                // menampilkan status cuti/sakit selama rentang ini.
+                \Illuminate\Support\Facades\DB::table('employee_schedule')
+                    ->where('employee_id', $lr->employee_id)
+                    ->whereNotNull('work_date')
+                    ->whereBetween('work_date', [$start->toDateString(), $end->toDateString()])
+                    ->delete();
             }
 
             // Kirim notifikasi sistem secara real-time ke akun karyawan bersangkutan
             $statusLabel = $newStatus === 'approved' ? 'Disetujui ✅' : 'Ditolak ❌';
+            $typeLabel   = match($lr->type) {
+                'cuti'        => 'Cuti Tahunan',
+                'cuti_khusus' => 'Cuti Khusus',
+                'sakit'       => 'Izin Sakit',
+                default       => ucfirst($lr->type),
+            };
+            $notifBody = $newStatus === 'approved'
+                ? "Pengajuan {$typeLabel} Anda untuk " . $lr->start_date->toDateString() . " s/d " . $lr->end_date->toDateString() . " telah disetujui. Jadwal shift Anda pada rentang tanggal tersebut telah otomatis disesuaikan menjadi status {$typeLabel}." . ($data['admin_note'] ? ' Catatan admin: ' . $data['admin_note'] : '')
+                : "Pengajuan {$typeLabel} Anda untuk " . $lr->start_date->toDateString() . " s/d " . $lr->end_date->toDateString() . " ditolak." . ($data['admin_note'] ? ' Catatan admin: ' . $data['admin_note'] : '');
             Notification::create([
                 'user_id' => $lr->employee->user_id,
-                'title'   => 'Pengajuan ' . ucfirst($lr->type) . ' ' . $statusLabel,
-                'body'    => 'Pengajuan ' . $lr->type . ' Anda untuk ' . $lr->start_date->toDateString() .
-                             ' s/d ' . $lr->end_date->toDateString() . ' telah ' .
-                             ($newStatus === 'approved' ? 'disetujui.' : 'ditolak.') .
-                             ($data['admin_note'] ? ' Catatan admin: ' . $data['admin_note'] : ''),
+                'title'   => 'Pengajuan ' . $typeLabel . ' ' . $statusLabel,
+                'body'    => $notifBody,
                 'type'    => 'leave',
                 'data'    => ['leave_request_id' => $lr->id],
             ]);
@@ -682,12 +921,11 @@ class LeaveRequestController extends Controller
             ], 403);
         }
 
-        // Pegawai hanya bisa membatalkan jika status utama masih 'pending' DAN pj_status masih 'pending'.
-        // Jika sudah disetujui oleh PJ Bagian (pj_status === 'approved') atau Admin (status === 'approved'), pegawai tidak dapat membatalkan.
-        if ($leaveRequest->status !== 'pending' || $leaveRequest->pj_status !== 'pending') {
+        // Pegawai hanya bisa membatalkan jika status utama masih 'pending'.
+        if ($leaveRequest->status !== 'pending') {
             return response()->json([
                 'success' => false,
-                'message' => 'Pengajuan yang sudah disetujui oleh PJ Bagian atau Admin tidak dapat dibatalkan oleh pegawai.',
+                'message' => 'Pengajuan yang sudah disetujui atau ditolak oleh Admin tidak dapat dibatalkan.',
             ], 422);
         }
 

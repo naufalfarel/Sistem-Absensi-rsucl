@@ -125,7 +125,7 @@ class ResignationRequestController extends Controller
         $validated = $request->validate([
             'effective_date' => 'required|date',
             'reason'         => 'required|string|min:10|max:2000',
-            'attachment'     => 'nullable|file|mimes:pdf|max:5120',
+            'attachment'     => 'required|file|mimes:pdf|max:5120',
         ]);
 
         $requestDate   = Carbon::today();
