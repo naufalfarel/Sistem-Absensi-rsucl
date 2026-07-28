@@ -1087,8 +1087,13 @@ export interface ShiftSchedule {
   created_by_name?: string | null;
   updated_by?: number | null;
   updated_by_name?: string | null;
+  status?: "pending" | "approved" | "rejected" | "pending_delete";
+  admin_note?: string | null;
+  proposed_by?: number | null;
+  proposed_by_name?: string | null;
   children?: ShiftSchedule[];
   employees?: Array<{
+
     id: number;
     nik_ktp: string;
     phone: string;
@@ -1245,9 +1250,19 @@ export const scheduleApi = {
   ) =>
     api.post<{ success: boolean; message: string }>(
       "/employee-schedules/assign-bulk-date",
-      { assignments },
+      { assignments }
     ),
+  approve: (id: number) =>
+    api.put<{ success: boolean; message: string }>(`/schedules/${id}/approve`, {}),
+
+  reject: (id: number, adminNote: string) =>
+    api.put<{ success: boolean; message: string }>(`/schedules/${id}/reject`, { admin_note: adminNote }),
+  getNote: (departmentId: number, year: number, month: number) =>
+    api.get<{ success: boolean; note: string }>(`/schedule-notes?department_id=${departmentId}&year=${year}&month=${month}`),
+  saveNote: (departmentId: number, year: number, month: number, note: string) =>
+    api.post<{ success: boolean; message: string; note: string }>(`/schedule-notes`, { department_id: departmentId, year, month, note }),
 };
+
 
 // ─────────────────────────────────────────────────────────────────────
 // Kalender Libur & Penugasan Kerja Hari Libur (holidays)
@@ -1610,6 +1625,7 @@ export interface PjBagianUser {
   position?: string;
   pj_bagian_department_id: number;
   pj_bagian_department: string;
+  pj_departments?: { id: number; name: string }[];
 }
 
 export const pjBagianApi = {
@@ -1619,13 +1635,12 @@ export const pjBagianApi = {
     );
   },
 
-  assign: (employeeId: number, departmentId: number) => {
+  assign: (employeeId: number, departmentIds: number[]) => {
     return api.put<{ success: boolean; message: string; data: any }>(
       `/employees/${employeeId}/assign-pj-bagian`,
-      { department_id: departmentId },
+      { department_ids: departmentIds },
     );
   },
-
   revoke: (employeeId: number) => {
     return api.put<{ success: boolean; message: string }>(
       `/employees/${employeeId}/revoke-pj-bagian`,
@@ -1866,6 +1881,49 @@ export const employeeRegistrationApi = {
         password_note?: string;
       };
     }>("/public/employee-registrations/check-status", data);
+  },
+
+  forgotReference: (data: { nik_ktp: string; phone: string }) => {
+    return api.post<{
+      success: boolean;
+      data: Array<{
+        registration_number: string;
+        name: string;
+        status: "pending" | "revision_required" | "approved" | "rejected";
+        created_at: string;
+      }>;
+    }>("/public/employee-registrations/forgot-reference", data);
+  },
+
+  update: (
+    regNumber: string,
+    data: {
+      name: string;
+      nik_ktp: string;
+      email: string;
+      phone: string;
+      gender: string;
+      department_id?: number | null;
+      position_id?: number | null;
+      motor_plate_1?: string | null;
+      motor_plate_2?: string | null;
+      car_plate_1?: string | null;
+      car_plate_2?: string | null;
+      instagram?: string | null;
+      facebook?: string | null;
+      tiktok?: string | null;
+      profile_picture?: string | null;
+    },
+  ) => {
+    return api.put<{
+      success: boolean;
+      message: string;
+      data: {
+        registration_number: string;
+        name: string;
+        created_at: string;
+      };
+    }>(`/public/employee-registrations/${regNumber}`, data);
   },
 
   list: (params?: { status?: string; search?: string }) => {

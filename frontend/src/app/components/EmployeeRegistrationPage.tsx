@@ -7,33 +7,37 @@ import logoImg from '../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.
 interface RegistrationPageProps {
   onBack?: () => void;
   onGoToCheckStatus?: (regNumber?: string) => void;
+  initialData?: any;
+  onClearInitialData?: () => void;
 }
 
-export function EmployeeRegistrationPage({ onBack, onGoToCheckStatus }: RegistrationPageProps) {
+export function EmployeeRegistrationPage({ onBack, onGoToCheckStatus, initialData, onClearInitialData }: RegistrationPageProps) {
   const { logoUrl } = useAuth();
+
+  const isEditMode = !!initialData;
 
   // Meta options
   const [departments, setDepartments] = useState<{ id: number; name: string }[]>([]);
   const [positions, setPositions] = useState<{ id: number; name: string }[]>([]);
   const [metaLoading, setMetaLoading] = useState(true);
 
-  // Form State
+  // Form State - prefill if initialData is provided (edit mode)
   const [form, setForm] = useState({
-    name: '',
-    nik_ktp: '',
-    email: '',
-    profile_picture: '',
-    phone: '',
-    gender: 'Laki-laki',
-    department_id: '',
-    position_id: '',
-    motor_plate_1: '',
-    motor_plate_2: '',
-    car_plate_1: '',
-    car_plate_2: '',
-    instagram: '',
-    facebook: '',
-    tiktok: '',
+    name: initialData?.name || '',
+    nik_ktp: initialData?.nik_ktp || '',
+    email: initialData?.email || '',
+    profile_picture: initialData?.profile_picture || '',
+    phone: initialData?.phone || '',
+    gender: initialData?.gender || 'Laki-laki',
+    department_id: initialData?.department_id ? String(initialData.department_id) : '',
+    position_id: initialData?.position_id ? String(initialData.position_id) : '',
+    motor_plate_1: initialData?.motor_plate_1 || '',
+    motor_plate_2: initialData?.motor_plate_2 || '',
+    car_plate_1: initialData?.car_plate_1 || '',
+    car_plate_2: initialData?.car_plate_2 || '',
+    instagram: initialData?.instagram || '',
+    facebook: initialData?.facebook || '',
+    tiktok: initialData?.tiktok || '',
   });
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -99,7 +103,7 @@ export function EmployeeRegistrationPage({ onBack, onGoToCheckStatus }: Registra
     setErrorMsg(null);
 
     try {
-      const res = await employeeRegistrationApi.submit({
+      const payload = {
         name: form.name.trim(),
         nik_ktp: form.nik_ktp.trim(),
         email: form.email.trim(),
@@ -115,7 +119,11 @@ export function EmployeeRegistrationPage({ onBack, onGoToCheckStatus }: Registra
         facebook: form.facebook.trim() || null,
         tiktok: form.tiktok.trim() || null,
         profile_picture: form.profile_picture || null,
-      });
+      };
+
+      const res = isEditMode
+        ? await employeeRegistrationApi.update(initialData.registration_number, payload)
+        : await employeeRegistrationApi.submit(payload);
 
       if (res.success) {
         setSuccessData(res.data);
@@ -158,12 +166,14 @@ export function EmployeeRegistrationPage({ onBack, onGoToCheckStatus }: Registra
                 </div>
               )}
               <div>
-                <h1 className="text-[16px] font-bold leading-tight">Formulir Onboarding Pegawai Baru</h1>
+                <h1 className="text-[16px] font-bold leading-tight">
+                  {isEditMode ? 'Formulir Revisi Data Pendaftaran' : 'Formulir Onboarding Pegawai Baru'}
+                </h1>
                 <p className="text-[11px] text-white/80 mt-0.5">Rumah Sakit Umum Cempaka Lima</p>
               </div>
             </div>
 
-            {onGoToCheckStatus && (
+            {onGoToCheckStatus && !isEditMode && (
               <button
                 type="button"
                 onClick={() => onGoToCheckStatus()}
@@ -183,23 +193,31 @@ export function EmployeeRegistrationPage({ onBack, onGoToCheckStatus }: Registra
               <div className="bg-slate-900 text-white p-4.5 rounded-2xl text-[12px] leading-relaxed font-normal space-y-3">
                 <div className="flex items-center gap-2 border-b border-slate-800 pb-2.5">
                   <UserPlus size={16} className="text-emerald-400 flex-shrink-0" />
-                  <p className="font-bold text-white text-[13px]">Panduan Pendaftaran & Alur Akun Pegawai Baru</p>
+                  <p className="font-bold text-white text-[13px]">
+                    {isEditMode ? 'Panduan Revisi Data Pengajuan Anda' : 'Panduan Pendaftaran & Alur Akun Pegawai Baru'}
+                  </p>
                 </div>
                 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-[11px] text-slate-300">
-                  <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700/60">
-                    <span className="font-bold text-emerald-400 block mb-0.5">1. Isi Data Wajib & Tambahan</span>
-                    Lengkapi data wajib seperti <strong>Foto Profil, Nama, NIK, Email, No HP, Departemen, & Posisi</strong>. Bagian Sosial Media & Data Kendaraan boleh dikosongkan jika tidak ada.
+                {isEditMode ? (
+                  <p className="text-[11px] text-slate-300">
+                    Anda sedang berada dalam <strong>mode revisi</strong> untuk nomor pengajuan <strong>{initialData.registration_number}</strong>. Silakan perbarui data di bawah (misalnya mengganti berkas foto, membetulkan NIK/No HP, dll.) berdasarkan catatan perbaikan dari admin RSUCL, lalu klik <strong>"Kirim Perbaikan Data"</strong> di bagian bawah.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-[11px] text-slate-300">
+                    <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700/60">
+                      <span className="font-bold text-emerald-400 block mb-0.5">1. Isi Data Wajib & Tambahan</span>
+                      Lengkapi data wajib seperti <strong>Foto Profil, Nama, NIK, Email, No HP, Departemen, & Posisi</strong>. Bagian Sosial Media & Data Kendaraan boleh dikosongkan jika tidak ada.
+                    </div>
+                    <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700/60">
+                      <span className="font-bold text-emerald-400 block mb-0.5">2. Simpan Nomor Referensi</span>
+                      Setelah mengirim formulir pendaftaran, pastikan Anda <strong>menyalin & menyimpan Nomor Referensi Pendaftaran</strong> unik yang diterbitkan oleh sistem.
+                    </div>
+                    <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700/60">
+                      <span className="font-bold text-emerald-400 block mb-0.5">3. Pantau & Dapatkan Password</span>
+                      Lakukan pengecekan berkala di menu <strong>Cek Status</strong> menggunakan NIK & Nomor Referensi. Setelah disetujui oleh Admin, akun aktif dan password login Anda akan tampil.
+                    </div>
                   </div>
-                  <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700/60">
-                    <span className="font-bold text-emerald-400 block mb-0.5">2. Simpan Nomor Referensi</span>
-                    Setelah mengirim formulir pendaftaran, pastikan Anda <strong>menyalin & menyimpan Nomor Referensi Pendaftaran</strong> unik yang diterbitkan oleh sistem.
-                  </div>
-                  <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700/60">
-                    <span className="font-bold text-emerald-400 block mb-0.5">3. Pantau & Dapatkan Password</span>
-                    Lakukan pengecekan berkala di menu <strong>Cek Status</strong> menggunakan NIK & Nomor Referensi. Setelah disetujui oleh Admin, akun aktif dan password login Anda akan tampil.
-                  </div>
-                </div>
+                )}
               </div>
 
               {errorMsg && (
@@ -514,10 +532,10 @@ export function EmployeeRegistrationPage({ onBack, onGoToCheckStatus }: Registra
                   {submitting ? (
                     <>
                       <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      <span>Mengirim Pengajuan...</span>
+                      <span>{isEditMode ? 'Mengirim Perbaikan...' : 'Mengirim Pengajuan...'}</span>
                     </>
                   ) : (
-                    'Kirim Formulir Pendaftaran'
+                    isEditMode ? 'Kirim Perbaikan Data' : 'Kirim Formulir Pendaftaran'
                   )}
                 </button>
               </div>
@@ -529,33 +547,39 @@ export function EmployeeRegistrationPage({ onBack, onGoToCheckStatus }: Registra
               </div>
 
               <div>
-                <h2 className="text-[18px] font-bold text-gray-900">Pengajuan Berhasil Dikirim!</h2>
+                <h2 className="text-[18px] font-bold text-gray-900">
+                  {isEditMode ? 'Revisi Pengajuan Berhasil Terkirim!' : 'Pengajuan Berhasil Dikirim!'}
+                </h2>
                 <p className="text-[12.5px] text-gray-500 mt-1 max-w-md mx-auto">
-                  Terima kasih, <strong>{successData.name}</strong>. Formulir onboarding pegawai Anda telah masuk ke dalam draf antrean admin RSUCL.
+                  Terima kasih, <strong>{successData.name}</strong>. {isEditMode ? 'Perbaikan data Anda telah tersimpan dan status kembali Pending untuk segera diverifikasi ulang oleh admin.' : 'Formulir onboarding pegawai Anda telah masuk ke dalam draf antrean admin RSUCL.'}
                 </p>
               </div>
 
               {/* Reference Box */}
-              <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white p-6 rounded-2xl space-y-3 shadow-lg max-w-md mx-auto">
-                <p className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
-                  Nomor Referensi Pendaftaran Anda
-                </p>
-                <div className="flex items-center justify-between bg-slate-950/70 p-3.5 rounded-xl border border-slate-700">
-                  <span className="font-mono text-xl font-bold tracking-wider text-emerald-400">
-                    {successData.registration_number}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => copyRegNumber(successData.registration_number)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#16A34A] hover:bg-[#0d9240] text-white rounded-lg text-[11px] font-bold transition-all cursor-pointer active:scale-95"
-                  >
-                    {copiedReg ? <Check size={13} /> : <Copy size={13} />}
-                    <span>{copiedReg ? 'Tersalin' : 'Salin'}</span>
-                  </button>
+              <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white p-5 rounded-2xl space-y-3.5 shadow-lg max-w-md mx-auto">
+                <div className="space-y-1">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    Nomor Referensi Pendaftaran Anda
+                  </p>
+                  <div className="flex items-center justify-between bg-slate-950/70 p-3.5 rounded-xl border border-slate-700">
+                    <span className="font-mono text-xl font-bold tracking-wider text-emerald-400">
+                      {successData.registration_number}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => copyRegNumber(successData.registration_number)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#16A34A] hover:bg-[#0d9240] text-white rounded-lg text-[11px] font-bold transition-all cursor-pointer active:scale-95"
+                    >
+                      {copiedReg ? <Check size={13} /> : <Copy size={13} />}
+                      <span>{copiedReg ? 'Tersalin' : 'Salin'}</span>
+                    </button>
+                  </div>
                 </div>
-                <p className="text-[11px] text-slate-300 leading-snug">
-                  Catat atau salin nomor di atas. Gunakan nomor referensi ini beserta NIK KTP Anda untuk mengecek status persetujuan & melihat password akun di kemudian hari.
-                </p>
+
+                {/* Warning box mencolok agar tidak lupa ss / simpan */}
+                <div className="bg-amber-500/15 border border-amber-500/30 p-3 rounded-xl text-left text-amber-200 text-[10.5px] leading-relaxed">
+                  <strong>⚠️ PENTING / HARAP DIINGAT:</strong> Silakan screenshot layar ini atau catat/salin Nomor Referensi di atas. Jika Anda kehilangan nomor referensi ini, Anda <strong>tidak akan bisa</strong> mengecek status persetujuan atau melihat password akun Anda nantinya!
+                </div>
               </div>
 
               <div className="pt-2 flex flex-col sm:flex-row gap-3 justify-center max-w-md mx-auto">

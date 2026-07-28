@@ -16,6 +16,11 @@ return Application::configure(basePath: dirname(__DIR__))
         // Izinkan frontend Vite (localhost:5173) mengakses API dengan cookie/Sanctum
         $middleware->statefulApi();
 
+        // Kecualikan semua rute API dari pengecekan CSRF karena frontend menggunakan Bearer Token
+        $middleware->validateCsrfTokens(except: [
+            'api/*',
+        ]);
+
         // Alias middleware role admin, pj_bagian, & super_admin
         $middleware->alias([
             'admin'        => \App\Http\Middleware\EnsureIsAdmin::class,

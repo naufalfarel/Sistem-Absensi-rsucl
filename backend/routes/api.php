@@ -35,6 +35,8 @@ Route::get('/settings', [SettingController::class, 'index']);
 Route::get('/public/employee-registrations/meta', [PublicEmployeeRegistrationController::class, 'meta']);
 Route::post('/public/employee-registrations', [PublicEmployeeRegistrationController::class, 'store']);
 Route::post('/public/employee-registrations/check-status', [PublicEmployeeRegistrationController::class, 'checkStatus'])->middleware('throttle:5,1');
+Route::post('/public/employee-registrations/forgot-reference', [PublicEmployeeRegistrationController::class, 'forgotReference']);
+Route::put('/public/employee-registrations/{registration_number}', [PublicEmployeeRegistrationController::class, 'update']);
 
 // ── Rute Terproteksi (Wajib menggunakan token Laravel Sanctum) ─────────────
 Route::middleware('auth:sanctum')->group(function () {
@@ -138,11 +140,14 @@ Route::middleware('auth:sanctum')->group(function () {
         // Kalender bulanan (jadwal per-tanggal)
         Route::post('/employee-schedules/assign-date', [ScheduleController::class, 'assignEmployeeScheduleByDate']);
         Route::post('/employee-schedules/assign-bulk-date', [ScheduleController::class, 'assignBulkByDate']);
-
         // Shift (Schedules) CRUD for both Admin and PJ Bagian
         Route::post('/schedules', [ScheduleController::class, 'store']);
         Route::put('/schedules/{schedule}', [ScheduleController::class, 'update']);
         Route::delete('/schedules/{schedule}', [ScheduleController::class, 'destroy']);
+
+        // Catatan cetak jadwal bulanan
+        Route::get('/schedule-notes', [ScheduleController::class, 'getScheduleNote']);
+        Route::post('/schedule-notes', [ScheduleController::class, 'saveScheduleNote']);
     });
 
     // ── RUTE KHUSUS ADMINISTRATOR (Hanya untuk User dengan Role 'admin') ──────
@@ -225,10 +230,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/leave-requests/all-processed',       [LeaveRequestController::class, 'destroyAll']);
         // Menghapus satu data pengajuan cuti tertentu
         Route::delete('/leave-requests/{leaveRequest}',       [LeaveRequestController::class, 'destroy']);
-
-        // Persetujuan Usulan Shift (Shift Assignment Proposals - Admin Only)
-        Route::put('/shift-assignment-proposals/{id}/approve', [\App\Http\Controllers\ShiftAssignmentProposalController::class, 'approve']);
-        Route::put('/shift-assignment-proposals/{id}/reject', [\App\Http\Controllers\ShiftAssignmentProposalController::class, 'reject']);
+        // Persetujuan Usulan Shift (Shift Master/Template - Admin Only)
+        Route::put('/schedules/{id}/approve', [ScheduleController::class, 'approve']);
+        Route::put('/schedules/{id}/reject', [ScheduleController::class, 'reject']);
 
 
         // API Resource standar untuk CRUD data Shift (Schedules) kecuali endpoint Detail (show) - Moved to pj_or_admin group

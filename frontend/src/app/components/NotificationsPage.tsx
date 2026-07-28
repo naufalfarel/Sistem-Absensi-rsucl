@@ -109,14 +109,18 @@ export function NotificationsPage({ onUpdateCount, onNavigate, userRole = 'emplo
         }
       }
 
-      if (text.includes('cuti') || text.includes('sakit') || type === 'leave') {
+      if (text.includes('usulan shift') || text.includes('persetujuan shift') || type === 'shift_approval' || type === 'shift-approval') {
+        onNavigate('shift');
+      } else if (text.includes('cuti') || text.includes('sakit') || type === 'leave') {
         onNavigate('leave');
       } else if (text.includes('lembur') || type === 'overtime') {
         onNavigate('overtime_personal');
       } else if (text.includes('tugas') || type.includes('assignment')) {
         onNavigate('leave');
       } else if (text.includes('shift') || text.includes('jadwal') || type === 'schedule') {
-        onNavigate('shift_proposals');
+        onNavigate('shift');
+
+
       } else if (text.includes('absen') || type === 'attendance') {
         onNavigate('history');
       } else if (text.includes('resign') || text.includes('pengunduran') || type === 'resignation') {
@@ -183,12 +187,16 @@ export function NotificationsPage({ onUpdateCount, onNavigate, userRole = 'emplo
   });
 
   const getIconProps = (type: string, text: string) => {
+    if (text.includes('usulan shift') || text.includes('persetujuan shift') || type === 'shift_approval' || type === 'shift-approval') {
+      return { icon: Clock, color: '#16A34A', bg: '#F0FDF4', label: 'Usulan Shift Baru' };
+    }
     if (text.includes('cuti') || type === 'leave') {
       return { icon: Calendar, color: '#7C3AED', bg: '#F5F3FF', label: 'Cuti & Sakit' };
     }
     if (text.includes('lembur') || type === 'overtime') {
       return { icon: Clock, color: '#EA580C', bg: '#FFF7ED', label: 'Lembur' };
     }
+
     if (text.includes('tugas') || type.includes('assignment')) {
       return { icon: FileText, color: '#16A34A', bg: '#F0FDF4', label: 'Surat Tugas' };
     }

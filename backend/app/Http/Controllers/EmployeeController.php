@@ -31,9 +31,8 @@ class EmployeeController extends Controller
     {
         $user = $request->user();
         $query = Employee::with(['user', 'department', 'position', 'todayAttendance', 'disciplinarySanctions']);
-
         if ($user->role === 'pj_bagian') {
-            $query->where('department_id', $user->pj_bagian_department_id);
+            $query->whereIn('department_id', $user->getPjDepartmentIds());
         }
 
         $employees = $query->get()->map(fn($e) => $this->formatEmployee($e));
@@ -172,7 +171,7 @@ class EmployeeController extends Controller
     public function listPjBagian()
     {
         $pjList = User::where('role', 'pj_bagian')
-            ->with(['pjBagianDepartment', 'employee.position'])
+            ->with(['pjDepartments', 'employee.position'])
             ->get()
             ->map(function ($u) {
                 return [
@@ -184,8 +183,12 @@ class EmployeeController extends Controller
                     'username'                => $u->username,
                     'profile_picture'         => $u->profile_picture ? url($u->profile_picture) : null,
                     'position'                => $u->employee?->position?->name,
-                    'pj_bagian_department_id' => $u->pj_bagian_department_id,
-                    'pj_bagian_department'    => $u->pjBagianDepartment?->name,
+                    'pj_bagian_department_id' => $u->pjDepartments->first()?->id,
+                    'pj_bagian_department'    => $u->pjDepartments->first()?->name,
+                    'pj_departments'          => $u->pjDepartments->map(fn($d) => [
+                        'id'   => $d->id,
+                        'name' => $d->name
+                    ])->toArray(),
                 ];
             });
 
@@ -196,68 +199,100 @@ class EmployeeController extends Controller
      * PUT /api/employees/{id}/assign-pj-bagian
      * 
      * Menugaskan karyawan sebagai PJ Bagian untuk departemen tertentu.
-     * Jika departemen sudah punya PJ Bagian aktif, PJ lama otomatis dinonaktifkan.
+     * Mendukung rangkap beberapa departemen sekaligus.
      */
     public function assignPjBagian(Request $request, Employee $employee)
     {
         $data = $request->validate([
-            'department_id' => 'required|exists:departments,id',
+            'department_ids'   => 'nullable|array',
+            'department_ids.*' => 'exists:departments,id',
+            'department_id'    => 'nullable|exists:departments,id', // Fallback legacy
         ]);
 
-        $departmentId = $data['department_id'];
-        $targetUser   = $employee->user;
+        $departmentIds = [];
+        if (isset($data['department_ids']) && is_array($data['department_ids'])) {
+            $departmentIds = $data['department_ids'];
+        } elseif (isset($data['department_id'])) {
+            $departmentIds = [$data['department_id']];
+        }
+
+        if (empty($departmentIds)) {
+            return response()->json(['success' => false, 'message' => 'Minimal pilih 1 unit kerja / departemen untuk diawasi.'], 422);
+        }
+
+        $targetUser = $employee->user;
 
         if (!$targetUser) {
             return response()->json(['success' => false, 'message' => 'Akun user karyawan tidak ditemukan.'], 404);
         }
 
-        // Cek & nonaktifkan PJ Bagian lama pada departemen yang sama
-        $existingPj = User::where('role', 'pj_bagian')
-            ->where('pj_bagian_department_id', $departmentId)
-            ->where('id', '!=', $targetUser->id)
-            ->first();
+        // Cek & sesuaikan PJ Bagian lama pada departemen yang dipilih
+        foreach ($departmentIds as $deptId) {
+            $otherPjs = User::where('role', 'pj_bagian')
+                ->where('id', '!=', $targetUser->id)
+                ->whereHas('pjDepartments', function ($q) use ($deptId) {
+                    $q->where('departments.id', $deptId);
+                })
+                ->get();
 
-        if ($existingPj) {
-            $existingPj->update([
-                'role'                    => 'employee',
-                'pj_bagian_department_id' => null,
-            ]);
-            \App\Models\Notification::create([
-                'user_id' => $existingPj->id,
-                'title'   => 'Status PJ Bagian Dicabut',
-                'body'    => 'Peran Penanggung Jawab Bagian Anda telah dialihkan ke pegawai lain oleh Administrator.',
-                'type'    => 'system',
-                'data'    => [],
-            ]);
+            foreach ($otherPjs as $pj) {
+                $pj->pjDepartments()->detach($deptId);
+                
+                // Jika tidak memegang departemen apa-apa lagi, turunkan ke employee
+                if ($pj->pjDepartments()->count() === 0) {
+                    $pj->update([
+                        'role'                    => 'employee',
+                        'pj_bagian_department_id' => null,
+                    ]);
+                    \App\Models\Notification::create([
+                        'user_id' => $pj->id,
+                        'title'   => 'Status PJ Bagian Dicabut',
+                        'body'    => 'Peran Penanggung Jawab Bagian Anda telah dicabut sepenuhnya oleh Administrator.',
+                        'type'    => 'system',
+                        'data'    => [],
+                    ]);
+                } else {
+                    $pj->update([
+                        'pj_bagian_department_id' => $pj->pjDepartments->first()?->id,
+                    ]);
+                }
+            }
         }
 
-        // Tugaskan sebagai PJ Bagian
+        // Tugaskan sebagai PJ Bagian untuk departemen-departemen tersebut
         $targetUser->update([
             'role'                    => 'pj_bagian',
-            'pj_bagian_department_id' => $departmentId,
+            'pj_bagian_department_id' => $departmentIds[0], // simpan departemen pertama di field legacy
         ]);
 
-        $department = Department::find($departmentId);
+        $targetUser->pjDepartments()->sync($departmentIds);
+
+        // Ambil nama departemen untuk notifikasi
+        $deptNames = Department::whereIn('id', $departmentIds)->pluck('name')->join(', ');
 
         \App\Models\Notification::create([
             'user_id' => $targetUser->id,
             'title'   => 'Anda Ditugaskan sebagai PJ Bagian 🏥',
-            'body'    => 'Anda kini menjadi Penanggung Jawab Bagian untuk departemen ' . ($department?->name ?? '') . '.',
+            'body'    => 'Anda kini menjadi Penanggung Jawab Bagian untuk unit kerja: ' . $deptNames . '.',
             'type'    => 'system',
-            'data'    => ['department_id' => $departmentId],
+            'data' => ['department_ids' => $departmentIds],
         ]);
 
-        $targetUser->load('pjBagianDepartment');
+        $targetUser->load('pjDepartments');
 
         return response()->json([
             'success' => true,
-            'message' => $targetUser->name . ' berhasil ditugaskan sebagai PJ Bagian untuk departemen ' . ($department?->name ?? '') . '.',
+            'message' => $targetUser->name . ' berhasil ditugaskan sebagai PJ Bagian untuk unit: ' . $deptNames . '.',
             'data'    => [
                 'user_id'                 => $targetUser->id,
                 'name'                    => $targetUser->name,
                 'role'                    => $targetUser->role,
                 'pj_bagian_department_id' => $targetUser->pj_bagian_department_id,
-                'pj_bagian_department'    => $targetUser->pjBagianDepartment?->name,
+                'pj_bagian_department'    => $targetUser->pjDepartments->first()?->name,
+                'pj_departments'          => $targetUser->pjDepartments->map(fn($d) => [
+                    'id'   => $d->id,
+                    'name' => $d->name
+                ])->toArray(),
             ],
         ]);
     }
@@ -284,6 +319,8 @@ class EmployeeController extends Controller
             'pj_bagian_department_id' => null,
         ]);
 
+        $targetUser->pjDepartments()->detach();
+
         \App\Models\Notification::create([
             'user_id' => $targetUser->id,
             'title'   => 'Status PJ Bagian Dicabut',
@@ -297,7 +334,6 @@ class EmployeeController extends Controller
             'message' => $targetUser->name . ' berhasil dicabut dari status PJ Bagian.',
         ]);
     }
-
     // ─────────────────────────────────────────────────────────────────────────
     // PRIVATE HELPERS
     // ─────────────────────────────────────────────────────────────────────────

@@ -104,7 +104,9 @@ export function NotificationsTab({ onUpdateCount, onNavigate }: NotificationsTab
     const body = (n.body || '').toLowerCase();
     const text = `${type} ${title} ${body}`;
 
-    if (text.includes('cuti') || text.includes('sakit') || text.includes('izin') || type === 'leave') {
+    if (text.includes('usulan shift') || text.includes('persetujuan shift') || type === 'shift_approval' || type === 'shift-approval') {
+      onNavigate('shift_approval');
+    } else if (text.includes('cuti') || text.includes('sakit') || text.includes('izin') || type === 'leave') {
       onNavigate('leave');
     } else if (text.includes('lembur') || type === 'overtime') {
       onNavigate('overtime');
@@ -160,8 +162,10 @@ export function NotificationsTab({ onUpdateCount, onNavigate }: NotificationsTab
     }
     return true;
   });
-
   const getIconProps = (type: string, text: string) => {
+    if (text.includes('usulan shift') || text.includes('persetujuan shift') || type === 'shift_approval' || type === 'shift-approval') {
+      return { icon: Clock, color: '#16A34A', bg: '#F0FDF4', label: 'Persetujuan Shift Baru' };
+    }
     if (text.includes('cuti') || type === 'leave') {
       return { icon: Calendar, color: '#7C3AED', bg: '#F5F3FF', label: 'Pengajuan Cuti' };
     }

@@ -110,11 +110,12 @@ class LeaveRequestController extends Controller
             } elseif ($user->isPjBagian()) {
                 // PJ Bagian hanya melihat pengajuan dari pegawai di departemennya
                 // (termasuk miliknya sendiri — dia boleh lihat, tapi tidak boleh approve miliknya)
-                if (!$user->pj_bagian_department_id) {
+                $deptIds = $user->getPjDepartmentIds();
+                if (empty($deptIds)) {
                     return response()->json(['success' => false, 'message' => 'PJ Bagian belum ditugaskan ke departemen.'], 422);
                 }
-                $query->whereHas('employee', function ($q) use ($user) {
-                    $q->where('department_id', $user->pj_bagian_department_id);
+                $query->whereHas('employee', function ($q) use ($deptIds) {
+                    $q->whereIn('department_id', $deptIds);
                 });
             } else {
                 // Karyawan biasa: hanya lihat milik sendiri
@@ -496,12 +497,13 @@ class LeaveRequestController extends Controller
                 'attachment_leave_' . $employee->id . '_' . time()
             );
         }
-
         // Cari PJ Bagian yang bertanggung jawab atas departemen karyawan ini
         $pjBagian = null;
         if ($employee->department_id) {
             $pjBagian = \App\Models\User::where('role', 'pj_bagian')
-                ->where('pj_bagian_department_id', $employee->department_id)
+                ->whereHas('pjDepartments', function ($q) use ($employee) {
+                    $q->where('departments.id', $employee->department_id);
+                })
                 ->first();
         }
 
@@ -667,9 +669,9 @@ class LeaveRequestController extends Controller
                     'message' => 'Anda tidak dapat memproses pengajuan cuti milik sendiri.',
                 ], 403);
             }
-
-            // PJ Bagian hanya boleh proses pengajuan dari departemennya
-            if ($lr->employee?->department_id !== $user->pj_bagian_department_id) {
+            // PJ Bagian hanya boleh proses pengajuan dari departemen yang diawasi
+            $deptIds = $user->getPjDepartmentIds();
+            if (!in_array($lr->employee?->department_id, $deptIds)) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Anda hanya dapat memproses pengajuan dari departemen yang Anda awasi.',
@@ -677,7 +679,6 @@ class LeaveRequestController extends Controller
             }
         }
 
-        // Cegah pemrosesan ulang data yang sudah disetujui/ditolak di tingkat final
         if ($lr->status !== 'pending') {
             return response()->json([
                 'success' => false,

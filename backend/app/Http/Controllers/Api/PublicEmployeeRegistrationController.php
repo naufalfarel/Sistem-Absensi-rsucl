@@ -178,10 +178,24 @@ class PublicEmployeeRegistrationController extends Controller
             ], 422);
         }
 
-        // Susun data response status
+        // Susun data response status lengkap agar bisa di-load oleh form revisi
         $responseData = [
             'registration_number' => $reg->registration_number,
             'name'                => $reg->name,
+            'nik_ktp'             => $reg->nik_ktp,
+            'email'               => $reg->email,
+            'phone'               => $reg->phone,
+            'gender'              => $reg->gender,
+            'department_id'       => $reg->department_id,
+            'position_id'         => $reg->position_id,
+            'motor_plate_1'       => $reg->motor_plate_1,
+            'motor_plate_2'       => $reg->motor_plate_2,
+            'car_plate_1'         => $reg->car_plate_1,
+            'car_plate_2'         => $reg->car_plate_2,
+            'instagram'           => $reg->instagram,
+            'facebook'            => $reg->facebook,
+            'tiktok'              => $reg->tiktok,
+            'profile_picture'     => $reg->profile_picture,
             'status'              => $reg->status,
             'admin_note'          => $reg->admin_note,
             'created_at'          => $reg->created_at?->toDateTimeString(),
@@ -212,6 +226,142 @@ class PublicEmployeeRegistrationController extends Controller
         return response()->json([
             'success' => true,
             'data'    => $responseData,
+        ]);
+    }
+
+    /**
+     * POST /api/public/employee-registrations/forgot-reference
+     * Membantu pegawai mencari nomor referensi pendaftaran berdasarkan NIK KTP dan No HP.
+     */
+    public function forgotReference(Request $request)
+    {
+        $request->validate([
+            'nik_ktp' => 'required|string',
+            'phone'   => 'required|string',
+        ]);
+
+        $nik   = trim($request->nik_ktp);
+        $phone = trim($request->phone);
+
+        $registrations = EmployeeRegistration::where('nik_ktp', $nik)
+            ->where('phone', $phone)
+            ->select('registration_number', 'name', 'status', 'created_at')
+            ->orderBy('id', 'desc')
+            ->get();
+
+        if ($registrations->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Tidak ditemukan data pengajuan pendaftaran dengan NIK KTP dan Nomor HP tersebut.',
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data'    => $registrations
+        ]);
+    }
+
+    /**
+     * PUT /api/public/employee-registrations/{registration_number}
+     * Mengubah/merevisi data pendaftaran calon pegawai yang membutuhkan revisi.
+     */
+    public function update(Request $request, $regNumber)
+    {
+        $reg = EmployeeRegistration::where('registration_number', $regNumber)->first();
+        if (!$reg) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Data pengajuan tidak ditemukan.',
+            ], 404);
+        }
+
+        // Hanya boleh direvisi jika berstatus revision_required atau pending
+        if (!in_array($reg->status, ['revision_required', 'pending'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Pengajuan yang sudah disetujui atau ditolak tidak dapat diubah.',
+            ], 422);
+        }
+
+        $request->validate([
+            'name'          => 'required|string|max:255',
+            'nik_ktp'       => 'required|string|max:30',
+            'email'         => 'required|email|max:255',
+            'phone'         => 'required|string|max:250',
+            'gender'        => 'required|in:Laki-laki,Perempuan',
+            'department_id' => 'required|exists:departments,id',
+            'position_id'   => 'required|exists:positions,id',
+            'motor_plate_1' => 'nullable|string|max:15',
+            'motor_plate_2' => 'nullable|string|max:15',
+            'car_plate_1'   => 'nullable|string|max:15',
+            'car_plate_2'   => 'nullable|string|max:15',
+            'instagram'     => 'nullable|string|max:100',
+            'facebook'      => 'nullable|string|max:100',
+            'tiktok'        => 'nullable|string|max:100',
+            'profile_picture' => 'nullable|string',
+        ]);
+
+        $nikKtp = trim($request->nik_ktp);
+        $email  = trim($request->email);
+
+        // Jika NIK atau email diubah, pastikan belum terdaftar di pegawai aktif
+        if ($nikKtp !== $reg->nik_ktp || $email !== $reg->email) {
+            $existingUser = User::where('nik_ktp', $nikKtp)->orWhere('email', $email)->first();
+            if ($existingUser) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'NIK KTP atau Email baru sudah terdaftar sebagai akun pegawai di sistem.',
+                ], 422);
+            }
+        }
+
+        // Proses penyimpanan file foto profil jika dikirim base64 baru
+        $profilePicturePath = $reg->getRawOriginal('profile_picture');
+        if ($request->filled('profile_picture')) {
+            $imgData = $request->input('profile_picture');
+            if (preg_match('/^data:image\/(\w+);base64,/', $imgData, $type)) {
+                $imgData = substr($imgData, strpos($imgData, ',') + 1);
+                $type = strtolower($type[1]); // png, jpg, jpeg
+                if (in_array($type, ['jpg', 'jpeg', 'png'])) {
+                    $imgData = base64_decode($imgData);
+                    if ($imgData !== false) {
+                        $fileName = 'profile_reg_' . uniqid() . '_' . time() . '.' . $type;
+                        \Illuminate\Support\Facades\Storage::disk('public')->put('profiles/' . $fileName, $imgData);
+                        $profilePicturePath = '/storage/profiles/' . $fileName;
+                    }
+                }
+            }
+        }
+
+        $reg->update([
+            'name'            => trim($request->name),
+            'nik_ktp'         => $nikKtp,
+            'email'           => $email,
+            'profile_picture' => $profilePicturePath,
+            'phone'           => trim($request->phone),
+            'gender'          => $request->gender,
+            'department_id'   => $request->department_id,
+            'position_id'     => $request->position_id,
+            'status'          => 'pending',
+            'admin_note'      => null,
+            'motor_plate_1'   => $request->motor_plate_1 ? trim($request->motor_plate_1) : null,
+            'motor_plate_2'   => $request->motor_plate_2 ? trim($request->motor_plate_2) : null,
+            'car_plate_1'     => $request->car_plate_1 ? trim($request->car_plate_1) : null,
+            'car_plate_2'     => $request->car_plate_2 ? trim($request->car_plate_2) : null,
+            'instagram'       => $request->instagram ? trim($request->instagram) : null,
+            'facebook'        => $request->facebook ? trim($request->facebook) : null,
+            'tiktok'          => $request->tiktok ? trim($request->tiktok) : null,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Data pengajuan pendaftaran berhasil diperbarui. Status kembali pending untuk ditinjau.',
+            'data'    => [
+                'registration_number' => $reg->registration_number,
+                'name'                => $reg->name,
+                'created_at'          => $reg->created_at->toDateTimeString(),
+            ]
         ]);
     }
 }

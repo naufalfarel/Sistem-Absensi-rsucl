@@ -67,6 +67,14 @@ class User extends Authenticatable
     }
 
     /**
+     * Relasi ke seluruh departemen yang diawasi (Many-to-Many, mendukung rangkap PJ Bagian).
+     */
+    public function pjDepartments()
+    {
+        return $this->belongsToMany(Department::class, 'pj_departments', 'user_id', 'department_id');
+    }
+
+    /**
      * Memeriksa apakah pengguna memiliki role admin atau super admin.
      * 
      * @return bool True jika role adalah 'admin' atau 'super_admin'
@@ -106,4 +114,16 @@ class User extends Authenticatable
     {
         return $this->role === 'admin' || $this->role === 'super_admin' || $this->role === 'pj_bagian';
     }
-}
+
+    /**
+     * Mengambil daftar ID departemen yang diawasi oleh PJ Bagian ini.
+     * 
+     * @return array
+     */
+    public function getPjDepartmentIds(): array
+    {
+        if ($this->isPjBagian()) {
+            return $this->pjDepartments()->pluck('departments.id')->toArray();
+        }
+        return [];
+    }}

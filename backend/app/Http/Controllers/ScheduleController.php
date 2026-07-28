@@ -24,7 +24,12 @@ class ScheduleController extends Controller
         $query = Schedule::whereNull('parent_id');
 
         if ($user->isPjBagian()) {
-            $deptId = $user->pj_bagian_department_id;
+            $deptIds = $user->getPjDepartmentIds();
+            $deptId = $request->query('department_id');
+            if (!$deptId || !in_array((int)$deptId, $deptIds)) {
+                $deptId = !empty($deptIds) ? $deptIds[0] : null;
+            }
+            
             // PJ Bagian hanya melihat master shift yang dimiliki oleh departemennya sendiri ATAU shift umum
             $query->where(function ($q) use ($deptId) {
                 $q->where('owner_department_id', $deptId)
@@ -70,21 +75,28 @@ class ScheduleController extends Controller
     {
         // Validasi input data shift baru
         $data = $request->validated();
-        
         $user = $request->user();
         if ($user->isPjBagian()) {
-            $deptId = $user->pj_bagian_department_id;
+            $deptIds = $user->getPjDepartmentIds();
+            $deptId = $request->input('department_id') ?? $request->input('owner_department_id');
+            if (!$deptId || !in_array((int)$deptId, $deptIds)) {
+                $deptId = !empty($deptIds) ? $deptIds[0] : null;
+            }
             if (!$deptId) {
                 return response()->json(['success' => false, 'message' => 'PJ Bagian belum ditugaskan ke departemen.'], 422);
             }
             $data['owner_department_id'] = $deptId;
             $data['created_by'] = $user->id;
+            $data['status'] = 'pending';
+            $data['proposed_by'] = $user->id;
         } else {
             $data['created_by'] = $user->id;
+            $data['status'] = 'approved';
         }
 
         // Buat jadwal shift di database
         $schedule = Schedule::create($data);
+
 
         // Jika ada children yang dikirim dari form, buat sub-shift sesuai array
         if (!isset($data['parent_id']) || $data['parent_id'] === null) {
@@ -102,7 +114,6 @@ class ScheduleController extends Controller
                                 ->format('H:i:s');
                         } catch (\Exception $e) {}
                     }
-
                     Schedule::create([
                         'parent_id'               => $schedule->id,
                         'name'                    => $childData['name'],
@@ -114,6 +125,8 @@ class ScheduleController extends Controller
                         'checkin_window_end_time' => $childLimit,
                         'owner_department_id'     => $schedule->owner_department_id,
                         'created_by'              => $user->id,
+                        'status'                  => $schedule->status,
+                        'proposed_by'             => $schedule->proposed_by,
                     ]);
                 }
             } elseif (isset($data['start_time']) && isset($data['end_time'])) {
@@ -137,11 +150,22 @@ class ScheduleController extends Controller
                     'checkin_window_end_time' => $childLimit,
                     'owner_department_id'     => $schedule->owner_department_id,
                     'created_by'              => $user->id,
+                    'status'                  => $schedule->status,
+                    'proposed_by'             => $schedule->proposed_by,
                 ]);
             }
         }
 
         $schedule->load(['creator', 'updater', 'ownerDepartment', 'children']);
+
+        if ($user->isPjBagian()) {
+            $this->notifyAdmins(
+                'Usulan Shift Baru',
+                'PJ Bagian mengusulkan shift baru: "' . $schedule->name . '" untuk unit ' . ($schedule->ownerDepartment->name ?? '') . '.',
+                'shift_approval',
+                ['schedule_id' => $schedule->id]
+            );
+        }
 
         return response()->json([
             'success' => true,
@@ -165,28 +189,32 @@ class ScheduleController extends Controller
         $data = $request->validated();
         
         $user = $request->user();
-        
-        if ($user->isPjBagian()) {
-            $deptId = $user->pj_bagian_department_id;
-            if (!$deptId) {
-                return response()->json(['success' => false, 'message' => 'PJ Bagian belum ditugaskan ke departemen.'], 422);
-            }
-            
-            if ($schedule->owner_department_id === null || (int)$schedule->owner_department_id !== (int)$deptId) {
+                if ($user->isPjBagian()) {
+            $deptIds = $user->getPjDepartmentIds();
+            if ($schedule->owner_department_id === null || !in_array((int)$schedule->owner_department_id, $deptIds)) {
                 return response()->json(['success' => false, 'message' => 'Akses ditolak. Anda tidak memiliki wewenang untuk mengubah shift umum atau shift unit lain.'], 403);
             }
             
             $schedule->updated_by = $user->id;
+            $schedule->status     = 'pending';
+            $schedule->proposed_by = $user->id;
+            $schedule->admin_note = null;
             $schedule->save();
         } else {
             // Admin: set updated_by
             $schedule->updated_by = $user->id;
+            $schedule->status     = 'approved';
             $schedule->save();
         }
 
         // Standard direct update logic (for non-shared PJ Bagian or Admin)
         $schedule->update(\Illuminate\Support\Arr::except($data, ['children']));
-        $schedule->children()->update(['owner_department_id' => $schedule->owner_department_id]);
+        $schedule->children()->update([
+            'owner_department_id' => $schedule->owner_department_id,
+            'status'              => $schedule->status,
+            'proposed_by'         => $schedule->proposed_by,
+            'admin_note'          => $schedule->admin_note,
+        ]);
 
         if ($request->has('children')) {
             $inputChildren = $data['children'] ?? [];
@@ -215,6 +243,9 @@ class ScheduleController extends Controller
                         'icon'       => $schedule->icon,
                         'shift_type' => $schedule->shift_type,
                         'updated_by' => $user->id,
+                        'status'     => $schedule->status,
+                        'proposed_by' => $schedule->proposed_by,
+                        'admin_note' => $schedule->admin_note,
                     ];
                     if ($user->isPjBagian()) {
                         $updatePayload['checkin_window_end_time'] = $childLimit;
@@ -233,6 +264,8 @@ class ScheduleController extends Controller
                         'checkin_window_end_time' => $childLimit,
                         'owner_department_id' => $schedule->owner_department_id,
                         'created_by' => $user->id,
+                        'status'     => $schedule->status,
+                        'proposed_by' => $schedule->proposed_by,
                     ]);
                     $keepIds[] = $newChild->id;
                 }
@@ -243,14 +276,22 @@ class ScheduleController extends Controller
 
         // Load relasi terbaru dan hitung ulang jumlah karyawan terkait
         if ($user->isPjBagian()) {
-            $deptId = $user->pj_bagian_department_id;
-            $schedule->load(['creator', 'updater', 'ownerDepartment', 'children.employees' => function($q) use ($deptId) {
-                $q->where('department_id', $deptId);
+            $deptIds = $user->getPjDepartmentIds();
+            $schedule->load(['creator', 'updater', 'ownerDepartment', 'children.employees' => function($q) use ($deptIds) {
+                $q->whereIn('department_id', $deptIds);
             }, 'children.employees.user', 'children.employees.department']);
         } else {
             $schedule->load(['creator', 'updater', 'ownerDepartment', 'children.employees.user', 'children.employees.department']);
         }
 
+        if ($user->isPjBagian()) {
+            $this->notifyAdmins(
+                'Usulan Perubahan Shift',
+                'PJ Bagian mengajukan perubahan shift: "' . $schedule->name . '" untuk unit ' . ($schedule->ownerDepartment->name ?? '') . '.',
+                'shift_approval',
+                ['schedule_id' => $schedule->id]
+            );
+        }
         return response()->json([
             'success' => true,
             'message' => 'Jadwal shift berhasil diperbarui.',
@@ -259,6 +300,7 @@ class ScheduleController extends Controller
     }
 
     /**
+
      * DELETE /api/schedules/{id}
      * 
      * Menghapus master jadwal shift dari database.
@@ -270,11 +312,34 @@ class ScheduleController extends Controller
     {
         $user = request()->user();
         if ($user->isPjBagian()) {
-            if ($schedule->owner_department_id === null || (int)$schedule->owner_department_id !== (int)$user->pj_bagian_department_id) {
+            $deptIds = $user->getPjDepartmentIds();
+            if ($schedule->owner_department_id === null || !in_array((int)$schedule->owner_department_id, $deptIds)) {
                 return response()->json(['success' => false, 'message' => 'Anda hanya dapat menghapus shift milik departemen Anda sendiri.'], 403);
             }
-        }
+            
+            $schedule->update([
+                'status'      => 'pending_delete',
+                'proposed_by' => $user->id,
+                'admin_note'  => null,
+            ]);
+            $schedule->children()->update([
+                'status'      => 'pending_delete',
+                'proposed_by' => $user->id,
+                'admin_note'  => null,
+            ]);
+            $this->notifyAdmins(
+                'Usulan Penghapusan Shift',
+                'PJ Bagian mengajukan penghapusan shift: "' . $schedule->name . '" untuk unit ' . ($schedule->ownerDepartment->name ?? '') . '.',
+                'shift_approval',
+                ['schedule_id' => $schedule->id]
+            );
 
+            return response()->json([
+                'success' => true,
+                'message' => 'Usulan penghapusan shift berhasil diajukan, menunggu persetujuan admin.'
+            ]);
+        }
+        
         $schedule->delete();
         return response()->json(['success' => true, 'message' => 'Jadwal shift berhasil dihapus.']);
     }
@@ -293,7 +358,7 @@ class ScheduleController extends Controller
         $query = \App\Models\Employee::with(['user', 'schedules'])->where('status', 'active');
 
         if ($user->role === 'pj_bagian') {
-            $query->where('department_id', $user->pj_bagian_department_id);
+            $query->whereIn('department_id', $user->getPjDepartmentIds());
         }
 
         $employees = $query->get();
@@ -513,10 +578,14 @@ class ScheduleController extends Controller
 
         // Bangun query karyawan
         $empQuery = \App\Models\Employee::with(['user.pjBagianDepartment'])->where('status', 'active');
-
         if ($user->isPjBagian()) {
-            $deptId = $user->pj_bagian_department_id;
-            $empQuery->where('department_id', $deptId);
+            $deptIds = $user->getPjDepartmentIds();
+            $reqDeptId = $request->query('department_id');
+            if ($reqDeptId && in_array((int)$reqDeptId, $deptIds)) {
+                $empQuery->where('department_id', (int)$reqDeptId);
+            } else {
+                $empQuery->whereIn('department_id', $deptIds);
+            }
         } elseif ($user->role === 'employee') {
             $deptId = $user->employee->department_id ?? null;
             if ($deptId) {
@@ -772,12 +841,14 @@ class ScheduleController extends Controller
         $emp = \App\Models\Employee::findOrFail($data['employee_id']);
 
         if ($request->user()->role === 'pj_bagian') {
-            if ($emp->department_id !== $request->user()->pj_bagian_department_id) {
+            $deptIds = $request->user()->getPjDepartmentIds();
+            if (!in_array($emp->department_id, $deptIds)) {
                 return response()->json(['success' => false, 'message' => 'Anda hanya dapat mengatur jadwal staf di departemen Anda.'], 403);
             }
+        }
 
-            // Lock approved leave check
-            $hasApprovedLeave = \App\Models\LeaveRequest::where('employee_id', $emp->id)
+        // Lock approved leave check
+        $hasApprovedLeave = \App\Models\LeaveRequest::where('employee_id', $emp->id)
                 ->where('status', 'approved')
                 ->whereDate('start_date', '<=', $data['work_date'])
                 ->where(function($q) use ($data) {
@@ -791,9 +862,8 @@ class ScheduleController extends Controller
                 })
                 ->exists();
 
-            if ($hasApprovedLeave) {
-                return response()->json(['success' => false, 'message' => 'Jadwal tidak dapat diubah karena karyawan sedang dalam masa cuti/izin/sakit yang disetujui Admin.'], 422);
-            }
+        if ($hasApprovedLeave) {
+             return response()->json(['success' => false, 'message' => 'Pegawai sedang dalam status Cuti/Izin yang disetujui pada tanggal tersebut.'], 403);
         }
 
         // Hapus record lama untuk tanggal yang sama (jika ada)
@@ -851,7 +921,7 @@ class ScheduleController extends Controller
         ]);
 
         $authUser = $request->user();
-        $deptId   = $authUser->isPjBagian() ? $authUser->pj_bagian_department_id : null;
+        $deptIds  = $authUser->isPjBagian() ? $authUser->getPjDepartmentIds() : null;
 
         $scheduleCache = [];
         $inserted = 0;
@@ -861,11 +931,12 @@ class ScheduleController extends Controller
             if (!$emp) continue;
 
             // PJ Bagian hanya boleh atur staf departemennya dan tidak boleh mengoverwrite cuti/sakit/izin
-            if ($deptId) {
-                if ($emp->department_id !== $deptId) continue;
+            if ($deptIds) {
+                if (!in_array($emp->department_id, $deptIds)) continue;
+            }
 
-                $hasApprovedLeave = \App\Models\LeaveRequest::where('employee_id', $emp->id)
-                    ->where('status', 'approved')
+            $hasApprovedLeave = \App\Models\LeaveRequest::where('employee_id', $emp->id)
+                ->where('status', 'approved')
                     ->whereDate('start_date', '<=', $assignment['work_date'])
                     ->where(function($q) use ($assignment) {
                         $q->where(function($q2) use ($assignment) {
@@ -877,10 +948,7 @@ class ScheduleController extends Controller
                         });
                     })
                     ->exists();
-
                 if ($hasApprovedLeave) continue;
-            }
-
             // Hapus record lama tanggal itu
             \Illuminate\Support\Facades\DB::table('employee_schedule')
                 ->where('employee_id', $emp->id)
@@ -928,11 +996,13 @@ class ScheduleController extends Controller
 
         $emp = \App\Models\Employee::findOrFail($data['employee_id']);
 
-        if ($request->user()->role === 'pj_bagian' && $emp->department_id !== $request->user()->pj_bagian_department_id) {
-            return response()->json(['success' => false, 'message' => 'Anda hanya dapat mengatur jadwal staf di departemen Anda.'], 403);
+        if ($request->user()->role === 'pj_bagian') {
+            $deptIds = $request->user()->getPjDepartmentIds();
+            if (!in_array($emp->department_id, $deptIds)) {
+                return response()->json(['success' => false, 'message' => 'Anda hanya dapat mengatur jadwal staf di departemen Anda.'], 403);
+            }
         }
 
-        // Hapus penugasan shift lama pegawai pada hari kerja yang sama (jika ada)
         \Illuminate\Support\Facades\DB::table('employee_schedule')
             ->where('employee_id', $emp->id)
             ->where('day_of_week', $data['day_of_week'])
@@ -982,8 +1052,11 @@ class ScheduleController extends Controller
             'schedule_id'   => 'nullable|exists:schedules,id',
         ]);
 
-        if ($request->user()->role === 'pj_bagian' && (int)$data['department_id'] !== (int)$request->user()->pj_bagian_department_id) {
-            return response()->json(['success' => false, 'message' => 'Anda hanya dapat mengatur jadwal departemen Anda sendiri.'], 403);
+        if ($request->user()->role === 'pj_bagian') {
+            $deptIds = $request->user()->getPjDepartmentIds();
+            if (!in_array((int)$data['department_id'], $deptIds)) {
+                return response()->json(['success' => false, 'message' => 'Anda hanya dapat mengatur jadwal departemen Anda sendiri.'], 403);
+            }
         }
 
         $employees = \App\Models\Employee::where('department_id', $data['department_id'])
@@ -1020,10 +1093,181 @@ class ScheduleController extends Controller
                 'data'    => ['employee_id' => $emp->id, 'day_of_week' => $data['day_of_week']],
             ]);
         }
-
         return response()->json([
             'success' => true,
             'message' => 'Jadwal departemen berhasil diperbarui.'
+        ]);
+    }
+
+    public function approve($id)
+    {
+        $schedule = Schedule::findOrFail($id);
+        if ($schedule->status === 'pending_delete') {
+            $this->notifyUser(
+                $schedule->proposed_by,
+                'Usulan Hapus Shift Disetujui',
+                'Usulan penghapusan shift "' . $schedule->name . '" telah disetujui oleh admin.',
+                'shift_approval',
+                ['schedule_id' => $schedule->id]
+            );
+            $schedule->delete();
+            return response()->json([
+                'success' => true,
+                'message' => 'Usulan penghapusan shift berhasil disetujui, shift dihapus.'
+            ]);
+        }
+
+        $schedule->update([
+            'status'     => 'approved',
+            'admin_note' => null,
+        ]);
+        $schedule->children()->update([
+            'status'     => 'approved',
+            'admin_note' => null,
+        ]);
+
+        $this->notifyUser(
+            $schedule->proposed_by,
+            'Usulan Shift Baru Disetujui',
+            'Usulan master shift "' . $schedule->name . '" telah disetujui oleh admin dan kini dapat ditugaskan.',
+            'shift_approval',
+            ['schedule_id' => $schedule->id]
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Usulan shift berhasil disetujui.'
+        ]);
+    }
+
+    public function reject(Request $request, $id)
+    {
+        $data = $request->validate([
+            'admin_note' => 'required|string|max:255'
+        ]);
+
+        $schedule = Schedule::findOrFail($id);
+        if ($schedule->status === 'pending_delete') {
+            $schedule->update([
+                'status'     => 'approved',
+                'admin_note' => 'Usulan hapus ditolak: ' . $data['admin_note']
+            ]);
+            $schedule->children()->update([
+                'status'     => 'approved',
+                'admin_note' => 'Usulan hapus ditolak: ' . $data['admin_note']
+            ]);
+
+            $this->notifyUser(
+                $schedule->proposed_by,
+                'Usulan Hapus Shift Ditolak',
+                'Usulan penghapusan shift "' . $schedule->name . '" ditolak oleh admin dengan alasan: "' . $data['admin_note'] . '".',
+                'shift_approval',
+                ['schedule_id' => $schedule->id]
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Usulan penghapusan shift berhasil ditolak.'
+            ]);
+        }
+
+        $schedule->update([
+            'status'     => 'rejected',
+            'admin_note' => $data['admin_note']
+        ]);
+        $schedule->children()->update([
+            'status'     => 'rejected',
+            'admin_note' => $data['admin_note']
+        ]);
+
+        $this->notifyUser(
+            $schedule->proposed_by,
+            'Usulan Shift Baru Ditolak',
+            'Usulan master shift "' . $schedule->name . '" ditolak oleh admin dengan alasan: "' . $data['admin_note'] . '".',
+            'shift_approval',
+            ['schedule_id' => $schedule->id]
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Usulan shift berhasil ditolak.'
+        ]);
+    }
+    private function notifyAdmins($title, $body, $type = 'system', $data = [])
+    {
+        $admins = \App\Models\User::whereIn('role', ['admin', 'super_admin'])->get();
+        foreach ($admins as $admin) {
+            \App\Models\Notification::create([
+                'user_id' => $admin->id,
+                'title'   => $title,
+                'body'    => $body,
+                'type'    => $type,
+                'data'    => $data,
+            ]);
+        }
+    }
+
+    private function notifyUser($userId, $title, $body, $type = 'system', $data = [])
+    {
+        if ($userId) {
+            \App\Models\Notification::create([
+                'user_id' => $userId,
+                'title'   => $title,
+                'body'    => $body,
+                'type'    => $type,
+                'data'    => $data,
+            ]);
+        }
+    }
+
+    public function getScheduleNote(Request $request)
+    {
+        $request->validate([
+            'department_id' => 'required|integer',
+            'year'          => 'required|integer',
+            'month'         => 'required|integer',
+        ]);
+
+        $noteObj = \App\Models\ScheduleNote::where([
+            'department_id' => $request->department_id,
+            'year'          => $request->year,
+            'month'         => $request->month,
+        ])->first();
+
+        return response()->json([
+            'success' => true,
+            'note'    => $noteObj ? $noteObj->note : ''
+        ]);
+    }
+
+    public function saveScheduleNote(Request $request)
+    {
+        $data = $request->validate([
+            'department_id' => 'required|integer',
+            'year'          => 'required|integer',
+            'month'         => 'required|integer',
+            'note'          => 'nullable|string'
+        ]);
+
+        $user = $request->user();
+
+        $noteObj = \App\Models\ScheduleNote::updateOrCreate(
+            [
+                'department_id' => $data['department_id'],
+                'year'          => $data['year'],
+                'month'         => $data['month'],
+            ],
+            [
+                'note'       => $data['note'],
+                'created_by' => $user->id,
+                'updated_by' => $user->id,
+            ]
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Keterangan jadwal berhasil disimpan.',
+            'note'    => $noteObj->note
         ]);
     }
 }

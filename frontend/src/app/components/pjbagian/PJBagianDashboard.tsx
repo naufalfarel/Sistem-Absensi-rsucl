@@ -227,7 +227,13 @@ export function PJBagianDashboard({ pendingLeaveCount, pendingOvertimeCount, pen
           <p className="text-[13px] text-gray-500 mt-0.5">
             Penanggung Jawab Departemen ·{' '}
             <span className="font-semibold text-[#16A34A]">
-              {(user as any)?.pj_bagian_department || user?.department || 'RSUCL'}
+              {(() => {
+                const pjDepts = (user as any)?.pj_departments;
+                if (pjDepts && pjDepts.length > 0) {
+                  return pjDepts.map((d: any) => d.name).join(', ');
+                }
+                return (user as any)?.pj_bagian_department || user?.department || 'RSUCL';
+              })()}
             </span>
           </p>
         </div>

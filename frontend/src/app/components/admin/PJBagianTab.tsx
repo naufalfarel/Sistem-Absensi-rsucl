@@ -13,28 +13,32 @@ export function PJBagianTab() {
   const [pjList, setPjList] = useState<PjBagianUser[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [departments, setDepartments] = useState<DepartmentModel[]>([]);
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+  const [selectedDepartmentIds, setSelectedDepartmentIds] = useState<number[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
   
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
-  
-  // Assign Modal
-  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
-  const [selectedDepartmentId, setSelectedDepartmentId] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
+
+  const [revokingPj, setRevokingPj] = useState<PjBagianUser | null>(null);
+
+  const handleRevoke = (pj: PjBagianUser) => {
+    setRevokingPj(pj);
+  };
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const pjRes = await pjBagianApi.list();
-      if (pjRes.success) setPjList(pjRes.data);
-
-      const empRes = await employeeApi.list();
-      if (empRes.success) setEmployees(empRes.data);
-
-      const deptRes = await departmentApi.list();
-      if (deptRes.success) setDepartments(deptRes.data);
+      const [pjRes, empRes, deptRes] = await Promise.all([
+        pjBagianApi.list(),
+        employeeApi.list(),
+        departmentApi.list()
+      ]);
+      if (pjRes.success) setPjList(pjRes.data ?? []);
+      if (empRes.success) setEmployees(empRes.data ?? []);
+      if (deptRes.success) setDepartments(deptRes.data ?? []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -50,21 +54,31 @@ export function PJBagianTab() {
     e.preventDefault();
     setErrorMsg('');
 
-    if (!selectedEmployeeId || !selectedDepartmentId) {
+    if (!selectedEmployeeId || selectedDepartmentIds.length === 0) {
       setErrorMsg('Semua kolom penugasan wajib diisi.');
       return;
     }
 
     setSubmitting(true);
     try {
-      // Find employee to get their name
-      const targetEmp = employees.find(e => e.id === Number(selectedEmployeeId));
-      const targetDept = departments.find(d => d.id === Number(selectedDepartmentId));
-      
-      const existing = pjList.find(pj => pj.pj_bagian_department_id === Number(selectedDepartmentId));
-      if (existing) {
+      // Cari nama-nama PJ lama di departemen terpilih
+      let existingPjs: string[] = [];
+      selectedDepartmentIds.forEach(deptId => {
+        const found = pjList.find(pj => {
+          if (pj.pj_departments && pj.pj_departments.length > 0) {
+            return pj.pj_departments.some(d => d.id === deptId);
+          }
+          return pj.pj_bagian_department_id === deptId;
+        });
+        if (found && found.employee_id !== Number(selectedEmployeeId)) {
+          const deptName = departments.find(d => d.id === deptId)?.name ?? '';
+          existingPjs.push(`Unit ${deptName} dipimpin oleh ${found.name}`);
+        }
+      });
+
+      if (existingPjs.length > 0) {
         const confirmChange = window.confirm(
-          `Departemen ${targetDept?.name} sudah dipimpin oleh ${existing.name}. Menugaskan ${targetEmp?.name} akan secara otomatis mencabut wewenang ${existing.name}. Lanjutkan?`
+          `${existingPjs.join('\n')}.\n\nMenugaskan PJ baru akan secara otomatis mencabut wewenang PJ lama dari unit kerja tersebut. Lanjutkan?`
         );
         if (!confirmChange) {
           setSubmitting(false);
@@ -72,11 +86,11 @@ export function PJBagianTab() {
         }
       }
 
-      const res = await pjBagianApi.assign(Number(selectedEmployeeId), Number(selectedDepartmentId));
+      const res = await pjBagianApi.assign(Number(selectedEmployeeId), selectedDepartmentIds);
       if (res.success) {
         setIsAssignModalOpen(false);
         setSelectedEmployeeId('');
-        setSelectedDepartmentId('');
+        setSelectedDepartmentIds([]);
         loadData();
       }
     } catch (err: any) {
@@ -84,12 +98,6 @@ export function PJBagianTab() {
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const [revokingPj, setRevokingPj] = useState<PjBagianUser | null>(null);
-
-  const handleRevoke = (pj: PjBagianUser) => {
-    setRevokingPj(pj);
   };
 
   const confirmRevokeAction = async () => {
@@ -182,10 +190,21 @@ export function PJBagianTab() {
                   </td>
                   <td className="py-3 px-4 text-gray-600 font-medium">{pj.position || 'Staf'}</td>
                   <td className="py-3 px-4">
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-green-50 text-[#16A34A] font-semibold">
-                      <Shield size={10} /> {pj.pj_bagian_department}
-                    </span>
+                    <div className="flex flex-wrap gap-1.5 max-w-xs">
+                      {pj.pj_departments && pj.pj_departments.length > 0 ? (
+                        pj.pj_departments.map(dept => (
+                          <span key={dept.id} className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-green-50 text-[#16A34A] font-semibold text-[10px]">
+                            <Shield size={10} /> {dept.name}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-green-50 text-[#16A34A] font-semibold text-[10px]">
+                          <Shield size={10} /> {pj.pj_bagian_department}
+                        </span>
+                      )}
+                    </div>
                   </td>
+
                   <td className="py-3 px-4 text-right">
                     <button
                       onClick={() => handleRevoke(pj)}
@@ -222,10 +241,19 @@ export function PJBagianTab() {
               </div>
               
               <div className="flex items-center justify-between gap-2 pt-1">
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-50 text-[#16A34A] font-semibold text-[10px]">
-                  <Shield size={9} /> {pj.pj_bagian_department}
-                </span>
-                
+                <div className="flex flex-wrap gap-1 max-w-[180px]">
+                  {pj.pj_departments && pj.pj_departments.length > 0 ? (
+                    pj.pj_departments.map(dept => (
+                      <span key={dept.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-50 text-[#16A34A] font-semibold text-[9px]">
+                        <Shield size={9} /> {dept.name}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-50 text-[#16A34A] font-semibold text-[9px]">
+                      <Shield size={9} /> {pj.pj_bagian_department}
+                    </span>
+                  )}
+                </div>
                 <button
                   onClick={() => handleRevoke(pj)}
                   className="inline-flex items-center gap-1 px-2.5 py-1.5 text-red-650 bg-red-50 hover:bg-red-650 hover:text-white border border-red-200/50 rounded-xl font-bold transition-all text-[10.5px] active:scale-95 shadow-xs"
@@ -274,18 +302,33 @@ export function PJBagianTab() {
                 </select>
               </div>
 
+
               <div>
-                <label className="block text-[10px] font-bold text-gray-500 mb-1">Departemen Kerja</label>
-                <select
-                  value={selectedDepartmentId}
-                  onChange={e => setSelectedDepartmentId(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-[11px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all font-semibold text-gray-700"
-                >
-                  <option value="">-- Pilih Departemen --</option>
-                  {departments.map(dept => (
-                    <option key={dept.id} value={dept.id}>{dept.name}</option>
-                  ))}
-                </select>
+                <label className="block text-[10px] font-bold text-gray-500 mb-1.5">Pilih Unit Kerja / Departemen (Bisa Rangkap)</label>
+                <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto p-2 border border-gray-200 rounded-lg bg-gray-50">
+                  {departments.map(dept => {
+                    const isChecked = selectedDepartmentIds.includes(dept.id);
+                    return (
+                      <label key={dept.id} className="flex items-center gap-2 p-1.5 hover:bg-white rounded-md cursor-pointer transition-all border border-transparent hover:border-gray-100">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {
+                            if (isChecked) {
+                              setSelectedDepartmentIds(prev => prev.filter(id => id !== dept.id));
+                            } else {
+                              setSelectedDepartmentIds(prev => [...prev, dept.id]);
+                            }
+                          }}
+                          className="rounded text-[#16A34A] focus:ring-[#16A34A] w-3.5 h-3.5"
+                        />
+                        <span className="text-[10.5px] font-semibold text-gray-700 select-none truncate" title={dept.name}>
+                          {dept.name}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="flex gap-2 pt-2">

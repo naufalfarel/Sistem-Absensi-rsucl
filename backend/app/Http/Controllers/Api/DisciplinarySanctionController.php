@@ -58,16 +58,15 @@ class DisciplinarySanctionController extends Controller
         // Mode Admin / PJ Bagian
         $query = DisciplinarySanction::with(['employee.user', 'employee.department', 'creator'])
             ->orderBy('created_at', 'desc');
-
         if ($user->isPjBagian()) {
-            if (!$user->pj_bagian_department_id) {
+            $deptIds = $user->getPjDepartmentIds();
+            if (empty($deptIds)) {
                 return response()->json(['success' => false, 'message' => 'PJ Bagian belum ditugaskan ke departemen.'], 422);
             }
-            $query->whereHas('employee', function ($q) use ($user) {
-                $q->where('department_id', $user->pj_bagian_department_id);
+            $query->whereHas('employee', function ($q) use ($deptIds) {
+                $q->whereIn('department_id', $deptIds);
             });
         }
-
         if ($request->filled('type') && $request->input('type') !== 'all') {
             $query->where('type', $request->input('type'));
         }

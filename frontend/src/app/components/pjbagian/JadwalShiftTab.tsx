@@ -657,18 +657,27 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
   const [viewMonth, setViewMonth] = useState(today.getMonth() + 1); // 1-12
   const [daysInMonth, setDaysInMonth] = useState(0);
 
+  const pjDepts = (user as any)?.pj_departments || [];
+  const [activeDeptId, setActiveDeptId] = useState<number>(() => {
+    if (pjDepts && pjDepts.length > 0) return pjDepts[0].id;
+    return user.pj_bagian_department_id || 0;
+  });
   const [shifts, setShifts]         = useState<ShiftSchedule[]>([]);
   const [monthlyData, setMonthlyData] = useState<EmployeeMonthlySchedule[]>([]);
   const [employees, setEmployees]   = useState<any[]>([]);
   const [loading, setLoading]       = useState(false);
   const [holidays, setHolidays] = useState<string[]>([]);
+  const [showAddModal, setShowAddModal]     = useState(false);
+  const [showBulkModal, setShowBulkModal]   = useState(false);
+
   const [saving, setSaving]         = useState<string | null>(null); // "empId-date" key being saved
   const [pendingChanges, setPendingChanges] = useState<Record<string, { employee_id: number; work_date: string; schedule_id: number | null }>>({});
   const [savingAll, setSavingAll]   = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState('');
 
-  const [showAddModal, setShowAddModal]     = useState(false);
-  const [showBulkModal, setShowBulkModal]   = useState(false);
+  const [scheduleNote, setScheduleNote] = useState('');
+  const [loadingNote, setLoadingNote] = useState(false);
+  const [savingNote, setSavingNote] = useState(false);
   const [deleteTarget, setDeleteTarget]     = useState<ShiftSchedule | null>(null);
   const [cloneInfo, setCloneInfo]           = useState<string | null>(null);
 
@@ -772,7 +781,7 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
     try {
       const [sRes, mRes, eRes] = await Promise.all([
         scheduleApi.list(),
-        scheduleApi.getMonthlySchedule(viewYear, viewMonth),
+        scheduleApi.getMonthlySchedule(viewYear, viewMonth, activeDeptId),
         employeeApi.list(),
       ]);
       if (sRes.success) setShifts(sRes.data);
@@ -783,7 +792,7 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
       }
       if (eRes.success) {
         const filtered = eRes.data.filter((e: any) =>
-          Number(e.department_id) === Number(user.pj_bagian_department_id)
+          Number(e.department_id) === Number(activeDeptId)
         );
         setEmployees(filtered);
       }
@@ -792,9 +801,49 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
     } finally {
       setLoading(false);
     }
-  }, [viewYear, viewMonth, user.pj_bagian_department_id]);
+  }, [viewYear, viewMonth, activeDeptId]);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const fetchScheduleNote = useCallback(async () => {
+    if (!activeDeptId) return;
+    setLoadingNote(true);
+    try {
+      const res = await scheduleApi.getNote(activeDeptId, viewYear, viewMonth);
+      if (res.success) {
+        setScheduleNote(res.note ?? '');
+      } else {
+        setScheduleNote('');
+      }
+    } catch (err) {
+      console.error(err);
+      setScheduleNote('');
+    } finally {
+      setLoadingNote(false);
+    }
+  }, [activeDeptId, viewYear, viewMonth]);
+
+  useEffect(() => {
+    fetchScheduleNote();
+  }, [fetchScheduleNote]);
+
+  const handleSaveNote = async () => {
+    if (!activeDeptId) return;
+    setSavingNote(true);
+    try {
+      const res = await scheduleApi.saveNote(activeDeptId, viewYear, viewMonth, scheduleNote);
+      if (res.success) {
+        alert('Catatan keterangan jadwal berhasil disimpan.');
+      }
+    } catch (err: any) {
+      alert(err?.message ?? 'Gagal menyimpan catatan.');
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
 
   const handleAdd = (newShift: ShiftSchedule) => {
     setShifts(prev => [...prev, newShift]);
@@ -1220,11 +1269,17 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
             <tbody>
               ${rowsHtml}
             </tbody>
-          </table>
-          
+          </table>          
           <div style="font-size: 9px; color: #000000; margin-top: 15px; display: flex; gap: 15px; font-weight: bold; border-top: 1px solid #E5E7EB; padding-top: 8px; flex-wrap: wrap;">
             ${legendHtml}
           </div>
+
+          ${scheduleNote ? `
+            <div style="font-size: 10px; color: #000000; margin-top: 18px; border: 1.5px solid #000000; padding: 12px; border-radius: 8px; font-weight: 550; background-color: #FAFAFA; white-space: pre-wrap; text-align: left; line-height: 1.5; font-family: 'Arial', sans-serif;">
+              <div style="font-size: 11px; font-weight: bold; border-bottom: 1.5px solid #000000; padding-bottom: 4px; margin-bottom: 6px; text-transform: uppercase; color: #111827;">Keterangan / Catatan Dinas Bulanan:</div>
+              ${scheduleNote}
+            </div>
+          ` : ''}
 
           <script>
             window.onload = function() {
@@ -1309,11 +1364,29 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
                     </div>
                     <div>
                       <p className="text-[14px] font-semibold text-gray-800 leading-tight">{shift.name}</p>
+                      {shift.status === 'rejected' && shift.admin_note && (
+                        <p className="text-[10px] text-red-650 mt-1 bg-red-50/50 p-1.5 rounded-lg border border-red-100 flex items-start gap-1 font-medium">
+                          <AlertCircle size={11} className="flex-shrink-0 mt-0.5" />
+                          <span>Ditolak: {shift.admin_note}</span>
+                        </p>
+                      )}
                       <div className="flex flex-wrap gap-1.5 mt-1 items-center">
                         {shift.owner_department_id ? (
-                          <span className="inline-block text-[9px] font-semibold px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200">
-                            Unit: {user.pj_bagian_department || 'Unit Kerja'}
-                          </span>
+                          <>
+                            <span className="inline-block text-[9px] font-semibold px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200">
+                              Unit: {user.pj_bagian_department || 'Unit Kerja'}
+                            </span>
+                            {shift.status && (
+                              <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                                shift.status === 'pending' ? 'bg-amber-50 text-amber-600 border border-amber-250/50' :
+                                shift.status === 'approved' ? 'bg-green-50 text-[#16A34A] border border-green-250/50' :
+                                'bg-red-50 text-red-600 border border-red-250/50'
+                              }`}>
+                                {shift.status === 'pending' ? 'Menunggu Review' :
+                                 shift.status === 'approved' ? 'Disetujui' : 'Ditolak'}
+                              </span>
+                            )}
+                          </>
                         ) : (
                           <span className="inline-block text-[9px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
                             Shift Umum
@@ -1594,9 +1667,15 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
             embedded={true}
             onMonthChange={setViewMonth}
             onYearChange={setViewYear}
+            deptId={activeDeptId}
+            onDeptChange={(id) => {
+              if (id !== 'all') {
+                setActiveDeptId(Number(id));
+              }
+            }}
+            departments={(user as any)?.pj_departments || (user.pj_bagian_department_id ? [{ id: user.pj_bagian_department_id, name: user.pj_bagian_department || 'Departemen Anda' }] : [])}
           />
         </div>
-
         {/* Calendar Title Bar */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-150 bg-gradient-to-r from-green-50/50 to-white flex-wrap gap-3">
           <div className="flex items-center gap-3">
@@ -1808,6 +1887,49 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
         )}
       </div>
 
+      {/* Monthly Notes Section */}
+      <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 max-w-5xl mx-auto mt-5">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 flex-shrink-0">
+            <FileText size={20} />
+          </div>
+          <div className="flex-1 space-y-3">
+            <div>
+              <h4 className="text-[14px] font-bold text-gray-900">Catatan / Keterangan Dinas Bulanan</h4>
+              <p className="text-[11px] text-gray-400 mt-0.5 font-medium">Catatan ini akan tersimpan khusus untuk bulan ini dan tercetak secara otomatis di bagian bawah lembar jadwal PDF.</p>
+            </div>
+            {loadingNote ? (
+              <div className="flex items-center gap-2 py-2 text-gray-400 text-[11px] font-medium">
+                <Loader2 size={14} className="animate-spin text-blue-500" />
+                <span>Memuat catatan dinas...</span>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <textarea
+                  value={scheduleNote}
+                  onChange={e => setScheduleNote(e.target.value)}
+                  placeholder="Contoh: 
+- Apabila terjadi kendala operasional, staf ICU dan NICU dapat saling membackup.
+- Mengetahui, Direktur RSU Cempaka Lima."
+                  rows={4}
+                  className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-[12px] bg-slate-50 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 font-medium"
+                />
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleSaveNote}
+                    disabled={savingNote}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-[11px] font-bold transition-all shadow-xs active:scale-95 cursor-pointer"
+                  >
+                    {savingNote ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+                    {savingNote ? 'Menyimpan...' : 'Simpan Keterangan'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Save Success Banner */}
       {saveSuccessMsg && (
         <div className="p-3.5 bg-green-500 text-white rounded-2xl shadow-lg flex items-center gap-2.5 text-[13px] font-bold animate-bounce max-w-md mx-auto">
@@ -1850,7 +1972,7 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
       {showBulkModal && (
         <BulkAssignModal
           user={user}
-          shifts={shifts}
+          shifts={shifts.filter(s => s.status === 'approved')}
           employees={employees}
           year={viewYear}
           month={viewMonth}
@@ -1870,7 +1992,7 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
       {/* Shift Popover */}
       {popover && (
         <ShiftPopover
-          shifts={shifts}
+          shifts={shifts.filter(s => s.status === 'approved')}
           currentScheduleId={monthlyData.find(r => r.employee_id === popover.empId)?.dates[popover.dateStr]?.schedule_id}
           onSelect={handleAssign}
           onSelectSpecial={handleAssignSpecial}

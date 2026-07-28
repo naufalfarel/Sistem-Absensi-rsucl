@@ -33,14 +33,14 @@ class OvertimeRequestController extends Controller
                 if (!$employee) {
                     return response()->json(['success' => false, 'message' => 'Profil pegawai tidak ditemukan.'], 404);
                 }
-                $query->where('employee_id', $employee->id);
             } elseif ($user->isPjBagian()) {
                 // PJ Bagian: hanya lihat lembur dari departemennya
-                if (!$user->pj_bagian_department_id) {
+                $deptIds = $user->getPjDepartmentIds();
+                if (empty($deptIds)) {
                     return response()->json(['success' => false, 'message' => 'PJ Bagian belum ditugaskan ke departemen.'], 422);
                 }
-                $query->whereHas('employee', function ($q) use ($user) {
-                    $q->where('department_id', $user->pj_bagian_department_id);
+                $query->whereHas('employee', function ($q) use ($deptIds) {
+                    $q->whereIn('department_id', $deptIds);
                 });
                 if ($request->filled('status') && $request->status !== 'all') {
                     if ($request->status === 'pending') {
@@ -194,12 +194,13 @@ class OvertimeRequestController extends Controller
             $path = $request->file('photo')->store('overtime-photos', 'public');
             $photoUrl = '/storage/' . $path;
         }
-
         // Cari PJ Bagian yang bertanggung jawab atas departemen karyawan ini
         $pjBagian = null;
         if ($employee->department_id) {
             $pjBagian = \App\Models\User::where('role', 'pj_bagian')
-                ->where('pj_bagian_department_id', $employee->department_id)
+                ->whereHas('pjDepartments', function ($q) use ($employee) {
+                    $q->where('departments.id', $employee->department_id);
+                })
                 ->first();
         }
 
@@ -274,11 +275,11 @@ class OvertimeRequestController extends Controller
             if ($overtimeRequest->employee?->user_id === $user->id) {
                 return response()->json(['success' => false, 'message' => 'Anda tidak dapat memproses pengajuan lembur milik sendiri.'], 403);
             }
-            if ($overtimeRequest->employee?->department_id !== $user->pj_bagian_department_id) {
+            $deptIds = $user->getPjDepartmentIds();
+            if (!in_array($overtimeRequest->employee?->department_id, $deptIds)) {
                 return response()->json(['success' => false, 'message' => 'Anda hanya dapat memproses pengajuan dari departemen yang Anda awasi.'], 403);
             }
         }
-
         if ($overtimeRequest->status !== 'pending') {
             return response()->json([
                 'success' => false,
@@ -363,7 +364,8 @@ class OvertimeRequestController extends Controller
             if ($overtimeRequest->employee?->user_id === $user->id) {
                 return response()->json(['success' => false, 'message' => 'Anda tidak dapat memproses pengajuan lembur milik sendiri.'], 403);
             }
-            if ($overtimeRequest->employee?->department_id !== $user->pj_bagian_department_id) {
+            $deptIds = $user->getPjDepartmentIds();
+            if (!in_array($overtimeRequest->employee?->department_id, $deptIds)) {
                 return response()->json(['success' => false, 'message' => 'Anda hanya dapat memproses pengajuan dari departemen yang Anda awasi.'], 403);
             }
         }

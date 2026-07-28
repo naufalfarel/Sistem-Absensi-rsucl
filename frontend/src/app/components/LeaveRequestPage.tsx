@@ -128,6 +128,57 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
     }
   }, [user]);
 
+  // Helper to get max selectable end date based on type
+  const getMaxEndDate = (): string | undefined => {
+    if (!startDate) return undefined;
+    const start = new Date(startDate);
+    
+    if (leaveType === 'cuti') {
+      const maxDate = new Date(start);
+      maxDate.setDate(start.getDate() + 3);
+      return maxDate.toISOString().split('T')[0];
+    }
+    
+    if (leaveType === 'sakit') {
+      const maxDate = new Date(start);
+      maxDate.setDate(start.getDate() + 2);
+      return maxDate.toISOString().split('T')[0];
+    }
+    
+    if (leaveType === 'cuti_khusus') {
+      const cat = categories.find(c => String(c.id) === selectedCategory);
+      const catName = (cat?.name || '').toLowerCase();
+      
+      if (catName.includes('menikah')) {
+        const maxDate = new Date(start);
+        maxDate.setDate(start.getDate() + 2);
+        return maxDate.toISOString().split('T')[0];
+      }
+      if (catName.includes('melahirkan') || catName.includes('keguguran')) {
+        const maxDate = new Date(start);
+        maxDate.setDate(start.getDate() + 89);
+        return maxDate.toISOString().split('T')[0];
+      }
+      if (catName.includes('meninggal') || catName.includes('duka') || catName.includes('kepergian')) {
+        const maxDate = new Date(start);
+        maxDate.setDate(start.getDate() + 2);
+        return maxDate.toISOString().split('T')[0];
+      }
+    }
+    
+    return undefined;
+  };
+
+  // Reset endDate if it exceeds new dynamic maximum date range
+  useEffect(() => {
+    if (startDate && endDate) {
+      const maxEnd = getMaxEndDate();
+      if (maxEnd && endDate > maxEnd) {
+        setEndDate('');
+      }
+    }
+  }, [startDate, leaveType, selectedCategory]);
+
   // ── Attachment State ──────────────────────────────────────────────────
   const [attachmentName, setAttachmentName]     = useState('');
   const [attachmentBase64, setAttachmentBase64] = useState<string | null>(null);
@@ -787,7 +838,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
                 </div>
                 <div>
                   <label className="block text-[12px] font-semibold text-gray-600 mb-1.5">Tanggal Selesai <span className="text-red-500">*</span></label>
-                  <input type="date" value={endDate} min={startDate} onChange={e => { setEndDate(e.target.value); setFormError(''); }}
+                  <input type="date" value={endDate} min={startDate} max={getMaxEndDate()} onChange={e => { setEndDate(e.target.value); setFormError(''); }}
                     className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all font-semibold" />
                 </div>
               </div>

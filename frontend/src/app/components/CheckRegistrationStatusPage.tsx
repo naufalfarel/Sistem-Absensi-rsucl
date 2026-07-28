@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, ShieldCheck, CheckCircle2, Clock, XCircle, AlertTriangle, Copy, Check, Lock, User, ArrowLeft, Building2, Phone, FileText } from 'lucide-react';
+import { Search, ShieldCheck, CheckCircle2, Clock, XCircle, AlertTriangle, Copy, Check, Lock, User, ArrowLeft, Building2, Phone, FileText, X } from 'lucide-react';
 import { employeeRegistrationApi } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import logoImg from '../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
@@ -8,9 +8,10 @@ interface CheckStatusPageProps {
   onBack?: () => void;
   onGoToLogin?: () => void;
   initialRegNumber?: string;
+  onEditRegistration?: (data: any) => void;
 }
 
-export function CheckRegistrationStatusPage({ onBack, onGoToLogin, initialRegNumber }: CheckStatusPageProps) {
+export function CheckRegistrationStatusPage({ onBack, onGoToLogin, initialRegNumber, onEditRegistration }: CheckStatusPageProps) {
   const { logoUrl } = useAuth();
 
   const [registrationNumber, setRegistrationNumber] = useState(initialRegNumber || '');
@@ -19,6 +20,14 @@ export function CheckRegistrationStatusPage({ onBack, onGoToLogin, initialRegNum
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [result, setResult] = useState<any>(null);
   const [copiedPass, setCopiedPass] = useState(false);
+
+  // States untuk fitur "Lupa Nomor Referensi"
+  const [showForgotForm, setShowForgotForm] = useState(false);
+  const [forgotNik, setForgotNik] = useState('');
+  const [forgotPhone, setForgotPhone] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotError, setForgotError] = useState<string | null>(null);
+  const [forgotResults, setForgotResults] = useState<any[] | null>(null);
 
   const handleCheck = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,7 +41,6 @@ export function CheckRegistrationStatusPage({ onBack, onGoToLogin, initialRegNum
     setResult(null);
 
     const val = verificationData.trim();
-    // Determine whether verification input looks like NIK (digits) or phone
     const isDigitsOnly = /^\d+$/.test(val);
     const nikVal = isDigitsOnly && val.length > 10 ? val : val;
     const phoneVal = val;
@@ -52,6 +60,34 @@ export function CheckRegistrationStatusPage({ onBack, onGoToLogin, initialRegNum
       setErrorMsg(msg);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleForgotReferenceSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotNik.trim() || !forgotPhone.trim()) {
+      setForgotError('NIK KTP dan Nomor HP wajib diisi.');
+      return;
+    }
+
+    setForgotLoading(true);
+    setForgotError(null);
+    setForgotResults(null);
+
+    try {
+      const res = await employeeRegistrationApi.forgotReference({
+        nik_ktp: forgotNik.trim(),
+        phone: forgotPhone.trim(),
+      });
+
+      if (res.success) {
+        setForgotResults(res.data);
+      }
+    } catch (err: any) {
+      const msg = err?.data?.message ?? err?.message ?? 'Data pengajuan pendaftaran tidak ditemukan.';
+      setForgotError(msg);
+    } finally {
+      setForgotLoading(false);
     }
   };
 
@@ -102,14 +138,14 @@ export function CheckRegistrationStatusPage({ onBack, onGoToLogin, initialRegNum
         </div>
 
         {/* Form Container */}
-        <div className="p-6 space-y-6">
+        <div className="p-6 space-y-5">
           {/* Panduan Cek Status (Pre-login) */}
           <div className="bg-emerald-50/70 border border-emerald-200/80 p-4 rounded-2xl text-[12px] text-emerald-950 text-left leading-relaxed">
             <p className="font-bold mb-1 flex items-center gap-1.5 text-emerald-900">
               <Search size={15} className="text-[#16A34A]" /> Panduan Cek Status Pendaftaran Akun
             </p>
             <p className="text-[11.5px] text-gray-700">
-              Masukkan <strong>Nomor Referensi Pendaftaran</strong> yang Anda dapatkan setelah mengisi formulir onboarding beserta <strong>NIK KTP atau Nomor HP</strong> terdaftar untuk memantau draf verifikasi Administrator RSUCL.
+              Masukkan <strong>Nomor Referensi Pendaftaran</strong> yang Anda dapatkan setelah mengisi formulir onboarding beserta <strong>NIK KTP atau Nomor HP</strong> terdaftar untuk memantau status verifikasi Administrator RSUCL.
             </p>
           </div>
 
@@ -146,10 +182,123 @@ export function CheckRegistrationStatusPage({ onBack, onGoToLogin, initialRegNum
                   className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:bg-white focus:ring-2 focus:ring-[#16A34A]/15 transition-all text-gray-800 font-medium"
                 />
               </div>
-              <p className="text-[10px] text-gray-400 mt-1">
-                Gunakan NIK KTP atau Nomor HP yang Anda masukkan saat mengisi formulir pendaftaran.
-              </p>
+              <div className="flex justify-between items-center gap-2 pt-1 flex-wrap">
+                <p className="text-[10px] text-gray-400">
+                  Gunakan NIK KTP atau Nomor HP yang dimasukkan saat pendaftaran.
+                </p>
+                {!showForgotForm && (
+                  <button
+                    type="button"
+                    onClick={() => { setShowForgotForm(true); setForgotError(null); setForgotResults(null); }}
+                    className="text-[11px] text-[#16A34A] font-bold hover:underline cursor-pointer"
+                  >
+                    Lupa Nomor Referensi?
+                  </button>
+                )}
+              </div>
             </div>
+
+            {/* Sub-Form Pemulihan Lupa Nomor Referensi */}
+            {showForgotForm && (
+              <div className="p-4.5 bg-gray-50 border border-gray-200 rounded-2xl space-y-3.5 text-left animate-fade-in">
+                <div className="flex justify-between items-center pb-2 border-b border-gray-200/60">
+                  <span className="text-[12px] font-bold text-gray-800 flex items-center gap-1.5">
+                    <Search size={14} className="text-[#16A34A]" /> Pulihkan Nomor Referensi
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowForgotForm(false)}
+                    className="text-gray-400 hover:text-gray-600 cursor-pointer"
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[10.5px] font-bold text-gray-500 uppercase tracking-wider block">NIK KTP Terdaftar</label>
+                    <input
+                      type="text"
+                      placeholder="16 digit angka NIK KTP"
+                      value={forgotNik}
+                      onChange={(e) => setForgotNik(e.target.value)}
+                      className="w-full px-3 py-1.5 border border-gray-200 rounded-xl text-[12px] bg-white focus:outline-none focus:border-[#16A34A]"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10.5px] font-bold text-gray-500 uppercase tracking-wider block">No. HP Terdaftar</label>
+                    <input
+                      type="text"
+                      placeholder="08xxxxxxxxxx"
+                      value={forgotPhone}
+                      onChange={(e) => setForgotPhone(e.target.value)}
+                      className="w-full px-3 py-1.5 border border-gray-200 rounded-xl text-[12px] bg-white focus:outline-none focus:border-[#16A34A]"
+                    />
+                  </div>
+                </div>
+
+                {forgotError && (
+                  <div className="p-2.5 bg-red-50 border border-red-100 rounded-xl text-red-600 text-[11px] font-medium flex items-center gap-1.5">
+                    <AlertTriangle size={13} className="text-red-500" />
+                    <span>{forgotError}</span>
+                  </div>
+                )}
+
+                {/* List Nomor Referensi yang Ditemukan */}
+                {forgotResults && (
+                  <div className="space-y-2 pt-1">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Hasil Pencarian ({forgotResults.length}):</p>
+                    <div className="max-h-36 overflow-y-auto space-y-1.5 border border-gray-200/50 p-2 bg-white rounded-xl">
+                      {forgotResults.map((item) => (
+                        <div key={item.registration_number} className="flex justify-between items-center bg-gray-50 p-2 rounded-lg border border-gray-100 text-[11px] gap-2">
+                          <div>
+                            <span className="font-mono font-bold text-gray-800">{item.registration_number}</span>
+                            <span className="text-[9.5px] text-gray-400 block mt-0.5">Dibuat: {new Date(item.created_at).toLocaleDateString("id-ID")}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
+                              item.status === 'approved' ? 'bg-green-50 text-green-700' :
+                              item.status === 'rejected' ? 'bg-red-50 text-red-700' :
+                              item.status === 'revision_required' ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'
+                            }`}>
+                              {item.status === 'revision_required' ? 'revisi' : item.status}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setRegistrationNumber(item.registration_number);
+                                setShowForgotForm(false);
+                              }}
+                              className="px-2.5 py-1 bg-[#16A34A] hover:bg-[#0d9240] text-white text-[9.5px] font-bold rounded-md transition-colors cursor-pointer"
+                            >
+                              Gunakan
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-2 justify-end pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowForgotForm(false)}
+                    className="px-3 py-1.5 border border-gray-200 text-gray-600 rounded-lg text-[11px] font-semibold hover:bg-gray-100 transition-colors cursor-pointer"
+                  >
+                    Tutup
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleForgotReferenceSubmit}
+                    disabled={forgotLoading}
+                    className="px-4 py-1.5 bg-[#16A34A] hover:bg-[#0d9240] text-white rounded-lg text-[11px] font-bold transition-colors disabled:opacity-70 cursor-pointer"
+                  >
+                    {forgotLoading ? 'Mencari...' : 'Cari Data'}
+                  </button>
+                </div>
+              </div>
+            )}
 
             {errorMsg && (
               <div className="flex items-start gap-2.5 p-3.5 bg-red-50 border border-red-100 rounded-2xl text-red-600 text-[12px] font-semibold text-left animate-fade-in">
@@ -220,14 +369,23 @@ export function CheckRegistrationStatusPage({ onBack, onGoToLogin, initialRegNum
 
               {/* Revision required message */}
               {result.status === 'revision_required' && (
-                <div className="p-4 bg-blue-50/70 border border-blue-100 rounded-2xl text-[12.5px] text-blue-900 leading-relaxed space-y-2">
+                <div className="p-4 bg-blue-50/70 border border-blue-100 rounded-2xl text-[12.5px] text-blue-900 leading-relaxed space-y-3">
                   <p className="font-bold text-blue-950">Pengajuan Memerlukan Perbaikan Data</p>
                   {result.admin_note && (
                     <div className="bg-white p-3 rounded-xl border border-blue-200/60 font-semibold text-blue-800 text-[12px]">
                       Catatan Admin: "{result.admin_note}"
                     </div>
                   )}
-                  <p className="text-[11.5px] text-blue-700">Silakan hubungi bagian HRD/Admin RSUCL untuk melengkapi perbaikan data yang diminta.</p>
+                  <p className="text-[11.5px] text-blue-700">Silakan klik tombol di bawah untuk langsung merevisi dan melengkapi data pengajuan Anda tanpa perlu mengetik ulang dari awal.</p>
+                  {onEditRegistration && (
+                    <button
+                      type="button"
+                      onClick={() => onEditRegistration(result)}
+                      className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[12px] font-bold shadow-sm transition-all flex items-center justify-center gap-1.5 active:scale-98 cursor-pointer"
+                    >
+                      <FileText size={14} /> Revisi & Perbaiki Data Sekarang
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -240,6 +398,7 @@ export function CheckRegistrationStatusPage({ onBack, onGoToLogin, initialRegNum
                       Alasan Admin: "{result.admin_note}"
                     </div>
                   )}
+                  <p className="text-[11.5px] text-red-700 mt-1">Anda dipersilakan melakukan pengajuan akun baru kembali dengan data yang valid dan benar jika dibutuhkan.</p>
                 </div>
               )}
 
@@ -262,7 +421,7 @@ export function CheckRegistrationStatusPage({ onBack, onGoToLogin, initialRegNum
                     </div>
                   </div>
 
-                  {/* Temporary Password Box or Changed Password Notice */}
+                  {/* Temporary Password Box */}
                   {result.temp_password ? (
                     <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white p-5 rounded-2xl space-y-3 shadow-md">
                       <div className="flex items-center justify-between">

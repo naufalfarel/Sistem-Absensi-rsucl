@@ -30,6 +30,7 @@ import {
   Trophy,
   Award,
   Eye,
+  CheckSquare,
 } from "lucide-react";
 import logoImg from "../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg";
 import {
@@ -59,6 +60,8 @@ import { ResignationTab } from "./admin/ResignationTab";
 import AssignmentLetterTab from "./admin/AssignmentLetterTab";
 import { AdminManagementTab } from "./admin/AdminManagementTab";
 import { DisciplinaryTab } from "./admin/DisciplinaryTab";
+import { ShiftApprovalTab } from "./admin/ShiftApprovalTab";
+
 import { Crown, ShieldAlert } from "lucide-react";
 import {
   employeeApi,
@@ -68,6 +71,7 @@ import {
   notificationApi,
   overtimeApi,
   employeeRegistrationApi,
+  scheduleApi,
 } from "../../services/api";
 
 const sidebarItems = [
@@ -84,6 +88,7 @@ const sidebarItems = [
   { id: "attendance", icon: ClipboardList, label: "Absensi" },
   { id: "history", icon: History, label: "Riwayat" },
   { id: "schedule", icon: CalendarDays, label: "Jadwal Shift" },
+  { id: "shift_approval", icon: CheckSquare, label: "Persetujuan Shift Baru" },
   { id: "holidays", icon: CalendarDays, label: "Kalender Libur" },
   { id: "leave", icon: FileText, label: "Pengajuan Cuti", badge: 0 },
   { id: "overtime", icon: Clock, label: "Lembur", badge: 0 },
@@ -243,11 +248,9 @@ export function AdminApp({ onLogout }: AdminAppProps) {
   // Jumlah notifikasi sistem admin yang belum dibaca
   const [unreadNotifications, setUnreadNotifications] = useState(0);
 
-  // Jumlah pengajuan lembur yang belum diproses (draft / pending)
   const [pendingOvertimeCount, setPendingOvertimeCount] = useState(0);
-
-  // Jumlah pengajuan pendaftaran pegawai baru yang belum diproses (pending)
   const [pendingRegistrationCount, setPendingRegistrationCount] = useState(0);
+  const [pendingShiftCount, setPendingShiftCount] = useState(0);
 
   // State untuk detail modal pegawai
   const [detailModalEmp, setDetailModalEmp] = useState<Employee | null>(null);
@@ -302,6 +305,21 @@ export function AdminApp({ onLogout }: AdminAppProps) {
     }
   };
 
+  const fetchPendingShiftCount = async () => {
+    try {
+      const res = await scheduleApi.list();
+      if (res.success) {
+        const count = (res.data ?? []).filter(
+          (s) => s.proposed_by !== null && s.parent_id === null && (s.status === 'pending' || s.status === 'pending_delete')
+        ).length;
+        setPendingShiftCount(count);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+
   /**
    * Mengambil data utama secara massal (Daftar Pegawai, Metadata Departemen & Jabatan, Ringkasan Laporan).
    */
@@ -348,10 +366,12 @@ export function AdminApp({ onLogout }: AdminAppProps) {
     fetchUnreadNotificationsCount();
     fetchPendingOvertimeCount();
     fetchPendingRegistrationCount();
+    fetchPendingShiftCount();
     const interval = setInterval(() => {
       fetchUnreadNotificationsCount();
       fetchPendingOvertimeCount();
       fetchPendingRegistrationCount();
+      fetchPendingShiftCount();
     }, 20000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -749,6 +769,9 @@ export function AdminApp({ onLogout }: AdminAppProps) {
       if (item.id === "notifications") {
         return { ...item, badge: unreadNotifications };
       }
+      if (item.id === "shift_approval") {
+        return { ...item, badge: pendingShiftCount };
+      }
       return item;
     });
 
@@ -777,7 +800,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
       },
       {
         title: "Operasional & Jadwal",
-        items: ["attendance", "history", "schedule", "holidays"]
+        items: ["attendance", "history", "schedule", "shift_approval", "holidays"]
           .map(getItem)
           .filter(Boolean),
       },
@@ -1788,6 +1811,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
           {activeTab === "attendance" && <AttendanceTab />}
           {activeTab === "history" && <HistoryTab />}
           {activeTab === "schedule" && <ScheduleTab />}
+          {activeTab === "shift_approval" && <ShiftApprovalTab />}
           {activeTab === "holidays" && <HolidaysTab />}
           {activeTab === "leave" && (
             <LeaveTab onUpdateCount={refreshReportSummary} />

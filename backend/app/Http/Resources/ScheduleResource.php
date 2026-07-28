@@ -51,6 +51,10 @@ class ScheduleResource extends JsonResource
             'created_by_name' => $this->creator ? $this->creator->name : null,
             'updated_by'      => $this->updated_by,
             'updated_by_name' => $this->updater ? $this->updater->name : null,
+            'status'          => $this->status ?? 'approved',
+            'admin_note'      => $this->admin_note,
+            'proposed_by'     => $this->proposed_by,
+            'proposed_by_name' => $this->proposedBy ? $this->proposedBy->name : null,
         ];
 
         if ($this->relationLoaded('children')) {

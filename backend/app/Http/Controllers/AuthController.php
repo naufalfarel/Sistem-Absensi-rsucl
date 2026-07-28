@@ -60,9 +60,13 @@ class AuthController extends Controller
 
         // Sertakan info departemen yang diawasi jika PJ Bagian
         if ($user->isPjBagian()) {
-            $user->load('pjBagianDepartment');
+            $user->load(['pjBagianDepartment', 'pjDepartments']);
             $userData['pj_bagian_department_id'] = $user->pj_bagian_department_id;
             $userData['pj_bagian_department']    = $user->pjBagianDepartment?->name;
+            $userData['pj_departments']          = $user->pjDepartments->map(fn($d) => [
+                'id'   => $d->id,
+                'name' => $d->name
+            ])->toArray();
         }
 
         // Jika user bukan admin, sertakan info jabatan dan departemen (berlaku untuk employee & pj_bagian)
@@ -121,12 +125,15 @@ class AuthController extends Controller
             'username'        => $user->username,
             'profile_picture' => $user->profile_picture ? url($user->profile_picture) : null,
         ];
-
         // Sertakan info departemen yang diawasi jika PJ Bagian
         if ($user->isPjBagian()) {
-            $user->load('pjBagianDepartment');
+            $user->load(['pjBagianDepartment', 'pjDepartments']);
             $data['pj_bagian_department_id'] = $user->pj_bagian_department_id;
             $data['pj_bagian_department']    = $user->pjBagianDepartment?->name;
+            $data['pj_departments']          = $user->pjDepartments->map(fn($d) => [
+                'id'   => $d->id,
+                'name' => $d->name
+            ])->toArray();
         }
 
         // Lampirkan data kepegawaian jika bukan admin (employee & pj_bagian)
@@ -271,7 +278,6 @@ class AuthController extends Controller
                 $emp->save();
             }
         }
-
         // Siapkan ulang response payload data profil terbaru
         $data = [
             'id'              => $user->id,
@@ -282,6 +288,16 @@ class AuthController extends Controller
             'username'        => $user->username,
             'profile_picture' => $user->profile_picture ? url($user->profile_picture) : null,
         ];
+
+        if ($user->isPjBagian()) {
+            $user->load(['pjBagianDepartment', 'pjDepartments']);
+            $data['pj_bagian_department_id'] = $user->pj_bagian_department_id;
+            $data['pj_bagian_department']    = $user->pjBagianDepartment?->name;
+            $data['pj_departments']          = $user->pjDepartments->map(fn($d) => [
+                'id'   => $d->id,
+                'name' => $d->name
+            ])->toArray();
+        }
 
         if (!$user->isAdmin()) {
             $emp = $user->employee()->with(['department', 'position'])->first();

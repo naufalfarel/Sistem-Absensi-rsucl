@@ -185,20 +185,23 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
               <div className="min-w-0">
                 <p className="text-[13px] font-bold text-gray-900 leading-tight">RSUCL</p>
                 <p className="text-[10.5px] text-[#16A34A] font-semibold truncate max-w-[145px]" title={
-                  (user?.pj_bagian_department || (user as any)?.department)
-                    ? ((user?.pj_bagian_department || (user as any)?.department).toLowerCase().startsWith('bagian')
-                        ? `PJ ${user?.pj_bagian_department || (user as any)?.department}`
-                        : `PJ Bagian ${user?.pj_bagian_department || (user as any)?.department}`)
-                    : 'PJ Bagian'
+                  (() => {
+                    const pjDepts = (user as any)?.pj_departments;
+                    if (pjDepts && pjDepts.length > 0) {
+                      return 'PJ ' + pjDepts.map((d: any) => d.name).join(', ');
+                    }
+                    return 'PJ ' + (user?.pj_bagian_department || 'Bagian');
+                  })()
                 }>
-                  {(user?.pj_bagian_department || (user as any)?.department)
-                    ? ((user?.pj_bagian_department || (user as any)?.department).toLowerCase().startsWith('bagian')
-                        ? `PJ ${user?.pj_bagian_department || (user as any)?.department}`
-                        : `PJ Bagian ${user?.pj_bagian_department || (user as any)?.department}`)
-                    : 'PJ Bagian'}
+                  {(() => {
+                    const pjDepts = (user as any)?.pj_departments;
+                    if (pjDepts && pjDepts.length > 0) {
+                      return 'PJ ' + pjDepts.map((d: any) => d.name).join(', ');
+                    }
+                    return 'PJ ' + (user?.pj_bagian_department || 'Bagian');
+                  })()}
                 </p>
-              </div>
-            </div>
+              </div>            </div>
             <button className="md:hidden text-gray-400 hover:text-gray-600" onClick={() => setSidebarOpen(false)}>
               <X size={18} />
             </button>
@@ -331,9 +334,24 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
                     </span>
                   )}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[12px] font-semibold text-gray-850 truncate">{user?.name || 'PJ Bagian'}</p>
-                  <p className="text-[10px] text-gray-400 truncate">PJ Bagian · {user?.pj_bagian_department || 'RSUCL'}</p>
+                <div className="flex-1 min-w-0">                  <p className="text-[12px] font-semibold text-gray-850 truncate">{user?.name || 'PJ Bagian'}</p>
+                  <p className="text-[10px] text-gray-400 truncate" title={
+                    (() => {
+                      const pjDepts = (user as any)?.pj_departments;
+                      if (pjDepts && pjDepts.length > 0) {
+                        return 'PJ Bagian · ' + pjDepts.map((d: any) => d.name).join(', ');
+                      }
+                      return 'PJ Bagian · ' + (user?.pj_bagian_department || 'RSUCL');
+                    })()
+                  }>
+                    {(() => {
+                      const pjDepts = (user as any)?.pj_departments;
+                      if (pjDepts && pjDepts.length > 0) {
+                        return 'PJ · ' + pjDepts.map((d: any) => d.name).join(', ');
+                      }
+                      return 'PJ · ' + (user?.pj_bagian_department || 'RSUCL');
+                    })()}
+                  </p>
                 </div>
               </button>
               <button onClick={onLogout} className="text-gray-400 hover:text-red-500 transition-colors flex-shrink-0" title="Keluar">
@@ -352,8 +370,22 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
             <button className="md:hidden text-gray-500 hover:text-gray-700" onClick={() => setSidebarOpen(true)}>
               <Menu size={20} />
             </button>
-            <p className="text-[13px] font-bold text-gray-800 truncate hidden md:block">
-              Departemen: {user.pj_bagian_department || 'Umum'}
+            <p className="text-[13px] font-bold text-gray-800 truncate hidden md:block" title={
+              (() => {
+                const pjDepts = (user as any)?.pj_departments;
+                if (pjDepts && pjDepts.length > 0) {
+                  return 'Unit: ' + pjDepts.map((d: any) => d.name).join(', ');
+                }
+                return 'Unit: ' + (user?.pj_bagian_department || 'Umum');
+              })()
+            }>
+              {(() => {
+                const pjDepts = (user as any)?.pj_departments;
+                if (pjDepts && pjDepts.length > 0) {
+                  return 'Unit: ' + pjDepts.map((d: any) => d.name).join(', ');
+                }
+                return 'Unit: ' + (user?.pj_bagian_department || 'Umum');
+              })()}
             </p>
           </div>
 

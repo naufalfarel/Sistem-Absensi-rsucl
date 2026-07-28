@@ -56,13 +56,13 @@ class ResignationRequestController extends Controller
         // Mode Admin / PJ Bagian: memuat pengajuan pengunduran diri dengan filter
         $query = ResignationRequest::with(['employee.user', 'employee.department', 'reviewer', 'pjReviewer'])
             ->orderBy('created_at', 'desc');
-
         if ($user->isPjBagian()) {
-            if (!$user->pj_bagian_department_id) {
+            $deptIds = $user->getPjDepartmentIds();
+            if (empty($deptIds)) {
                 return response()->json(['success' => false, 'message' => 'PJ Bagian belum ditugaskan ke departemen.'], 422);
             }
-            $query->whereHas('employee', function ($q) use ($user) {
-                $q->where('department_id', $user->pj_bagian_department_id);
+            $query->whereHas('employee', function ($q) use ($deptIds) {
+                $q->whereIn('department_id', $deptIds);
             });
         }
 
@@ -150,12 +150,13 @@ class ResignationRequestController extends Controller
             $path = $file->storeAs('resignation-documents', $fileName, 'public');
             $attachmentUrl = '/storage/' . $path;
         }
-
         // Cari PJ Bagian yang bertanggung jawab atas departemen karyawan ini
         $pjBagian = null;
         if ($employee->department_id) {
             $pjBagian = User::where('role', 'pj_bagian')
-                ->where('pj_bagian_department_id', $employee->department_id)
+                ->whereHas('pjDepartments', function ($q) use ($employee) {
+                    $q->where('departments.id', $employee->department_id);
+                })
                 ->first();
         }
 
@@ -351,9 +352,9 @@ class ResignationRequestController extends Controller
                 'message' => 'Anda tidak dapat memproses pengajuan resign milik sendiri.',
             ], 403);
         }
-
-        // PJ Bagian hanya boleh proses pengajuan dari departemennya
-        if ($resignation->employee?->department_id !== $user->pj_bagian_department_id) {
+        // PJ Bagian hanya boleh proses pengajuan dari departemen yang diawasi
+        $deptIds = $user->getPjDepartmentIds();
+        if (!in_array($resignation->employee?->department_id, $deptIds)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Anda hanya dapat memproses pengajuan dari departemen yang Anda awasi.',

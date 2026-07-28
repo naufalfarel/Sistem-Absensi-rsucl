@@ -121,14 +121,23 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
     if (e.key === 'Enter') handleLogin();
   };
 
+  // State mode pendaftaran / edit data registrasi
+  const [editRegistrationData, setEditRegistrationData] = useState<any | null>(null);
+
   if (publicView === 'register') {
     return (
       <EmployeeRegistrationPage
-        onBack={() => setPublicView('login')}
+        onBack={() => {
+          setEditRegistrationData(null);
+          setPublicView('login');
+        }}
         onGoToCheckStatus={(regNum) => {
+          setEditRegistrationData(null);
           setPrefilledRegNumber(regNum);
           setPublicView('check_status');
         }}
+        initialData={editRegistrationData}
+        onClearInitialData={() => setEditRegistrationData(null)}
       />
     );
   }
@@ -139,6 +148,10 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
         onBack={() => setPublicView('login')}
         onGoToLogin={() => setPublicView('login')}
         initialRegNumber={prefilledRegNumber}
+        onEditRegistration={(data) => {
+          setEditRegistrationData(data);
+          setPublicView('register');
+        }}
       />
     );
   }

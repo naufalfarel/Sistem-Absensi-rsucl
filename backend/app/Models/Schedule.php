@@ -12,11 +12,15 @@ use Illuminate\Database\Eloquent\Model;
  */
 class Schedule extends Model
 {
-    // Kolom yang dapat diisi secara massal
     protected $fillable = [
         'parent_id', 'name', 'start_time', 'end_time', 'color', 'icon', 'shift_type',
-        'owner_department_id', 'created_by', 'updated_by'
+        'owner_department_id', 'created_by', 'updated_by', 'status', 'admin_note', 'proposed_by'
     ];
+
+    public function proposedBy()
+    {
+        return $this->belongsTo(User::class, 'proposed_by');
+    }
 
     /**
      * Relasi ke model parent Schedule.
