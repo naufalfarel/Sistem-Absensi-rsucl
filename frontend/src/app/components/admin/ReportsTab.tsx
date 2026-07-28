@@ -201,7 +201,7 @@ export function ReportsTab() {
     alignment: { horizontal: "right", vertical: "center" },
   });
 
-  const handleExportExcel = async () => {
+  const handleExportExcel = async (type: "harian" | "bulanan" = "harian") => {
     setExporting(true);
     try {
       // Load logo as base64 for inline embedding in HTML Excel
@@ -282,7 +282,7 @@ export function ReportsTab() {
           ? ` | Departemen: ${selectedDepartment.toUpperCase()}`
           : "";
 
-      if (reportType === "harian") {
+      if (type === "harian") {
         const res = await attendanceApi.history(selectedMonth, selectedYear);
         if (!res.success || !res.data) {
           alert("Gagal memuat data absensi.");
@@ -713,7 +713,7 @@ export function ReportsTab() {
     }
   };
 
-  const handleExportPDF = async () => {
+  const handleExportPDF = async (type: "harian" | "bulanan" = "harian") => {
     setExporting(true);
     const printWindow = window.open("", "_blank");
     if (!printWindow) {
@@ -737,7 +737,7 @@ export function ReportsTab() {
       let tableRowsHtml = "";
       let reportTitle = "";
 
-      if (reportType === "harian") {
+      if (type === "harian") {
         const res = await attendanceApi.history(selectedMonth, selectedYear);
         if (!res.success || !res.data) {
           alert("Gagal memuat data absensi.");
@@ -999,10 +999,7 @@ export function ReportsTab() {
     }
   };
 
-  // ── State Filter Laporan Manajemen SDM ──────────────────────────
-  const [hrReportMonth, setHrReportMonth] = useState<number>(currentDate.getMonth() + 1);
-  const [hrReportYear, setHrReportYear] = useState<number>(currentDate.getFullYear());
-  const [hrReportDept, setHrReportDept] = useState<string>("all");
+  // ── State Laporan Manajemen SDM ──────────────────────────
   const [hrExporting, setHrExporting] = useState<string | null>(null); // nama laporan yang sedang diekspor
 
   // ── Helper: Header HTML untuk semua laporan SDM ──────────────────
@@ -1119,14 +1116,14 @@ export function ReportsTab() {
     setHrExporting("lembur");
     try {
       const logo = await loadLogoBase64();
-      const period = getMonthsLabel(hrReportMonth, hrReportYear);
-      const startDate = `${hrReportYear}-${String(hrReportMonth).padStart(2,"0")}-01`;
-      const lastDay = new Date(hrReportYear, hrReportMonth, 0).getDate();
-      const endDate = `${hrReportYear}-${String(hrReportMonth).padStart(2,"0")}-${String(lastDay).padStart(2,"0")}`;
+      const period = getMonthsLabel(selectedMonth, selectedYear);
+      const startDate = `${selectedYear}-${String(selectedMonth).padStart(2,"0")}-01`;
+      const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
+      const endDate = `${selectedYear}-${String(selectedMonth).padStart(2,"0")}-${String(lastDay).padStart(2,"0")}`;
       const res = await overtimeApi.list({ date_from: startDate, date_to: endDate, per_page: 9999 });
       if (!res.success) { alert("Gagal memuat data lembur."); return; }
       const data = res.data.filter(r => {
-        const deptOk = hrReportDept === "all" || r.employee?.department === hrReportDept;
+        const deptOk = selectedDepartment === "all" || r.employee?.department === selectedDepartment;
         return r.status === "approved" && deptOk;
       });
       let rows = ""; let no = 1;
@@ -1150,7 +1147,7 @@ export function ReportsTab() {
         `<table><thead><tr>
           <th style="width:35px">No</th><th>NIK KTP</th><th>Nama</th><th>Unit Kerja</th><th>Tanggal</th><th>Jam Mulai</th><th>Jam Selesai</th><th>Alasan/Tujuan</th><th>Tugas</th><th>Status</th><th>Catatan Admin</th>
         </tr></thead><tbody>${rows || '<tr><td colspan="11" style="text-align:center;padding:20px;color:#9CA3AF;">Tidak ada data lembur pada periode ini.</td></tr>'}</tbody></table>`;
-      triggerHrDownload(excelWrapperHr("Rekap Lembur", body), `Rekap_Lembur_RSUCL_${hrReportYear}_${String(hrReportMonth).padStart(2,"0")}.xls`);
+      triggerHrDownload(excelWrapperHr("Rekap Lembur", body), `Rekap_Lembur_RSUCL_${selectedYear}_${String(selectedMonth).padStart(2,"0")}.xls`);
     } catch(e) { alert("Gagal ekspor data lembur."); } finally { setHrExporting(null); }
   };
 
@@ -1160,14 +1157,14 @@ export function ReportsTab() {
     if (!pw) { alert("Izinkan popup untuk mencetak."); setHrExporting(null); return; }
     try {
       const logo = await loadLogoBase64();
-      const period = getMonthsLabel(hrReportMonth, hrReportYear);
-      const startDate = `${hrReportYear}-${String(hrReportMonth).padStart(2,"0")}-01`;
-      const lastDay = new Date(hrReportYear, hrReportMonth, 0).getDate();
-      const endDate = `${hrReportYear}-${String(hrReportMonth).padStart(2,"0")}-${String(lastDay).padStart(2,"0")}`;
+      const period = getMonthsLabel(selectedMonth, selectedYear);
+      const startDate = `${selectedYear}-${String(selectedMonth).padStart(2,"0")}-01`;
+      const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
+      const endDate = `${selectedYear}-${String(selectedMonth).padStart(2,"0")}-${String(lastDay).padStart(2,"0")}`;
       const res = await overtimeApi.list({ date_from: startDate, date_to: endDate, per_page: 9999 });
       if (!res.success) { pw.close(); return; }
       const data = res.data.filter(r => {
-        const deptOk = hrReportDept === "all" || r.employee?.department === hrReportDept;
+        const deptOk = selectedDepartment === "all" || r.employee?.department === selectedDepartment;
         return r.status === "approved" && deptOk;
       });
       let rows = ""; let no = 1;
@@ -1198,14 +1195,14 @@ export function ReportsTab() {
     setHrExporting("cuti");
     try {
       const logo = await loadLogoBase64();
-      const period = getMonthsLabel(hrReportMonth, hrReportYear);
+      const period = getMonthsLabel(selectedMonth, selectedYear);
       const res = await leaveApi.list();
       if (!res.success) { alert("Gagal memuat data cuti."); return; }
-      const startDate = new Date(hrReportYear, hrReportMonth - 1, 1);
-      const endDate = new Date(hrReportYear, hrReportMonth, 0);
+      const startDate = new Date(selectedYear, selectedMonth - 1, 1);
+      const endDate = new Date(selectedYear, selectedMonth, 0);
       const data = res.data.filter(r => {
         const d = new Date(r.start_date);
-        const deptOk = hrReportDept === "all" || r.employee?.department === hrReportDept;
+        const deptOk = selectedDepartment === "all" || r.employee?.department === selectedDepartment;
         return r.status === "approved" && d >= startDate && d <= endDate && deptOk;
       });
       const typeLabel = (t: string) => ({ cuti: "Cuti Tahunan", sakit: "Izin Sakit", cuti_khusus: "Cuti Khusus", izin: "Izin" }[t] ?? t);
@@ -1229,7 +1226,7 @@ export function ReportsTab() {
         `<table><thead><tr>
           <th style="width:35px">No</th><th>NIK KTP</th><th>Nama</th><th>Unit Kerja</th><th>Jenis</th><th>Tgl Mulai</th><th>Tgl Selesai</th><th>Durasi</th><th>Alasan</th><th>Status</th><th>Disetujui Oleh</th>
         </tr></thead><tbody>${rows || '<tr><td colspan="11" style="text-align:center;padding:20px;color:#9CA3AF;">Tidak ada data pada periode ini.</td></tr>'}</tbody></table>`;
-      triggerHrDownload(excelWrapperHr("Rekap Cuti", body), `Rekap_Cuti_RSUCL_${hrReportYear}_${String(hrReportMonth).padStart(2,"0")}.xls`);
+      triggerHrDownload(excelWrapperHr("Rekap Cuti", body), `Rekap_Cuti_RSUCL_${selectedYear}_${String(selectedMonth).padStart(2,"0")}.xls`);
     } catch(e) { alert("Gagal ekspor data cuti."); } finally { setHrExporting(null); }
   };
 
@@ -1239,15 +1236,15 @@ export function ReportsTab() {
     if (!pw) { alert("Izinkan popup untuk mencetak."); setHrExporting(null); return; }
     try {
       const logo = await loadLogoBase64();
-      const period = getMonthsLabel(hrReportMonth, hrReportYear);
+      const period = getMonthsLabel(selectedMonth, selectedYear);
       const res = await leaveApi.list();
       if (!res.success) { pw.close(); return; }
-      const startDate = new Date(hrReportYear, hrReportMonth - 1, 1);
-      const endDate = new Date(hrReportYear, hrReportMonth, 0);
+      const startDate = new Date(selectedYear, selectedMonth - 1, 1);
+      const endDate = new Date(selectedYear, selectedMonth, 0);
       const typeLabel = (t: string) => ({ cuti: "Cuti Tahunan", sakit: "Izin Sakit", cuti_khusus: "Cuti Khusus", izin: "Izin" }[t] ?? t);
       const data = res.data.filter(r => {
         const d = new Date(r.start_date);
-        const deptOk = hrReportDept === "all" || r.employee?.department === hrReportDept;
+        const deptOk = selectedDepartment === "all" || r.employee?.department === selectedDepartment;
         return r.status === "approved" && d >= startDate && d <= endDate && deptOk;
       });
       let rows = ""; let no = 1;
@@ -1277,11 +1274,11 @@ export function ReportsTab() {
     setHrExporting("surat-tugas");
     try {
       const logo = await loadLogoBase64();
-      const period = getMonthsLabel(hrReportMonth, hrReportYear);
-      const startDate = `${hrReportYear}-${String(hrReportMonth).padStart(2,"0")}-01`;
-      const lastDay = new Date(hrReportYear, hrReportMonth, 0).getDate();
-      const endDate = `${hrReportYear}-${String(hrReportMonth).padStart(2,"0")}-${String(lastDay).padStart(2,"0")}`;
-      const res = await assignmentLetterApi.list({ start_date: startDate, end_date: endDate, department_id: hrReportDept !== "all" ? hrReportDept : undefined, per_page: 9999 } as any);
+      const period = getMonthsLabel(selectedMonth, selectedYear);
+      const startDate = `${selectedYear}-${String(selectedMonth).padStart(2,"0")}-01`;
+      const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
+      const endDate = `${selectedYear}-${String(selectedMonth).padStart(2,"0")}-${String(lastDay).padStart(2,"0")}`;
+      const res = await assignmentLetterApi.list({ start_date: startDate, end_date: endDate, department_id: selectedDepartment !== "all" ? selectedDepartment : undefined, per_page: 9999 } as any);
       if (!res.success) { alert("Gagal memuat data surat tugas."); return; }
       const data = res.data.filter(r => r.status === "approved" || r.status === "completed");
       let rows = ""; let no = 1;
@@ -1303,7 +1300,7 @@ export function ReportsTab() {
         `<table><thead><tr>
           <th style="width:35px">No</th><th>NIK KTP</th><th>Nama</th><th>Unit Kerja</th><th>Judul Surat</th><th>Institusi</th><th>Tujuan</th><th>Tgl Mulai</th><th>Tgl Selesai</th><th>Status</th>
         </tr></thead><tbody>${rows || '<tr><td colspan="10" style="text-align:center;padding:20px;color:#9CA3AF;">Tidak ada data surat tugas pada periode ini.</td></tr>'}</tbody></table>`;
-      triggerHrDownload(excelWrapperHr("Surat Tugas", body), `Rekap_Surat_Tugas_RSUCL_${hrReportYear}_${String(hrReportMonth).padStart(2,"0")}.xls`);
+      triggerHrDownload(excelWrapperHr("Surat Tugas", body), `Rekap_Surat_Tugas_RSUCL_${selectedYear}_${String(selectedMonth).padStart(2,"0")}.xls`);
     } catch(e) { alert("Gagal ekspor data surat tugas."); } finally { setHrExporting(null); }
   };
 
@@ -1313,11 +1310,11 @@ export function ReportsTab() {
     if (!pw) { alert("Izinkan popup untuk mencetak."); setHrExporting(null); return; }
     try {
       const logo = await loadLogoBase64();
-      const period = getMonthsLabel(hrReportMonth, hrReportYear);
-      const startDate = `${hrReportYear}-${String(hrReportMonth).padStart(2,"0")}-01`;
-      const lastDay = new Date(hrReportYear, hrReportMonth, 0).getDate();
-      const endDate = `${hrReportYear}-${String(hrReportMonth).padStart(2,"0")}-${String(lastDay).padStart(2,"0")}`;
-      const res = await assignmentLetterApi.list({ start_date: startDate, end_date: endDate, department_id: hrReportDept !== "all" ? hrReportDept : undefined, per_page: 9999 } as any);
+      const period = getMonthsLabel(selectedMonth, selectedYear);
+      const startDate = `${selectedYear}-${String(selectedMonth).padStart(2,"0")}-01`;
+      const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
+      const endDate = `${selectedYear}-${String(selectedMonth).padStart(2,"0")}-${String(lastDay).padStart(2,"0")}`;
+      const res = await assignmentLetterApi.list({ start_date: startDate, end_date: endDate, department_id: selectedDepartment !== "all" ? selectedDepartment : undefined, per_page: 9999 } as any);
       if (!res.success) { pw.close(); return; }
       const data = res.data.filter(r => r.status === "approved" || r.status === "completed");
       let rows = ""; let no = 1;
@@ -1346,12 +1343,12 @@ export function ReportsTab() {
     setHrExporting("resign");
     try {
       const logo = await loadLogoBase64();
-      const period = getMonthsLabel(hrReportMonth, hrReportYear);
-      const res = await resignationApi.list({ department_id: hrReportDept !== "all" ? Number(hrReportDept) : undefined });
+      const period = getMonthsLabel(selectedMonth, selectedYear);
+      const res = await resignationApi.list({ department_id: selectedDepartment !== "all" ? Number(selectedDepartment) : undefined });
       if (!res.success) { alert("Gagal memuat data pengunduran diri."); return; }
       const data = res.data.filter(r => {
         const d = new Date(r.request_date);
-        return r.status === "approved" && d.getFullYear() === hrReportYear && d.getMonth() + 1 === hrReportMonth;
+        return r.status === "approved" && d.getFullYear() === selectedYear && d.getMonth() + 1 === selectedMonth;
       });
       let rows = ""; let no = 1;
       data.forEach(r => {
@@ -1371,7 +1368,7 @@ export function ReportsTab() {
         `<table><thead><tr>
           <th style="width:35px">No</th><th>NIK KTP</th><th>Nama</th><th>Unit Kerja</th><th>Jabatan</th><th>Tgl Pengajuan</th><th>Tgl Efektif</th><th>Alasan</th><th>Status</th>
         </tr></thead><tbody>${rows || '<tr><td colspan="9" style="text-align:center;padding:20px;color:#9CA3AF;">Tidak ada data pengunduran diri pada periode ini.</td></tr>'}</tbody></table>`;
-      triggerHrDownload(excelWrapperHr("Pengunduran Diri", body), `Rekap_Pengunduran_Diri_RSUCL_${hrReportYear}_${String(hrReportMonth).padStart(2,"0")}.xls`);
+      triggerHrDownload(excelWrapperHr("Pengunduran Diri", body), `Rekap_Pengunduran_Diri_RSUCL_${selectedYear}_${String(selectedMonth).padStart(2,"0")}.xls`);
     } catch(e) { alert("Gagal ekspor data pengunduran diri."); } finally { setHrExporting(null); }
   };
 
@@ -1381,12 +1378,12 @@ export function ReportsTab() {
     if (!pw) { alert("Izinkan popup untuk mencetak."); setHrExporting(null); return; }
     try {
       const logo = await loadLogoBase64();
-      const period = getMonthsLabel(hrReportMonth, hrReportYear);
-      const res = await resignationApi.list({ department_id: hrReportDept !== "all" ? Number(hrReportDept) : undefined });
+      const period = getMonthsLabel(selectedMonth, selectedYear);
+      const res = await resignationApi.list({ department_id: selectedDepartment !== "all" ? Number(selectedDepartment) : undefined });
       if (!res.success) { pw.close(); return; }
       const data = res.data.filter(r => {
         const d = new Date(r.request_date);
-        return r.status === "approved" && d.getFullYear() === hrReportYear && d.getMonth() + 1 === hrReportMonth;
+        return r.status === "approved" && d.getFullYear() === selectedYear && d.getMonth() + 1 === selectedMonth;
       });
       let rows = ""; let no = 1;
       data.forEach(r => {
@@ -1414,12 +1411,12 @@ export function ReportsTab() {
     setHrExporting("disiplin");
     try {
       const logo = await loadLogoBase64();
-      const period = getMonthsLabel(hrReportMonth, hrReportYear);
-      const res = await disciplinarySanctionApi.list({ department_id: hrReportDept !== "all" ? Number(hrReportDept) : undefined });
+      const period = getMonthsLabel(selectedMonth, selectedYear);
+      const res = await disciplinarySanctionApi.list({ department_id: selectedDepartment !== "all" ? Number(selectedDepartment) : undefined });
       if (!res.success) { alert("Gagal memuat data sanksi disiplin."); return; }
       const data = res.data.filter(r => {
         const d = new Date(r.created_at);
-        return d.getFullYear() === hrReportYear && d.getMonth() + 1 === hrReportMonth;
+        return d.getFullYear() === selectedYear && d.getMonth() + 1 === selectedMonth;
       });
       const typeLabel = (t: string) => ({ teguran: "Teguran", sp1: "SP 1", sp2: "SP 2", phk: "PHK" }[t] ?? t.toUpperCase());
       const typeColor = (t: string) => ({ teguran: "#FEF9C3", sp1: "#FED7AA", sp2: "#FEE2E2", phk: "#FECACA" }[t] ?? "#F3F4F6");
@@ -1440,7 +1437,7 @@ export function ReportsTab() {
         `<table><thead><tr>
           <th style="width:35px">No</th><th>NIK KTP</th><th>Nama</th><th>Unit Kerja</th><th>Jenis Sanksi</th><th>Tanggal</th><th>Catatan / Kronologi</th><th>Ditetapkan Oleh</th>
         </tr></thead><tbody>${rows || '<tr><td colspan="8" style="text-align:center;padding:20px;color:#9CA3AF;">Tidak ada sanksi disiplin pada periode ini.</td></tr>'}</tbody></table>`;
-      triggerHrDownload(excelWrapperHr("Sanksi Disiplin", body), `Rekap_Sanksi_Disiplin_RSUCL_${hrReportYear}_${String(hrReportMonth).padStart(2,"0")}.xls`);
+      triggerHrDownload(excelWrapperHr("Sanksi Disiplin", body), `Rekap_Sanksi_Disiplin_RSUCL_${selectedYear}_${String(selectedMonth).padStart(2,"0")}.xls`);
     } catch(e) { alert("Gagal ekspor data sanksi disiplin."); } finally { setHrExporting(null); }
   };
 
@@ -1450,12 +1447,12 @@ export function ReportsTab() {
     if (!pw) { alert("Izinkan popup untuk mencetak."); setHrExporting(null); return; }
     try {
       const logo = await loadLogoBase64();
-      const period = getMonthsLabel(hrReportMonth, hrReportYear);
-      const res = await disciplinarySanctionApi.list({ department_id: hrReportDept !== "all" ? Number(hrReportDept) : undefined });
+      const period = getMonthsLabel(selectedMonth, selectedYear);
+      const res = await disciplinarySanctionApi.list({ department_id: selectedDepartment !== "all" ? Number(selectedDepartment) : undefined });
       if (!res.success) { pw.close(); return; }
       const data = res.data.filter(r => {
         const d = new Date(r.created_at);
-        return d.getFullYear() === hrReportYear && d.getMonth() + 1 === hrReportMonth;
+        return d.getFullYear() === selectedYear && d.getMonth() + 1 === selectedMonth;
       });
       const typeLabel = (t: string) => ({ teguran: "Teguran", sp1: "SP 1", sp2: "SP 2", phk: "PHK" }[t] ?? t.toUpperCase());
       const typeColor = (t: string) => ({ teguran: "#FEF9C3", sp1: "#FED7AA", sp2: "#FEE2E2", phk: "#FECACA" }[t] ?? "#F3F4F6");
@@ -1540,98 +1537,10 @@ export function ReportsTab() {
             Real-time
           </p>
         </div>
-        <div className="flex gap-3 flex-wrap items-center">
-          {/* Kelompok Laporan Absensi */}
-          <div className="flex items-center gap-2 p-1.5 bg-gray-50/60 rounded-xl border border-gray-100 shadow-sm">
-            <div className="text-left px-2 hidden sm:block">
-              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">
-                Laporan Absensi
-              </p>
-              <p className="text-[8.5px] text-gray-400 leading-none mt-0.5">
-                Sesuai filter aktif
-              </p>
-            </div>
-            <button
-              onClick={handleExportPDF}
-              disabled={exporting}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 border border-red-100 rounded-lg text-[11px] font-medium text-red-600 hover:bg-red-100 transition-colors disabled:opacity-50"
-            >
-              <FileText size={12} /> {exporting ? "Memproses..." : "Export PDF"}
-            </button>
-            <button
-              onClick={handleExportExcel}
-              disabled={exporting}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 border border-green-100 rounded-lg text-[11px] font-medium text-[#16A34A] hover:bg-green-100 transition-colors disabled:opacity-50"
-            >
-              <Download size={12} />{" "}
-              {exporting ? "Memproses..." : "Export Excel"}
-            </button>
-          </div>
-
-          {/* Kelompok Laporan Kendaraan */}
-          <div className="flex items-center gap-2 p-1.5 bg-gray-50/60 rounded-xl border border-gray-100 shadow-sm">
-            <div className="text-left px-2 hidden sm:block">
-              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">
-                Data Kendaraan
-              </p>
-              <p className="text-[8.5px] text-gray-400 leading-none mt-0.5">
-                Daftar plat nomor
-              </p>
-            </div>
-            <button
-              onClick={handleExportVehicles}
-              disabled={exporting}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#16A34A] hover:bg-[#0d9240] rounded-lg text-[11px] font-medium text-white transition-colors disabled:opacity-50"
-            >
-              <Download size={12} />{" "}
-              {exporting ? "Memproses..." : "Export Kendaraan"}
-            </button>
-          </div>
-
-          {/* Kelompok Laporan Media Sosial */}
-          <div className="flex items-center gap-2 p-1.5 bg-gray-50/60 rounded-xl border border-gray-100 shadow-sm">
-            <div className="text-left px-2 hidden sm:block">
-              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">
-                Media Sosial
-              </p>
-              <p className="text-[8.5px] text-gray-400 leading-none mt-0.5">
-                Instagram, FB, TikTok
-              </p>
-            </div>
-            <button
-              onClick={handleExportSocialMedia}
-              disabled={exporting}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#EA580C] hover:bg-[#d44f0b] rounded-lg text-[11px] font-medium text-white transition-colors disabled:opacity-50"
-            >
-              <Download size={12} />{" "}
-              {exporting ? "Memproses..." : "Export Medsos"}
-            </button>
-          </div>
-        </div>
       </div>
 
       {/* ── Month, Year & Department Filter ──────────────────────── */}
-      <div className="space-y-3">
-        <div className="flex flex-col gap-1 w-fit">
-          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-            Tipe Laporan
-          </label>
-          <div className="relative">
-            <select
-              value={reportType}
-              onChange={(e) => setReportType(e.target.value as any)}
-              className="appearance-none pl-3.5 pr-9 py-2 border border-gray-200 rounded-full text-[13px] bg-white focus:outline-none focus:border-[#16A34A] transition-all text-gray-700 font-semibold cursor-pointer shadow-xs"
-            >
-              <option value="harian">Harian (Detail Kehadiran)</option>
-              <option value="bulanan">Rekap Bulanan (Ringkasan)</option>
-            </select>
-            <ChevronDown
-              size={12}
-              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
-            />
-          </div>
-        </div>
-
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
         <MonthYearDeptFilter
           month={selectedMonth}
           year={selectedYear}
@@ -1642,6 +1551,131 @@ export function ReportsTab() {
           onYearChange={setSelectedYear}
           onDeptChange={setSelectedDepartment}
         />
+      </div>
+
+      {/* ══════════════════════════════════════════════════════════════════
+           SECTION: LAPORAN KEHADIRAN & OPERASIONAL
+         ══════════════════════════════════════════════════════════════════ */}
+      <div className="bg-white rounded-2xl border border-green-150 shadow-sm overflow-hidden">
+        {/* Header Section */}
+        <div className="px-5 py-4 border-b border-green-100 bg-gradient-to-r from-green-50/60 to-emerald-50/40">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-green-100 flex items-center justify-center flex-shrink-0">
+              <ClipboardList size={15} className="text-green-700" />
+            </div>
+            <div>
+              <h3 className="text-[13px] font-bold text-gray-900">Laporan Kehadiran &amp; Operasional</h3>
+              <p className="text-[10.5px] text-gray-400 mt-0.5">Cetak &amp; ekspor rekap kehadiran harian, bulanan, data kendaraan, dan media sosial pegawai</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Grid Laporan */}
+        <div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+
+          {/* Card 1: Absensi Harian */}
+          <div className="bg-blue-50/30 rounded-xl border border-blue-100 p-4 flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+                <Clock size={13} className="text-blue-700" />
+              </div>
+              <div>
+                <p className="text-[12px] font-bold text-gray-800">Absensi Harian</p>
+                <p className="text-[10px] text-gray-400">Detail check-in masuk &amp; pulang</p>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-auto">
+              <button
+                onClick={() => handleExportExcel("harian")}
+                disabled={exporting}
+                className="flex-1 flex items-center justify-center gap-1 px-2 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                <Download size={11} />Excel
+              </button>
+              <button
+                onClick={() => handleExportPDF("harian")}
+                disabled={exporting}
+                className="flex-1 flex items-center justify-center gap-1 px-2 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                <FileText size={11} />PDF
+              </button>
+            </div>
+          </div>
+
+          {/* Card 2: Absensi Bulanan */}
+          <div className="bg-emerald-50/30 rounded-xl border border-emerald-100 p-4 flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                <Users size={13} className="text-emerald-700" />
+              </div>
+              <div>
+                <p className="text-[12px] font-bold text-gray-800">Absensi Bulanan</p>
+                <p className="text-[10px] text-gray-400">Total kehadiran &amp; jam kerja</p>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-auto">
+              <button
+                onClick={() => handleExportExcel("bulanan")}
+                disabled={exporting}
+                className="flex-1 flex items-center justify-center gap-1 px-2 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                <Download size={11} />Excel
+              </button>
+              <button
+                onClick={() => handleExportPDF("bulanan")}
+                disabled={exporting}
+                className="flex-1 flex items-center justify-center gap-1 px-2 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                <FileText size={11} />PDF
+              </button>
+            </div>
+          </div>
+
+          {/* Card 3: Data Kendaraan */}
+          <div className="bg-purple-50/30 rounded-xl border border-purple-100 p-4 flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
+                <Briefcase size={13} className="text-purple-700" />
+              </div>
+              <div>
+                <p className="text-[12px] font-bold text-gray-800">Data Kendaraan</p>
+                <p className="text-[10px] text-gray-400">Plat nomor kendaraan pegawai</p>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-auto">
+              <button
+                onClick={handleExportVehicles}
+                disabled={exporting}
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                <Download size={11} />Unduh Plat Kendaraan (Excel)
+              </button>
+            </div>
+          </div>
+
+          {/* Card 4: Media Sosial */}
+          <div className="bg-orange-50/30 rounded-xl border border-orange-100 p-4 flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-orange-100 flex items-center justify-center flex-shrink-0">
+                <Award size={13} className="text-orange-700" />
+              </div>
+              <div>
+                <p className="text-[12px] font-bold text-gray-800">Media Sosial</p>
+                <p className="text-[10px] text-gray-400">Instagram, FB, TikTok pegawai</p>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-auto">
+              <button
+                onClick={handleExportSocialMedia}
+                disabled={exporting}
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                <Download size={11} />Unduh Data Medsos (Excel)
+              </button>
+            </div>
+          </div>
+
+        </div>
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════
@@ -1656,51 +1690,12 @@ export function ReportsTab() {
             </div>
             <div>
               <h3 className="text-[13px] font-bold text-gray-900">Laporan Manajemen SDM</h3>
-              <p className="text-[10.5px] text-gray-400 mt-0.5">Cetak & ekspor laporan lembur, cuti, surat tugas, pengunduran diri, dan sanksi disiplin</p>
+              <p className="text-[10.5px] text-gray-400 mt-0.5">Cetak &amp; ekspor laporan lembur, cuti, surat tugas, pengunduran diri, dan sanksi disiplin</p>
             </div>
           </div>
         </div>
 
-        {/* Filter Periode & Departemen */}
-        <div className="px-5 py-4 border-b border-gray-50 bg-gray-50/30">
-          <div className="flex flex-wrap gap-3 items-end">
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bulan</label>
-              <select
-                value={hrReportMonth}
-                onChange={e => setHrReportMonth(Number(e.target.value))}
-                className="appearance-none pl-3 pr-8 py-2 border border-gray-200 rounded-xl text-[12px] bg-white focus:outline-none focus:border-blue-400 text-gray-700 font-semibold cursor-pointer shadow-sm"
-              >
-                {["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"].map((m, i) => (
-                  <option key={i+1} value={i+1}>{m}</option>
-                ))}
-              </select>
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Tahun</label>
-              <select
-                value={hrReportYear}
-                onChange={e => setHrReportYear(Number(e.target.value))}
-                className="appearance-none pl-3 pr-8 py-2 border border-gray-200 rounded-xl text-[12px] bg-white focus:outline-none focus:border-blue-400 text-gray-700 font-semibold cursor-pointer shadow-sm"
-              >
-                {Array.from({length: new Date().getFullYear() - 2022 + 1}, (_,i) => 2022 + i).reverse().map(y => (
-                  <option key={y} value={y}>{y}</option>
-                ))}
-              </select>
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Unit Kerja</label>
-              <select
-                value={hrReportDept}
-                onChange={e => setHrReportDept(e.target.value)}
-                className="appearance-none pl-3 pr-8 py-2 border border-gray-200 rounded-xl text-[12px] bg-white focus:outline-none focus:border-blue-400 text-gray-700 font-semibold cursor-pointer shadow-sm min-w-[160px]"
-              >
-                <option value="all">Semua Departemen</option>
-                {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
-              </select>
-            </div>
-          </div>
-        </div>
+        {/* Cards container directly without duplicate filter block */}
 
         {/* Grid Laporan */}
         <div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
