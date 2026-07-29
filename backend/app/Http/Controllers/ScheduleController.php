@@ -468,85 +468,116 @@ class ScheduleController extends Controller
             ]);
         }
 
-        // ── Khusus PJ Bagian: Otomatis Jam Kantor Biasa (Reguler) ──────────
-        if ($user->isPjBagian()) {
-            // Pada hari Minggu => Libur
-            if ($dayOfWeek === 0) {
-                return response()->json([
-                    'success'        => true,
-                    'day'            => $todayName,
-                    'data'           => null,
-                    'saturday_shift' => null,
-                    'source'         => 'pj_bagian_default',
-                ]);
+        // ── Prioritas 2: Fallback ke jadwal mingguan (day_of_week) ──────────
+        $schedules = $employee->schedules()->get();
+        $todaySchedule = $schedules->first(fn($s) => $s->pivot->day_of_week === $todayName);
+        $saturdaySchedule = $schedules->first(fn($s) => $s->pivot->day_of_week === 'Sabtu');
+
+        if ($todaySchedule) {
+            $matchedShift = $todaySchedule;
+            if ($todaySchedule->parent_id === null && $todaySchedule->children()->exists()) {
+                $children = $todaySchedule->children()->get();
+                $sub = null;
+                if ($dayOfWeek === 6) {
+                    $sub = $children->first(fn($c) => str_contains(strtolower($c->name), 'sabtu'));
+                } else {
+                    $sub = $children->first(fn($c) => !str_contains(strtolower($c->name), 'sabtu'));
+                }
+                if ($sub) {
+                    $matchedShift = $sub;
+                }
             }
 
-            // Cari master shift Reguler Kantor jika ada di DB
-            $regulerShift = Schedule::whereNull('parent_id')
-                ->where(function($q) {
-                    $q->where('name', 'LIKE', '%reguler%')
-                      ->orWhere('name', 'LIKE', '%kantor%')
-                      ->orWhere('name', 'LIKE', '%pagi%');
-                })
-                ->first();
-
-            $startTime = $regulerShift ? $regulerShift->start_time : '08:30:00';
-            $endTime   = $regulerShift ? $regulerShift->end_time : '17:00:00';
-            $shiftName = $regulerShift ? $regulerShift->name : 'Reguler Kantor (Jam Kantor)';
-
-            if ($dayOfWeek === 6) { // Khusus hari Sabtu: 08:30 – 13:00 WIB
-                $endTime   = '13:00:00';
-                $shiftName = 'Reguler Kantor (Sabtu 08:30–13:00)';
+            $saturdayData = null;
+            if ($saturdaySchedule) {
+                $satMatched = $saturdaySchedule;
+                if ($saturdaySchedule->parent_id === null && $saturdaySchedule->children()->exists()) {
+                    $satSub = $saturdaySchedule->children()->where('name', 'LIKE', '%Sabtu%')->first()
+                           ?? $saturdaySchedule->children()->first();
+                    if ($satSub) $satMatched = $satSub;
+                }
+                $saturdayData = [
+                    'id'         => $satMatched->id,
+                    'name'       => $satMatched->name,
+                    'start_time' => $satMatched->start_time ?? '08:30:00',
+                    'end_time'   => $satMatched->end_time ?? '13:00:00',
+                    'color'      => $satMatched->color,
+                    'icon'       => $satMatched->icon,
+                    'shift_type' => $satMatched->shift_type ?? 'normal',
+                ];
             }
 
             return response()->json([
                 'success'        => true,
                 'day'            => $todayName,
                 'data'           => [
-                    'id'         => $regulerShift ? $regulerShift->id : 1,
-                    'name'       => $shiftName,
-                    'start_time' => $startTime,
-                    'end_time'   => $endTime,
-                    'color'      => '#16A34A',
-                    'icon'       => 'sun',
-                    'shift_type' => 'normal',
+                    'id'         => $matchedShift->id,
+                    'name'       => $matchedShift->name,
+                    'start_time' => $matchedShift->start_time ?? '08:30:00',
+                    'end_time'   => $matchedShift->end_time ?? '17:00:00',
+                    'color'      => $matchedShift->color,
+                    'icon'       => $matchedShift->icon,
+                    'shift_type' => $matchedShift->shift_type ?? 'normal',
                 ],
+                'saturday_shift' => $saturdayData,
+                'source'         => 'weekly',
+            ]);
+        }
+
+        // ── Prioritas 3: Fallback Jam Kantor Reguler (Khusus PJ Bagian / Default Office Staff) ──────────
+        // Pada hari Minggu => Libur
+        if ($dayOfWeek === 0) {
+            return response()->json([
+                'success'        => true,
+                'day'            => $todayName,
+                'data'           => null,
                 'saturday_shift' => null,
                 'source'         => 'pj_bagian_default',
             ]);
         }
 
-        // ── Prioritas 2: Fallback ke jadwal mingguan (day_of_week) ──────────
-        $schedules = $employee->schedules()->get();
+        // Cari master shift Reguler / Jam Kantor dan sub-shift yang valid (berupa child sub-shift dengan start_time & end_time)
+        $regulerParent = Schedule::whereNull('parent_id')
+            ->where(function($q) {
+                $q->where('name', 'LIKE', 'Reguler Kantor%')
+                  ->orWhere('name', 'LIKE', 'Administrasi%')
+                  ->orWhere('name', 'LIKE', '%Office%');
+            })
+            ->first();
 
-        $todaySchedule = $schedules->first(fn($s) => $s->pivot->day_of_week === $todayName);
-        $saturdaySchedule = $schedules->first(fn($s) => $s->pivot->day_of_week === 'Sabtu');
-
-        $todayData = null;
-        if ($todaySchedule) {
-            $todayData = [
-                'id'         => $todaySchedule->id,
-                'name'       => $todaySchedule->name,
-                'start_time' => $todaySchedule->start_time,
-                'end_time'   => $todaySchedule->end_time,
-                'color'      => $todaySchedule->color,
-                'icon'       => $todaySchedule->icon,
-                'shift_type' => $todaySchedule->shift_type ?? 'normal',
-            ];
+        $subShift = null;
+        if ($regulerParent) {
+            if ($dayOfWeek === 6) {
+                $subShift = $regulerParent->children()->where('name', 'LIKE', '%Sabtu%')->first();
+            } else {
+                $subShift = $regulerParent->children()->where(function($q) {
+                    $q->where('name', 'LIKE', '%Senin%')
+                      ->orWhere('name', 'LIKE', '%Normal%');
+                })->first();
+            }
         }
 
-        $saturdayData = null;
-        if ($saturdaySchedule) {
-            $saturdayData = [
-                'id'         => $saturdaySchedule->id,
-                'name'       => $saturdaySchedule->name,
-                'start_time' => $saturdaySchedule->start_time,
-                'end_time'   => $saturdaySchedule->end_time,
-                'color'      => $saturdaySchedule->color,
-                'icon'       => $saturdaySchedule->icon,
-                'shift_type' => $saturdaySchedule->shift_type ?? 'normal',
-            ];
-        }
+        $startTime  = ($subShift && $subShift->start_time) ? $subShift->start_time : '08:30:00';
+        $endTime    = ($subShift && $subShift->end_time) ? $subShift->end_time : ($dayOfWeek === 6 ? '13:00:00' : '17:00:00');
+        $shiftName  = $subShift ? $subShift->name : ($dayOfWeek === 6 ? 'Sabtu (08:30–13:00)' : 'Senin s/d Jum\'at (08:30–17:00)');
+        $shiftId    = $subShift ? $subShift->id : ($regulerParent ? $regulerParent->id : 1);
+        $shiftColor = $subShift ? $subShift->color : '#16A34A';
+
+        return response()->json([
+            'success'        => true,
+            'day'            => $todayName,
+            'data'           => [
+                'id'         => $shiftId,
+                'name'       => $shiftName,
+                'start_time' => $startTime,
+                'end_time'   => $endTime,
+                'color'      => $shiftColor,
+                'icon'       => $dayOfWeek === 6 ? 'calendar' : 'sun',
+                'shift_type' => 'normal',
+            ],
+            'saturday_shift' => null,
+            'source'         => 'pj_bagian_default',
+        ]);
 
         return response()->json([
             'success'        => true,

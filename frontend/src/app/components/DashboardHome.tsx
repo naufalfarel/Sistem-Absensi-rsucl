@@ -165,7 +165,7 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
   };
 
   // ── Helper tampilan shift ──────────────────────────────────────────────
-  const shiftName       = todayShift ? `Shift ${todayShift.name}` : todayShift === null ? 'Tidak Ada Shift' : 'Memuat…';
+  const shiftName       = todayShift ? (todayShift.name.toLowerCase().startsWith('shift') ? todayShift.name : `Shift ${todayShift.name}`) : todayShift === null ? 'Tidak Ada Shift' : 'Memuat…';
   const shiftStartTime  = fmtTime(todayShift?.start_time);
   const shiftEndTime    = fmtTime(todayShift?.end_time);
   const shiftRange      = todayShift ? `${shiftStartTime} – ${shiftEndTime} WIB` : todayShift === null ? 'Tidak ada jadwal hari ini' : '';
