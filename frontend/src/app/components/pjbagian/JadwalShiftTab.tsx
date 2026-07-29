@@ -614,34 +614,33 @@ function ShiftPopover({ shifts, currentScheduleId, onSelect, onSelectSpecial, on
         <p className="text-[9px] font-bold text-gray-400 px-3 py-1 uppercase tracking-wider">Shift Jam Kerja</p>
 
         {shifts.map(parent => (
-          <div key={parent.id}>
-            {parent.children && parent.children.length > 0
-              ? parent.children.map(child => {
-                  const pr = getPresetByHex(child.color);
-                  return (
-                    <button key={child.id} onClick={() => onSelect(child.id)}
-                      className="w-full text-left px-3 py-2 text-[11px] hover:bg-gray-50 flex items-center gap-2 transition-colors cursor-pointer">
-                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: child.color }} />
-                      <span className="font-semibold text-gray-700 truncate">{child.name}</span>
-                      <span className="ml-auto text-[10px] text-gray-400 font-mono flex-shrink-0">
-                        {child.start_time?.substring(0, 5)}–{child.end_time?.substring(0, 5)}
-                      </span>
-                      {currentScheduleId === child.id && <Check size={12} className="ml-1 text-[#16A34A]" />}
-                    </button>
-                  );
-                })
-              : (
-                <button onClick={() => onSelect(parent.id)}
-                  className="w-full text-left px-3 py-2 text-[11px] hover:bg-gray-50 flex items-center gap-2 transition-colors cursor-pointer">
-                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: parent.color }} />
-                  <span className="font-semibold text-gray-700 truncate">{parent.name}</span>
-                  <span className="ml-auto text-[10px] text-gray-400 font-mono flex-shrink-0">
-                    {parent.start_time?.substring(0, 5)}–{parent.end_time?.substring(0, 5)}
-                  </span>
-                  {currentScheduleId === parent.id && <Check size={12} className="ml-1 text-[#16A34A]" />}
-                </button>
-              )
-            }
+          <div key={parent.id} className="mt-1 font-sans">
+            {parent.children && parent.children.length > 0 ? (
+              <div>
+                <p className="text-[9px] font-bold text-gray-400 px-3 pt-2 pb-1 uppercase tracking-wider">{parent.name}</p>
+                {parent.children.map(child => (
+                  <button key={child.id} onClick={() => onSelect(child.id)}
+                    className="w-full text-left px-3 py-1.5 text-[11px] hover:bg-gray-50 flex items-center gap-2 transition-colors cursor-pointer">
+                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: child.color || '#16A34A' }} />
+                    <span className="font-medium text-gray-700 truncate">{child.name}</span>
+                    <span className="ml-auto text-[10px] text-gray-400 font-mono flex-shrink-0">
+                      {child.start_time?.substring(0, 5)}–{child.end_time?.substring(0, 5)}
+                    </span>
+                    {currentScheduleId === child.id && <Check size={12} className="ml-1 text-[#16A34A] flex-shrink-0" />}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <button onClick={() => onSelect(parent.id)}
+                className="w-full text-left px-3 py-1.5 text-[11px] hover:bg-gray-50 flex items-center gap-2 transition-colors cursor-pointer">
+                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: parent.color }} />
+                <span className="font-medium text-gray-700 truncate">{parent.name}</span>
+                <span className="ml-auto text-[10px] text-gray-400 font-mono flex-shrink-0">
+                  {parent.start_time?.substring(0, 5)}–{parent.end_time?.substring(0, 5)}
+                </span>
+                {currentScheduleId === parent.id && <Check size={12} className="ml-1 text-[#16A34A] flex-shrink-0" />}
+              </button>
+            )}
           </div>
         ))}
       </div>
@@ -1823,7 +1822,7 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
                                     title={
                                       assigned
                                         ? `[DISETUJUI] ${assigned.name}`
-                                        : "Jam Kantor Biasa (08:30 - 17:00). Akun PJ Bagian otomatis mengikuti Jam Kantor."
+                                         : "Jam Kantor Biasa (Senin–Jumat: 08:30 - 17:00, Sabtu: 08:30 - 13:00). Akun PJ Bagian otomatis mengikuti Jam Kantor."
                                     }
                                   >
                                     {assigned ? badge : 'N'}

@@ -60,7 +60,8 @@ class DatabaseSeeder extends Seeder
             [
                 'parent' => ['name' => 'Reguler Kantor (08:30–17:00)', 'color' => '#16A34A', 'icon' => 'sun'],
                 'children' => [
-                    ['name' => 'Normal (08:30–17:00)', 'start_time' => '08:30:00', 'end_time' => '17:00:00', 'color' => '#16A34A', 'icon' => 'sun'],
+                    ['name' => 'Senin s/d Jum\'at (08:30–17:00)', 'start_time' => '08:30:00', 'end_time' => '17:00:00', 'color' => '#16A34A', 'icon' => 'sun'],
+                    ['name' => 'Sabtu', 'start_time' => '08:30:00', 'end_time' => '13:00:00', 'color' => '#16A34A', 'icon' => 'calendar'],
                 ]
             ],
             [

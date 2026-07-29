@@ -494,6 +494,11 @@ class ScheduleController extends Controller
             $endTime   = $regulerShift ? $regulerShift->end_time : '17:00:00';
             $shiftName = $regulerShift ? $regulerShift->name : 'Reguler Kantor (Jam Kantor)';
 
+            if ($dayOfWeek === 6) { // Khusus hari Sabtu: 08:30 – 13:00 WIB
+                $endTime   = '13:00:00';
+                $shiftName = 'Reguler Kantor (Sabtu 08:30–13:00)';
+            }
+
             return response()->json([
                 'success'        => true,
                 'day'            => $todayName,
@@ -665,25 +670,39 @@ class ScheduleController extends Controller
             // Lapis 0 (Khusus PJ Bagian): Set default jam kantor reguler pada hari kerja (Senin - Sabtu)
             $isPj = $emp->user && $emp->user->role === 'pj_bagian';
             if ($isPj) {
-                $regulerSubShift = \App\Models\Schedule::whereNotNull('parent_id')
-                    ->where('name', 'like', '%Normal%')
-                    ->whereHas('parent', function ($q) {
-                        $q->where('name', 'like', '%Reguler%');
+                $regulerParent = \App\Models\Schedule::whereNull('parent_id')
+                    ->where(function($q) {
+                        $q->where('name', 'like', '%Reguler%')
+                          ->orWhere('name', 'like', '%Administrasi%')
+                          ->orWhere('name', 'like', '%Kantor%');
                     })
                     ->first();
 
-                $schedId = $regulerSubShift ? $regulerSubShift->id : 88888;
-                $schedName = $regulerSubShift ? $regulerSubShift->name : 'Normal';
-                $schedColor = $regulerSubShift ? $regulerSubShift->color : '#16A34A';
-                $schedIcon = $regulerSubShift ? $regulerSubShift->icon : 'sun';
-                $schedType = $regulerSubShift ? $regulerSubShift->shift_type : 'normal';
-                $schedStart = $regulerSubShift ? substr($regulerSubShift->start_time, 0, 5) : '08:30';
-                $schedEnd = $regulerSubShift ? substr($regulerSubShift->end_time, 0, 5) : '17:00';
+                $seninSub = null;
+                $sabtuSub = null;
+                if ($regulerParent) {
+                    $seninSub = $regulerParent->children()->where(function($q) {
+                        $q->where('name', 'like', '%Senin%')
+                          ->orWhere('name', 'like', '%Normal%');
+                    })->first();
+                    $sabtuSub = $regulerParent->children()->where('name', 'like', '%Sabtu%')->first();
+                }
 
                 $curr = $startDate->copy();
                 while ($curr->lte($endDate)) {
                     if ($curr->dayOfWeek !== 0) { // Bukan hari Minggu
                         $dateKey = $curr->toDateString();
+                        $isSabtu = ($curr->dayOfWeek === 6);
+                        $targetSub = $isSabtu ? $sabtuSub : $seninSub;
+
+                        $schedId    = $targetSub ? $targetSub->id : ($isSabtu ? 88889 : 88888);
+                        $schedName  = $targetSub ? $targetSub->name : ($isSabtu ? 'Sabtu' : 'Senin s/d Jum\'at (08:30–17:00)');
+                        $schedColor = $targetSub ? $targetSub->color : '#16A34A';
+                        $schedIcon  = $targetSub ? $targetSub->icon : ($isSabtu ? 'calendar' : 'sun');
+                        $schedType  = $targetSub ? $targetSub->shift_type : 'normal';
+                        $schedStart = $targetSub ? substr($targetSub->start_time, 0, 5) : '08:30';
+                        $schedEnd   = $targetSub ? substr($targetSub->end_time, 0, 5) : ($isSabtu ? '13:00' : '17:00');
+
                         $assignMap[$dateKey] = [
                             'schedule_id' => $schedId,
                             'name'        => $schedName,

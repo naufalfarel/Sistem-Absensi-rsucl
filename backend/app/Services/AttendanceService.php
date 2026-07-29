@@ -36,9 +36,9 @@ class AttendanceService
             $jamPulangNormal = substr($shift->end_time, 0, 5); // "HH:mm"
             $startTimeStr = substr($shift->start_time, 0, 5);
         } else {
-            // Default normal checkout time if no shift: 17:00
-            $jamPulangNormal = '17:00';
-            $startTimeStr = '08:00';
+            // Default normal checkout time if no shift: 17:00 (Sabtu: 13:00)
+            $jamPulangNormal = ($shiftDate->dayOfWeek === 6) ? '13:00' : '17:00';
+            $startTimeStr = '08:30';
         }
 
         // Tentukan waktu checkout yang diharapkan

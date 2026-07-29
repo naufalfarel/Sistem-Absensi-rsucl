@@ -74,11 +74,9 @@ class ScheduleRules
         //
         // Catatan: 17:00 adalah default end-time yang juga digunakan di AttendancePage.tsx
         // sebagai DEFAULT_SHIFT.checkout_open.
-        $defaultEndHour   = 17;
+        $defaultEndHour   = ($date->dayOfWeek === Carbon::SATURDAY) ? 13 : 17;
         $defaultEndMinute = 0;
 
-        // Coba ambil dari setting checkout_open (offset sebelum end) — tidak relevan tanpa shift
-        // Gunakan jam 17:00 sebagai referensi jam pulang global
         $expected = $date->copy()->setTime($defaultEndHour, $defaultEndMinute, 0);
 
         return $expected;

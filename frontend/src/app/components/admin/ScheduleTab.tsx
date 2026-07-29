@@ -1986,31 +1986,31 @@ export function ScheduleTab() {
             </button>
             <div className="h-px bg-gray-100 my-1" />
             {shifts.map(parent => (
-              <div key={parent.id}>
-                <p className="text-[9px] font-bold text-gray-400 px-3 py-1 uppercase tracking-wider">{parent.name}</p>
-                {parent.children && parent.children.length > 0
-                  ? parent.children.map(child => {
-                      const pr = getPresetByHex(child.color);
+              <div key={parent.id} className="mt-1 font-sans">
+                {parent.children && parent.children.length > 0 ? (
+                  <div>
+                    <p className="text-[9px] font-bold text-gray-400 px-3 pt-2 pb-1 uppercase tracking-wider">{parent.name}</p>
+                    {parent.children.map(child => {
                       const cur = monthlyData.find(r => r.employee_id === calPopover.empId)?.dates[calPopover.dateStr]?.schedule_id;
                       return (
                         <button key={child.id} onClick={() => handleCalAssign(child.id)}
-                          className="w-full text-left px-3 py-2 text-[11px] hover:bg-gray-50 flex items-center gap-2">
-                          <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: child.color }} />
+                          className="w-full text-left px-3 py-1.5 text-[11px] hover:bg-gray-50 flex items-center gap-2 transition-colors cursor-pointer">
+                          <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: child.color || '#16A34A' }} />
                           <span className="font-medium text-gray-700 truncate">{child.name}</span>
                           <span className="ml-auto text-[10px] text-gray-400 font-mono flex-shrink-0">{child.start_time?.substring(0,5)}–{child.end_time?.substring(0,5)}</span>
-                          {cur === child.id && <Check size={12} className="ml-1 text-[#16A34A]" />}
+                          {cur === child.id && <Check size={12} className="ml-1 text-[#16A34A] flex-shrink-0" />}
                         </button>
                       );
-                    })
-                  : (
-                    <button onClick={() => handleCalAssign(parent.id)}
-                      className="w-full text-left px-3 py-2 text-[11px] hover:bg-gray-50 flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: parent.color }} />
-                      <span className="font-medium text-gray-700 truncate">{parent.name}</span>
-                      <span className="ml-auto text-[10px] text-gray-400 font-mono flex-shrink-0">{parent.start_time?.substring(0,5)}–{parent.end_time?.substring(0,5)}</span>
-                    </button>
-                  )
-                }
+                    })}
+                  </div>
+                ) : (
+                  <button onClick={() => handleCalAssign(parent.id)}
+                    className="w-full text-left px-3 py-1.5 text-[11px] hover:bg-gray-50 flex items-center gap-2 transition-colors cursor-pointer">
+                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: parent.color }} />
+                    <span className="font-medium text-gray-700 truncate">{parent.name}</span>
+                    <span className="ml-auto text-[10px] text-gray-400 font-mono flex-shrink-0">{parent.start_time?.substring(0,5)}–{parent.end_time?.substring(0,5)}</span>
+                  </button>
+                )}
               </div>
             ))}
           </div>
