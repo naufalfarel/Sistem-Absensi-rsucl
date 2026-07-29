@@ -43,16 +43,21 @@ export function EmployeeRegistrationPage({ onBack, onGoToCheckStatus, initialDat
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
     if (!file.type.match(/^image\/(jpeg|jpg|png)$/)) {
-      setErrorMsg('Format foto tidak didukung. Gunakan JPG, JPEG, atau PNG.');
+      setPhotoError('Format tidak didukung. Gunakan file JPG, JPEG, atau PNG.');
       e.target.value = '';
       return;
     }
+
     if (file.size > 2 * 1024 * 1024) {
-      setErrorMsg(`Ukuran foto terlalu besar (${(file.size / 1024 / 1024).toFixed(1)}MB). Maksimal 2MB.`);
+      const sizeMB = (file.size / 1024 / 1024).toFixed(1);
+      setPhotoError(`Foto terlalu besar (${sizeMB}MB). Silakan pilih foto lain di bawah 2MB.`);
       e.target.value = '';
       return;
     }
+
+    setPhotoError(null);
     setErrorMsg(null);
     const reader = new FileReader();
     reader.onload = () => {
@@ -61,10 +66,19 @@ export function EmployeeRegistrationPage({ onBack, onGoToCheckStatus, initialDat
     reader.readAsDataURL(file);
   };
 
+  const handleRemovePhoto = () => {
+    setForm(prev => ({ ...prev, profile_picture: '' }));
+    setPhotoError(null);
+  };
+
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
   const [successData, setSuccessData] = useState<any>(null);
   const [copiedReg, setCopiedReg] = useState(false);
+
+  // Form hanya bisa diisi setelah foto valid diupload
+  const photoReady = !!form.profile_picture;
 
   useEffect(() => {
     const loadMeta = async () => {
@@ -98,8 +112,7 @@ export function EmployeeRegistrationPage({ onBack, onGoToCheckStatus, initialDat
       return;
     }
     if (!form.profile_picture) {
-      setErrorMsg('Foto profil wajib diunggah. Klik ikon + pada lingkaran foto di atas.');
-      // Scroll ke atas agar user melihat area foto
+      setErrorMsg('Foto profil belum diunggah. Silakan unggah foto terlebih dahulu.');
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
@@ -234,21 +247,33 @@ export function EmployeeRegistrationPage({ onBack, onGoToCheckStatus, initialDat
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Foto Profil */}
-                <div className="md:col-span-2 flex flex-col items-center justify-center p-4 bg-gray-50 border border-dashed border-gray-200 rounded-2xl mb-2">
-                  <span className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-2.5 self-start font-bold">
+                <div className={`md:col-span-2 flex flex-col items-center justify-center p-5 rounded-2xl mb-2 border-2 transition-all ${
+                  form.profile_picture
+                    ? 'bg-emerald-50/50 border-emerald-200'
+                    : photoError
+                    ? 'bg-red-50 border-red-300'
+                    : 'bg-gray-50 border-dashed border-gray-300'
+                }`}>
+                  <span className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-3 self-start">
                     Foto Profil <span className="text-red-500">*</span>
+                    <span className="text-[10px] font-normal text-gray-400 normal-case ml-2">Wajib diisi sebelum melanjutkan</span>
                   </span>
-                  <div className={`relative group flex flex-col items-center`}>
-                    <div className={`w-24 h-24 rounded-full overflow-hidden border-4 shadow-md bg-gray-200 flex items-center justify-center relative transition-all ${
-                      !form.profile_picture ? 'border-red-300 ring-2 ring-red-100' : 'border-white'
+
+                  <div className="relative group flex flex-col items-center">
+                    <div className={`w-24 h-24 rounded-full overflow-hidden border-4 shadow-md bg-gray-100 flex items-center justify-center relative transition-all ${
+                      form.profile_picture ? 'border-emerald-400' : photoError ? 'border-red-300' : 'border-gray-300'
                     }`}>
                       {form.profile_picture ? (
                         <img src={form.profile_picture} alt="Preview Foto" className="w-full h-full object-cover" />
                       ) : (
-                        <User size={36} className="text-gray-400" />
+                        <User size={36} className={photoError ? 'text-red-300' : 'text-gray-300'} />
                       )}
                     </div>
-                    <label className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-[#16A34A] hover:bg-[#0d9240] text-white flex items-center justify-center shadow-md cursor-pointer transition-transform group-hover:scale-105 active:scale-95">
+                    <label className={`absolute bottom-0 right-0 w-8 h-8 rounded-full text-white flex items-center justify-center shadow-md cursor-pointer transition-all active:scale-95 ${
+                      form.profile_picture
+                        ? 'bg-emerald-500 hover:bg-emerald-600'
+                        : 'bg-[#16A34A] hover:bg-[#0d9240] animate-pulse'
+                    }`}>
                       <Plus size={16} />
                       <input
                         type="file"
@@ -258,9 +283,33 @@ export function EmployeeRegistrationPage({ onBack, onGoToCheckStatus, initialDat
                       />
                     </label>
                   </div>
-                  <p className="text-[10px] text-gray-400 mt-2">Format: JPG, JPEG, PNG. Maks: 2MB.</p>
-                  {!form.profile_picture && (
-                    <p className="text-[10.5px] text-red-500 font-semibold mt-1">Foto profil wajib diunggah</p>
+
+                  {/* Status pesan di bawah foto */}
+                  {form.profile_picture ? (
+                    <div className="mt-3 flex flex-col items-center gap-1">
+                      <p className="text-[11px] text-emerald-600 font-bold">✓ Foto berhasil diunggah</p>
+                      <button
+                        type="button"
+                        onClick={handleRemovePhoto}
+                        className="text-[10.5px] text-gray-400 hover:text-red-500 underline transition-colors cursor-pointer"
+                      >
+                        Ganti foto
+                      </button>
+                    </div>
+                  ) : photoError ? (
+                    <div className="mt-3 text-center">
+                      <p className="text-[12px] text-red-600 font-bold">{photoError}</p>
+                      <p className="text-[11px] text-red-500 mt-0.5">Silakan unggah ulang foto lain di bawah 2MB.</p>
+                      <label className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-[11px] font-bold cursor-pointer transition-colors">
+                        <Plus size={12} /> Pilih Foto Lain
+                        <input type="file" accept="image/jpeg,image/jpg,image/png" onChange={handlePhotoChange} className="hidden" />
+                      </label>
+                    </div>
+                  ) : (
+                    <div className="mt-3 text-center">
+                      <p className="text-[11.5px] text-gray-500 font-medium">Klik tombol <span className="font-bold text-[#16A34A]">+</span> untuk mengunggah foto</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">Format: JPG, JPEG, PNG · Maks: 2MB</p>
+                    </div>
                   )}
                 </div>
 
@@ -522,7 +571,28 @@ export function EmployeeRegistrationPage({ onBack, onGoToCheckStatus, initialDat
                     />
                   </div>
                 </div>
-              </div>
+              </div>{/* end foto grid item */}
+
+              {/* Sisa form — hanya bisa diisi setelah foto diunggah */}
+              <div className={`relative transition-all duration-300 ${ !photoReady ? 'pointer-events-none' : '' }`}>
+                {/* Overlay blur jika foto belum ada */}
+                {!photoReady && (
+                  <div className="absolute inset-0 z-10 rounded-2xl bg-white/80 backdrop-blur-[2px] flex flex-col items-center justify-center gap-2">
+                    <div className="bg-white border border-gray-200 shadow-md rounded-2xl px-5 py-4 text-center">
+                      <p className="text-[13px] font-bold text-gray-700">Unggah foto profil terlebih dahulu</p>
+                      <p className="text-[11.5px] text-gray-400 mt-1">Form akan terbuka setelah foto berhasil diunggah</p>
+                      <label className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 bg-[#16A34A] hover:bg-[#0d9240] text-white rounded-xl text-[12px] font-bold cursor-pointer transition-colors">
+                        <Plus size={13} /> Unggah Foto
+                        <input type="file" accept="image/jpeg,image/jpg,image/png" onChange={handlePhotoChange} className="hidden" />
+                      </label>
+                    </div>
+                  </div>
+                )}
+
+                {/* placeholder agar overlay punya tinggi minimum */}
+                <div className="min-h-[200px]" />
+              </div>{/* end form body wrapper */}
+
 
               <div className="pt-3 flex gap-3">
                 {onBack && (
@@ -536,14 +606,16 @@ export function EmployeeRegistrationPage({ onBack, onGoToCheckStatus, initialDat
                 )}
                 <button
                   type="submit"
-                  disabled={submitting}
-                  className="flex-1 py-3 bg-[#16A34A] hover:bg-[#0d9240] text-white font-bold rounded-xl text-[13px] shadow-md shadow-green-200 transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+                  disabled={submitting || !photoReady}
+                  className="flex-1 py-3 bg-[#16A34A] hover:bg-[#0d9240] text-white font-bold rounded-xl text-[13px] shadow-md shadow-green-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer active:scale-98"
                 >
                   {submitting ? (
                     <>
                       <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                       <span>{isEditMode ? 'Mengirim Perbaikan...' : 'Mengirim Pengajuan...'}</span>
                     </>
+                  ) : !photoReady ? (
+                    'Unggah foto dulu untuk melanjutkan'
                   ) : (
                     isEditMode ? 'Kirim Perbaikan Data' : 'Kirim Formulir Pendaftaran'
                   )}
