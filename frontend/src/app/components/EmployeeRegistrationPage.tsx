@@ -43,14 +43,17 @@ export function EmployeeRegistrationPage({ onBack, onGoToCheckStatus, initialDat
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      setErrorMsg("File harus berupa gambar.");
+    if (!file.type.match(/^image\/(jpeg|jpg|png)$/)) {
+      setErrorMsg('Format foto tidak didukung. Gunakan JPG, JPEG, atau PNG.');
+      e.target.value = '';
       return;
     }
     if (file.size > 2 * 1024 * 1024) {
-      setErrorMsg("Ukuran file foto profil maksimal 2MB.");
+      setErrorMsg(`Ukuran foto terlalu besar (${(file.size / 1024 / 1024).toFixed(1)}MB). Maksimal 2MB.`);
+      e.target.value = '';
       return;
     }
+    setErrorMsg(null);
     const reader = new FileReader();
     reader.onload = () => {
       setForm(prev => ({ ...prev, profile_picture: reader.result as string }));
@@ -95,7 +98,9 @@ export function EmployeeRegistrationPage({ onBack, onGoToCheckStatus, initialDat
       return;
     }
     if (!form.profile_picture) {
-      setErrorMsg('Foto Profil wajib diunggah.');
+      setErrorMsg('Foto profil wajib diunggah. Klik ikon + pada lingkaran foto di atas.');
+      // Scroll ke atas agar user melihat area foto
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
@@ -233,8 +238,10 @@ export function EmployeeRegistrationPage({ onBack, onGoToCheckStatus, initialDat
                   <span className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-2.5 self-start font-bold">
                     Foto Profil <span className="text-red-500">*</span>
                   </span>
-                  <div className="relative group">
-                    <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-md bg-gray-200 flex items-center justify-center relative">
+                  <div className={`relative group flex flex-col items-center`}>
+                    <div className={`w-24 h-24 rounded-full overflow-hidden border-4 shadow-md bg-gray-200 flex items-center justify-center relative transition-all ${
+                      !form.profile_picture ? 'border-red-300 ring-2 ring-red-100' : 'border-white'
+                    }`}>
                       {form.profile_picture ? (
                         <img src={form.profile_picture} alt="Preview Foto" className="w-full h-full object-cover" />
                       ) : (
@@ -245,13 +252,16 @@ export function EmployeeRegistrationPage({ onBack, onGoToCheckStatus, initialDat
                       <Plus size={16} />
                       <input
                         type="file"
-                        accept="image/*"
+                        accept="image/jpeg,image/jpg,image/png"
                         onChange={handlePhotoChange}
                         className="hidden"
                       />
                     </label>
                   </div>
                   <p className="text-[10px] text-gray-400 mt-2">Format: JPG, JPEG, PNG. Maks: 2MB.</p>
+                  {!form.profile_picture && (
+                    <p className="text-[10.5px] text-red-500 font-semibold mt-1">Foto profil wajib diunggah</p>
+                  )}
                 </div>
 
                 {/* Nama Lengkap */}

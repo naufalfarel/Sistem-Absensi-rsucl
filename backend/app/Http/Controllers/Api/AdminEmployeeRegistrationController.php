@@ -207,6 +207,58 @@ class AdminEmployeeRegistrationController extends Controller
     }
 
     /**
+     * PUT /api/employee-registrations/{id}/revert-approval
+     * Membatalkan persetujuan -> Menghapus akun User & Employee yang dibuat -> Mengembalikan status ke revision_required.
+     * Hanya bisa dilakukan oleh Super Admin atau Admin (dengan konfirmasi ketat di frontend).
+     */
+    public function revertApproval(Request $request, $id)
+    {
+        $registration = EmployeeRegistration::findOrFail($id);
+
+        if ($registration->status !== 'approved') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya pengajuan yang berstatus Disetujui yang dapat dibatalkan persetujuannya.',
+            ], 422);
+        }
+
+        return DB::transaction(function () use ($request, $registration) {
+            // Hapus Employee record jika ada
+            if ($registration->employee_id) {
+                $employee = \App\Models\Employee::find($registration->employee_id);
+                if ($employee) {
+                    $employee->delete();
+                }
+            }
+
+            // Hapus User record jika ada
+            if ($registration->user_id) {
+                $user = User::find($registration->user_id);
+                if ($user) {
+                    // Hapus token Sanctum user tersebut
+                    $user->tokens()->delete();
+                    $user->delete();
+                }
+            }
+
+            // Kembalikan status registration ke revision_required
+            $registration->update([
+                'status'                  => 'revision_required',
+                'admin_note'              => $request->input('admin_note') ?? 'Persetujuan dibatalkan oleh Administrator. Mohon perbaiki data yang diperlukan.',
+                'temp_password_encrypted' => null,
+                'user_id'                 => null,
+                'employee_id'             => null,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Persetujuan berhasil dibatalkan. Status kembali ke Perlu Revisi dan akun yang dibuat telah dihapus.',
+                'data'    => $registration->fresh(['department', 'position']),
+            ]);
+        });
+    }
+
+    /**
      * Helper: Generate base username dari nama lengkap
      * Contoh: "dr. Rina Kusumawati" -> "rina.kusumawati"
      */

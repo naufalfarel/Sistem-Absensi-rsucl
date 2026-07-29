@@ -203,6 +203,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/employee-registrations/{id}/approve', [AdminEmployeeRegistrationController::class, 'approve']);
         Route::put('/employee-registrations/{id}/reject', [AdminEmployeeRegistrationController::class, 'reject']);
         Route::put('/employee-registrations/{id}/revision', [AdminEmployeeRegistrationController::class, 'requestRevision']);
+        Route::put('/employee-registrations/{id}/revert-approval', [AdminEmployeeRegistrationController::class, 'revertApproval']);
         Route::delete('/employee-registrations/{id}', [AdminEmployeeRegistrationController::class, 'destroy']);
 
         // Mendapatkan data meta pendukung (list department/position) untuk registrasi karyawan

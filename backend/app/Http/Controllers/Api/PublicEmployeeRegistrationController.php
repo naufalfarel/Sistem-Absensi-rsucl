@@ -91,22 +91,54 @@ class PublicEmployeeRegistrationController extends Controller
         $nextId = ($lastReg ? $lastReg->id : 0) + 1;
         $registrationNumber = 'REG-' . $year . '-' . str_pad($nextId, 6, '0', STR_PAD_LEFT);
 
-        // Proses penyimpanan file foto profil jika terdapat upload Base64
+        // Proses penyimpanan file foto profil
         $profilePicturePath = null;
         if ($request->filled('profile_picture')) {
             $imgData = $request->input('profile_picture');
             if (preg_match('/^data:image\/(\w+);base64,/', $imgData, $type)) {
-                $imgData = substr($imgData, strpos($imgData, ',') + 1);
-                $type = strtolower($type[1]); // png, jpg, jpeg
-                if (in_array($type, ['jpg', 'jpeg', 'png'])) {
-                    $imgData = base64_decode($imgData);
-                    if ($imgData !== false) {
-                        $fileName = 'profile_reg_' . uniqid() . '_' . time() . '.' . $type;
-                        \Illuminate\Support\Facades\Storage::disk('public')->put('profiles/' . $fileName, $imgData);
-                        $profilePicturePath = '/storage/profiles/' . $fileName;
-                    }
+                $rawBase64 = substr($imgData, strpos($imgData, ',') + 1);
+                $type      = strtolower($type[1]);
+
+                if (!in_array($type, ['jpg', 'jpeg', 'png'])) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Format foto tidak didukung. Gunakan JPG, JPEG, atau PNG.',
+                    ], 422);
                 }
+
+                $decoded = base64_decode($rawBase64, true);
+                if ($decoded === false) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'File foto tidak valid atau rusak. Silakan unggah ulang.',
+                    ], 422);
+                }
+
+                // Cek ukuran file: maksimal 2MB
+                if (strlen($decoded) > 2 * 1024 * 1024) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Ukuran foto profil maksimal 2MB. Silakan kompres atau pilih foto lain.',
+                    ], 422);
+                }
+
+                $fileName = 'profile_reg_' . uniqid() . '_' . time() . '.' . $type;
+                \Illuminate\Support\Facades\Storage::disk('public')->put('profiles/' . $fileName, $decoded);
+                $profilePicturePath = '/storage/profiles/' . $fileName;
+            } else {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Format data foto tidak valid. Silakan unggah ulang.',
+                ], 422);
             }
+        }
+
+        // Pastikan foto berhasil tersimpan (tidak boleh null)
+        if (!$profilePicturePath) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Foto profil gagal diproses. Pastikan file foto valid dan coba lagi.',
+            ], 422);
         }
 
         $registration = EmployeeRegistration::create([
@@ -320,18 +352,46 @@ class PublicEmployeeRegistrationController extends Controller
         $profilePicturePath = $reg->getRawOriginal('profile_picture');
         if ($request->filled('profile_picture')) {
             $imgData = $request->input('profile_picture');
+            // Jika base64 baru (bukan URL path lama yang dikirim balik)
             if (preg_match('/^data:image\/(\w+);base64,/', $imgData, $type)) {
-                $imgData = substr($imgData, strpos($imgData, ',') + 1);
-                $type = strtolower($type[1]); // png, jpg, jpeg
-                if (in_array($type, ['jpg', 'jpeg', 'png'])) {
-                    $imgData = base64_decode($imgData);
-                    if ($imgData !== false) {
-                        $fileName = 'profile_reg_' . uniqid() . '_' . time() . '.' . $type;
-                        \Illuminate\Support\Facades\Storage::disk('public')->put('profiles/' . $fileName, $imgData);
-                        $profilePicturePath = '/storage/profiles/' . $fileName;
-                    }
+                $rawBase64 = substr($imgData, strpos($imgData, ',') + 1);
+                $type      = strtolower($type[1]);
+
+                if (!in_array($type, ['jpg', 'jpeg', 'png'])) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Format foto tidak didukung. Gunakan JPG, JPEG, atau PNG.',
+                    ], 422);
                 }
+
+                $decoded = base64_decode($rawBase64, true);
+                if ($decoded === false) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'File foto tidak valid atau rusak. Silakan unggah ulang.',
+                    ], 422);
+                }
+
+                if (strlen($decoded) > 2 * 1024 * 1024) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Ukuran foto profil maksimal 2MB. Silakan kompres atau pilih foto lain.',
+                    ], 422);
+                }
+
+                $fileName = 'profile_reg_' . uniqid() . '_' . time() . '.' . $type;
+                \Illuminate\Support\Facades\Storage::disk('public')->put('profiles/' . $fileName, $decoded);
+                $profilePicturePath = '/storage/profiles/' . $fileName;
             }
+            // Jika dikirim ulang sebagai URL path lama, tetap pakai nilai lama (sudah di-set di atas)
+        }
+
+        // Tidak boleh submit revisi tanpa foto sama sekali
+        if (!$profilePicturePath) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Foto profil wajib ada. Silakan unggah foto terlebih dahulu.',
+            ], 422);
         }
 
         $reg->update([

@@ -96,6 +96,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Listener event auth:unauthorized — dipicu oleh interceptor API saat token expired (mobile)
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      handleLogoutLocal();
+    };
+    window.addEventListener('auth:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   /**
    * Menghapus sesi autentikasi dari state React dan penyimpanan lokal (cookie/localStorage).
    */

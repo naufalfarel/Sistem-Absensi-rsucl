@@ -81,6 +81,17 @@ async function request<T = unknown>(
     .catch(() => ({ success: false, message: "Respons tidak valid." }));
 
   if (!res.ok) {
+    // Jika 401 Unauthenticated: token expired / tidak valid (sering terjadi di mobile)
+    // Bersihkan sesi lokal dan picu event agar aplikasi redirect ke halaman login
+    if (res.status === 401) {
+      clearToken();
+      localStorage.removeItem("auth_user");
+      localStorage.removeItem("admin_active_tab");
+      localStorage.removeItem("pj_active_tab");
+      localStorage.removeItem("employee_active_tab");
+      // Dispatch event global agar AuthContext / komponen bisa menanganinya
+      window.dispatchEvent(new CustomEvent("auth:unauthorized"));
+    }
     const message =
       (json as { message?: string }).message ?? `HTTP ${res.status}`;
     throw new ApiError(res.status, message, json);
@@ -1977,6 +1988,14 @@ export const employeeRegistrationApi = {
       message: string;
       data: EmployeeRegistration;
     }>(`/employee-registrations/${id}/revision`, { admin_note: adminNote });
+  },
+
+  revertApproval: (id: number, adminNote: string) => {
+    return api.put<{
+      success: boolean;
+      message: string;
+      data: EmployeeRegistration;
+    }>(`/employee-registrations/${id}/revert-approval`, { admin_note: adminNote });
   },
 
   delete: (id: number) => {
