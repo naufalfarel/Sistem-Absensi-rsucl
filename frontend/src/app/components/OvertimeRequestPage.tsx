@@ -285,274 +285,280 @@ export function OvertimeRequestPage() {
         </div>
       )}
 
-      {/* Form Section */}
+      {/* Form Section Modal */}
       {showForm && (
-        <div className="bg-white rounded-3xl border border-slate-100 shadow-lg overflow-hidden p-4 sm:p-6 animate-fade-in">
-          <div className="flex items-center justify-between pb-4 border-b border-slate-200 mb-5">
-            <h3 className="text-[14px] font-bold text-slate-900 flex items-center gap-2">
-              <FileText size={16} className="text-[#16A34A]" />
-              Formulir Pengajuan Lembur Baru
-            </h3>
-            <button
-              onClick={() => setShowForm(false)}
-              className="w-7 h-7 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:bg-slate-100 transition-colors cursor-pointer"
-            >
-              <X size={14} />
-            </button>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="flex items-start gap-3 p-4 bg-emerald-50/60 border border-emerald-100 text-emerald-950 rounded-2xl text-[12.5px] leading-relaxed">
-              <AlertCircle size={18} className="text-[#16A34A] flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="font-extrabold text-emerald-900">Penting Sebelum Mengajukan Lembur</p>
-                <p className="mt-1 text-emerald-700 font-medium">
-                  Pastikan kamu melakukan absensi masuk dan pulang sesuai dengan kehadiran aktual di rumah sakit. Jangan sengaja memperlambat jam kepulangan agar terhitung sebagai lembur.
-                </p>
-              </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 font-sans text-left">
+          <div
+            className="absolute inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity"
+            onClick={() => setShowForm(false)}
+          />
+          <div className="relative bg-white rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col z-10 animate-scale-up">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 flex-shrink-0 bg-slate-50/50">
+              <h3 className="text-[14px] font-bold text-slate-900 flex items-center gap-2">
+                <FileText size={16} className="text-[#16A34A]" />
+                Formulir Pengajuan Lembur Baru
+              </h3>
+              <button
+                onClick={() => setShowForm(false)}
+                className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X size={14} />
+              </button>
             </div>
 
-            {errorMsg && (
-              <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-[12px] font-semibold">
-                <AlertCircle size={15} className="mt-0.5 flex-shrink-0" />
-                <p>{errorMsg}</p>
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
-              {/* Date Input */}
-              <div className="space-y-1.5">
-                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">Tanggal Lembur <span className="text-red-500">*</span></label>
-                <div className="relative">
-                  <input
-                    type="date"
-                    required
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-[12.5px] bg-slate-50/50 focus:outline-none focus:border-[#16A34A] focus:bg-white focus:ring-2 focus:ring-[#16A34A]/10 font-semibold text-slate-800 transition-all cursor-pointer"
-                  />
+            <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
+              <div className="flex items-start gap-3 p-4 bg-emerald-50/60 border border-emerald-100 text-emerald-950 rounded-2xl text-[12.5px] leading-relaxed">
+                <AlertCircle size={18} className="text-[#16A34A] flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-extrabold text-emerald-900">Penting Sebelum Mengajukan Lembur</p>
+                  <p className="mt-1 text-emerald-700 font-medium">
+                    Pastikan kamu melakukan absensi masuk dan pulang sesuai dengan kehadiran aktual di rumah sakit. Jangan sengaja memperlambat jam kepulangan agar terhitung sebagai lembur.
+                  </p>
                 </div>
               </div>
 
-              {/* Location Note Input */}
-              <div className="space-y-1.5">
-                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">Keterangan Lokasi <span className="text-red-500">*</span></label>
+              {errorMsg && (
+                <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-[12px] font-semibold">
+                  <AlertCircle size={15} className="mt-0.5 flex-shrink-0" />
+                  <p>{errorMsg}</p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
+                {/* Date Input */}
+                <div className="space-y-1.5">
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">Tanggal Lembur <span className="text-red-500">*</span></label>
+                  <div className="relative">
+                    <input
+                      type="date"
+                      required
+                      value={date}
+                      onChange={(e) => setDate(e.target.value)}
+                      className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-[12.5px] bg-slate-50/50 focus:outline-none focus:border-[#16A34A] focus:bg-white focus:ring-2 focus:ring-[#16A34A]/10 font-semibold text-slate-800 transition-all cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                {/* Location Note Input */}
+                <div className="space-y-1.5">
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">Keterangan Lokasi <span className="text-red-500">*</span></label>
+                  <div className="relative">
+                    <MapPin size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      required
+                      maxLength={150}
+                      placeholder="Contoh: Ruang Farmasi Rawat Inap, Ruang IT Lantai 3..."
+                      value={locationNote}
+                      onChange={(e) => setLocationNote(e.target.value)}
+                      className="w-full pl-9.5 pr-3.5 py-2.5 border border-slate-200 rounded-xl text-[12.5px] bg-slate-50/50 focus:outline-none focus:border-[#16A34A] focus:bg-white focus:ring-2 focus:ring-[#16A34A]/10 placeholder:text-slate-400 font-semibold text-slate-850 transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* Unit Kerja Dropdown */}
+                <div className="space-y-1.5">
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">Unit Kerja / Bagian <span className="text-red-500">*</span></label>
+                  <div className="relative">
+                    <select
+                      required
+                      value={unitKerja}
+                      onChange={(e) => setUnitKerja(e.target.value)}
+                      className="w-full appearance-none pl-3.5 pr-9 py-2.5 border border-slate-200 rounded-xl text-[12.5px] bg-slate-50/50 focus:outline-none focus:border-[#16A34A] focus:bg-white focus:ring-2 focus:ring-[#16A34A]/10 font-bold text-slate-700 cursor-pointer transition-all"
+                    >
+                      <option value="" className="text-slate-400 font-medium">Pilih Unit Kerja</option>
+                      {unitKerja && !departments.some((d) => d.name === unitKerja) && (
+                        <option value={unitKerja}>{unitKerja}</option>
+                      )}
+                      {departments.map((d) => (
+                        <option key={d.id} value={d.name}>{d.name}</option>
+                      ))}
+                    </select>
+                    <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+
+                {/* Lembur Pada Waktu (Hari Kerja / Hari Libur) */}
+                <div className="space-y-1.5">
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">Lembur Pada Waktu <span className="text-red-500">*</span></label>
+                  <div className="flex gap-6 pt-2">
+                    <label className="flex items-center gap-2.5 text-[12.5px] font-bold text-slate-700 cursor-pointer group">
+                      <input
+                        type="radio"
+                        name="overtimeDayType"
+                        value="workday"
+                        checked={overtimeDayType === 'workday'}
+                        onChange={() => setOvertimeDayType('workday')}
+                        className="accent-[#16A34A] w-4 h-4 cursor-pointer"
+                      />
+                      <span className="group-hover:text-slate-900 transition-colors">Hari Kerja</span>
+                    </label>
+                    <label className="flex items-center gap-2.5 text-[12.5px] font-bold text-slate-700 cursor-pointer group">
+                      <input
+                        type="radio"
+                        name="overtimeDayType"
+                        value="holiday"
+                        checked={overtimeDayType === 'holiday'}
+                        onChange={() => setOvertimeDayType('holiday')}
+                        className="accent-[#16A34A] w-4 h-4 cursor-pointer"
+                      />
+                      <span className="group-hover:text-slate-900 transition-colors">Hari Libur</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Jam Lembur (Mulai s/d Selesai) */}
+                <div className="space-y-1.5 text-left">
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">Jam Mulai Lembur <span className="text-red-500">*</span></label>
+                  <div className="flex gap-2">
+                    <select
+                      value={startHour}
+                      onChange={(e) => setStartHour(e.target.value)}
+                      className="flex-1 px-3 py-2.5 border border-slate-200 rounded-xl text-[12.5px] bg-slate-50/50 focus:outline-none focus:border-[#16A34A] focus:bg-white font-bold text-slate-700 cursor-pointer transition-all"
+                    >
+                      {Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0')).map(h => (
+                        <option key={h} value={h}>{h}</option>
+                      ))}
+                    </select>
+                    <span className="self-center font-extrabold text-slate-400">:</span>
+                    <select
+                      value={startMinute}
+                      onChange={(e) => setStartMinute(e.target.value)}
+                      className="flex-1 px-3 py-2.5 border border-slate-200 rounded-xl text-[12.5px] bg-slate-50/50 focus:outline-none focus:border-[#16A34A] focus:bg-white font-bold text-slate-700 cursor-pointer transition-all"
+                    >
+                      {Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0')).map(m => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 text-left">
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">Jam Selesai Lembur <span className="text-red-500">*</span></label>
+                  <div className="flex gap-2">
+                    <select
+                      value={endHour}
+                      onChange={(e) => setEndHour(e.target.value)}
+                      className="flex-1 px-3 py-2.5 border border-slate-200 rounded-xl text-[12.5px] bg-slate-50/50 focus:outline-none focus:border-[#16A34A] focus:bg-white font-bold text-slate-700 cursor-pointer transition-all"
+                    >
+                      {Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0')).map(h => (
+                        <option key={h} value={h}>{h}</option>
+                      ))}
+                    </select>
+                    <span className="self-center font-extrabold text-slate-400">:</span>
+                    <select
+                      value={endMinute}
+                      onChange={(e) => setEndMinute(e.target.value)}
+                      className="flex-1 px-3 py-2.5 border border-slate-200 rounded-xl text-[12.5px] bg-slate-50/50 focus:outline-none focus:border-[#16A34A] focus:bg-white font-bold text-slate-700 cursor-pointer transition-all"
+                    >
+                      {Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0')).map(m => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tugas Saat Lembur */}
+              <div className="space-y-1.5 text-left">
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">Tugas / Pekerjaan Saat Lembur <span className="text-red-500">*</span></label>
                 <div className="relative">
-                  <MapPin size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <FileText size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
                     type="text"
                     required
-                    maxLength={150}
-                    placeholder="Contoh: Ruang Farmasi Rawat Inap, Ruang IT Lantai 3..."
-                    value={locationNote}
-                    onChange={(e) => setLocationNote(e.target.value)}
-                    className="w-full pl-9.5 pr-3.5 py-2.5 border border-slate-200 rounded-xl text-[12.5px] bg-slate-50/50 focus:outline-none focus:border-[#16A34A] focus:bg-white focus:ring-2 focus:ring-[#16A34A]/10 placeholder:text-slate-400 font-semibold text-slate-850 transition-all"
+                    placeholder="Contoh: Mengisi rekam medis rawat jalan, melakukan instalasi server..."
+                    value={tasks}
+                    onChange={(e) => setTasks(e.target.value)}
+                    className="w-full pl-9.5 pr-3.5 py-2.5 border border-slate-200 rounded-xl text-[12.5px] bg-slate-50/50 focus:outline-none focus:border-[#16A34A] focus:bg-white focus:ring-2 focus:ring-[#16A34A]/10 placeholder:text-slate-400 font-semibold text-slate-800 transition-all"
                   />
                 </div>
               </div>
 
-              {/* Unit Kerja Dropdown */}
-              <div className="space-y-1.5">
-                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">Unit Kerja / Bagian <span className="text-red-500">*</span></label>
-                <div className="relative">
-                  <select
-                    required
-                    value={unitKerja}
-                    onChange={(e) => setUnitKerja(e.target.value)}
-                    className="w-full appearance-none pl-3.5 pr-9 py-2.5 border border-slate-200 rounded-xl text-[12.5px] bg-slate-50/50 focus:outline-none focus:border-[#16A34A] focus:bg-white focus:ring-2 focus:ring-[#16A34A]/10 font-bold text-slate-700 cursor-pointer transition-all"
-                  >
-                    <option value="" className="text-slate-400 font-medium">Pilih Unit Kerja</option>
-                    {unitKerja && !departments.some((d) => d.name === unitKerja) && (
-                      <option value={unitKerja}>{unitKerja}</option>
-                    )}
-                    {departments.map((d) => (
-                      <option key={d.id} value={d.name}>{d.name}</option>
-                    ))}
-                  </select>
-                  <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                </div>
-              </div>
-
-              {/* Lembur Pada Waktu (Hari Kerja / Hari Libur) */}
-              <div className="space-y-1.5">
-                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">Lembur Pada Waktu <span className="text-red-500">*</span></label>
-                <div className="flex gap-6 pt-2">
-                  <label className="flex items-center gap-2.5 text-[12.5px] font-bold text-slate-700 cursor-pointer group">
-                    <input
-                      type="radio"
-                      name="overtimeDayType"
-                      value="workday"
-                      checked={overtimeDayType === 'workday'}
-                      onChange={() => setOvertimeDayType('workday')}
-                      className="accent-[#16A34A] w-4 h-4 cursor-pointer"
-                    />
-                    <span className="group-hover:text-slate-900 transition-colors">Hari Kerja</span>
-                  </label>
-                  <label className="flex items-center gap-2.5 text-[12.5px] font-bold text-slate-700 cursor-pointer group">
-                    <input
-                      type="radio"
-                      name="overtimeDayType"
-                      value="holiday"
-                      checked={overtimeDayType === 'holiday'}
-                      onChange={() => setOvertimeDayType('holiday')}
-                      className="accent-[#16A34A] w-4 h-4 cursor-pointer"
-                    />
-                    <span className="group-hover:text-slate-900 transition-colors">Hari Libur</span>
-                  </label>
-                </div>
-              </div>
-
-              {/* Jam Lembur (Mulai s/d Selesai) */}
+              {/* Reason Textarea */}
               <div className="space-y-1.5 text-left">
-                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">Jam Mulai Lembur <span className="text-red-500">*</span></label>
-                <div className="flex gap-2">
-                  <select
-                    value={startHour}
-                    onChange={(e) => setStartHour(e.target.value)}
-                    className="flex-1 px-3 py-2.5 border border-slate-200 rounded-xl text-[12.5px] bg-slate-50/50 focus:outline-none focus:border-[#16A34A] focus:bg-white font-bold text-slate-700 cursor-pointer transition-all"
-                  >
-                    {Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0')).map(h => (
-                      <option key={h} value={h}>{h}</option>
-                    ))}
-                  </select>
-                  <span className="self-center font-extrabold text-slate-400">:</span>
-                  <select
-                    value={startMinute}
-                    onChange={(e) => setStartMinute(e.target.value)}
-                    className="flex-1 px-3 py-2.5 border border-slate-200 rounded-xl text-[12.5px] bg-slate-50/50 focus:outline-none focus:border-[#16A34A] focus:bg-white font-bold text-slate-700 cursor-pointer transition-all"
-                  >
-                    {Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0')).map(m => (
-                      <option key={m} value={m}>{m}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-1.5 text-left">
-                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">Jam Selesai Lembur <span className="text-red-500">*</span></label>
-                <div className="flex gap-2">
-                  <select
-                    value={endHour}
-                    onChange={(e) => setEndHour(e.target.value)}
-                    className="flex-1 px-3 py-2.5 border border-slate-200 rounded-xl text-[12.5px] bg-slate-50/50 focus:outline-none focus:border-[#16A34A] focus:bg-white font-bold text-slate-700 cursor-pointer transition-all"
-                  >
-                    {Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0')).map(h => (
-                      <option key={h} value={h}>{h}</option>
-                    ))}
-                  </select>
-                  <span className="self-center font-extrabold text-slate-400">:</span>
-                  <select
-                    value={endMinute}
-                    onChange={(e) => setEndMinute(e.target.value)}
-                    className="flex-1 px-3 py-2.5 border border-slate-200 rounded-xl text-[12.5px] bg-slate-50/50 focus:outline-none focus:border-[#16A34A] focus:bg-white font-bold text-slate-700 cursor-pointer transition-all"
-                  >
-                    {Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0')).map(m => (
-                      <option key={m} value={m}>{m}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            {/* Tugas Saat Lembur */}
-            <div className="space-y-1.5 text-left">
-              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">Tugas / Pekerjaan Saat Lembur <span className="text-red-500">*</span></label>
-              <div className="relative">
-                <FileText size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">Alasan & Rincian Pekerjaan Lembur <span className="text-red-500">*</span></label>
+                <textarea
                   required
-                  placeholder="Contoh: Mengisi rekam medis rawat jalan, melakukan instalasi server..."
-                  value={tasks}
-                  onChange={(e) => setTasks(e.target.value)}
-                  className="w-full pl-9.5 pr-3.5 py-2.5 border border-slate-200 rounded-xl text-[12.5px] bg-slate-50/50 focus:outline-none focus:border-[#16A34A] focus:bg-white focus:ring-2 focus:ring-[#16A34A]/10 placeholder:text-slate-400 font-semibold text-slate-800 transition-all"
+                  maxLength={1000}
+                  rows={3}
+                  placeholder="Jelaskan secara rinci kegiatan lembur yang dilakukan..."
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-[12.5px] bg-slate-50/50 focus:outline-none focus:border-[#16A34A] focus:bg-white focus:ring-2 focus:ring-[#16A34A]/10 placeholder:text-slate-400 resize-none font-semibold text-slate-800 transition-all"
                 />
-              </div>
-            </div>
-
-            {/* Reason Textarea */}
-            <div className="space-y-1.5 text-left">
-              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">Alasan & Rincian Pekerjaan Lembur <span className="text-red-500">*</span></label>
-              <textarea
-                required
-                maxLength={1000}
-                rows={3}
-                placeholder="Jelaskan secara rinci kegiatan lembur yang dilakukan..."
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-[12.5px] bg-slate-50/50 focus:outline-none focus:border-[#16A34A] focus:bg-white focus:ring-2 focus:ring-[#16A34A]/10 placeholder:text-slate-400 resize-none font-semibold text-slate-800 transition-all"
-              />
-              <div className="flex justify-end text-[9.5px] text-slate-400 font-bold">
-                {reason.length}/1000 karakter
-              </div>
-            </div>
-
-            {/* Photo upload Box */}
-            <div className="space-y-1.5 text-left">
-              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">Unggah Foto Bukti Kegiatan <span className="text-red-500">*</span></label>
-              
-              <input
-                type="file"
-                ref={fileInputRef}
-                accept="image/*"
-                onChange={handlePhotoChange}
-                className="hidden"
-              />
-
-              {!photoPreview ? (
-                <div 
-                  onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-slate-200 hover:border-[#16A34A]/40 hover:bg-emerald-50/10 rounded-2xl p-6 text-center cursor-pointer bg-slate-50/40 transition-all flex flex-col items-center justify-center gap-2.5 group"
-                >
-                  <div className="w-11 h-11 rounded-xl bg-white flex items-center justify-center text-slate-400 group-hover:text-[#16A34A] group-hover:border-[#16A34A]/25 shadow-xs transition-all border border-slate-200 flex-shrink-0">
-                    <Upload size={18} />
-                  </div>
-                  <div>
-                    <p className="text-[12px] font-extrabold text-slate-700">Klik untuk Unggah Gambar</p>
-                    <p className="text-[10px] text-slate-400 mt-1 font-semibold">Format JPG, JPEG, PNG (Maks. 2MB)</p>
-                  </div>
+                <div className="flex justify-end text-[9.5px] text-slate-400 font-bold">
+                  {reason.length}/1000 karakter
                 </div>
-              ) : (
-                <div className="relative border border-slate-200 rounded-2xl overflow-hidden max-w-xs bg-slate-50 shadow-inner group">
-                  <img src={photoPreview} alt="Bukti Kegiatan" className="w-full h-40 object-cover" />
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <button
-                      type="button"
-                      onClick={() => { setPhoto(null); setPhotoPreview(null); }}
-                      className="w-8 h-8 rounded-full bg-red-600 text-white flex items-center justify-center hover:bg-red-700 shadow-md transition-transform hover:scale-105 cursor-pointer"
-                    >
-                      <X size={15} />
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+              </div>
 
-            {/* Form actions */}
-            <div className="flex gap-3 pt-3">
-              <button
-                type="button"
-                onClick={() => setShowForm(false)}
-                className="flex-1 py-3 border border-slate-200 text-slate-600 rounded-xl text-[12.5px] font-extrabold hover:bg-slate-50 transition-colors cursor-pointer active:scale-98"
-              >
-                Batal
-              </button>
-              <button
-                type="submit"
-                disabled={submitting}
-                className="flex-1 py-3 bg-[#16A34A] hover:bg-[#15803D] disabled:bg-slate-200 text-white rounded-xl text-[12.5px] font-extrabold shadow-sm transition-all disabled:cursor-not-allowed flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
-              >
-                {submitting ? (
-                  <>
-                    <Loader2 size={15} className="animate-spin" />
-                    <span>Mengirim...</span>
-                  </>
+              {/* Photo upload Box */}
+              <div className="space-y-1.5 text-left">
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">Unggah Foto Bukti Kegiatan <span className="text-red-500">*</span></label>
+                
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept="image/*"
+                  onChange={handlePhotoChange}
+                  className="hidden"
+                />
+
+                {!photoPreview ? (
+                  <div 
+                    onClick={() => fileInputRef.current?.click()}
+                    className="border-2 border-dashed border-slate-200 hover:border-[#16A34A]/40 hover:bg-emerald-50/10 rounded-2xl p-6 text-center cursor-pointer bg-slate-50/40 transition-all flex flex-col items-center justify-center gap-2.5 group"
+                  >
+                    <div className="w-11 h-11 rounded-xl bg-white flex items-center justify-center text-slate-400 group-hover:text-[#16A34A] group-hover:border-[#16A34A]/25 shadow-xs transition-all border border-slate-200 flex-shrink-0">
+                      <Upload size={18} />
+                    </div>
+                    <div>
+                      <p className="text-[12px] font-extrabold text-slate-700">Klik untuk Unggah Gambar</p>
+                      <p className="text-[10px] text-slate-400 mt-1 font-semibold">Format JPG, JPEG, PNG (Maks. 2MB)</p>
+                    </div>
+                  </div>
                 ) : (
-                  'Kirim Pengajuan'
+                  <div className="relative border border-slate-200 rounded-2xl overflow-hidden max-w-xs bg-slate-50 shadow-inner group">
+                    <img src={photoPreview} alt="Bukti Kegiatan" className="w-full h-40 object-cover" />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <button
+                        type="button"
+                        onClick={() => { setPhoto(null); setPhotoPreview(null); }}
+                        className="w-8 h-8 rounded-full bg-red-600 text-white flex items-center justify-center hover:bg-red-700 shadow-md transition-transform hover:scale-105 cursor-pointer"
+                      >
+                        <X size={15} />
+                      </button>
+                    </div>
+                  </div>
                 )}
-              </button>
-            </div>
-          </form>
+              </div>
+
+              {/* Form actions */}
+              <div className="flex gap-3 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowForm(false)}
+                  className="flex-1 py-3 border border-slate-200 text-slate-600 rounded-xl text-[12.5px] font-extrabold hover:bg-slate-50 transition-colors cursor-pointer active:scale-98"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="flex-1 py-3 bg-[#16A34A] hover:bg-[#15803D] disabled:bg-slate-200 text-white rounded-xl text-[12.5px] font-extrabold shadow-sm transition-all disabled:cursor-not-allowed flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
+                >
+                  {submitting ? (
+                    <>
+                      <Loader2 size={15} className="animate-spin" />
+                      <span>Mengirim...</span>
+                    </>
+                  ) : (
+                    'Kirim Pengajuan'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

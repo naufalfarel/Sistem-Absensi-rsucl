@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Shield, ShieldAlert, Plus, Trash2, Search, CheckCircle2, UserCheck, RefreshCw } from 'lucide-react';
+import { Shield, ShieldAlert, Plus, Trash2, Search, CheckCircle2, UserCheck, RefreshCw, X } from 'lucide-react';
 import { 
   pjBagianApi, 
   employeeApi, 
@@ -15,6 +15,7 @@ export function PJBagianTab() {
   const [departments, setDepartments] = useState<DepartmentModel[]>([]);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+  const [modalEmpSearch, setModalEmpSearch] = useState('');
   const [selectedDepartmentIds, setSelectedDepartmentIds] = useState<number[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -290,15 +291,45 @@ export function PJBagianTab() {
             <form onSubmit={handleAssign} className="space-y-4">
               <div>
                 <label className="block text-[10px] font-bold text-gray-500 mb-1">Pilih Karyawan</label>
+                <div className="relative mb-1.5">
+                  <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Cari nama, NIK KTP, atau unit..."
+                    value={modalEmpSearch}
+                    onChange={e => setModalEmpSearch(e.target.value)}
+                    className="w-full pl-8 pr-7 py-1.5 border border-gray-200 rounded-lg text-[11px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all font-semibold text-gray-700"
+                  />
+                  {modalEmpSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setModalEmpSearch('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
                 <select
                   value={selectedEmployeeId}
                   onChange={e => setSelectedEmployeeId(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-[11px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all font-semibold text-gray-700"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-[11px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all font-semibold text-gray-700 cursor-pointer"
                 >
                   <option value="">-- Pilih Karyawan --</option>
-                  {employees.filter(e => e.role !== 'admin' && e.role !== 'super_admin').map(emp => (
-                    <option key={emp.id} value={emp.id}>{emp.name} ({emp.nik_ktp}) - {emp.department}</option>
-                  ))}
+                  {employees
+                    .filter(e => e.role !== 'admin' && e.role !== 'super_admin')
+                    .filter(e => {
+                      if (!modalEmpSearch.trim()) return true;
+                      const q = modalEmpSearch.toLowerCase();
+                      return (
+                        e.name.toLowerCase().includes(q) ||
+                        (e.nik_ktp && e.nik_ktp.includes(q)) ||
+                        (e.department && e.department.toLowerCase().includes(q))
+                      );
+                    })
+                    .map(emp => (
+                      <option key={emp.id} value={emp.id}>{emp.name} ({emp.nik_ktp}) - {emp.department}</option>
+                    ))}
                 </select>
               </div>
 

@@ -1717,11 +1717,11 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
             <span className="text-[13px] font-medium">Sinkronisasi jadwal kerja dinas...</span>
           </div>
         ) : (
-          <div ref={tableRef} className="overflow-x-auto custom-scrollbar pb-1">
-            <table className="text-[11px] border-collapse" style={{ minWidth: `${Math.max(800, 150 + daysInMonth * 44)}px` }}>
-              <thead>
-                <tr className="border-b border-slate-100 bg-slate-50/40">
-                  <th className="sticky left-0 z-20 bg-[#F8FAFC] text-left px-5 py-4 min-w-[150px] font-semibold text-slate-500 uppercase tracking-wider text-[10px] border-r border-slate-200/80 shadow-[3px_0_6px_-2px_rgba(0,0,0,0.05)]">
+          <div ref={tableRef} className="overflow-auto max-h-[calc(100vh-250px)] min-h-[400px] custom-scrollbar pb-1 border-t border-slate-100">
+            <table className="text-[11px] border-collapse relative" style={{ minWidth: `${Math.max(800, 150 + daysInMonth * 44)}px` }}>
+              <thead className="sticky top-0 z-30 bg-[#F8FAFC] shadow-xs">
+                <tr className="border-b border-slate-200/80 bg-[#F8FAFC]">
+                  <th className="sticky top-0 left-0 z-40 bg-[#F8FAFC] text-left px-5 py-3.5 min-w-[150px] font-semibold text-slate-500 uppercase tracking-wider text-[10px] border-r border-slate-200/80 shadow-[3px_3px_6px_-2px_rgba(0,0,0,0.08)]">
                     <div className="flex items-center gap-1.5">
                       <Users size={13} className="text-slate-400" />
                       Karyawan
@@ -1735,7 +1735,7 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
                     const isSunday = dow === 0;
                     return (
                       <th key={day}
-                        className={`text-center py-2 px-1 font-semibold text-[10px] ${isToday ? 'bg-green-50/50' : ''}`}
+                        className={`sticky top-0 z-30 bg-[#F8FAFC] text-center py-2 px-1 font-semibold text-[10px] ${isToday ? 'bg-green-50' : ''}`}
                         style={{ minWidth: '42px', ...getDayHeaderStyle(dow, isHoliday) }}>
                         <div className="flex flex-col items-center">
                           <span className={`text-[9px] uppercase tracking-wider font-semibold ${isSunday || isHoliday ? 'text-red-500/80' : 'opacity-75'}`}>{DAY_ABBR[dow]}</span>

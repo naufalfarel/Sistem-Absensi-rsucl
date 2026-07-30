@@ -699,429 +699,122 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
           </div>
         )}
 
-        {/* ─── SUBMISSION FORM ──────────────────────────────────────────────── */}
+        {/* ─── SUBMISSION FORM MODAL ────────────────────────────────────────── */}
         {showForm && (
-          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm mb-5 overflow-hidden">
-            {/* Form Header */}
-            <div className={`px-6 py-4 flex items-center justify-between border-b border-gray-100 ${
-              leaveType === 'cuti_khusus' ? 'bg-orange-50' : 'bg-green-50'
-            }`}>
-              <div className="flex items-center gap-2.5">
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
-                  leaveType === 'cuti_khusus' ? 'bg-orange-100' : 'bg-green-100'
-                }`}>
-                  <FileText size={16} className={leaveType === 'cuti_khusus' ? 'text-orange-600' : 'text-[#16A34A]'} />
-                </div>
-                <div>
-                  <p className="text-[14px] font-bold text-gray-900">
-                    {leaveType === 'cuti_khusus' ? 'Form Cuti Khusus / Diluar Tanggungan' : 'Form Pengajuan Cuti / Sakit'}
-                  </p>
-                  <p className="text-[11px] text-gray-500">Isi data pengajuan dengan lengkap dan benar</p>
-                </div>
-              </div>
-              <button
-                onClick={() => { setShowForm(false); setFormError(''); clearAttachment(); setStartDate(''); setEndDate(''); setReason(''); setSelectedCategory(''); setCustomCategoryOther(''); }}
-                className="w-8 h-8 rounded-xl bg-white/80 hover:bg-white flex items-center justify-center border border-gray-200 transition-colors"
-              >
-                <X size={14} className="text-gray-500" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4">
-              {/* Syarat Masa Kerja Banner */}
-              <div className="flex items-center gap-2.5 bg-blue-50 border border-blue-100 rounded-2xl px-4 py-3 text-[12px] text-blue-900 shadow-xs">
-                <Shield size={16} className="text-blue-600 flex-shrink-0" />
-                <div>
-                  <p className="font-bold text-blue-950">Syarat Ketentuan Masa Kerja (1 Tahun)</p>
-                  <p className="text-[11.5px] text-blue-800/90 mt-0.5 leading-relaxed">
-                    Pengajuan Cuti Tahunan, Sakit, maupun Cuti Khusus berlaku bagi pegawai dengan masa bergabung minimal <strong>1 tahun (365 hari)</strong> terhitung sejak tanggal masuk kerja.
-                  </p>
-                </div>
-              </div>
-
-              {formError && (
-                <div className="flex items-center gap-2 bg-red-50 border border-red-100 text-red-600 text-[12px] px-3.5 py-2.5 rounded-xl">
-                  <AlertCircle size={14} className="flex-shrink-0" /> {formError}
-                </div>
-              )}
-
-              {/* Data Pegawai (read only from profile) */}
-              <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
-                <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-3">Data Pengaju (dari Profil)</p>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                  <div>
-                    <p className="text-[10px] text-gray-400">Nama</p>
-                    <p className="text-[13px] font-semibold text-gray-800">{user?.name || '-'}</p>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 font-sans text-left">
+            <div
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity"
+              onClick={() => { setShowForm(false); setFormError(''); clearAttachment(); setStartDate(''); setEndDate(''); setReason(''); setSelectedCategory(''); setCustomCategoryOther(''); }}
+            />
+            
+            <div className="relative bg-white rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col z-10 animate-scale-up">
+              {/* Form Header */}
+              <div className={`px-6 py-4 flex items-center justify-between border-b border-gray-100 flex-shrink-0 ${
+                leaveType === 'cuti_khusus' ? 'bg-orange-50' : 'bg-green-50'
+              }`}>
+                <div className="flex items-center gap-2.5">
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                    leaveType === 'cuti_khusus' ? 'bg-orange-100' : 'bg-green-100'
+                  }`}>
+                    <FileText size={16} className={leaveType === 'cuti_khusus' ? 'text-orange-600' : 'text-[#16A34A]'} />
                   </div>
                   <div>
-                    <p className="text-[10px] text-gray-400">NIK KTP</p>
-                    <p className="text-[13px] font-semibold text-gray-800">{user?.nik_ktp || '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-gray-400">Departemen</p>
-                    <p className="text-[13px] font-semibold text-gray-800">{user?.department || '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-gray-400">Jabatan</p>
-                    <p className="text-[13px] font-semibold text-gray-800">{user?.position || '-'}</p>
+                    <p className="text-[14px] font-bold text-gray-900">
+                      {leaveType === 'cuti_khusus' ? 'Form Cuti Khusus / Diluar Tanggungan' : 'Form Pengajuan Cuti / Sakit'}
+                    </p>
+                    <p className="text-[11px] text-gray-500">Isi data pengajuan dengan lengkap dan benar</p>
                   </div>
                 </div>
+                <button
+                  onClick={() => { setShowForm(false); setFormError(''); clearAttachment(); setStartDate(''); setEndDate(''); setReason(''); setSelectedCategory(''); setCustomCategoryOther(''); }}
+                  className="w-8 h-8 rounded-xl bg-white/80 hover:bg-white flex items-center justify-center border border-gray-200 transition-colors cursor-pointer"
+                >
+                  <X size={14} className="text-gray-500" />
+                </button>
               </div>
 
-              {/* Jenis Pengajuan */}
-              {leaveType !== 'cuti_khusus' ? (
-                <div>
-                  <label className="block text-[12px] font-semibold text-gray-600 mb-2">Jenis Pengajuan</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {(['cuti', 'sakit'] as LeaveType[]).map(t => {
-                      const tc = typeConfig[t];
-                      return (
-                        <button key={t} onClick={() => { setLeaveType(t); setFormError(''); }}
-                          className={`py-3 rounded-xl border-2 text-center transition-all ${
-                            leaveType === t ? 'shadow-sm' : 'border-gray-100 hover:border-gray-200 bg-gray-50'
-                          }`}
-                          style={leaveType === t ? { borderColor: tc.color, background: tc.bg } : {}}>
-                          <p className="text-[16px] mb-0.5">{tc.initial}</p>
-                          <p className="text-[11px] font-semibold" style={{ color: leaveType === t ? tc.color : '#6B7280' }}>{tc.label}</p>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <div className="flex items-center gap-2.5 bg-orange-50 border border-orange-100 rounded-xl px-3.5 py-3">
-                    <span className="text-[18px]">✨</span>
-                    <div>
-                      <p className="text-[12px] font-bold text-orange-800">Cuti Khusus / Diluar Tanggungan</p>
-                      <p className="text-[11px] text-orange-600">Tidak memotong kuota cuti tahunan 12 hari</p>
-                    </div>
-                  </div>
-                  {/* Switch ke reguler */}
-                  <button
-                    onClick={() => { setLeaveType('cuti'); setSelectedCategory(''); setCustomCategoryOther(''); clearAttachment(); }}
-                    className="mt-2 text-[11px] text-[#2563EB] font-semibold hover:underline"
-                  >
-                    ← Kembali ke Cuti / Sakit biasa
-                  </button>
-                </div>
-              )}
-
-              {/* Kategori Cuti Khusus */}
-              {leaveType === 'cuti_khusus' && (
-                <div>
-                  <label className="block text-[12px] font-semibold text-gray-600 mb-1.5">
-                    Kategori Cuti Khusus <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <select
-                      value={selectedCategory}
-                      onChange={e => { setSelectedCategory(e.target.value); setCustomCategoryOther(''); setFormError(''); }}
-                      className="w-full pl-3.5 pr-9 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/15 transition-all appearance-none cursor-pointer"
-                    >
-                      <option value="">-- Pilih Kategori --</option>
-                      {categories.map(c => (
-                        <option key={c.id} value={String(c.id)}>{c.name}</option>
-                      ))}
-                    </select>
-                    <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                  </div>
-                </div>
-              )}
-
-              {/* Category Lock Rules Info Badge */}
-              {leaveType === 'cuti_khusus' && selectedCategory && (() => {
-                const cat = categories.find(c => String(c.id) === selectedCategory);
-                const catName = (cat?.name || '').toLowerCase();
-                if (catName.includes('melahirkan') || catName.includes('keguguran')) {
-                  return (
-                    <div className="mt-2 text-[11.5px] bg-purple-50 border border-purple-200 text-purple-800 px-3.5 py-2 rounded-xl flex items-center gap-2 font-sans">
-                      <span className="text-base">🔒</span>
-                      <span><strong>Ketentuan Dikunci:</strong> Durasi Cuti Melahirkan/Keguguran dikunci maksimal <strong>90 Hari (3 Bulan)</strong>.</span>
-                    </div>
-                  );
-                }
-                if (catName.includes('meninggal') || catName.includes('duka') || catName.includes('kepergian')) {
-                  return (
-                    <div className="mt-2 text-[11.5px] bg-rose-50 border border-rose-200 text-rose-800 px-3.5 py-2 rounded-xl flex items-center gap-2 font-sans">
-                      <span className="text-base">🔒</span>
-                      <span><strong>Ketentuan Dikunci:</strong> Cuti Duka / Kematian dikunci maksimal <strong>3 Hari / Pengajuan</strong> &amp; <strong>Maks. 3 Hari / Bulan</strong>.</span>
-                    </div>
-                  );
-                }
-                if (catName.includes('menikah')) {
-                  return (
-                    <div className="mt-2 text-[11.5px] bg-amber-50 border border-amber-200 text-amber-800 px-3.5 py-2 rounded-xl flex items-center gap-2 font-sans">
-                      <span className="text-base">🔒</span>
-                      <span><strong>Ketentuan Dikunci:</strong> Cuti Menikah dikunci maksimal <strong>3 Hari / Pengajuan</strong> &amp; <strong>Maks. 3 Hari dalam 1 Tahun</strong>.</span>
-                    </div>
-                  );
-                }
-                if (catName.includes('sakit')) {
-                  return (
-                    <div className="mt-2 text-[11.5px] bg-green-50 border border-green-200 text-green-800 px-3.5 py-2 rounded-xl flex items-center gap-2 font-sans">
-                      <span className="text-base">🩺</span>
-                      <span><strong>Sakit Kekhususan:</strong> Durasi &amp; Kuota <strong>TIDAK DIKUNCI</strong> (bebas disesuaikan dengan instruksi surat dokter).</span>
-                    </div>
-                  );
-                }
-                return null;
-              })()}
-
-              {leaveType === 'cuti_khusus' && (() => {
-                const cat = categories.find(c => String(c.id) === selectedCategory);
-                const catName = (cat?.name || '').toLowerCase();
-                return catName === 'lainnya' || catName.includes('sakit');
-              })() && (() => {
-                const cat = categories.find(c => String(c.id) === selectedCategory);
-                const catName = (cat?.name || '').toLowerCase();
-                const isSakit = catName.includes('sakit');
-                return (
-                  <div className="space-y-1.5 mt-3">
-                    <label className="block text-[12px] font-semibold text-gray-600 mb-1.5">
-                      {isSakit ? 'Jenis / Nama Penyakit yang Dialami' : 'Nama / Keterangan Cuti Khusus Lainnya'} <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={customCategoryOther}
-                      onChange={(e) => { setCustomCategoryOther(e.target.value); setFormError(''); }}
-                      placeholder={isSakit ? "Contoh: Tipes / Demam Berdarah / Pasca Operasi / Covid-19 / dll." : "Contoh: Khitanan Anak, Menikahkan Anak, dll."}
-                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/15 transition-all font-semibold"
-                    />
-                  </div>
-                );
-              })()}
-
-              {/* Tanggal */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[12px] font-semibold text-gray-600 mb-1.5">Tanggal Mulai <span className="text-red-500">*</span></label>
-                  <input type="date" value={startDate} onChange={e => { setStartDate(e.target.value); setFormError(''); }}
-                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all font-semibold" />
-                </div>
-                <div>
-                  <label className="block text-[12px] font-semibold text-gray-600 mb-1.5">Tanggal Selesai <span className="text-red-500">*</span></label>
-                  <input type="date" value={endDate} min={startDate} max={getMaxEndDate()} onChange={e => { setEndDate(e.target.value); setFormError(''); }}
-                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all font-semibold" />
-                </div>
-              </div>
-
-              {/* Duration Preview */}
-              {startDate && endDate && (
-                <div className={`flex flex-col gap-1.5 rounded-xl px-3.5 py-2.5 border ${
-                  (leaveType === 'cuti' && (calcDays() > remainingCuti || calcDays() > 4 || !!checkMonthlyLimit()))
-                    ? 'bg-red-50 border-red-200'
-                    : leaveType === 'cuti_khusus'
-                      ? 'bg-orange-50 border-orange-200'
-                      : 'bg-green-50 border-green-100'
-                }`}>
-                  <div className="flex items-center gap-2.5">
-                    <Calendar size={14} className={
-                      (leaveType === 'cuti' && (calcDays() > remainingCuti || calcDays() > 4 || !!checkMonthlyLimit()))
-                        ? 'text-red-500'
-                        : leaveType === 'cuti_khusus'
-                          ? 'text-orange-600'
-                          : 'text-[#16A34A]'
-                    } />
-                    <p className={`text-[12px] font-medium ${
-                      (leaveType === 'cuti' && (calcDays() > remainingCuti || calcDays() > 4 || !!checkMonthlyLimit()))
-                        ? 'text-red-600'
-                        : leaveType === 'cuti_khusus'
-                          ? 'text-orange-700'
-                          : 'text-[#16A34A]'
-                    }`}>
-                      Durasi: <strong>{calcDays()} hari</strong>
-                      {leaveType === 'cuti' && calcDays() > remainingCuti && (
-                        <span className="ml-1 font-normal"> — Melebihi sisa kuota ({remainingCuti} hari)! Pengajuan mungkin ditolak.</span>
-                      )}
-                      {leaveType === 'cuti' && calcDays() > 4 && (
-                        <span className="ml-1 font-normal"> — Melebihi batas 4 hari beruntun!</span>
-                      )}
-                      {leaveType === 'cuti_khusus' && (
-                        <span className="ml-1 font-normal text-orange-600/90"> — Tidak memotong kuota cuti tahunan.</span>
-                      )}
+              {/* Form Content (Scrollable inside modal) */}
+              <div className="p-6 space-y-4 overflow-y-auto flex-1">
+                {/* Syarat Masa Kerja Banner */}
+                <div className="flex items-center gap-2.5 bg-blue-50 border border-blue-100 rounded-2xl px-4 py-3 text-[12px] text-blue-900 shadow-xs">
+                  <Shield size={16} className="text-blue-600 flex-shrink-0" />
+                  <div>
+                    <p className="font-bold text-blue-950">Syarat Ketentuan Masa Kerja (1 Tahun)</p>
+                    <p className="text-[11.5px] text-blue-800/90 mt-0.5 leading-relaxed">
+                      Pengajuan Cuti Tahunan, Sakit, maupun Cuti Khusus berlaku bagi pegawai dengan masa bergabung minimal <strong>1 tahun (365 hari)</strong> terhitung sejak tanggal masuk kerja.
                     </p>
                   </div>
-                  {/* Monthly limit warning */}
-                  {leaveType === 'cuti' && !!checkMonthlyLimit() && (
-                    <div className="flex items-start gap-1.5 mt-0.5">
-                      <AlertTriangle size={12} className="text-red-500 flex-shrink-0 mt-0.5" />
-                      <p className="text-[11px] text-red-600 font-medium">{checkMonthlyLimit()}</p>
+                </div>
+
+                {formError && (
+                  <div className="flex items-center gap-2 bg-red-50 border border-red-100 text-red-600 text-[12px] px-3.5 py-2.5 rounded-xl">
+                    <AlertCircle size={14} className="flex-shrink-0" /> {formError}
+                  </div>
+                )}
+
+                {/* Data Pegawai (read only from profile) */}
+                <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
+                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-3">Data Pengaju (dari Profil)</p>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                    <div>
+                      <p className="text-[10px] text-gray-400">Nama</p>
+                      <p className="text-[13px] font-semibold text-gray-800">{user?.name || '-'}</p>
                     </div>
-                  )}
-                  {/* Monthly hint for cuti when within limit */}
-                  {leaveType === 'cuti' && calcDays() <= 4 && !checkMonthlyLimit() && (() => {
-                    const months = getMonthsCovered();
-                    return months.map(({ year, month }) => {
-                      const existing = existingCutiDaysInMonth(year, month);
-                      const newDays  = calcNewDaysInMonth(year, month);
-                      const remain   = 4 - existing - newDays;
-                      if (existing > 0 || newDays < calcDays()) {
+                    <div>
+                      <p className="text-[10px] text-gray-400">NIK KTP</p>
+                      <p className="text-[13px] font-semibold text-gray-800">{user?.nik_ktp || '-'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-gray-400">Departemen</p>
+                      <p className="text-[13px] font-semibold text-gray-800">{user?.department || '-'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-gray-400">Jabatan</p>
+                      <p className="text-[13px] font-semibold text-gray-800">{user?.position || '-'}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Jenis Pengajuan */}
+                {leaveType !== 'cuti_khusus' ? (
+                  <div>
+                    <label className="block text-[12px] font-semibold text-gray-600 mb-2">Jenis Pengajuan</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(['cuti', 'sakit'] as LeaveType[]).map(t => {
+                        const tc = typeConfig[t];
                         return (
-                          <p key={`${year}-${month}`} className="text-[11px] text-[#16A34A] font-medium">
-                            {INDO_MONTHS[month]} {year}: sudah ada {existing} hari, +{newDays} hari baru → total {existing + newDays}/4 hari
-                            {remain > 0 ? ` (sisa ${remain} hari lagi)` : ' (penuh bulan ini)'}
-                          </p>
+                          <button key={t} onClick={() => { setLeaveType(t); setFormError(''); }}
+                            className={`py-3 rounded-xl border-2 text-center transition-all ${
+                              leaveType === t ? 'shadow-sm' : 'border-gray-100 hover:border-gray-200 bg-gray-50'
+                            }`}
+                            style={leaveType === t ? { borderColor: tc.color, background: tc.bg } : {}}>
+                            <p className="text-[16px] mb-0.5">{tc.initial}</p>
+                            <p className="text-[11px] font-semibold" style={{ color: leaveType === t ? tc.color : '#6B7280' }}>{tc.label}</p>
+                          </button>
                         );
-                      }
-                      return null;
-                    });
-                  })()}
-                </div>
-              )}
-
-              {/* Rekan Kerja Pengganti (Hanya untuk Cuti Tahunan) */}
-              {leaveType === 'cuti' && (
-                <div className="space-y-3 text-left">
-                  {calcDays() > 0 ? (
-                    <>
-                      <div>
-                        <label className="block text-[12px] font-bold text-gray-700 mb-1.5 flex items-center justify-between">
-                          <span>Jumlah Rekan Kerja Pengganti <span className="text-red-500">*</span></span>
-                          <span className="text-[11px] font-semibold text-[#16A34A] bg-green-50 px-2 py-0.5 rounded-md border border-green-150">Otomatis sesuai durasi {calcDays()} hari</span>
-                        </label>
-                        <div className="relative">
-                          <select
-                            disabled
-                            value={numSubstitutesSelect}
-                            className="w-full pl-3.5 pr-9 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-100 focus:outline-none transition-all appearance-none cursor-not-allowed font-bold text-gray-500"
-                          >
-                            <option value={numSubstitutesSelect}>{numSubstitutesSelect} Orang</option>
-                          </select>
-                          <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                        {numSubstitutesSelect >= 1 && (
-                          <div>
-                            <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-wider mb-1">
-                              Pengganti 1 <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                              type="text"
-                              value={substitute1}
-                              onChange={e => setSubstitute1(e.target.value)}
-                              placeholder="Nama rekan kerja pengganti 1..."
-                              className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[12.5px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all placeholder:text-gray-300 font-semibold text-gray-800"
-                            />
-                          </div>
-                        )}
-                        {numSubstitutesSelect >= 2 && (
-                          <div>
-                            <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-wider mb-1">
-                              Pengganti 2 <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                              type="text"
-                              value={substitute2}
-                              onChange={e => setSubstitute2(e.target.value)}
-                              placeholder="Nama rekan kerja pengganti 2..."
-                              className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[12.5px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all placeholder:text-gray-300 font-semibold text-gray-800"
-                            />
-                          </div>
-                        )}
-                        {numSubstitutesSelect >= 3 && (
-                          <div>
-                            <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-wider mb-1">
-                              Pengganti 3 <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                              type="text"
-                              value={substitute3}
-                              onChange={e => setSubstitute3(e.target.value)}
-                              placeholder="Nama rekan kerja pengganti 3..."
-                              className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[12.5px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all placeholder:text-gray-300 font-semibold text-gray-800"
-                            />
-                          </div>
-                        )}
-                        {numSubstitutesSelect >= 4 && (
-                          <div>
-                            <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-wider mb-1">
-                              Pengganti 4 <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                              type="text"
-                              value={substitute4}
-                              onChange={e => setSubstitute4(e.target.value)}
-                              placeholder="Nama rekan kerja pengganti 4..."
-                              className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[12.5px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all placeholder:text-gray-300 font-semibold text-gray-800"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="bg-amber-50/50 border border-amber-200/60 rounded-xl p-3.5 text-center text-amber-700 text-[11.5px] font-medium">
-                      ⚠️ Silakan tentukan tanggal mulai & selesai terlebih dahulu untuk menentukan rekan kerja pengganti.
+                      })}
                     </div>
-                  )}
-                </div>
-              )}
-
-              {/* Alamat Selama Cuti */}
-              <div className="text-left">
-                <label className="block text-[12px] font-semibold text-gray-600 mb-1.5">
-                  Alamat Selama Cuti
-                </label>
-                <input
-                  type="text"
-                  value={alamatCuti}
-                  onChange={e => setAlamatCuti(e.target.value)}
-                  placeholder="Alamat tinggal selama cuti..."
-                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all placeholder:text-gray-300 font-semibold text-gray-800"
-                />
-              </div>
-
-              {/* Keterangan */}
-              <div>
-                <label className="block text-[12px] font-semibold text-gray-600 mb-1.5">
-                  Keterangan / Alasan <span className="text-red-500">*</span>
-                </label>
-                <textarea value={reason} onChange={e => { setReason(e.target.value); setFormError(''); }} rows={3}
-                  placeholder={leaveType === 'sakit' ? 'Jelaskan kondisi kesehatan Anda...' : 'Jelaskan keperluan cuti Anda secara singkat...'}
-                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all resize-none placeholder:text-gray-300" />
-              </div>
-
-              {/* Lampiran */}
-              <div>
-                <label className="block text-[12px] font-semibold text-gray-600 mb-1.5">
-                  Dokumen Pendukung{' '}
-                  {leaveType === 'cuti_khusus' || leaveType === 'sakit'
-                    ? <span className="text-red-500">* (Wajib)</span>
-                    : <span className="text-gray-400 font-normal">(Opsional)</span>
-                  }{' '}
-                  <span className="text-gray-400 font-normal">PDF, PNG, JPG max 2MB</span>
-                </label>
-                {!attachmentName ? (
-                  <label className="flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-2xl p-5 cursor-pointer hover:border-[#16A34A] hover:bg-green-50/30 transition-all text-center">
-                    <Paperclip size={20} className="text-gray-300 mb-2" />
-                    <span className="text-[12px] text-gray-500 font-medium">Klik untuk unggah dokumen</span>
-                    <span className="text-[11px] text-gray-400 mt-0.5">Surat sakit, surat tugas, atau dokumen pendukung lainnya</span>
-                    <input type="file" onChange={handleAttachmentChange} accept=".pdf,image/png,image/jpeg,image/jpg" className="hidden" />
-                  </label>
+                  </div>
                 ) : (
-                  <div className="flex items-center justify-between bg-green-50 border border-green-100 rounded-2xl px-4 py-3">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <FileText size={16} className="text-[#16A34A] flex-shrink-0" />
-                      <span className="text-[12px] font-medium text-gray-700 truncate">{attachmentName}</span>
+                  <div>
+                    <div className="flex items-center gap-2.5 bg-orange-50 border border-orange-100 rounded-xl px-3.5 py-3">
+                      <span className="text-[18px]">✨</span>
+                      <div>
+                        <p className="text-[12px] font-bold text-orange-800">Cuti Khusus / Diluar Tanggungan</p>
+                        <p className="text-[11px] text-orange-600">Tidak memotong kuota cuti tahunan 12 hari</p>
+                      </div>
                     </div>
-                    <button type="button" onClick={clearAttachment} className="w-6 h-6 rounded-lg hover:bg-red-100 flex items-center justify-center text-gray-400 hover:text-red-500 transition-colors flex-shrink-0">
-                      <X size={13} />
+                    {/* Switch ke reguler */}
+                    <button
+                      onClick={() => { setLeaveType('cuti'); setSelectedCategory(''); setCustomCategoryOther(''); clearAttachment(); }}
+                      className="mt-2 text-[11px] text-[#2563EB] font-semibold hover:underline"
+                    >
+                      ← Kembali ke Cuti / Sakit biasa
                     </button>
                   </div>
                 )}
-              </div>
 
-              {/* Sakit Note */}
-              {leaveType === 'sakit' && (
-                <div className="flex items-start gap-2.5 bg-blue-50 border border-blue-100 rounded-xl px-3.5 py-2.5">
-                  <Info size={13} className="text-blue-500 flex-shrink-0 mt-0.5" />
-                  <p className="text-[11px] text-blue-600">Wajib mengunggah surat keterangan dokter dari fasilitas kesehatan.</p>
-                </div>
-              )}
-
-              {/* Submit & Cancel */}
+                {/* Submit & Cancel */}
               <div className="flex gap-2.5 pt-1">
                 <button
                   onClick={() => { setShowForm(false); setFormError(''); clearAttachment(); setStartDate(''); setEndDate(''); setReason(''); setSelectedCategory(''); setCustomCategoryOther(''); }}
@@ -1152,7 +845,8 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
               </div>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
         {/* ─── HISTORY LIST ─────────────────────────────────────────────────── */}
         <div>

@@ -160,7 +160,7 @@ export function HistoryPage() {
 
   // Stats from range-filtered records
   const totalDays    = rangeFiltered.length;
-  const hadirCount   = rangeFiltered.filter(r => r.display_status !== 'tidak_lengkap' && (r.status === 'hadir' || r.status === 'telat')).length;
+  const hadirCount   = rangeFiltered.filter(r => r.display_status !== 'tidak_lengkap' && r.status === 'hadir').length;
   const telatCount   = rangeFiltered.filter(r => r.display_status !== 'tidak_lengkap' && r.status === 'telat').length;
   const tidakLengkapCount = rangeFiltered.filter(r => r.display_status === 'tidak_lengkap').length;
   const alphaCount   = rangeFiltered.filter(r => r.status === 'alpha').length;

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Sun, Sunset, Moon, Edit2, Check, X, Plus, Users, Trash2, Star, Zap, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Loader2, Save, Coffee, FileText } from 'lucide-react';
+import { Sun, Sunset, Moon, Edit2, Check, X, Plus, Users, Trash2, Star, Zap, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Loader2, Save, Coffee, FileText, Search } from 'lucide-react';
 import { scheduleApi, employeeApi, ShiftSchedule, EmployeeWeeklySchedule, EmployeeMonthlySchedule } from '../../../services/api';
 import { MonthYearDeptFilter } from '../ui/MonthYearDeptFilter';
 import logoImg from '../../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
@@ -388,6 +388,7 @@ function AddEmployeeToShiftModal({
   onAssign: (empId: number, day: string, childScheduleId: number) => Promise<void>;
 }) {
   const [employees, setEmployees] = useState<any[]>([]);
+  const [empSearch, setEmpSearch] = useState('');
   const [selectedEmpId, setSelectedEmpId] = useState<number | ''>('');
   const [selectedDay, setSelectedDay] = useState<string>('Senin');
   const [selectedChildId, setSelectedChildId] = useState<number>(
@@ -411,6 +412,13 @@ function AddEmployeeToShiftModal({
     };
     fetchEmployees();
   }, []);
+
+  const filteredEmployees = employees.filter(emp =>
+    !empSearch.trim() ||
+    emp.name.toLowerCase().includes(empSearch.toLowerCase()) ||
+    (emp.nik_ktp && emp.nik_ktp.includes(empSearch)) ||
+    (emp.department && emp.department.toLowerCase().includes(empSearch.toLowerCase()))
+  );
 
   const handleSubmit = async () => {
     if (selectedEmpId === '' || !selectedChildId) return;
@@ -445,13 +453,28 @@ function AddEmployeeToShiftModal({
         <div className="space-y-4">
           <div>
             <label className="block text-[12px] font-semibold text-gray-700 mb-1.5 font-sans">Pilih Karyawan</label>
+            <div className="relative mb-1.5">
+              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Cari nama/NIK..."
+                value={empSearch}
+                onChange={e => setEmpSearch(e.target.value)}
+                className="w-full pl-8 pr-7 py-1.5 border border-gray-200 rounded-xl text-[12px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all font-sans"
+              />
+              {empSearch && (
+                <button type="button" onClick={() => setEmpSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  <X size={12} />
+                </button>
+              )}
+            </div>
             <select
               value={selectedEmpId}
               onChange={e => setSelectedEmpId(Number(e.target.value))}
               className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all font-sans"
             >
               {employees.length === 0 && <option value="">Memuat data karyawan...</option>}
-              {employees.map(emp => (
+              {filteredEmployees.map(emp => (
                 <option key={emp.id} value={emp.id}>
                   {emp.name} ({emp.department || 'Tanpa Dept'})
                 </option>
@@ -738,6 +761,7 @@ export function ScheduleTab() {
 
   // State untuk pencarian/filter kartu shift
   const [searchQuery, setSearchQuery] = useState('');
+  const [calSearchQuery, setCalSearchQuery] = useState('');
   const [departments, setDepartments] = useState<any[]>([]);
   const [selectedDeptFilter, setSelectedDeptFilter] = useState<string>('all');
 
@@ -1795,12 +1819,36 @@ export function ScheduleTab() {
               <p className="text-[11px] text-gray-400">{daysInMonth} hari · Klik sel karyawan untuk mengatur penugasan shift kerja</p>
             </div>
           </div>
-          <button
-            onClick={handlePrintPDF}
-            className="flex items-center gap-1.5 px-4 py-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl text-[11px] font-bold text-blue-700 transition-colors shadow-2xs active:scale-95 cursor-pointer"
-          >
-            <FileText size={13} /> Cetak Jadwal Bulanan
-          </button>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Search Input for Employees in Calendar */}
+            <div className="relative min-w-[200px] sm:min-w-[240px]">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Cari nama karyawan..."
+                value={calSearchQuery}
+                onChange={e => setCalSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-8 py-1.5 border border-gray-200 rounded-xl text-[12px] bg-white focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/10 transition-all font-sans"
+              />
+              {calSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setCalSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+
+            <button
+              onClick={handlePrintPDF}
+              className="flex items-center gap-1.5 px-4 py-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl text-[11px] font-bold text-blue-700 transition-colors shadow-2xs active:scale-95 cursor-pointer"
+            >
+              <FileText size={13} /> Cetak Jadwal Bulanan
+            </button>
+          </div>
         </div>
 
         {/* Grid Table */}
@@ -1810,11 +1858,11 @@ export function ScheduleTab() {
             <span className="text-[13px] font-medium">Memuat data kalender...</span>
           </div>
         ) : (
-          <div ref={calTableRef} className="overflow-x-auto custom-scrollbar pb-1">
-            <table className="text-[11px] border-collapse" style={{ minWidth: `${Math.max(900, 150 + daysInMonth * 44)}px` }}>
-              <thead>
-                <tr className="border-b border-slate-100 bg-slate-50/40">
-                  <th className="sticky left-0 z-20 bg-[#F8FAFC] text-left px-5 py-4 min-w-[150px] font-semibold text-slate-500 uppercase tracking-wider text-[10px] border-r border-slate-200/80 shadow-[3px_0_6px_-2px_rgba(0,0,0,0.05)]">
+          <div ref={calTableRef} className="overflow-auto max-h-[calc(100vh-250px)] min-h-[400px] custom-scrollbar pb-1 border-t border-slate-100">
+            <table className="text-[11px] border-collapse relative" style={{ minWidth: `${Math.max(900, 150 + daysInMonth * 44)}px` }}>
+              <thead className="sticky top-0 z-30 bg-[#F8FAFC] shadow-xs">
+                <tr className="border-b border-slate-200/80 bg-[#F8FAFC]">
+                  <th className="sticky top-0 left-0 z-40 bg-[#F8FAFC] text-left px-5 py-3.5 min-w-[150px] font-semibold text-slate-500 uppercase tracking-wider text-[10px] border-r border-slate-200/80 shadow-[3px_3px_6px_-2px_rgba(0,0,0,0.08)]">
                     <div className="flex items-center gap-1.5">
                       <Users size={13} className="text-slate-400" />
                       Karyawan
@@ -1827,7 +1875,7 @@ export function ScheduleTab() {
                     const isHoliday = holidays.includes(dateStr);
                     const isSunday = dow === 0;
                     return (
-                      <th key={day} className={`text-center py-2 px-1 font-semibold text-[10px] ${isToday ? 'bg-green-50/50' : ''}`}
+                      <th key={day} className={`sticky top-0 z-30 bg-[#F8FAFC] text-center py-2 px-1 font-semibold text-[10px] ${isToday ? 'bg-green-50' : ''}`}
                         style={{ minWidth: '42px', ...getDayHeaderStyle(dow, isHoliday) }}>
                         <div className="flex flex-col items-center">
                           <span className={`text-[9px] uppercase tracking-wider font-semibold ${isSunday || isHoliday ? 'text-red-500/80' : 'opacity-75'}`}>{DAY_ABBR[dow]}</span>
@@ -1841,14 +1889,20 @@ export function ScheduleTab() {
                 </tr>
               </thead>
               <tbody>
-                {monthlyData.length === 0 ? (
-                  <tr>
-                    <td colSpan={daysInMonth + 1} className="text-center py-14 text-slate-400 text-[12px] italic">
-                      Belum ada data karyawan. Pilih unit kerja untuk melihat jadwal.
-                    </td>
-                  </tr>
-                ) : (
-                  monthlyData.map((row, ri) => (
+                {(() => {
+                  const filteredMonthly = monthlyData.filter(row =>
+                    !calSearchQuery.trim() || row.name.toLowerCase().includes(calSearchQuery.toLowerCase())
+                  );
+                  if (filteredMonthly.length === 0) {
+                    return (
+                      <tr>
+                        <td colSpan={daysInMonth + 1} className="text-center py-14 text-slate-400 text-[12px] italic">
+                          {calSearchQuery ? 'Tidak ada karyawan yang cocok dengan pencarian Anda.' : 'Belum ada data karyawan. Pilih unit kerja untuk melihat jadwal.'}
+                        </td>
+                      </tr>
+                    );
+                  }
+                  return filteredMonthly.map((row, ri) => (
                     <tr key={row.employee_id}
                       className="border-b border-slate-50 group hover:bg-slate-50/30 transition-colors">
                       <td className={`sticky left-0 z-20 ${ri % 2 === 0 ? 'bg-white' : 'bg-[#F8FAFC]/60'} group-hover:bg-[#F0FDF4] px-5 py-3 border-r border-slate-200/80 shadow-[3px_0_6px_-2px_rgba(0,0,0,0.04)] transition-colors`}>
@@ -1903,8 +1957,8 @@ export function ScheduleTab() {
                         );
                       })}
                     </tr>
-                  ))
-                )}
+                  ));
+                })()}
               </tbody>
             </table>
           </div>
