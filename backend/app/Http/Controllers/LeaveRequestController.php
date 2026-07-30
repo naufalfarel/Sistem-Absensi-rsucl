@@ -196,15 +196,15 @@ class LeaveRequestController extends Controller
             'alamat_cuti'               => 'nullable|string|max:255',
         ];
 
-        // Lampiran wajib untuk cuti_khusus. Untuk tipe lain opsional.
+        // Lampiran wajib untuk seluruh pengajuan cuti, sakit, dan cuti khusus
         if ($request->hasFile('attachment')) {
-            $rules['attachment'] = 'required_if:type,cuti_khusus|file|mimes:pdf,jpg,jpeg,png|max:2048';
+            $rules['attachment'] = 'required|file|mimes:pdf,jpg,jpeg,png|max:2048';
         } else {
-            $rules['attachment'] = 'required_if:type,cuti_khusus|string';
+            $rules['attachment'] = 'required|string';
         }
 
         $messages = [
-            'attachment.required_if' => 'Dokumen pendukung wajib diupload untuk pengajuan cuti khusus.',
+            'attachment.required' => 'Dokumen pendukung / surat izin wajib diunggah.',
             'attachment.file' => 'Dokumen pendukung harus berupa file.',
             'attachment.mimes' => 'Format file dokumen pendukung harus berupa PDF, PNG, atau JPG/JPEG.',
             'attachment.max' => 'Ukuran file dokumen pendukung maksimal 2MB.',
