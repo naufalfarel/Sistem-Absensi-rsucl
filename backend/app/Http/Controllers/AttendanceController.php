@@ -1454,6 +1454,7 @@ class AttendanceController extends Controller
      */
     private function getHistoryRows(Request $request): array
     {
+        $user = $request->user();
         $dateFrom = $request->query('date_from');
         $dateTo   = $request->query('date_to');
         
@@ -1462,6 +1463,14 @@ class AttendanceController extends Controller
         // 1. Get active employees matching search and department filters
         $empQuery = \App\Models\Employee::where('status', 'active')
             ->with(['user', 'department', 'position', 'schedules']);
+
+        // Scope to PJ Bagian department(s) if user is PJ Bagian and not Admin
+        if ($user->isPjBagian() && !$user->isAdmin()) {
+            $deptIds = $user->getPjDepartmentIds();
+            if (!empty($deptIds)) {
+                $empQuery->whereIn('department_id', $deptIds);
+            }
+        }
 
         if ($request->filled('search')) {
             $search = $request->query('search');

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Home, MapPin, History, Bell, User, LogOut, Menu, X, Clock, CheckSquare, CalendarDays, FileText, BookOpen, ShieldAlert } from 'lucide-react';
+import { Home, MapPin, History, Bell, User, LogOut, Menu, X, Clock, CheckSquare, CalendarDays, FileText, BookOpen, ShieldAlert, UserCheck } from 'lucide-react';
 import logoImg from '../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
 import { useAuth } from '../../context/AuthContext';
 import { AttendancePage } from './AttendancePage';
@@ -14,11 +14,12 @@ import { LeaveApprovalTab } from './pjbagian/LeaveApprovalTab';
 import { OvertimeApprovalTab } from './pjbagian/OvertimeApprovalTab';
 import { ResignationApprovalTab } from './pjbagian/ResignationApprovalTab';
 import { JadwalShiftTab } from './pjbagian/JadwalShiftTab';
+import { StaffAttendanceTab } from './pjbagian/StaffAttendanceTab';
 import { PJBagianDashboard } from './pjbagian/PJBagianDashboard';
 import { DisciplinaryPage } from './DisciplinaryPage';
 import { notificationApi, leaveApi, overtimeApi, resignationApi } from '../../services/api';
 
-type Tab = 'dashboard' | 'attendance' | 'history' | 'overtime_personal' | 'approvals' | 'shift_proposals' | 'notifications' | 'profile' | 'leave' | 'resignation' | 'guide' | 'disciplinary';
+type Tab = 'dashboard' | 'attendance' | 'history' | 'overtime_personal' | 'approvals' | 'shift_proposals' | 'staff_attendance' | 'notifications' | 'profile' | 'leave' | 'resignation' | 'guide' | 'disciplinary';
 
 interface PJBagianAppProps {
   onLogout: () => void;
@@ -123,6 +124,8 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
         );
       case 'shift_proposals':
         return <JadwalShiftTab user={user} />;
+      case 'staff_attendance':
+        return <StaffAttendanceTab user={user} />;
       case 'notifications':
         return <NotificationsPage onUpdateCount={fetchUnreadCount} onNavigate={(tab) => setActiveTab(tab as Tab)} userRole="pj_bagian" />;
       case 'profile':
@@ -162,6 +165,7 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
   const managementItems: { id: Tab; icon: any; label: string; badge?: number }[] = [
     { id: 'approvals', icon: CheckSquare, label: 'Pengajuan Staf', badge: totalPendingApprovals },
     { id: 'shift_proposals', icon: CalendarDays, label: 'Jadwal Shift Staf' },
+    { id: 'staff_attendance', icon: UserCheck, label: 'Riwayat Absensi Staf' },
   ];
 
   return (

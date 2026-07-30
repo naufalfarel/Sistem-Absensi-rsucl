@@ -148,6 +148,10 @@ Route::middleware('auth:sanctum')->group(function () {
         // Catatan cetak jadwal bulanan
         Route::get('/schedule-notes', [ScheduleController::class, 'getScheduleNote']);
         Route::post('/schedule-notes', [ScheduleController::class, 'saveScheduleNote']);
+
+        // ── Riwayat & Monitoring Kehadiran (Admin & PJ Bagian)
+        Route::get('/attendance', [AttendanceController::class, 'adminAttendanceHistory']);
+        Route::get('/attendance/status-summary', [AttendanceController::class, 'adminStatusSummary']);
     });
 
     // ── RUTE KHUSUS ADMINISTRATOR (Hanya untuk User dengan Role 'admin') ──────
@@ -172,10 +176,6 @@ Route::middleware('auth:sanctum')->group(function () {
         // ── Dashboard / Monitoring Kehadiran
         // Memonitoring status absensi seluruh karyawan hari ini secara real-time
         Route::get('/attendance/all-today', [AttendanceController::class, 'allToday']);
-
-        // ── Riwayat Kehadiran (Admin)
-        Route::get('/attendance', [AttendanceController::class, 'adminAttendanceHistory']);
-        Route::get('/attendance/status-summary', [AttendanceController::class, 'adminStatusSummary']);
 
         // ── Fitur Pulang Cepat (Early Checkout) — Admin
         // Daftar absensi pulang cepat (filter: ?status=pending|approved|rejected)
