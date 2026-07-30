@@ -413,12 +413,14 @@ function AddEmployeeToShiftModal({
     fetchEmployees();
   }, []);
 
-  const filteredEmployees = employees.filter(emp =>
-    !empSearch.trim() ||
-    emp.name.toLowerCase().includes(empSearch.toLowerCase()) ||
-    (emp.nik_ktp && emp.nik_ktp.includes(empSearch)) ||
-    (emp.department && emp.department.toLowerCase().includes(empSearch.toLowerCase()))
-  );
+  const filteredEmployees = employees
+    .filter(emp =>
+      !empSearch.trim() ||
+      emp.name.toLowerCase().includes(empSearch.toLowerCase()) ||
+      (emp.nik_ktp && emp.nik_ktp.includes(empSearch)) ||
+      (emp.department && emp.department.toLowerCase().includes(empSearch.toLowerCase()))
+    )
+    .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'id', { sensitivity: 'base' }));
 
   const handleSubmit = async () => {
     if (selectedEmpId === '' || !selectedChildId) return;

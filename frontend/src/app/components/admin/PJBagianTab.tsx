@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Shield, ShieldAlert, Plus, Trash2, Search, CheckCircle2, UserCheck, RefreshCw, X } from 'lucide-react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { Shield, ShieldAlert, Plus, Trash2, Search, CheckCircle2, UserCheck, RefreshCw, X, ChevronDown } from 'lucide-react';
 import { 
   pjBagianApi, 
   employeeApi, 
@@ -8,6 +8,140 @@ import {
   Employee, 
   DepartmentModel 
 } from '../../../services/api';
+
+/**
+ * Component Combobox Cari & Pilih Karyawan
+ * Diurutkan A-Z berdasarkan Nama Pegawai untuk kemudahan pencarian Admin & Super Admin.
+ */
+function SearchableEmployeeSelect({
+  employees,
+  selectedId,
+  onSelect,
+}: {
+  employees: Employee[];
+  selectedId: string;
+  onSelect: (id: string) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // Tutup dropdown saat klik di luar area
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Filter & Urutkan secara alfabetis A-Z berdasarkan NAMA PEGAWAI
+  const sortedEmployees = useMemo(() => {
+    return [...employees]
+      .filter(e => e.role !== 'admin' && e.role !== 'super_admin')
+      .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'id', { sensitivity: 'base' }));
+  }, [employees]);
+
+  const filteredEmployees = sortedEmployees.filter(e => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      (e.name && e.name.toLowerCase().includes(q)) ||
+      (e.nik_ktp && e.nik_ktp.includes(q)) ||
+      (e.department && e.department.toLowerCase().includes(q))
+    );
+  });
+
+  const selectedEmp = employees.find(e => String(e.id) === String(selectedId));
+
+  return (
+    <div className="relative" ref={wrapperRef}>
+      <label className="block text-[10px] font-bold text-gray-500 mb-1">Pilih Karyawan (Cari Nama A–Z)</label>
+
+      {/* Box Input Pencarian & Pilihan */}
+      <div className="relative">
+        <input
+          type="text"
+          placeholder={selectedEmp ? `${selectedEmp.name} (${selectedEmp.department || 'Tanpa Unit'})` : 'Ketik nama / NIK pegawai...'}
+          value={isOpen ? search : (selectedEmp ? `${selectedEmp.name} (${selectedEmp.nik_ktp || '-'}) — ${selectedEmp.department || 'Tanpa Unit'}` : '')}
+          onFocus={() => {
+            setIsOpen(true);
+            setSearch('');
+          }}
+          onChange={e => {
+            setSearch(e.target.value);
+            if (!isOpen) setIsOpen(true);
+          }}
+          className={`w-full pl-8 pr-8 py-2 border rounded-xl text-[11px] font-semibold transition-all cursor-pointer ${
+            selectedEmp && !isOpen
+              ? 'bg-green-50/70 border-green-300 text-gray-900 font-bold'
+              : 'bg-gray-50 border-gray-200 text-gray-800 focus:bg-white focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15'
+          }`}
+        />
+        <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        
+        {selectedId ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelect('');
+              setSearch('');
+              setIsOpen(true);
+            }}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-red-500 rounded-full hover:bg-gray-100 transition-colors"
+            title="Hapus Pilihan"
+          >
+            <X size={12} />
+          </button>
+        ) : (
+          <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        )}
+      </div>
+
+      {/* Menu Popup Opsi Karyawan (Sorted A-Z) */}
+      {isOpen && (
+        <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-50 max-h-56 overflow-y-auto divide-y divide-gray-50 animate-in fade-in slide-in-from-top-1 duration-150">
+          {filteredEmployees.length === 0 ? (
+            <div className="p-3 text-center text-gray-400 text-[10.5px]">
+              Tidak ada karyawan ditemukan.
+            </div>
+          ) : (
+            filteredEmployees.map(emp => {
+              const isSelected = String(emp.id) === String(selectedId);
+              return (
+                <button
+                  key={emp.id}
+                  type="button"
+                  onClick={() => {
+                    onSelect(String(emp.id));
+                    setIsOpen(false);
+                    setSearch('');
+                  }}
+                  className={`w-full text-left px-3 py-2 text-[11px] transition-colors flex items-center justify-between gap-2 hover:bg-green-50/80 cursor-pointer ${
+                    isSelected ? 'bg-green-50 font-bold text-[#16A34A]' : 'text-gray-700'
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="font-bold truncate text-gray-900">
+                      {emp.name}
+                    </p>
+                    <p className="text-[9.5px] text-gray-400 truncate">
+                      {emp.nik_ktp ? `NIK: ${emp.nik_ktp}` : ''} {emp.department ? `• Unit: ${emp.department}` : ''}
+                    </p>
+                  </div>
+                  {isSelected && <CheckCircle2 size={13} className="text-[#16A34A] flex-shrink-0" />}
+                </button>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function PJBagianTab() {
   const [pjList, setPjList] = useState<PjBagianUser[]>([]);
@@ -289,49 +423,11 @@ export function PJBagianTab() {
             )}
 
             <form onSubmit={handleAssign} className="space-y-4">
-              <div>
-                <label className="block text-[10px] font-bold text-gray-500 mb-1">Pilih Karyawan</label>
-                <div className="relative mb-1.5">
-                  <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Cari nama, NIK KTP, atau unit..."
-                    value={modalEmpSearch}
-                    onChange={e => setModalEmpSearch(e.target.value)}
-                    className="w-full pl-8 pr-7 py-1.5 border border-gray-200 rounded-lg text-[11px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all font-semibold text-gray-700"
-                  />
-                  {modalEmpSearch && (
-                    <button
-                      type="button"
-                      onClick={() => setModalEmpSearch('')}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                      <X size={12} />
-                    </button>
-                  )}
-                </div>
-                <select
-                  value={selectedEmployeeId}
-                  onChange={e => setSelectedEmployeeId(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-[11px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all font-semibold text-gray-700 cursor-pointer"
-                >
-                  <option value="">-- Pilih Karyawan --</option>
-                  {employees
-                    .filter(e => e.role !== 'admin' && e.role !== 'super_admin')
-                    .filter(e => {
-                      if (!modalEmpSearch.trim()) return true;
-                      const q = modalEmpSearch.toLowerCase();
-                      return (
-                        e.name.toLowerCase().includes(q) ||
-                        (e.nik_ktp && e.nik_ktp.includes(q)) ||
-                        (e.department && e.department.toLowerCase().includes(q))
-                      );
-                    })
-                    .map(emp => (
-                      <option key={emp.id} value={emp.id}>{emp.name} ({emp.nik_ktp}) - {emp.department}</option>
-                    ))}
-                </select>
-              </div>
+              <SearchableEmployeeSelect
+                employees={employees}
+                selectedId={selectedEmployeeId}
+                onSelect={setSelectedEmployeeId}
+              />
 
 
               <div>

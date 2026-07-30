@@ -414,6 +414,7 @@ class AttendanceController extends Controller
                 $attendanceData = [
                     'check_in'                => $now->format('H:i:s'),
                     'status'                  => $status,
+                    'note'                    => null, // Reset/clear stale leave note upon check-in
                     'checkin_punctuality'     => $punctuality,
                     'effective_checkin_time'  => $effectiveCheckinTime,
                     'latitude'                => $clientLat,
@@ -1617,7 +1618,7 @@ class AttendanceController extends Controller
             'longitude' => $att->longitude,
             'accuracy' => $att->accuracy,
             'is_within_geofence' => (bool)$att->is_within_geofence,
-            'note' => $att->note,
+            'note' => (in_array($displayStatus, ['hadir', 'telat']) && $att->note && str_starts_with($att->note, 'Masa ')) ? null : $att->note,
             'checkin_location_note' => $att->checkin_location_note,
             'checkout_location_note' => $att->checkout_location_note,
             'checkin_photo_url' => $att->checkin_photo_url ? url($att->checkin_photo_url) : null,

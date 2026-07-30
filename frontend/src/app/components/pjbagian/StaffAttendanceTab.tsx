@@ -279,6 +279,8 @@ export function StaffAttendanceTab({ user }: StaffAttendanceTabProps) {
       const bodyRows = exportRecords.map((r, idx) => {
         const statusRaw = r.display_status || r.status || 'tidak_ada_shift';
         const statusText = statusRaw.toUpperCase().replace('_', ' ');
+        const rawNote = r.note || '-';
+        const noteText = ((statusRaw === 'hadir' || statusRaw === 'telat') && rawNote.startsWith('Masa ')) ? '-' : rawNote;
 
         return `
           <tr>
@@ -290,7 +292,7 @@ export function StaffAttendanceTab({ user }: StaffAttendanceTabProps) {
             <td style="border:1px solid #000000;text-align:center;padding:5px 8px;">${r.check_in ? r.check_in.substring(0, 5) + ' WIB' : '-'}</td>
             <td style="border:1px solid #000000;text-align:center;padding:5px 8px;">${r.check_out ? r.check_out.substring(0, 5) + ' WIB' : '-'}</td>
             <td style="border:1px solid #000000;text-align:center;padding:5px 8px;font-weight:bold;">${statusText}</td>
-            <td style="border:1px solid #000000;text-align:left;padding:5px 8px;font-style:italic;">${r.note || '-'}</td>
+            <td style="border:1px solid #000000;text-align:left;padding:5px 8px;font-style:italic;">${noteText}</td>
           </tr>
         `;
       }).join('');
@@ -925,8 +927,10 @@ export function StaffAttendanceTab({ user }: StaffAttendanceTabProps) {
                 </div>
               </div>
 
-              {/* Catatan / Notes */}
-              {detailModalRecord.note && (
+              {/* Catatan / Notes - hanya tampilkan jika bukan catatan sistem otomatis */}
+              {detailModalRecord.note && 
+               detailModalRecord.note !== 'Tidak Hadir Tanpa Keterangan' &&
+               detailModalRecord.note !== 'Belum Absen Masuk' && (
                 <div className="p-3 bg-amber-50 border border-amber-150 rounded-2xl text-[11.5px] text-amber-900">
                   <span className="font-bold block text-[10px] uppercase tracking-wider text-amber-700">Catatan Absensi:</span>
                   <p className="mt-0.5 font-medium">{detailModalRecord.note}</p>

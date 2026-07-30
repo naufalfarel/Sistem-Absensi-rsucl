@@ -632,6 +632,20 @@ class ScheduleController extends Controller
         }
 
         $employees = $empQuery->get();
+
+        // Jika PJ Bagian, pastikan employee-nya sendiri juga muncul di grid (walau dept_id berbeda)
+        if ($user->isPjBagian() && $user->employee) {
+            $pjEmpId = $user->employee->id;
+            if (!$employees->contains('id', $pjEmpId)) {
+                $pjEmployee = \App\Models\Employee::with(['user.pjBagianDepartment'])
+                    ->where('id', $pjEmpId)
+                    ->where('status', 'active')
+                    ->first();
+                if ($pjEmployee) {
+                    $employees = $employees->prepend($pjEmployee);
+                }
+            }
+        }
         $empIds    = $employees->pluck('id')->toArray();
 
         // Ambil semua hari libur dalam rentang bulan ini

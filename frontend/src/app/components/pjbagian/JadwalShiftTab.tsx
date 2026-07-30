@@ -793,6 +793,13 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
         const filtered = eRes.data.filter((e: any) =>
           Number(e.department_id) === Number(activeDeptId)
         );
+        // Tambahkan PJ Bagian itu sendiri jika belum ada di list (department_id bisa beda)
+        const pjUserId = (user as any)?.id;
+        const selfInList = pjUserId && eRes.data.find((e: any) => Number(e.user_id) === Number(pjUserId));
+        const selfInFiltered = selfInList && filtered.find((e: any) => Number(e.user_id) === Number(pjUserId));
+        if (selfInList && !selfInFiltered) {
+          filtered.unshift(selfInList);
+        }
         setEmployees(filtered);
       }
     } catch (err) {
@@ -800,7 +807,8 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
     } finally {
       setLoading(false);
     }
-  }, [viewYear, viewMonth, activeDeptId]);
+  }, [viewYear, viewMonth, activeDeptId, user]);
+
 
   useEffect(() => {
     loadData();
