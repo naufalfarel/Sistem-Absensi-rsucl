@@ -162,7 +162,7 @@ class AttendanceRules
 
         // ── Prioritas 2: Fallback ke jadwal mingguan (day_of_week) ──────────
         $schedules = $employee->schedules()->get();
-        $todaySchedule = $schedules->first(fn($s) => $s->pivot->day_of_week === $todayName);
+        $todaySchedule = $schedules->first(fn($s) => $s->pivot->day_of_week === $dayName);
 
         if ($todaySchedule) {
             $matchedShift = $todaySchedule;
