@@ -260,25 +260,19 @@ class AttendanceRules
      * @param int $toleranceMinutes Batas toleransi setelah shift mulai (menit, misal: 40)
      * @return array ['status' => string, 'punctuality' => string, 'effective_checkin_time' => string]
      */
-    public static function classifyCheckin(Carbon $checkinTime, Carbon $shiftStart, Carbon $checkinWindowEnd, int $tepatWaktuMinutes, int $toleranceMinutes): array
+    public static function classifyCheckin(Carbon $checkinTime, Carbon $shiftStart, Carbon $checkinWindowEnd, int $tepatWaktuMinutes = 10, int $toleranceMinutes = 10): array
     {
         $checkinSec = $checkinTime->timestamp;
         $startSec = $shiftStart->timestamp;
         $endSec = $checkinWindowEnd->timestamp;
-        $tepatWaktuSec = $startSec + ($tepatWaktuMinutes * 60);
-        $toleranceSec = $startSec + ($toleranceMinutes * 60);
+        // Toleransi tepat waktu adalah 10 menit setelah jam masuk shift (misal 08:30 -> 08:40, 14:00 -> 14:10)
+        $tepatWaktuSec = $startSec + (max($tepatWaktuMinutes, $toleranceMinutes) * 60);
 
         if ($checkinSec <= $tepatWaktuSec) {
             return [
                 'status' => 'hadir',
                 'punctuality' => 'tepat_waktu',
                 'effective_checkin_time' => $checkinTime->lt($shiftStart) ? $shiftStart->format('H:i:s') : $checkinTime->format('H:i:s'),
-            ];
-        } elseif ($checkinSec <= $toleranceSec) {
-            return [
-                'status' => 'hadir',
-                'punctuality' => 'toleransi',
-                'effective_checkin_time' => $checkinTime->format('H:i:s'),
             ];
         } elseif ($checkinSec <= $endSec) {
             return [

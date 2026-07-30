@@ -43,6 +43,18 @@ class AuthController extends Controller
             ], 401);
         }
 
+        // Cek jika akun sanitarian / pegawai biasa / PJ Bagian tapi profil pegawainya sudah dihapus / nonaktif
+        if (!$user->isAdmin()) {
+            $emp = $user->employee;
+            if (!$emp || $emp->status === 'inactive') {
+                $user->tokens()->delete();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Akun Anda telah dinonaktifkan atau dihapus oleh Administrator.',
+                ], 403);
+            }
+        }
+
         // Hapus token lama untuk mencegah kebocoran sesi multipel, lalu terbitkan token baru
         $user->tokens()->delete();
         $token = $user->createToken('rsucl-token')->plainTextToken;

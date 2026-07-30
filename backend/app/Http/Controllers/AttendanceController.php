@@ -426,8 +426,9 @@ class AttendanceController extends Controller
             ], 422);
         }
 
-        // Jalankan klasifikasi check-in menggunakan helper baru
-        $tepatWaktuMinutes = $isFallback ? 0 : (int) Setting::get('late_limit', '30');
+        // Jalankan klasifikasi check-in: Toleransi tepat waktu 10 menit dari jam masuk shift
+        $tepatWaktuMinutes = 10;
+        $toleranceMinutes = 10;
         $classification = AttendanceRules::classifyCheckin($now, $shiftStartCarbon, $windowEnd, $tepatWaktuMinutes, $toleranceMinutes);
 
         if ($classification['status'] === 'closed') {

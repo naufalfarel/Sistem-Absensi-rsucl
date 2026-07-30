@@ -626,7 +626,7 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
                         <p className="text-[14px] font-semibold text-gray-900">{req.employee?.name}</p>
                         <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ color: tc.color, background: tc.bg }}>
                           {req.type === 'cuti_khusus' && req.special_leave_category
-                            ? `Cuti Khusus (${req.special_leave_category.name}${req.special_leave_category.name.toLowerCase() === 'lainnya' && req.special_leave_category_other ? ` - ${req.special_leave_category_other}` : ''})`
+                            ? `Cuti Khusus (${req.special_leave_category.name}${req.special_leave_category_other ? ` - ${req.special_leave_category_other}` : ''})`
                             : tc.label}
                         </span>
                         <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ color: sc.color, background: sc.bg }}>{sc.label}</span>

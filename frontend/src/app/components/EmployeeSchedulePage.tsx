@@ -75,9 +75,11 @@ export function EmployeeSchedulePage() {
     if (upper.includes('SAKIT')) return 'SK';
     if (upper.includes('DINAS') || upper.includes('TUGAS')) return 'DL';
     if (upper.includes('IZIN')) return 'IZ';
+    if (upper.includes('SABTU')) return 'S';
     if (upper.includes('PAGI') || upper === 'P') return 'P';
     if (upper.includes('SIANG') || upper === 'S') return 'S';
     if (upper.includes('MALAM') || upper === 'M') return 'M';
+    if (upper.includes('NORMAL') || upper.includes('REGULER') || upper.includes('KANTOR') || upper.includes('SENIN')) return 'N';
     if (upper.includes('LIBUR') || upper.includes('OFF')) return '-';
     return name.trim().charAt(0).toUpperCase();
   };

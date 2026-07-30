@@ -387,7 +387,7 @@ class LeaveRequestController extends Controller
                 $daysRequested = $startDate->diffInDays($endDate) + 1;
                 $today = \Carbon\Carbon::today();
 
-                // 1. Validasi Cuti Menikah
+                // 1. Validasi Cuti Menikah (Dikunci 3 hari per pengajuan & Maksimal 3 hari dalam 1 TAHUN)
                 if (str_contains($categoryName, 'menikah')) {
                     // Batas waktu pengajuan: paling lambat 2 minggu (14 hari) sebelum pelaksanaan
                     $daysDiff = $today->diffInDays($startDate, false);
@@ -401,19 +401,49 @@ class LeaveRequestController extends Controller
                         ], 422);
                     }
 
-                    // Durasi cuti menikah maksimal 3 hari
+                    // Durasi cuti menikah maksimal 3 hari per pengajuan
                     if ($daysRequested > 3) {
                         return response()->json([
                             'success' => false,
-                            'message' => "Durasi Cuti Menikah maksimal adalah 3 hari.",
+                            'message' => "Durasi Cuti Menikah dikunci maksimal 3 hari.",
                             'errors'  => [
-                                'duration' => ["Durasi Cuti Menikah maksimal 3 hari."],
+                                'duration' => ["Durasi Cuti Menikah dikunci maksimal 3 hari."],
+                            ],
+                        ], 422);
+                    }
+
+                    // Kuota Cuti Menikah: Maksimal 3 hari dalam 1 TAHUN (1 tahun kalender)
+                    $year = $startDate->year;
+                    $yearStart = \Carbon\Carbon::create($year, 1, 1)->startOfDay();
+                    $yearEnd   = \Carbon\Carbon::create($year, 12, 31)->endOfDay();
+
+                    $existingRequests = $employee->leaveRequests()
+                        ->where('type', 'cuti_khusus')
+                        ->where('special_leave_category_id', $category->id)
+                        ->whereIn('status', ['pending', 'approved'])
+                        ->where('start_date', '<=', $yearEnd->toDateString())
+                        ->where('end_date',   '>=', $yearStart->toDateString())
+                        ->get();
+
+                    $existingDaysThisYear = 0;
+                    foreach ($existingRequests as $er) {
+                        $erStart = \Carbon\Carbon::parse(max($er->start_date->toDateString(), $yearStart->toDateString()));
+                        $erEnd   = \Carbon\Carbon::parse(min($er->end_date->toDateString(), $yearEnd->toDateString()));
+                        $existingDaysThisYear += $erStart->diffInDays($erEnd) + 1;
+                    }
+
+                    if ($existingDaysThisYear + $daysRequested > 3) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => "Cuti Menikah dikunci maksimal 3 hari dalam 1 tahun kalender (tahun {$year} sudah pernah diambil {$existingDaysThisYear} hari, pengajuan baru {$daysRequested} hari = total " . ($existingDaysThisYear + $daysRequested) . " hari).",
+                            'errors'  => [
+                                'quota' => ["Cuti Menikah dikunci maksimal 3 hari dalam 1 tahun."],
                             ],
                         ], 422);
                     }
                 }
 
-                // 2. Validasi Cuti Melahirkan
+                // 2. Validasi Cuti Melahirkan / Keguguran (Dikunci maksimal 90 hari / 3 bulan)
                 elseif (str_contains($categoryName, 'melahirkan') || str_contains($categoryName, 'keguguran')) {
                     // Batas waktu pengajuan: paling lambat 2 hari setelah kejadian
                     $daysPast = $startDate->diffInDays($today, false);
@@ -431,15 +461,15 @@ class LeaveRequestController extends Controller
                     if ($daysRequested > 90) {
                         return response()->json([
                             'success' => false,
-                            'message' => "Durasi Cuti Melahirkan/Keguguran maksimal adalah 90 hari.",
+                            'message' => "Durasi Cuti Melahirkan/Keguguran dikunci maksimal 90 hari (3 bulan). Anda mengajukan {$daysRequested} hari.",
                             'errors'  => [
-                                'duration' => ["Durasi Cuti Melahirkan/Keguguran maksimal 90 hari."],
+                                'duration' => ["Durasi Cuti Melahirkan/Keguguran dikunci maksimal 90 hari (3 bulan)."],
                             ],
                         ], 422);
                     }
                 }
 
-                // 3. Validasi Duka / Meninggal Keluarga
+                // 3. Validasi Duka / Kematian / Meninggal (Dikunci 3 hari per pengajuan & Maksimal 3 hari dalam 1 BULAN)
                 elseif (str_contains($categoryName, 'meninggal') || str_contains($categoryName, 'duka') || str_contains($categoryName, 'kepergian')) {
                     // Diajukan paling lambat 2 hari setelah kejadian
                     $daysPast = $startDate->diffInDays($today, false);
@@ -453,33 +483,52 @@ class LeaveRequestController extends Controller
                         ], 422);
                     }
 
-                    // Durasi cuti duka maksimal 3 hari
+                    // Durasi cuti duka maksimal 3 hari per pengajuan
                     if ($daysRequested > 3) {
                         return response()->json([
                             'success' => false,
-                            'message' => "Durasi Cuti Duka/Kematian Keluarga maksimal adalah 3 hari.",
+                            'message' => "Durasi Cuti Duka/Kematian Keluarga dikunci maksimal 3 hari.",
                             'errors'  => [
-                                'duration' => ["Durasi maksimal 3 hari."],
+                                'duration' => ["Durasi Cuti Duka/Kematian dikunci maksimal 3 hari."],
+                            ],
+                        ], 422);
+                    }
+
+                    // Kuota Cuti Duka/Meninggal: Maksimal 3 hari dalam 1 BULAN
+                    $year = $startDate->year;
+                    $month = $startDate->month;
+                    $monthStart = \Carbon\Carbon::create($year, $month, 1)->startOfMonth();
+                    $monthEnd   = \Carbon\Carbon::create($year, $month, 1)->endOfMonth();
+
+                    $existingRequests = $employee->leaveRequests()
+                        ->where('type', 'cuti_khusus')
+                        ->where('special_leave_category_id', $category->id)
+                        ->whereIn('status', ['pending', 'approved'])
+                        ->where('start_date', '<=', $monthEnd->toDateString())
+                        ->where('end_date',   '>=', $monthStart->toDateString())
+                        ->get();
+
+                    $existingDaysThisMonth = 0;
+                    foreach ($existingRequests as $er) {
+                        $erStart = \Carbon\Carbon::parse(max($er->start_date->toDateString(), $monthStart->toDateString()));
+                        $erEnd   = \Carbon\Carbon::parse(min($er->end_date->toDateString(), $monthEnd->toDateString()));
+                        $existingDaysThisMonth += $erStart->diffInDays($erEnd) + 1;
+                    }
+
+                    if ($existingDaysThisMonth + $daysRequested > 3) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => "Cuti Duka / Kematian dikunci maksimal 3 hari dalam 1 bulan kalender (sudah pernah diambil {$existingDaysThisMonth} hari di bulan ini, pengajuan baru {$daysRequested} hari = total " . ($existingDaysThisMonth + $daysRequested) . " hari).",
+                            'errors'  => [
+                                'quota' => ["Cuti Duka / Kematian dikunci maksimal 3 hari dalam 1 bulan."],
                             ],
                         ], 422);
                     }
                 }
 
-
-
-                // 5. Validasi Sakit Kekhususan
+                // 4. Validasi Sakit Kekhususan (TIDAK USAH DIKUNCI - Bebas Durasi & Kuota)
                 elseif (str_contains($categoryName, 'sakit')) {
-                    // Diajukan paling lambat 3 hari dari tanggal mulai sakit
-                    $daysPast = $startDate->diffInDays($today, false);
-                    if ($daysPast > 3) {
-                        return response()->json([
-                            'success' => false,
-                            'message' => "Pengajuan Sakit Kekhususan harus diajukan paling lambat 3 hari dari tanggal mulai sakit.",
-                            'errors'  => [
-                                'start_date' => ["Pengajuan sakit kekhususan paling lambat diajukan 3 hari dari tanggal mulai."],
-                            ],
-                        ], 422);
-                    }
+                    // Bebas durasi & kuota sesuai instruksi surat dokter
                 }
             }
         }

@@ -259,8 +259,8 @@ class SettingController extends Controller
             'early_checkout_grace_minutes'    => '15',
             'overtime_grace_minutes'          => '15',
             // Toleransi Check-in & Jendela Absen Baru
-            'checkin_tolerance_minutes'       => '40',
-            'early_checkin_window_minutes'    => '120',
+            'checkin_tolerance_minutes'       => '10',
+            'early_checkin_window_minutes'    => '150',
             'checkin_open_time'               => '08:00',
             'checkin_late_after_time'         => '08:30',
             'checkin_close_time'              => '09:00',

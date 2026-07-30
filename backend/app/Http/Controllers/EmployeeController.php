@@ -139,8 +139,13 @@ class EmployeeController extends Controller
      */
     public function destroy(Employee $employee)
     {
+        $user = $employee->user;
+        if ($user) {
+            $user->tokens()->delete();
+            $user->delete();
+        }
         $employee->delete();
-        return response()->json(['success' => true, 'message' => 'Karyawan berhasil dihapus.']);
+        return response()->json(['success' => true, 'message' => 'Karyawan dan akun berhasil dihapus.']);
     }
 
     /**

@@ -1011,9 +1011,11 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
     if (upper.includes('SAKIT')) return 'SK';
     if (upper.includes('DINAS') || upper.includes('TUGAS')) return 'DL';
     if (upper.includes('IZIN')) return 'IZ';
+    if (upper.includes('SABTU')) return 'S';
     if (upper.includes('PAGI') || upper === 'P') return 'P';
     if (upper.includes('SIANG') || upper === 'S') return 'S';
     if (upper.includes('MALAM') || upper === 'M') return 'M';
+    if (upper.includes('NORMAL') || upper.includes('REGULER') || upper.includes('KANTOR') || upper.includes('SENIN')) return 'N';
     if (upper.includes('LIBUR') || upper.includes('OFF')) return '-';
     return name.trim().charAt(0).toUpperCase();
   };
@@ -1812,7 +1814,7 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
                                     className={`w-8 h-7 mx-auto rounded-lg text-[10px] font-extrabold border flex items-center justify-center cursor-not-allowed opacity-90 ${
                                       assigned
                                         ? 'shadow-sm'
-                                        : 'border-[#BBF7D0] bg-[#F0FDF4] text-[#16A34A] shadow-2xs'
+                                        : 'border-slate-100 bg-slate-50 text-slate-400'
                                     }`}
                                     style={assigned && pr ? {
                                       background: pr.bg,
@@ -1822,10 +1824,10 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
                                     title={
                                       assigned
                                         ? `[DISETUJUI] ${assigned.name}`
-                                         : "Jam Kantor Biasa (Senin–Jumat: 08:30 - 17:00, Sabtu: 08:30 - 13:00). Akun PJ Bagian otomatis mengikuti Jam Kantor."
+                                        : "Hari Libur / OFF. Akun PJ Bagian otomatis mengikuti Jam Kantor."
                                     }
                                   >
-                                    {assigned ? badge : 'N'}
+                                    {assigned ? badge : '-'}
                                   </button>
                                 </div>
                               ) : isLeave ? (

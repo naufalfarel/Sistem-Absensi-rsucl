@@ -275,7 +275,7 @@ export function LeaveFormPrintModal({
               {request.type === "cuti_khusus"
                 ? `FORMULIR PERMOHONAN CUTI KHUSUS ${
                     request.special_leave_category
-                      ? `(${request.special_leave_category.name.toUpperCase()})`
+                      ? `(${request.special_leave_category.name.toUpperCase()}${request.special_leave_category_other ? ` - ${request.special_leave_category_other.toUpperCase()}` : ''})`
                       : ""
                   }`
                 : request.type === "sakit"
@@ -355,7 +355,7 @@ export function LeaveFormPrintModal({
                 {request.type === "sakit"
                   ? "Sakit"
                   : request.type === "cuti_khusus"
-                    ? "Cuti Khusus"
+                    ? `Cuti Khusus (${request.special_leave_category?.name || ''}${request.special_leave_category_other ? ` - ${request.special_leave_category_other}` : ''})`
                     : "Cuti Tahunan"}{" "}
                 {request.reason ? `(${request.reason})` : ""}
               </span>

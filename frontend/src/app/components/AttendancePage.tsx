@@ -148,41 +148,27 @@ function getWindow(
 ): AttendanceWindow {
   const day = now.getDay();
   const mins = toMins(now.getHours(), now.getMinutes());
-  if (day === 0) return "sunday";
+  if (day === 0 && !s.isOvernight) return "sunday";
 
   const openMins = parseMins(s.checkin_open);
   const closeMins = parseMins(s.close_checkin);
-  const breakSt = parseMins(s.break_start);
-  const breakEn = parseMins(s.break_end);
   const checkoutOpen = parseMins(s.checkout_open);
-  const checkoutCls = parseMins(s.checkout_close);
 
   if (s.isOvernight) {
-    if (mins >= openMins) {
-      if (mins < openMins) return "too_early";
-      if (mins <= closeMins) return "checkin";
-      return "late_locked";
+    if (openMins > closeMins) {
+      if (mins >= openMins || mins <= closeMins) return "checkin";
     } else {
-      if (mins <= checkoutCls) return "checkout";
-      return "ended";
+      if (mins >= openMins && mins <= closeMins) return "checkin";
     }
+    if (mins <= checkoutOpen) return "working";
+    return "checkout";
   }
 
-  // Shift normal (tidak lintas tengah malam)
-  if (day >= 1 && day <= 5) {
-    if (mins < openMins) return "too_early";
-    if (mins <= closeMins) return "checkin";
-    if (mins < breakEn) return "break";
-    if (mins < checkoutOpen) return "working";
-    return "checkout";
-  }
-  if (day === 6) {
-    if (mins < openMins) return "too_early";
-    if (mins <= closeMins) return "checkin";
-    if (mins < parseMins(s.sat_checkout_open)) return "working";
-    return "checkout";
-  }
-  return "ended";
+  // Shift normal
+  if (mins < openMins) return "too_early";
+  if (mins <= closeMins) return "checkin";
+  if (mins < checkoutOpen) return "working";
+  return "checkout";
 }
 
 const DAYS_ID = [
@@ -1134,10 +1120,10 @@ export function AttendancePage() {
         const satCheckoutOpenOffset = parseInt(base.sat_checkout_open) || 0;
         const satCheckoutCloseOffset = parseInt(base.sat_checkout_close) || 0;
 
-        // Jam buka check-in = jam mulai shift - checkinOpenOffset menit
-        const openHHmm = subMins(startHHmm, checkinOpenOffset);
-        // Batas telat       = mulai + lateLimitOffset menit
-        const lateHHmm = addMins(startHHmm, lateLimitOffset);
+        // Jam buka check-in = 2 jam 30 menit (150 menit) sebelum jam masuk shift
+        const openHHmm = subMins(startHHmm, 150);
+        // Batas toleransi tepat waktu = 10 menit setelah jam masuk shift
+        const lateHHmm = addMins(startHHmm, 10);
         // Tutup check-in    = checkin_window_end_time jika ada, atau setengah durasi shift
         let closeHHmm = "";
         if (shift && shift.checkin_window_end_time) {
@@ -2202,40 +2188,31 @@ export function AttendancePage() {
             ],
             [
               "Pintu Check-In Dibuka",
-              `${shiftSettings.checkin_open} WIB`,
-              "text-black",
+              `${shiftSettings.checkin_open} WIB (2.5 Jam Sebelum Shift)`,
+              "text-black font-medium",
             ],
             [
               "Rentang Tepat Waktu",
-              `${shiftSettings.checkin_open} – ${shiftSettings.late_limit} WIB`,
-              "text-black",
+              `${shiftSettings.checkin_open} – ${shiftSettings.late_limit} WIB (Toleransi 10 Menit)`,
+              "text-green-700 font-semibold",
             ],
             [
-              "Toleransi Terlambat",
-              `${shiftSettings.late_limit} – ${shiftSettings.close_checkin} WIB`,
-              "text-black",
+              "Status Terlambat",
+              `Lewat ${shiftSettings.late_limit} WIB – ${shiftSettings.close_checkin} WIB (Tetap Bisa Absen)`,
+              "text-orange-700 font-semibold",
             ],
             [
               "Batas Akhir Check-In (Tutup)",
               `${shiftSettings.close_checkin} WIB (Lewat = Alpha)`,
-              "text-black",
+              "text-red-700 font-semibold",
             ],
-            ...(shiftSettings.break_start !== shiftSettings.checkout_open
-              ? [
-                  [
-                    "Jam Istirahat",
-                    `${shiftSettings.break_start} – ${shiftSettings.break_end} WIB`,
-                    "text-black",
-                  ],
-                ]
-              : []),
             [
               "Waktu Check-Out (Pulang)",
               `${shiftSettings.checkout_open} WIB` +
                 (saturdayShift
                   ? ` (Sabtu: ${shiftSettings.sat_checkout_open} WIB)`
                   : ""),
-              "text-black",
+              "text-black font-medium",
             ],
             [
               "Batas Akhir Check-Out",

@@ -922,10 +922,13 @@ export function ScheduleTab() {
     if (u.includes('SAKIT')) return 'SK';
     if (u.includes('DINAS') || u.includes('TUGAS')) return 'DL';
     if (u.includes('IZIN')) return 'IZ';
+    if (u.includes('SABTU')) return 'S';
     if (u.includes('PAGI')) return 'P';
     if (u.includes('SIANG')) return 'S';
     if (u.includes('MALAM')) return 'M';
     if (u.includes('SORE')) return 'Sr';
+    if (u.includes('NORMAL') || u.includes('REGULER') || u.includes('KANTOR') || u.includes('SENIN')) return 'N';
+    if (u.includes('LIBUR') || u.includes('OFF')) return '-';
     return name.trim().charAt(0).toUpperCase();
   };
 

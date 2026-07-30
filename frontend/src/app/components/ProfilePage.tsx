@@ -1516,7 +1516,7 @@ export function ProfilePage({
                         <div>
                           <span className="text-[13px] font-semibold text-gray-800">
                             {req.type === "cuti_khusus" && req.special_leave_category
-                              ? `Cuti Khusus (${req.special_leave_category.name}${req.special_leave_category.name.toLowerCase() === 'lainnya' && req.special_leave_category_other ? ` - ${req.special_leave_category_other}` : ''})`
+                              ? `Cuti Khusus (${req.special_leave_category.name}${req.special_leave_category_other ? ` - ${req.special_leave_category_other}` : ''})`
                               : tc.label}
                           </span>
                           <p className="text-[11px] text-gray-400 mt-0.5">
@@ -1760,21 +1760,27 @@ export function ProfilePage({
 
               {leaveType === "cuti_khusus" && (() => {
                 const cat = categories.find(c => String(c.id) === selectedCategory);
-                return cat && cat.name.toLowerCase() === 'lainnya';
-              })() && (
-                <div className="space-y-1.5 mt-3">
-                  <label className="block text-[12px] font-medium text-gray-600">
-                    Nama / Keterangan Cuti Khusus Lainnya <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={customCategoryOther}
-                    onChange={(e) => setCustomCategoryOther(e.target.value)}
-                    placeholder="Contoh: Khitanan Anak, Menikahkan Anak, dll."
-                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all font-semibold"
-                  />
-                </div>
-              )}
+                const catName = (cat?.name || '').toLowerCase();
+                return catName === 'lainnya' || catName.includes('sakit');
+              })() && (() => {
+                const cat = categories.find(c => String(c.id) === selectedCategory);
+                const catName = (cat?.name || '').toLowerCase();
+                const isSakit = catName.includes('sakit');
+                return (
+                  <div className="space-y-1.5 mt-3">
+                    <label className="block text-[12px] font-medium text-gray-600">
+                      {isSakit ? 'Jenis / Nama Penyakit yang Dialami' : 'Nama / Keterangan Cuti Khusus Lainnya'} <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={customCategoryOther}
+                      onChange={(e) => setCustomCategoryOther(e.target.value)}
+                      placeholder={isSakit ? "Contoh: Tipes / Demam Berdarah / Pasca Operasi / Covid-19 / dll." : "Contoh: Khitanan Anak, Menikahkan Anak, dll."}
+                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all font-semibold"
+                    />
+                  </div>
+                );
+              })()}
 
               {/* Dates */}
               <div className="grid grid-cols-2 gap-3">

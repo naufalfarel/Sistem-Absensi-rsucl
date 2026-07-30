@@ -37,6 +37,11 @@ const formatDate = (str: string) => {
 // ── Warning Notes Content ─────────────────────────────────────────────
 const LEAVE_NOTES = [
   {
+    icon: Shield,
+    title: 'Syarat Masa Kerja Minimum (1 Tahun)',
+    desc: 'Pengajuan Cuti Tahunan, Sakit, maupun Cuti Khusus hanya dapat diajukan oleh pegawai yang telah memiliki masa kerja / bergabung minimal 1 tahun penuh (365 hari) terhitung sejak tanggal pertama masuk kerja di perusahaan.',
+  },
+  {
     icon: Clock,
     title: 'Penundaan Cuti',
     desc: 'Perusahaan dapat menunda cuti paling lama 1 bulan sejak timbulnya hak cuti.',
@@ -341,12 +346,13 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
   const handleSubmit = async () => {
     if (submitting) return;
     if (leaveType === 'cuti_khusus') {
-      const isLainnya = () => {
-        const cat = categories.find(c => String(c.id) === selectedCategory);
-        return cat && cat.name.toLowerCase() === 'lainnya';
-      };
-      if (!startDate || !endDate || !reason.trim() || !selectedCategory || !attachmentFile || (isLainnya() && !customCategoryOther.trim())) {
-        setFormError('Semua field wajib diisi termasuk kategori cuti khusus, keterangan lainnya (jika memilih Lainnya), dan dokumen pendukung.');
+      const cat = categories.find(c => String(c.id) === selectedCategory);
+      const catName = (cat?.name || '').toLowerCase();
+      const needsOther = catName === 'lainnya' || catName.includes('sakit');
+      if (!startDate || !endDate || !reason.trim() || !selectedCategory || !attachmentFile || (needsOther && !customCategoryOther.trim())) {
+        setFormError(needsOther
+          ? (catName.includes('sakit') ? 'Semua field wajib diisi termasuk jenis/nama penyakit yang dialami dan dokumen pendukung.' : 'Semua field wajib diisi termasuk kategori cuti khusus, keterangan lainnya, dan dokumen pendukung.')
+          : 'Semua field wajib diisi termasuk kategori cuti khusus dan dokumen pendukung.');
         return;
       }
     } else if (leaveType === 'sakit') {
@@ -415,8 +421,9 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
       if (leaveType === 'cuti_khusus') {
         formData.append('special_leave_category_id', selectedCategory);
         const cat = categories.find(c => String(c.id) === selectedCategory);
-        const isLainnya = cat && cat.name.toLowerCase() === 'lainnya';
-        if (isLainnya) {
+        const catName = (cat?.name || '').toLowerCase();
+        const needsOther = catName === 'lainnya' || catName.includes('sakit');
+        if (needsOther && customCategoryOther.trim()) {
           formData.append('special_leave_category_other', customCategoryOther.trim());
         }
       }
@@ -721,6 +728,17 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
             </div>
 
             <div className="p-6 space-y-4">
+              {/* Syarat Masa Kerja Banner */}
+              <div className="flex items-center gap-2.5 bg-blue-50 border border-blue-100 rounded-2xl px-4 py-3 text-[12px] text-blue-900 shadow-xs">
+                <Shield size={16} className="text-blue-600 flex-shrink-0" />
+                <div>
+                  <p className="font-bold text-blue-950">Syarat Ketentuan Masa Kerja (1 Tahun)</p>
+                  <p className="text-[11.5px] text-blue-800/90 mt-0.5 leading-relaxed">
+                    Pengajuan Cuti Tahunan, Sakit, maupun Cuti Khusus berlaku bagi pegawai dengan masa bergabung minimal <strong>1 tahun (365 hari)</strong> terhitung sejak tanggal masuk kerja.
+                  </p>
+                </div>
+              </div>
+
               {formError && (
                 <div className="flex items-center gap-2 bg-red-50 border border-red-100 text-red-600 text-[12px] px-3.5 py-2.5 rounded-xl">
                   <AlertCircle size={14} className="flex-shrink-0" /> {formError}
@@ -811,23 +829,68 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
                 </div>
               )}
 
+              {/* Category Lock Rules Info Badge */}
+              {leaveType === 'cuti_khusus' && selectedCategory && (() => {
+                const cat = categories.find(c => String(c.id) === selectedCategory);
+                const catName = (cat?.name || '').toLowerCase();
+                if (catName.includes('melahirkan') || catName.includes('keguguran')) {
+                  return (
+                    <div className="mt-2 text-[11.5px] bg-purple-50 border border-purple-200 text-purple-800 px-3.5 py-2 rounded-xl flex items-center gap-2 font-sans">
+                      <span className="text-base">🔒</span>
+                      <span><strong>Ketentuan Dikunci:</strong> Durasi Cuti Melahirkan/Keguguran dikunci maksimal <strong>90 Hari (3 Bulan)</strong>.</span>
+                    </div>
+                  );
+                }
+                if (catName.includes('meninggal') || catName.includes('duka') || catName.includes('kepergian')) {
+                  return (
+                    <div className="mt-2 text-[11.5px] bg-rose-50 border border-rose-200 text-rose-800 px-3.5 py-2 rounded-xl flex items-center gap-2 font-sans">
+                      <span className="text-base">🔒</span>
+                      <span><strong>Ketentuan Dikunci:</strong> Cuti Duka / Kematian dikunci maksimal <strong>3 Hari / Pengajuan</strong> &amp; <strong>Maks. 3 Hari / Bulan</strong>.</span>
+                    </div>
+                  );
+                }
+                if (catName.includes('menikah')) {
+                  return (
+                    <div className="mt-2 text-[11.5px] bg-amber-50 border border-amber-200 text-amber-800 px-3.5 py-2 rounded-xl flex items-center gap-2 font-sans">
+                      <span className="text-base">🔒</span>
+                      <span><strong>Ketentuan Dikunci:</strong> Cuti Menikah dikunci maksimal <strong>3 Hari / Pengajuan</strong> &amp; <strong>Maks. 3 Hari dalam 1 Tahun</strong>.</span>
+                    </div>
+                  );
+                }
+                if (catName.includes('sakit')) {
+                  return (
+                    <div className="mt-2 text-[11.5px] bg-green-50 border border-green-200 text-green-800 px-3.5 py-2 rounded-xl flex items-center gap-2 font-sans">
+                      <span className="text-base">🩺</span>
+                      <span><strong>Sakit Kekhususan:</strong> Durasi &amp; Kuota <strong>TIDAK DIKUNCI</strong> (bebas disesuaikan dengan instruksi surat dokter).</span>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+
               {leaveType === 'cuti_khusus' && (() => {
                 const cat = categories.find(c => String(c.id) === selectedCategory);
-                return cat && cat.name.toLowerCase() === 'lainnya';
-              })() && (
-                <div className="space-y-1.5 mt-3">
-                  <label className="block text-[12px] font-semibold text-gray-600 mb-1.5">
-                    Nama / Keterangan Cuti Khusus Lainnya <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={customCategoryOther}
-                    onChange={(e) => setCustomCategoryOther(e.target.value)}
-                    placeholder="Contoh: Khitanan Anak, Menikahkan Anak, dll."
-                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/15 transition-all font-semibold"
-                  />
-                </div>
-              )}
+                const catName = (cat?.name || '').toLowerCase();
+                return catName === 'lainnya' || catName.includes('sakit');
+              })() && (() => {
+                const cat = categories.find(c => String(c.id) === selectedCategory);
+                const catName = (cat?.name || '').toLowerCase();
+                const isSakit = catName.includes('sakit');
+                return (
+                  <div className="space-y-1.5 mt-3">
+                    <label className="block text-[12px] font-semibold text-gray-600 mb-1.5">
+                      {isSakit ? 'Jenis / Nama Penyakit yang Dialami' : 'Nama / Keterangan Cuti Khusus Lainnya'} <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={customCategoryOther}
+                      onChange={(e) => { setCustomCategoryOther(e.target.value); setFormError(''); }}
+                      placeholder={isSakit ? "Contoh: Tipes / Demam Berdarah / Pasca Operasi / Covid-19 / dll." : "Contoh: Khitanan Anak, Menikahkan Anak, dll."}
+                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/15 transition-all font-semibold"
+                    />
+                  </div>
+                );
+              })()}
 
               {/* Tanggal */}
               <div className="grid grid-cols-2 gap-3">
@@ -1162,7 +1225,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
                         <div>
                           <span className="text-[13px] font-bold text-gray-800">
                             {req.type === 'cuti_khusus' && req.special_leave_category
-                              ? `Cuti Khusus (${req.special_leave_category.name}${req.special_leave_category.name.toLowerCase() === 'lainnya' && req.special_leave_category_other ? ` - ${req.special_leave_category_other}` : ''})`
+                              ? `Cuti Khusus (${req.special_leave_category.name}${req.special_leave_category_other ? ` - ${req.special_leave_category_other}` : ''})`
                               : tc.label}
                           </span>
                           <p className="text-[11px] text-gray-400 mt-0.5">Diajukan: {formatDate(req.created_at)}</p>
