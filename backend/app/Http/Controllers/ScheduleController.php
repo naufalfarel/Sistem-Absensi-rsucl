@@ -524,7 +524,18 @@ class ScheduleController extends Controller
             ]);
         }
 
-        // ── Prioritas 3: Fallback Jam Kantor Reguler (Khusus PJ Bagian / Default Office Staff) ──────────
+        // ── Prioritas 3: Fallback Jam Kantor Reguler (KHUSUS PJ Bagian) ──────────
+        // Pegawai biasa yang belum diatur jadwalnya oleh Admin/PJ => data: null (Belum ada shift)
+        if (!$user->isPjBagian()) {
+            return response()->json([
+                'success'        => true,
+                'day'            => $todayName,
+                'data'           => null,
+                'saturday_shift' => null,
+                'source'         => 'no_shift',
+            ]);
+        }
+
         // Pada hari Minggu => Libur
         if ($dayOfWeek === 0) {
             return response()->json([

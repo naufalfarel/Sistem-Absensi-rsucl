@@ -181,8 +181,9 @@ class AttendanceRules
             return $matchedShift;
         }
 
-        // ── Prioritas 3: Fallback ke jadwal kantor reguler ─────────────────
-        if ($dayOfWeek !== 0) { // Bukan hari Minggu
+        // ── Prioritas 3: Fallback ke jadwal kantor reguler (KHUSUS PJ BAGIAN) ─────────────────
+        $isPj = $employee->user && $employee->user->isPjBagian();
+        if ($isPj && $dayOfWeek !== 0) { // Hanya untuk PJ Bagian pada hari kerja (bukan Minggu)
             $regulerParent = \App\Models\Schedule::whereNull('parent_id')
                 ->where(function($q) {
                     $q->where('name', 'LIKE', 'Reguler Kantor%')

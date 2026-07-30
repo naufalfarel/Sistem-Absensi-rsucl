@@ -286,26 +286,10 @@ class AttendanceController extends Controller
         $isFallback = false;
 
         if (!$todayShift) {
-            $openTime = Setting::get('checkin_open_time', '08:00:00');
-            $lateTime = Setting::get('checkin_late_after_time', '08:30:00');
-            $closeTime = Setting::get('checkin_close_time', '09:00:00');
-
-            $todayShift = new \App\Models\Schedule();
-            $todayShift->name = 'Jadwal Reguler Fallback';
-            $todayShift->start_time = $lateTime;
-            $todayShift->end_time = '17:00:00';
-            $todayShift->checkin_window_end_time = $closeTime;
-            $isFallback = true;
-
-            // Cek jika tombol check-in ditekan sebelum waktu buka
-            $nowStr = $now->format('H:i:s');
-            if ($nowStr < $openTime) {
-                $openStr = substr($openTime, 0, 5);
-                return response()->json([
-                    'success' => false,
-                    'message' => "Check-in belum dibuka. Waktu check-in dibuka mulai pukul {$openStr} WIB.",
-                ], 422);
-            }
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda belum memiliki jadwal shift untuk hari ini. Silakan hubungi Penanggung Jawab Bagian atau Administrator untuk pengisian jadwal dinas Anda.',
+            ], 422);
         }
 
         // Tentukan tipe shift harian
