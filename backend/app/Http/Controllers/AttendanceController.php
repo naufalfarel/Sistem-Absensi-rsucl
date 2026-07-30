@@ -347,83 +347,23 @@ class AttendanceController extends Controller
             }
         }
 
-        // 6. Evaluasi batas waktu check-in berdasarkan konfigurasi shift
-        $shiftStartCarbon = null;
-        $windowEnd = null;
-        $toleranceMinutes = $isFallback ? 0 : (int) Setting::get('checkin_tolerance_minutes', '10');
-        $earlyCheckinWindowOffset = (int) Setting::get('early_checkin_window_minutes', '150');
+        // 6. Evaluasi waktu check-in berdasarkan konfigurasi shift
+        $earlyCheckinWindowOffset = (int) Setting::get('early_checkin_window_minutes', '150'); // 2 jam 30 menit
+        $shiftStartCarbon = $now->copy()->setTimeFromTimeString($todayShift->start_time);
+        $todayCandidateOpen = $shiftStartCarbon->copy()->subMinutes($earlyCheckinWindowOffset);
 
-        if (!$isFallback) {
-            // Cek jika check-in dipanggil terlalu awal
-            $todayCandidateStart = $now->copy()->setTimeFromTimeString($todayShift->start_time);
-            $todayCandidateOpen = $todayCandidateStart->copy()->subMinutes($earlyCheckinWindowOffset);
-
-            if ($now->lt($todayCandidateOpen)) {
-                $openStr = $todayCandidateOpen->format('H:i');
-                return response()->json([
-                    'success' => false,
-                    'message' => "Check-in belum dibuka. Waktu check-in dibuka mulai pukul {$openStr} WIB.",
-                ], 422);
-            }
-        }
-
-        if ($isFallback) {
-            $shiftStartCarbon = $now->copy()->setTimeFromTimeString($todayShift->start_time);
-            $windowEnd = $now->copy()->setTimeFromTimeString($todayShift->checkin_window_end_time);
-        } else {
-            // Evaluasi pencocokan rentang tanggal check-in (kemarin, hari ini, besok)
-            $possibleDates = [$now->copy()->subDay(), $now->copy(), $now->copy()->addDay()];
-            
-            foreach ($possibleDates as $pDate) {
-                $candidateStart = $pDate->copy()->setTimeFromTimeString($todayShift->start_time);
-                $candidateOpen = $candidateStart->copy()->subMinutes($earlyCheckinWindowOffset);
-                
-                // Cari close limit
-                $resolvedCloseTime = $todayShift->checkin_window_end_time;
-                if (empty($resolvedCloseTime)) {
-                    $s = Carbon::parse($todayShift->start_time);
-                    $e = Carbon::parse($todayShift->end_time);
-                    if ($e->lt($s)) {
-                        $e->addDay();
-                    }
-                    $duration = $s->diffInMinutes($e);
-                    $half = (int) ($duration / 2);
-                    $resolvedCloseTime = $s->copy()->addMinutes($half)->format('H:i:s');
-                }
-                
-                $candidateEnd = $candidateStart->copy()->setTimeFromTimeString($resolvedCloseTime);
-                if ($candidateEnd->lt($candidateStart)) {
-                    $candidateEnd->addDay();
-                }
-                
-                if ($now->timestamp >= $candidateOpen->timestamp && $now->timestamp <= $candidateEnd->timestamp) {
-                    $shiftStartCarbon = $candidateStart;
-                    $windowEnd = $candidateEnd;
-                    break;
-                }
-            }
-        }
-
-        // Jika tidak ada kandidat tanggal/waktu yang cocok
-        if (!$shiftStartCarbon || !$windowEnd) {
-            // Tentukan info penutupan terformat
-            $resolvedCloseTime = $todayShift->checkin_window_end_time;
-            if (empty($resolvedCloseTime)) {
-                $s = Carbon::parse($todayShift->start_time);
-                $e = Carbon::parse($todayShift->end_time);
-                if ($e->lt($s)) {
-                    $e->addDay();
-                }
-                $duration = $s->diffInMinutes($e);
-                $half = (int) ($duration / 2);
-                $resolvedCloseTime = $s->copy()->addMinutes($half)->format('H:i:s');
-            }
-            $closeStr = substr($resolvedCloseTime, 0, 5);
-
+        // Cek jika check-in dipanggil terlalu awal (sebelum 2 jam 30 menit dari jam masuk shift)
+        if ($now->lt($todayCandidateOpen)) {
+            $openStr = $todayCandidateOpen->format('H:i');
             return response()->json([
                 'success' => false,
-                'message' => "Jendela absen untuk shift Anda [{$todayShift->name}] sudah ditutup pukul {$closeStr} WIB.",
+                'message' => "Check-in belum dibuka. Waktu check-in dibuka mulai pukul {$openStr} WIB.",
             ], 422);
+        }
+
+        $windowEnd = $now->copy()->setTimeFromTimeString($todayShift->end_time);
+        if ($windowEnd->lt($shiftStartCarbon)) {
+            $windowEnd->addDay();
         }
 
         // Jalankan klasifikasi check-in: Toleransi tepat waktu 10 menit dari jam masuk shift
@@ -431,16 +371,8 @@ class AttendanceController extends Controller
         $toleranceMinutes = 10;
         $classification = AttendanceRules::classifyCheckin($now, $shiftStartCarbon, $windowEnd, $tepatWaktuMinutes, $toleranceMinutes);
 
-        if ($classification['status'] === 'closed') {
-            $closeStr = $windowEnd->format('H:i');
-            return response()->json([
-                'success' => false,
-                'message' => "Jendela absen untuk shift Anda [{$todayShift->name}] sudah ditutup pukul {$closeStr} WIB.",
-            ], 422);
-        }
-
         $status = $classification['status']; // 'hadir' atau 'telat'
-        $punctuality = $classification['punctuality']; // 'tepat_waktu', 'toleransi', 'terlambat'
+        $punctuality = $classification['punctuality']; // 'tepat_waktu' atau 'terlambat'
         $effectiveCheckinTime = $classification['effective_checkin_time'];
 
         // Simpan file foto check-in wajib

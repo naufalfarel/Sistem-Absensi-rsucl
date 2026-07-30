@@ -1124,20 +1124,8 @@ export function AttendancePage() {
         const openHHmm = subMins(startHHmm, 150);
         // Batas toleransi tepat waktu = 10 menit setelah jam masuk shift
         const lateHHmm = addMins(startHHmm, 10);
-        // Tutup check-in    = checkin_window_end_time jika ada, atau setengah durasi shift
-        let closeHHmm = "";
-        if (shift && shift.checkin_window_end_time) {
-          closeHHmm = shift.checkin_window_end_time.substring(0, 5);
-        } else {
-          // Fallback: setengah durasi shift
-          const startM = parseMins(startHHmm);
-          let endM = parseMins(endHHmm);
-          if (endM < startM) {
-            endM += 1440; // overnight
-          }
-          const halfDuration = Math.floor((endM - startM) / 2);
-          closeHHmm = addMins(startHHmm, halfDuration);
-        }
+        // Tutup check-in = jam selesai shift (atau jam kerja berikutnya)
+        const closeHHmm = endHHmm;
 
         // Checkout = jam selesai shift - checkoutOpenOffset; batas = selesai + checkoutCloseOffset
         const checkoutOpenHHmm = subMins(endHHmm, checkoutOpenOffset);

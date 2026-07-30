@@ -94,6 +94,11 @@ function AssignDepartmentModal({
         for (const day of days) {
           await onAssign(departmentId, day, schedId);
         }
+      } else if (selectedDay === 'Senin - Jumat') {
+        const days = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'];
+        for (const day of days) {
+          await onAssign(departmentId, day, schedId);
+        }
       } else {
         await onAssign(departmentId, selectedDay, schedId);
       }
@@ -131,6 +136,7 @@ function AssignDepartmentModal({
             >
               <option value="Semua Hari">Senin - Minggu</option>
               <option value="Senin - Sabtu">Senin - Sabtu</option>
+              <option value="Senin - Jumat">Senin - Jumat</option>
               <option value="Senin">Senin</option>
               <option value="Selasa">Selasa</option>
               <option value="Rabu">Rabu</option>

@@ -129,125 +129,88 @@ class AttendanceRules
      * @param Carbon $date
      * @return \App\Models\Schedule|null
      */
+    /**
+     * Menemukan jadwal shift aktif pegawai untuk tanggal tertentu, termasuk sub-shift anak jika ada.
+     * 
+     * @param Employee $employee
+     * @param Carbon $date
+     * @return \App\Models\Schedule|null
+     */
     public static function resolveShiftFor(Employee $employee, Carbon $date): ?\App\Models\Schedule
     {
+        $todayStr = $date->toDateString();
         $dayMap = [
             0 => 'Minggu', 1 => 'Senin', 2 => 'Selasa',
             3 => 'Rabu',   4 => 'Kamis', 5 => 'Jumat', 6 => 'Sabtu',
         ];
-        $dayName = $dayMap[$date->dayOfWeek];
-        $schedule = $employee->schedules()->wherePivot('day_of_week', $dayName)->first();
+        $dayOfWeek = $date->dayOfWeek;
+        $dayName   = $dayMap[$dayOfWeek];
 
-        if (!$schedule) {
-            return null;
+        // ── Prioritas 1: Cek jadwal tanggal spesifik (work_date) ──────────────
+        $dateRow = \Illuminate\Support\Facades\DB::table('employee_schedule')
+            ->join('schedules', 'employee_schedule.schedule_id', '=', 'schedules.id')
+            ->where('employee_schedule.employee_id', $employee->id)
+            ->where('employee_schedule.work_date', $todayStr)
+            ->whereNotNull('employee_schedule.work_date')
+            ->select('schedules.*')
+            ->first();
+
+        if ($dateRow) {
+            $sched = \App\Models\Schedule::find($dateRow->id);
+            if ($sched) return $sched;
         }
 
-        // Jika schedule adalah parent template yang memiliki children, kita cari sub-shift yang cocok
-        if ($schedule->parent_id === null && $schedule->children()->exists()) {
-            // Cek apakah karyawan sudah melakukan check-in hari ini
-            $record = \App\Models\Attendance::where('employee_id', $employee->id)
-                ->whereDate('date', $date->toDateString())
+        // ── Prioritas 2: Fallback ke jadwal mingguan (day_of_week) ──────────
+        $schedules = $employee->schedules()->get();
+        $todaySchedule = $schedules->first(fn($s) => $s->pivot->day_of_week === $todayName);
+
+        if ($todaySchedule) {
+            $matchedShift = $todaySchedule;
+            if ($todaySchedule->parent_id === null && $todaySchedule->children()->exists()) {
+                $children = $todaySchedule->children()->get();
+                $sub = null;
+                if ($dayOfWeek === 6) {
+                    $sub = $children->first(fn($c) => str_contains(strtolower($c->name), 'sabtu'));
+                } else {
+                    $sub = $children->first(fn($c) => !str_contains(strtolower($c->name), 'sabtu'));
+                }
+                if ($sub) {
+                    $matchedShift = $sub;
+                }
+            }
+            return $matchedShift;
+        }
+
+        // ── Prioritas 3: Fallback ke jadwal kantor reguler ─────────────────
+        if ($dayOfWeek !== 0) { // Bukan hari Minggu
+            $regulerParent = \App\Models\Schedule::whereNull('parent_id')
+                ->where(function($q) {
+                    $q->where('name', 'LIKE', 'Reguler Kantor%')
+                      ->orWhere('name', 'LIKE', 'Administrasi%')
+                      ->orWhere('name', 'LIKE', '%Office%');
+                })
                 ->first();
-            
-            $timeToMatch = $date;
-            if ($record && $record->check_in) {
-                // Gunakan jam check-in yang sudah tercatat
-                $timeToMatch = Carbon::parse($record->check_in);
+
+            $subShift = null;
+            if ($regulerParent) {
+                if ($dayOfWeek === 6) {
+                    $subShift = $regulerParent->children()->where('name', 'LIKE', '%Sabtu%')->first();
+                } else {
+                    $subShift = $regulerParent->children()->where(function($q) {
+                        $q->where('name', 'LIKE', '%Senin%')
+                          ->orWhere('name', 'LIKE', '%Normal%');
+                    })->first();
+                }
             }
 
-            $children = $schedule->children()->get();
-            if ($children->isNotEmpty()) {
-                $nowMins = $timeToMatch->hour * 60 + $timeToMatch->minute;
-
-                // Gunakan setting baru early_checkin_window_minutes, fallback 150 menit
-                $checkinOpenOffset = (int) Setting::get('early_checkin_window_minutes', '150');
-                
-                // Cari close limit: fallback setengah durasi shift
-                $matched = null;
-                $closestDiff = 999999;
-
-                foreach ($children as $child) {
-                    $nameLower = strtolower($child->name);
-                    if (str_contains($nameLower, 'sabtu') && $dayName !== 'Sabtu') {
-                        continue;
-                    }
-                    if (str_contains($nameLower, 'senin–jumat') && $dayName === 'Sabtu') {
-                        continue;
-                    }
-                    if (str_contains($nameLower, 'sen-jum') && $dayName === 'Sabtu') {
-                        continue;
-                    }
-
-                    $startTime = substr($child->start_time, 0, 5);
-                    [$ch, $cm] = explode(':', $startTime);
-                    $startMins = (int)$ch * 60 + (int)$cm;
-
-                    $openLimitMins = $startMins - $checkinOpenOffset;
-                    if ($openLimitMins < 0) {
-                        $openLimitMins += 1440;
-                    }
-
-                    // Tentukan close limit untuk child sub-shift ini
-                    $resolvedCloseTime = $child->checkin_window_end_time;
-                    if (empty($resolvedCloseTime)) {
-                        // Fallback setengah durasi
-                        $s = Carbon::parse($child->start_time);
-                        $e = Carbon::parse($child->end_time);
-                        if ($e->lte($s)) {
-                            $e->addDay();
-                        }
-                        $duration = $s->diffInMinutes($e);
-                        $half = (int) ($duration / 2);
-                        $resolvedCloseTime = $s->copy()->addMinutes($half)->format('H:i:s');
-                    }
-
-                    [$c_h, $c_m] = explode(':', substr($resolvedCloseTime, 0, 5));
-                    $closeLimitMins = (int)$c_h * 60 + (int)$c_m;
-
-                    // Cek apakah in window
-                    $inWindow = false;
-                    if ($closeLimitMins > $openLimitMins) {
-                        $inWindow = ($nowMins >= $openLimitMins && $nowMins <= $closeLimitMins);
-                    } else {
-                        // Window melewati tengah malam
-                        $inWindow = ($nowMins >= $openLimitMins || $nowMins <= $closeLimitMins);
-                    }
-
-                    if ($inWindow) {
-                        $cloned = $schedule->replicate();
-                        $cloned->id = $child->id;
-                        $cloned->start_time = $child->start_time;
-                        $cloned->end_time = $child->end_time;
-                        $cloned->name = $child->name;
-                        $cloned->checkin_window_end_time = $child->checkin_window_end_time;
-                        $cloned->exists = true;
-                        return $cloned;
-                    }
-
-                    $diff = abs($nowMins - $startMins);
-                    if ($diff > 720) {
-                        $diff = 1440 - $diff;
-                    }
-                    if ($diff < $closestDiff) {
-                        $closestDiff = $diff;
-                        $matched = $child;
-                    }
-                }
-
-                if ($matched) {
-                    $cloned = $schedule->replicate();
-                    $cloned->id = $matched->id;
-                    $cloned->start_time = $matched->start_time;
-                    $cloned->end_time = $matched->end_time;
-                    $cloned->name = $matched->name;
-                    $cloned->checkin_window_end_time = $matched->checkin_window_end_time;
-                    $cloned->exists = true;
-                    return $cloned;
-                }
+            if ($subShift) {
+                return $subShift;
+            } elseif ($regulerParent) {
+                return $regulerParent;
             }
         }
 
-        return $schedule;
+        return null;
     }
 
     /**
@@ -256,16 +219,15 @@ class AttendanceRules
      * @param Carbon $checkinTime Waktu absen
      * @param Carbon $shiftStart Jam mulai shift
      * @param Carbon $checkinWindowEnd Jam tutup jendela absen
-     * @param int $tepatWaktuMinutes Batas tepat waktu setelah shift mulai (menit, misal: 30)
-     * @param int $toleranceMinutes Batas toleransi setelah shift mulai (menit, misal: 40)
+     * @param int $tepatWaktuMinutes Batas tepat waktu setelah shift mulai (menit, misal: 10)
+     * @param int $toleranceMinutes Batas toleransi setelah shift mulai (menit, misal: 10)
      * @return array ['status' => string, 'punctuality' => string, 'effective_checkin_time' => string]
      */
     public static function classifyCheckin(Carbon $checkinTime, Carbon $shiftStart, Carbon $checkinWindowEnd, int $tepatWaktuMinutes = 10, int $toleranceMinutes = 10): array
     {
         $checkinSec = $checkinTime->timestamp;
         $startSec = $shiftStart->timestamp;
-        $endSec = $checkinWindowEnd->timestamp;
-        // Toleransi tepat waktu adalah 10 menit setelah jam masuk shift (misal 08:30 -> 08:40, 14:00 -> 14:10)
+        // Toleransi tepat waktu adalah 10 menit setelah jam masuk shift (misal 08:30 -> 08:40, 11:00 -> 11:10)
         $tepatWaktuSec = $startSec + (max($tepatWaktuMinutes, $toleranceMinutes) * 60);
 
         if ($checkinSec <= $tepatWaktuSec) {
@@ -274,17 +236,12 @@ class AttendanceRules
                 'punctuality' => 'tepat_waktu',
                 'effective_checkin_time' => $checkinTime->lt($shiftStart) ? $shiftStart->format('H:i:s') : $checkinTime->format('H:i:s'),
             ];
-        } elseif ($checkinSec <= $endSec) {
+        } else {
+            // Absen di atas toleransi 10 menit tetap diizinkan check-in dengan status terlambat (telat)
             return [
                 'status' => 'telat',
                 'punctuality' => 'terlambat',
                 'effective_checkin_time' => $checkinTime->format('H:i:s'),
-            ];
-        } else {
-            return [
-                'status' => 'closed',
-                'punctuality' => null,
-                'effective_checkin_time' => null,
             ];
         }
     }

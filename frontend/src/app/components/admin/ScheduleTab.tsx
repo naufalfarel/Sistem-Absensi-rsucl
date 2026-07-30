@@ -434,6 +434,11 @@ function AddEmployeeToShiftModal({
         for (const day of days) {
           await onAssign(Number(selectedEmpId), day, selectedChildId);
         }
+      } else if (selectedDay === 'Senin - Jumat') {
+        const days = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'];
+        for (const day of days) {
+          await onAssign(Number(selectedEmpId), day, selectedChildId);
+        }
       } else {
         await onAssign(Number(selectedEmpId), selectedDay, selectedChildId);
       }
@@ -491,6 +496,7 @@ function AddEmployeeToShiftModal({
             >
               <option value="Semua Hari">Senin - Minggu</option>
               <option value="Senin - Sabtu">Senin - Sabtu</option>
+              <option value="Senin - Jumat">Senin - Jumat</option>
               <option value="Senin">Senin</option>
               <option value="Selasa">Selasa</option>
               <option value="Rabu">Rabu</option>
@@ -602,6 +608,9 @@ function AssignDepartmentModal({
         } else if (selectedDay === 'Senin - Sabtu') {
           const days = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
           for (const day of days) { await onAssign(Number(selectedDeptId), day, schedId); }
+        } else if (selectedDay === 'Senin - Jumat') {
+          const days = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'];
+          for (const day of days) { await onAssign(Number(selectedDeptId), day, schedId); }
         } else {
           await onAssign(Number(selectedDeptId), selectedDay, schedId);
         }
@@ -614,6 +623,11 @@ function AssignDepartmentModal({
           }
         } else if (selectedDay === 'Senin - Sabtu') {
           const days = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+          for (const day of days) {
+            await onAssign(Number(selectedDeptId), day, schedId);
+          }
+        } else if (selectedDay === 'Senin - Jumat') {
+          const days = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'];
           for (const day of days) {
             await onAssign(Number(selectedDeptId), day, schedId);
           }
@@ -658,6 +672,7 @@ function AssignDepartmentModal({
             >
               <option value="Semua Hari">Senin - Minggu</option>
               <option value="Senin - Sabtu">Senin - Sabtu</option>
+              <option value="Senin - Jumat">Senin - Jumat</option>
               <option value="Senin">Senin</option>
               <option value="Selasa">Selasa</option>
               <option value="Rabu">Rabu</option>
