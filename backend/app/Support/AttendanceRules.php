@@ -130,13 +130,10 @@ class AttendanceRules
      * @return \App\Models\Schedule|null
      */
     /**
-     * Menemukan jadwal shift aktif pegawai untuk tanggal tertentu, termasuk sub-shift anak jika ada.
-     * 
-     * @param Employee $employee
-     * @param Carbon $date
-     * @return \App\Models\Schedule|null
+     * Mengambil seluruh daftar shift yang ditugaskan kepada karyawan pada tanggal tertentu.
+     * Mendukung multi-shift dalam 1 hari (cth: Shift Pagi & Shift Malam/Dadakan).
      */
-    public static function resolveShiftFor(Employee $employee, Carbon $date): ?\App\Models\Schedule
+    public static function resolveAllShiftsFor(Employee $employee, Carbon $date): array
     {
         $todayStr = $date->toDateString();
         $dayMap = [
@@ -146,39 +143,47 @@ class AttendanceRules
         $dayOfWeek = $date->dayOfWeek;
         $dayName   = $dayMap[$dayOfWeek];
 
+        $shifts = [];
+
         // ── Prioritas 1: Cek jadwal tanggal spesifik (work_date) ──────────────
-        $dateRow = \Illuminate\Support\Facades\DB::table('employee_schedule')
+        $dateRows = \Illuminate\Support\Facades\DB::table('employee_schedule')
             ->join('schedules', 'employee_schedule.schedule_id', '=', 'schedules.id')
             ->where('employee_schedule.employee_id', $employee->id)
             ->where('employee_schedule.work_date', $todayStr)
             ->whereNotNull('employee_schedule.work_date')
-            ->select('schedules.*')
-            ->first();
+            ->select('schedules.id')
+            ->get();
 
-        if ($dateRow) {
-            $sched = \App\Models\Schedule::find($dateRow->id);
-            if ($sched) return $sched;
+        if ($dateRows->isNotEmpty()) {
+            foreach ($dateRows as $row) {
+                $sched = \App\Models\Schedule::find($row->id);
+                if ($sched) $shifts[] = $sched;
+            }
+            return $shifts;
         }
 
         // ── Prioritas 2: Fallback ke jadwal mingguan (day_of_week) ──────────
         $schedules = $employee->schedules()->get();
-        $todaySchedule = $schedules->first(fn($s) => $s->pivot->day_of_week === $dayName);
+        $todaySchedules = $schedules->filter(fn($s) => $s->pivot->day_of_week === $dayName);
 
-        if ($todaySchedule) {
-            $matchedShift = $todaySchedule;
-            if ($todaySchedule->parent_id === null && $todaySchedule->children()->exists()) {
-                $children = $todaySchedule->children()->get();
-                $sub = null;
-                if ($dayOfWeek === 6) {
-                    $sub = $children->first(fn($c) => str_contains(strtolower($c->name), 'sabtu'));
-                } else {
-                    $sub = $children->first(fn($c) => !str_contains(strtolower($c->name), 'sabtu'));
+        if ($todaySchedules->isNotEmpty()) {
+            foreach ($todaySchedules as $todaySchedule) {
+                $matchedShift = $todaySchedule;
+                if ($todaySchedule->parent_id === null && $todaySchedule->children()->exists()) {
+                    $children = $todaySchedule->children()->get();
+                    $sub = null;
+                    if ($dayOfWeek === 6) {
+                        $sub = $children->first(fn($c) => str_contains(strtolower($c->name), 'sabtu'));
+                    } else {
+                        $sub = $children->first(fn($c) => !str_contains(strtolower($c->name), 'sabtu'));
+                    }
+                    if ($sub) {
+                        $matchedShift = $sub;
+                    }
                 }
-                if ($sub) {
-                    $matchedShift = $sub;
-                }
+                $shifts[] = $matchedShift;
             }
-            return $matchedShift;
+            return $shifts;
         }
 
         // ── Prioritas 3: Fallback ke jadwal kantor reguler (KHUSUS PJ BAGIAN) ─────────────────
@@ -205,13 +210,57 @@ class AttendanceRules
             }
 
             if ($subShift) {
-                return $subShift;
+                $shifts[] = $subShift;
             } elseif ($regulerParent) {
-                return $regulerParent;
+                $shifts[] = $regulerParent;
             }
         }
 
-        return null;
+        return $shifts;
+    }
+
+    /**
+     * Menentukan shift spesifik yang aktif/cocok untuk absen pada saat ini ($now).
+     */
+    public static function resolveShiftFor(Employee $employee, Carbon $date, ?Carbon $now = null): ?Schedule
+    {
+        $allShifts = self::resolveAllShiftsFor($employee, $date);
+        if (empty($allShifts)) return null;
+        if (count($allShifts) === 1) return $allShifts[0];
+
+        $now = $now ?? Carbon::now();
+        $dateStr = $date->toDateString();
+
+        $bestMatch = null;
+        $minDiff = 999999;
+
+        foreach ($allShifts as $sched) {
+            // Cek apakah sudah ada record attendance yang belum check_out untuk shift ini
+            $existing = \App\Models\Attendance::where('employee_id', $employee->id)
+                ->where('date', $dateStr)
+                ->where('schedule_id', $sched->id)
+                ->first();
+
+            // Jika karyawan sudah check-in dan belum check-out untuk shift ini, pilih shift ini
+            if ($existing && $existing->check_in && !$existing->check_out) {
+                return $sched;
+            }
+
+            // Hitung selisih waktu dari start_time
+            $shiftStart = Carbon::parse($dateStr . ' ' . ($sched->start_time ?? '08:00:00'));
+            $windowStart = $shiftStart->copy()->subMinutes(150); // Window Buka 2 jam 30 menit sebelum shift
+
+            // Jika waktu saat ini berada di dalam atau mendekati window shift ini
+            $diff = abs($now->timestamp - $shiftStart->timestamp);
+            if ($now->gte($windowStart) && $diff < $minDiff) {
+                if (!$existing || !$existing->check_out) {
+                    $minDiff = $diff;
+                    $bestMatch = $sched;
+                }
+            }
+        }
+
+        return $bestMatch ?? $allShifts[0];
     }
 
     /**

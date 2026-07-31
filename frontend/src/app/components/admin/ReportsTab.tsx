@@ -16,6 +16,9 @@ import {
   UserMinus,
   Shield,
   ClipboardList,
+  Eye,
+  DollarSign,
+  Search,
 } from "lucide-react";
 import {
   BarChart,
@@ -93,6 +96,31 @@ export function ReportsTab() {
   const [departments, setDepartments] = useState<
     { id: number; name: string }[]
   >([]);
+
+  // State Laporan Keterlambatan & Potongan
+  const [latenessData, setLatenessData] = useState<any>(null);
+  const [latenessLoading, setLatenessLoading] = useState(false);
+  const [latenessSearch, setLatenessSearch] = useState("");
+  const [selectedEmpLatenessDetail, setSelectedEmpLatenessDetail] = useState<any>(null);
+  const [showLatenessModal, setShowLatenessModal] = useState(false);
+
+  const loadLatenessData = async () => {
+    setLatenessLoading(true);
+    try {
+      const res = await reportApi.lateness(selectedMonth, selectedYear, selectedDepartment);
+      if (res.success) {
+        setLatenessData(res.data);
+      }
+    } catch (err) {
+      console.error("Gagal memuat data keterlambatan", err);
+    } finally {
+      setLatenessLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadLatenessData();
+  }, [selectedMonth, selectedYear, selectedDepartment]);
 
 
 
@@ -531,6 +559,306 @@ export function ReportsTab() {
     } catch (err: any) {
       console.error(err);
       alert(err.message || "Terjadi kesalahan saat mengekspor Excel.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleExportLatenessExcel = async () => {
+    setExporting(true);
+    try {
+      const res = await reportApi.lateness(selectedMonth, selectedYear, selectedDepartment);
+      if (!res.success || !res.data) {
+        alert("Gagal memuat data keterlambatan.");
+        return;
+      }
+
+      const logoPath = logoUrl && logoUrl !== "none" ? logoUrl : rsLogoImg;
+      let base64Logo = "";
+      try {
+        const response = await fetch(logoPath);
+        const blob = await response.blob();
+        base64Logo = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      } catch (e) {
+        console.error("Failed to load logo for Excel", e);
+      }
+
+      const logoImgHtml = base64Logo
+        ? `<img src="${base64Logo}" width="140" height="54" style="display:block;" />`
+        : '<span style="font-size:11pt;font-weight:bold;color:#16A34A;">RSUCL</span>';
+
+      const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+      const monthStr = monthNames[selectedMonth - 1] + " " + selectedYear;
+      const deptSuffix = selectedDepartment !== "all" ? `_${selectedDepartment.replace(/\s+/g, "_")}` : "";
+
+      let bodyRows = "";
+      let rowNum = 1;
+      const records = res.data.records || [];
+
+      if (records.length === 0) {
+        bodyRows = `<tr><td colspan="8" style="text-align:center; padding:15px; color:#6B7280;">Tidak ada data keterlambatan untuk periode ini.</td></tr>`;
+      } else {
+        records.forEach((r: any) => {
+          bodyRows += `<tr>
+            <td style="text-align:center;">${rowNum++}</td>
+            <td style="text-align:center; mso-number-format:'\\@';">${r.nik_ktp}</td>
+            <td style="font-weight:bold;">${r.name}</td>
+            <td>${r.department}</td>
+            <td style="text-align:center;">${r.total_late_days} Hari</td>
+            <td style="text-align:center; font-weight:bold; color:#DC2626;">${r.total_late_minutes} Menit</td>
+            <td style="text-align:right;">Rp ${(r.rate_per_minute || 500).toLocaleString('id-ID')}</td>
+            <td style="text-align:right; font-weight:bold; color:#B91C1C;">Rp ${(r.total_deduction || 0).toLocaleString('id-ID')}</td>
+          </tr>`;
+        });
+
+        // Summary row
+        bodyRows += `<tr style="background-color:#FEE2E2; font-weight:bold;">
+          <td colspan="4" style="text-align:right;">TOTAL KETERLAMBATAN &amp; POTONGAN</td>
+          <td style="text-align:center;">-</td>
+          <td style="text-align:center; color:#DC2626;">${res.data.grand_total_late_mins || 0} Menit</td>
+          <td style="text-align:right;">Rp ${(res.data.rate_per_minute || 500).toLocaleString('id-ID')} / min</td>
+          <td style="text-align:right; color:#B91C1C;">Rp ${(res.data.grand_total_deduction || 0).toLocaleString('id-ID')}</td>
+        </tr>`;
+      }
+
+      const bodyHtml = `
+        <table style="border:none; margin-bottom:12px; border-collapse:collapse;">
+          <tr style="height:22px;">
+            <td rowspan="3" colspan="2" class="logo-cell">${logoImgHtml}</td>
+            <td colspan="6" class="header-title" style="text-align:right;">REKAP POTONGAN KETERLAMBATAN PEGAWAI</td>
+          </tr>
+          <tr style="height:18px;">
+            <td colspan="6" class="header-rs" style="text-align:right;">RUMAH SAKIT UMUM CEMPAKA LIMA</td>
+          </tr>
+          <tr style="height:16px;">
+            <td colspan="6" class="header-period" style="text-align:right;">Periode: ${monthStr} ${selectedDepartment !== 'all' ? '| Unit Kerja: ' + selectedDepartment : ''}</td>
+          </tr>
+          <tr style="height:3px;">
+            <td colspan="8" class="separator">&nbsp;</td>
+          </tr>
+        </table>
+        <table>
+          <thead>
+            <tr>
+              <th style="width:40px;">No</th>
+              <th>NIK KTP</th>
+              <th>Nama Pegawai</th>
+              <th>Unit Kerja / Departemen</th>
+              <th>Jumlah Hari Telat</th>
+              <th>Total Menit Telat</th>
+              <th>Tarif Potongan / Menit</th>
+              <th>Total Potongan (Rp)</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${bodyRows}
+          </tbody>
+        </table>
+      `;
+
+      const excelWrapper = (sheetName: string, bodyHtmlStr: string) => `
+        <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+        <head>
+          <meta http-equiv="content-type" content="application/vnd.ms-excel; charset=UTF-8" />
+          <!--[if gte mso 9]><xml>
+           <x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>
+            <x:Name>${sheetName}</x:Name>
+            <x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+           </x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook>
+          </xml><![endif]-->
+          <style>
+            body { font-family: Calibri, Arial, sans-serif; }
+            table { border-collapse: collapse; }
+            .header-title { font-size: 13pt; font-weight: bold; color: #111827; text-align: right; vertical-align: bottom; border: none; padding: 2px 4px; }
+            .header-rs    { font-size: 10pt; font-weight: bold; color: #374151; text-align: right; vertical-align: middle; border: none; padding: 2px 4px; }
+            .header-period{ font-size: 9pt;  color: #6B7280; text-align: right; vertical-align: top;    border: none; padding: 2px 4px; }
+            .logo-cell    { border: none; vertical-align: middle; padding: 4px; width: 140px; }
+            .separator    { height: 3px; border: none; border-bottom: 2px solid #000000; padding: 0; font-size: 1px; mso-height-source: userset; }
+            th { background-color: #B91C1C; color: #FFFFFF; font-weight: bold; font-size: 10pt; text-align: center; vertical-align: middle; border: 1px solid #000000; padding: 6px 8px; }
+            td { font-size: 10pt; border: 1px solid #000000; vertical-align: middle; padding: 6px 8px; color: #1F2937; }
+          </style>
+        </head>
+        <body>${bodyHtmlStr}</body>
+        </html>`;
+
+      const filename = `Laporan_Keterlambatan_Potongan_RSUCL_${selectedYear}_${String(selectedMonth).padStart(2, "0")}${deptSuffix}.xls`;
+      
+      const blob = new Blob(["\uFEFF" + excelWrapper("Rekap Keterlambatan", bodyHtml)], {
+        type: "application/vnd.ms-excel;charset=utf-8",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.style.display = "none";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+
+    } catch (err: any) {
+      alert(err?.message || "Terjadi kesalahan saat mengekspor Laporan Keterlambatan.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleExportLatenessPDF = async () => {
+    setExporting(true);
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      alert("Mohon izinkan popup blocker untuk mencetak laporan.");
+      setExporting(false);
+      return;
+    }
+
+    try {
+      const res = await reportApi.lateness(selectedMonth, selectedYear, selectedDepartment);
+      if (!res.success || !res.data) {
+        alert("Gagal memuat data keterlambatan.");
+        printWindow.close();
+        return;
+      }
+
+      const logoPath = logoUrl && logoUrl !== "none" ? logoUrl : logoImg;
+      let base64Logo = "";
+      if (logoPath) {
+        try {
+          base64Logo = await getBase64Image(logoPath);
+        } catch (e) {
+          console.error("Failed to load base64 logo", e);
+        }
+      }
+
+      const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+      const monthStr = monthNames[selectedMonth - 1] + " " + selectedYear;
+      const deptStr = selectedDepartment !== "all" ? ` - Unit Kerja: ${selectedDepartment}` : "";
+
+      const records = res.data.records || [];
+      let rowsHtml = "";
+      let rowNum = 1;
+
+      records.forEach((r: any) => {
+        rowsHtml += `
+          <tr>
+            <td style="text-align: center;">${rowNum++}</td>
+            <td style="font-[#111827]; font-weight: bold;">${r.name}</td>
+            <td>${r.nik_ktp}</td>
+            <td>${r.department}</td>
+            <td style="text-align: center;">${r.total_late_days} Hari</td>
+            <td style="text-align: center; font-weight: bold; color: #B91C1C;">${r.total_late_minutes} Menit</td>
+            <td style="text-align: right;">Rp ${(r.rate_per_minute || 500).toLocaleString('id-ID')}</td>
+            <td style="text-align: right; font-weight: bold; color: #991B1B;">Rp ${(r.total_deduction || 0).toLocaleString('id-ID')}</td>
+          </tr>
+        `;
+      });
+
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Laporan Keterlambatan & Potongan Pegawai RSUCL</title>
+          <style>
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; color: #1F2937; font-size: 12px; }
+            .header-table { width: 100%; border-bottom: 3px double #B91C1C; padding-bottom: 10px; margin-bottom: 20px; }
+            .logo { width: 80px; height: 80px; object-fit: contain; }
+            .header-text { text-align: right; }
+            .header-title { font-size: 16px; font-weight: bold; color: #991B1B; margin: 0; }
+            .header-subtitle { font-size: 12px; font-weight: bold; color: #374151; margin: 2px 0; }
+            .header-period { font-size: 11px; color: #6B7280; margin: 0; }
+            
+            .summary-box { display: flex; gap: 15px; margin-bottom: 20px; }
+            .kpi-card { flex: 1; background: #FEF2F2; border: 1px solid #FCA5A5; padding: 12px; border-radius: 8px; text-align: center; }
+            .kpi-title { font-size: 10px; font-weight: bold; color: #7F1D1D; text-transform: uppercase; margin-bottom: 4px; }
+            .kpi-value { font-size: 16px; font-weight: bold; color: #991B1B; }
+
+            table.data-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            table.data-table th { background: #B91C1C; color: #FFFFFF; font-size: 10.5px; padding: 8px; text-align: left; font-weight: bold; }
+            table.data-table td { padding: 8px; border-bottom: 1px solid #E5E7EB; font-size: 11px; }
+            table.data-table tr:nth-child(even) { background-color: #F9FAFB; }
+
+            .footer { margin-top: 30px; text-align: right; font-size: 11px; color: #6B7280; }
+            @media print {
+              @page { size: A4 landscape; margin: 1.5cm; }
+              body { padding: 0; }
+            }
+          </style>
+        </head>
+        <body>
+          <table class="header-table">
+            <tr>
+              <td style="width: 90px;">
+                ${base64Logo ? `<img src="${base64Logo}" class="logo" />` : '<b style="color:#B91C1C; font-size:18px;">RSUCL</b>'}
+              </td>
+              <td class="header-text">
+                <h1 class="header-title">LAPORAN KETERLAMBATAN &amp; POTONGAN PEGAWAI</h1>
+                <p class="header-subtitle">RUMAH SAKIT UMUM CEMPAKA LIMA</p>
+                <p class="header-period">Periode: ${monthStr}${deptStr}</p>
+              </td>
+            </tr>
+          </table>
+
+          <div class="summary-box">
+            <div class="kpi-card">
+              <div class="kpi-title">Total Pegawai Terlambat</div>
+              <div class="kpi-value">${records.filter((r: any) => r.total_late_minutes > 0).length} Pegawai</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-title">Akumulasi Menit Terlambat</div>
+              <div class="kpi-value">${res.data.grand_total_late_mins || 0} Menit</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-title">Tarif Potongan / Menit</div>
+              <div class="kpi-value">Rp ${(res.data.rate_per_minute || 500).toLocaleString('id-ID')}</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-title">Total Potongan Keterlambatan</div>
+              <div class="kpi-value">Rp ${(res.data.grand_total_deduction || 0).toLocaleString('id-ID')}</div>
+            </div>
+          </div>
+
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width: 30px; text-align: center;">No</th>
+                <th>Nama Pegawai</th>
+                <th>NIK KTP</th>
+                <th>Unit Kerja</th>
+                <th style="text-align: center;">Hari Telat</th>
+                <th style="text-align: center;">Total Menit</th>
+                <th style="text-align: right;">Tarif / Menit</th>
+                <th style="text-align: right;">Total Potongan (Rp)</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml || '<tr><td colspan="8" style="text-align:center; padding:20px;">Tidak ada data keterlambatan.</td></tr>'}
+            </tbody>
+          </table>
+
+          <div class="footer">
+            <p>Dicetak pada: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })} WIB</p>
+          </div>
+
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(function() { window.close(); }, 800);
+            }
+          <\/script>
+        </body>
+        </html>
+      `;
+
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+    } catch (err: any) {
+      alert(err?.message || "Terjadi kesalahan saat meng-generate PDF.");
+      printWindow.close();
     } finally {
       setExporting(false);
     }
@@ -1675,6 +2003,35 @@ export function ReportsTab() {
             </div>
           </div>
 
+          {/* Card 5: Rekap Keterlambatan & Potongan */}
+          <div className="bg-red-50/40 rounded-xl border border-red-100 p-4 flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-red-100 flex items-center justify-center flex-shrink-0">
+                <AlertTriangle size={13} className="text-red-700" />
+              </div>
+              <div>
+                <p className="text-[12px] font-bold text-gray-800">Keterlambatan &amp; Potongan</p>
+                <p className="text-[10px] text-gray-400">Menit telat &amp; denda Rp / menit</p>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-auto">
+              <button
+                onClick={handleExportLatenessExcel}
+                disabled={exporting}
+                className="flex-1 flex items-center justify-center gap-1 px-2 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                <Download size={11} />Excel
+              </button>
+              <button
+                onClick={handleExportLatenessPDF}
+                disabled={exporting}
+                className="flex-1 flex items-center justify-center gap-1 px-2 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                <FileText size={11} />PDF
+              </button>
+            </div>
+          </div>
+
         </div>
       </div>
 
@@ -2511,6 +2868,230 @@ export function ReportsTab() {
           </div>
         </div>
       </div>
+
+      {/* ══════════════════════════════════════════════════════════════════
+           SECTION: LAPORAN KETERLAMBATAN & POTONGAN PEGAWAI
+         ══════════════════════════════════════════════════════════════════ */}
+      <div className="bg-white rounded-2xl border border-red-100 shadow-sm overflow-hidden mb-6">
+        {/* Header Section */}
+        <div className="px-5 py-4 border-b border-red-50 bg-gradient-to-r from-red-50/60 to-rose-50/40 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-red-100 flex items-center justify-center flex-shrink-0">
+              <AlertTriangle size={15} className="text-red-700" />
+            </div>
+            <div>
+              <h3 className="text-[13px] font-bold text-gray-900">Laporan Keterlambatan &amp; Potongan Pegawai</h3>
+              <p className="text-[10.5px] text-gray-400 mt-0.5">
+                Kalkulasi otomatis Rp {(latenessData?.rate_per_minute || 500).toLocaleString('id-ID')} / menit keterlambatan pegawai &amp; PJ Bagian
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={handleExportLatenessExcel}
+              disabled={exporting}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-[11.5px] font-semibold transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+            >
+              <Download size={13} /> Excel
+            </button>
+            <button
+              onClick={handleExportLatenessPDF}
+              disabled={exporting}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-[11.5px] font-semibold transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+            >
+              <FileText size={13} /> PDF
+            </button>
+          </div>
+        </div>
+
+        {/* Summary KPI Cards */}
+        <div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-red-50/20 border-b border-red-50">
+          <div className="bg-white rounded-xl p-3.5 border border-red-100 shadow-2xs">
+            <p className="text-[10.5px] font-bold text-gray-400 uppercase tracking-wider">Total Pegawai Telat</p>
+            <p className="text-xl font-black text-red-600 mt-1">
+              {(latenessData?.records || []).filter((r: any) => r.total_late_minutes > 0).length} <span className="text-[12px] font-medium text-gray-400">Orang</span>
+            </p>
+          </div>
+          <div className="bg-white rounded-xl p-3.5 border border-red-100 shadow-2xs">
+            <p className="text-[10.5px] font-bold text-gray-400 uppercase tracking-wider">Total Menit Telat</p>
+            <p className="text-xl font-black text-red-600 mt-1">
+              {latenessData?.grand_total_late_mins || 0} <span className="text-[12px] font-medium text-gray-400">Menit</span>
+            </p>
+          </div>
+          <div className="bg-white rounded-xl p-3.5 border border-red-100 shadow-2xs">
+            <p className="text-[10.5px] font-bold text-gray-400 uppercase tracking-wider">Tarif / Menit</p>
+            <p className="text-xl font-black text-gray-800 mt-1">
+              Rp {(latenessData?.rate_per_minute || 500).toLocaleString('id-ID')}
+            </p>
+          </div>
+          <div className="bg-white rounded-xl p-3.5 border border-red-100 shadow-2xs">
+            <p className="text-[10.5px] font-bold text-red-600 uppercase tracking-wider">Akumulasi Potongan</p>
+            <p className="text-xl font-black text-red-700 mt-1">
+              Rp {(latenessData?.grand_total_deduction || 0).toLocaleString('id-ID')}
+            </p>
+          </div>
+        </div>
+
+        {/* Search & Filter */}
+        <div className="p-4 border-b border-gray-100 flex items-center justify-between gap-3 flex-wrap">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Cari nama atau NIK KTP..."
+              value={latenessSearch}
+              onChange={(e) => setLatenessSearch(e.target.value)}
+              className="w-full pl-9 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-[12px] focus:outline-none focus:border-red-500 focus:bg-white transition-all"
+            />
+          </div>
+          <p className="text-[11.5px] text-gray-400 font-medium">
+            Menampilkan { (latenessData?.records || []).filter((r: any) =>
+              r.name.toLowerCase().includes(latenessSearch.toLowerCase()) ||
+              r.nik_ktp.includes(latenessSearch)
+            ).length } data pegawai
+          </p>
+        </div>
+
+        {/* Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-gray-50/80 border-b border-gray-100 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                <th className="py-3 px-4 text-center w-12">No</th>
+                <th className="py-3 px-4">Nama Pegawai</th>
+                <th className="py-3 px-4">NIK KTP</th>
+                <th className="py-3 px-4">Unit Kerja</th>
+                <th className="py-3 px-4 text-center">Jumlah Hari Telat</th>
+                <th className="py-3 px-4 text-center">Total Menit Telat</th>
+                <th className="py-3 px-4 text-right">Tarif / Menit</th>
+                <th className="py-3 px-4 text-right">Total Potongan (Rp)</th>
+                <th className="py-3 px-4 text-center">Aksi</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50 text-[12.5px]">
+              {latenessLoading ? (
+                <tr>
+                  <td colSpan={9} className="py-8 text-center text-gray-400 text-[12px]">
+                    <span className="w-4 h-4 border-2 border-red-300 border-t-red-600 rounded-full animate-spin inline-block mr-2" />
+                    Memuat data keterlambatan...
+                  </td>
+                </tr>
+              ) : !latenessData?.records || latenessData.records.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="py-8 text-center text-gray-400 text-[12.5px]">
+                    Tidak ada catatan keterlambatan untuk periode filter ini.
+                  </td>
+                </tr>
+              ) : (
+                latenessData.records
+                  .filter((r: any) =>
+                    r.name.toLowerCase().includes(latenessSearch.toLowerCase()) ||
+                    r.nik_ktp.includes(latenessSearch)
+                  )
+                  .map((row: any, idx: number) => (
+                    <tr key={row.employee_id} className="hover:bg-red-50/20 transition-colors">
+                      <td className="py-3 px-4 text-center font-medium text-gray-400">{idx + 1}</td>
+                      <td className="py-3 px-4 font-bold text-gray-900">{row.name}</td>
+                      <td className="py-3 px-4 text-gray-500 font-mono text-[11.5px]">{row.nik_ktp}</td>
+                      <td className="py-3 px-4 text-gray-600">{row.department}</td>
+                      <td className="py-3 px-4 text-center font-semibold text-gray-700">
+                        {row.total_late_days > 0 ? (
+                          <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold text-[11px]">
+                            {row.total_late_days} Hari
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">0 Hari</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-center font-bold text-red-600 font-mono">
+                        {row.total_late_minutes > 0 ? `${row.total_late_minutes} min` : "0 min"}
+                      </td>
+                      <td className="py-3 px-4 text-right text-gray-600">
+                        Rp {row.rate_per_minute.toLocaleString('id-ID')}
+                      </td>
+                      <td className="py-3 px-4 text-right font-extrabold text-red-700 font-mono">
+                        Rp {row.total_deduction.toLocaleString('id-ID')}
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <button
+                          onClick={() => {
+                            setSelectedEmpLatenessDetail(row);
+                            setShowLatenessModal(true);
+                          }}
+                          disabled={row.total_late_days === 0}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg text-[11px] font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                        >
+                          <Eye size={12} /> Rincian
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Modal Detail Rincian Keterlambatan Pegawai */}
+      {showLatenessModal && selectedEmpLatenessDetail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-xs" onClick={() => setShowLatenessModal(false)} />
+          <div className="relative bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between bg-red-50/50">
+              <div>
+                <h3 className="text-[14px] font-bold text-gray-900">Detail Keterlambatan Pegawai</h3>
+                <p className="text-[11px] text-gray-500 mt-0.5">{selectedEmpLatenessDetail.name} ({selectedEmpLatenessDetail.department})</p>
+              </div>
+              <button
+                onClick={() => setShowLatenessModal(false)}
+                className="w-7 h-7 rounded-full bg-white hover:bg-gray-100 text-gray-400 hover:text-gray-600 flex items-center justify-center transition-colors shadow-2xs cursor-pointer"
+              >
+                <X size={15} />
+              </button>
+            </div>
+            
+            <div className="p-5 max-h-[60vh] overflow-y-auto space-y-3">
+              <div className="flex items-center justify-between p-3 bg-red-50 border border-red-100 rounded-xl">
+                <div>
+                  <p className="text-[10.5px] font-bold text-red-700 uppercase tracking-wider">Total Akumulasi Denda</p>
+                  <p className="text-lg font-black text-red-800">Rp {selectedEmpLatenessDetail.total_deduction.toLocaleString('id-ID')}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10.5px] font-bold text-gray-500 uppercase tracking-wider">Total Terlambat</p>
+                  <p className="text-sm font-bold text-gray-800">{selectedEmpLatenessDetail.total_late_minutes} Menit ({selectedEmpLatenessDetail.total_late_days} Hari)</p>
+                </div>
+              </div>
+
+              <div className="space-y-2 pt-2">
+                <p className="text-[11.5px] font-bold text-gray-700">Rincian Per Tanggal Presensi:</p>
+                {selectedEmpLatenessDetail.details.map((d: any, i: number) => (
+                  <div key={i} className="p-3 bg-gray-50 border border-gray-100 rounded-xl flex items-center justify-between gap-3 text-[12px]">
+                    <div>
+                      <p className="font-bold text-gray-800">{d.date} <span className="font-normal text-gray-500">({d.shift_name})</span></p>
+                      <p className="text-[11px] text-gray-500 mt-0.5">Jam Masuk Shift: {d.shift_start} | Check-in: <span className="font-bold text-red-600">{d.check_in}</span></p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <span className="inline-block px-2 py-0.5 bg-red-100 text-red-800 rounded font-mono font-bold text-[11px] mb-0.5">
+                        +{d.late_minutes} Menit
+                      </span>
+                      <p className="text-[11.5px] font-extrabold text-red-700 font-mono">Rp {d.deduction.toLocaleString('id-ID')}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end">
+              <button
+                onClick={() => setShowLatenessModal(false)}
+                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-xl text-[12px] font-semibold transition-colors cursor-pointer"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

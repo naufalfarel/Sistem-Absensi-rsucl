@@ -781,6 +781,7 @@ export function ScheduleTab() {
   const [calSearchQuery, setCalSearchQuery] = useState('');
   const [departments, setDepartments] = useState<any[]>([]);
   const [selectedDeptFilter, setSelectedDeptFilter] = useState<string>('all');
+  const [showEmergencyModal, setShowEmergencyModal] = useState<boolean>(false);
 
   // ── Kalender Bulanan ────────────────────────────────────────────────
   const today = new Date();
@@ -1406,12 +1407,20 @@ export function ScheduleTab() {
           <h2 className="text-[16px] font-bold text-gray-900">Jadwal Shift</h2>
           <p className="text-[12px] text-gray-400 mt-0.5">Kelola jadwal shift dan penugasan karyawan</p>
         </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-[#16A34A] hover:bg-[#0d9240] text-white text-[13px] font-semibold rounded-xl transition-all shadow-sm shadow-green-200 active:scale-95"
-        >
-          <Plus size={15} /> Tambah Shift
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowEmergencyModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-[13px] font-bold rounded-xl transition-all shadow-sm active:scale-95 cursor-pointer"
+          >
+            <Zap size={15} /> + Shift Dadakan (On-Call)
+          </button>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-[#16A34A] hover:bg-[#0d9240] text-white text-[13px] font-semibold rounded-xl transition-all shadow-sm shadow-green-200 active:scale-95 cursor-pointer"
+          >
+            <Plus size={15} /> Tambah Shift
+          </button>
+        </div>
       </div>
 
       {/* Search Bar & Bulk Assign Button */}
@@ -1943,29 +1952,53 @@ export function ScheduleTab() {
                         const isSunday = dow === 0;
                         const isHoliday = holidays.includes(dateStr);
 
+                        const allShifts = assigned?.all_shifts && assigned.all_shifts.length > 0 ? assigned.all_shifts : (assigned ? [assigned] : []);
+
                         return (
                           <td key={day} className={`text-center py-2 px-0.5 border-r border-slate-100 relative ${
                             isToday ? 'bg-green-50/20' : ''
                           } ${isSunday || isHoliday ? 'bg-red-50/10' : ''}`}>
                             <div className="relative inline-block">
-                              <button onClick={e => handleCalCellClick(e, row.employee_id, dateStr)}
-                                className={`w-8 h-7 mx-auto rounded-lg text-[10px] font-extrabold transition-all hover:scale-110 active:scale-95 border flex items-center justify-center ${
-                                  isPending
-                                    ? 'ring-2 ring-blue-500 border-blue-400 shadow-md animate-pulse'
+                              {allShifts.length > 1 ? (
+                                <div
+                                  onClick={e => handleCalCellClick(e, row.employee_id, dateStr)}
+                                  className="flex items-center justify-center gap-0.5 cursor-pointer hover:scale-105 transition-all p-0.5"
+                                  title={`[MULTI-SHIFT (${allShifts.length} Shift)]\n${allShifts.map((s: any) => `• ${s.name} (${s.start_time ?? ''}–${s.end_time ?? ''})`).join('\n')}\nKlik untuk ubah.`}
+                                >
+                                  {allShifts.map((sItem: any, sIdx: number) => {
+                                    const prItem = getPresetByHex(sItem.color);
+                                    const bItem  = getShiftBadge(sItem.name);
+                                    return (
+                                      <span
+                                        key={sIdx}
+                                        className="px-1 py-0.5 rounded text-[9px] font-extrabold border shadow-2xs"
+                                        style={{ background: prItem?.bg || '#EFF6FF', borderColor: prItem?.border || '#BFDBFE', color: sItem.color }}
+                                      >
+                                        {bItem}
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <button onClick={e => handleCalCellClick(e, row.employee_id, dateStr)}
+                                  className={`w-8 h-7 mx-auto rounded-lg text-[10px] font-extrabold transition-all hover:scale-110 active:scale-95 border flex items-center justify-center ${
+                                    isPending
+                                      ? 'ring-2 ring-blue-500 border-blue-400 shadow-md animate-pulse'
+                                      : assigned
+                                        ? 'shadow-sm hover:shadow-md'
+                                        : 'border-slate-100 bg-slate-50 text-slate-400 hover:bg-slate-100'
+                                  }`}
+                                  style={assigned && pr ? { background: pr.bg, borderColor: isPending ? '#3B82F6' : pr.border, color: assigned.color } : {}}
+                                  title={isPending
+                                    ? `[BELUM DISIMPAN] ${assigned ? assigned.name : 'Libur'}\nKlik lagi untuk ubah.`
                                     : assigned
-                                      ? 'shadow-sm hover:shadow-md'
-                                      : 'border-slate-100 bg-slate-50 text-slate-400 hover:bg-slate-100'
-                                }`}
-                                style={assigned && pr ? { background: pr.bg, borderColor: isPending ? '#3B82F6' : pr.border, color: assigned.color } : {}}
-                                title={isPending
-                                  ? `[BELUM DISIMPAN] ${assigned ? assigned.name : 'Libur'}\nKlik lagi untuk ubah.`
-                                  : assigned
-                                    ? `${assigned.name}\n${assigned.start_time ?? ''}–${assigned.end_time ?? ''}\nKlik untuk ubah`
-                                    : isHoliday
-                                      ? `Tgl ${day} (Hari Libur) — kosong. Klik untuk atur.`
-                                      : `Tgl ${day} — kosong. Klik untuk atur.`}>
-                                {badge ?? '·'}
-                              </button>
+                                      ? `${assigned.name}\n${assigned.start_time ?? ''}–${assigned.end_time ?? ''}\nKlik untuk ubah`
+                                      : isHoliday
+                                        ? `Tgl ${day} (Hari Libur) — kosong. Klik untuk atur.`
+                                        : `Tgl ${day} — kosong. Klik untuk atur.`}>
+                                  {badge ?? '·'}
+                                </button>
+                              )}
                               {isPending && (
                                 <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-blue-500 border border-white flex items-center justify-center shadow-xs" title="Perubahan Belum Disimpan" />
                               )}
@@ -2092,6 +2125,18 @@ export function ScheduleTab() {
       )}
 
       {/* Modals */}
+      {showEmergencyModal && (
+        <AdminEmergencyShiftModal
+          user={user}
+          employees={allEmployees}
+          shifts={shifts}
+          onClose={() => setShowEmergencyModal(false)}
+          onSaved={() => {
+            fetchSchedules();
+            fetchCalMonthlyData();
+          }}
+        />
+      )}
       {showAddModal && <AddShiftModal onClose={() => setShowAddModal(false)} onAdd={handleAdd} departments={departments} />}
       {showDeptModal && <AssignDepartmentModal shifts={shifts} onClose={() => setShowDeptModal(false)} onAssign={handleAssignDepartment} />}
       {deleteTarget && <DeleteModal shift={deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => handleDelete(deleteTarget.id)} />}
@@ -2108,6 +2153,207 @@ export function ScheduleTab() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+// ── Admin Emergency Shift Modal ──────────────────────────────────────────
+function AdminEmergencyShiftModal({ user, employees, shifts, onClose, onSaved }: { user: any; employees: any[]; shifts: any[]; onClose: () => void; onSaved: () => void }) {
+  const [selectedEmpId, setSelectedEmpId] = useState<number | ''>('');
+  const [selectedShiftId, setSelectedShiftId] = useState<number | ''>('');
+  const [workDate, setWorkDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [note, setNote] = useState<string>('');
+  const [submitting, setSubmitting] = useState<boolean>(false);
+  const [search, setSearch] = useState<string>('');
+
+  const filteredEmps = employees.filter(e =>
+    e.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  // Flatten master shifts so all sub-shift options are selectable
+  const flatShiftOptions: Array<{ id: number; label: string; start: string; end: string }> = [];
+  shifts.forEach(s => {
+    if (s.children && s.children.length > 0) {
+      s.children.forEach((c: any) => {
+        const startStr = c.start_time ? c.start_time.substring(0, 5) : '--:--';
+        const endStr   = c.end_time ? c.end_time.substring(0, 5) : '--:--';
+        flatShiftOptions.push({
+          id: c.id,
+          label: `${s.name} - ${c.name} (${startStr}–${endStr})`,
+          start: startStr,
+          end: endStr,
+        });
+      });
+    } else {
+      const startStr = s.start_time ? s.start_time.substring(0, 5) : '--:--';
+      const endStr   = s.end_time ? s.end_time.substring(0, 5) : '--:--';
+      flatShiftOptions.push({
+        id: s.id,
+        label: `${s.name} (${startStr}–${endStr})`,
+        start: startStr,
+        end: endStr,
+      });
+    }
+  });
+
+  const activeSelectedShift = flatShiftOptions.find(item => item.id === Number(selectedShiftId));
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedEmpId || !selectedShiftId || !workDate) {
+      alert("Pegawai, Shift, dan Tanggal wajib diisi.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await scheduleApi.assignEmergencyShift({
+        employee_id: Number(selectedEmpId),
+        schedule_id: Number(selectedShiftId),
+        work_date: workDate,
+        note: note.trim() || undefined,
+      });
+
+      if (res.success) {
+        alert(`🚨 ${res.message}`);
+        onSaved();
+        onClose();
+      }
+    } catch (err: any) {
+      alert(err?.response?.data?.message || err?.message || "Gagal menugaskan shift dadakan.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn overflow-y-auto font-sans">
+      <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-5 my-6 relative">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3.5">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center font-bold">
+              🚨
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-900">Penugasan Shift Dadakan / On-Call</h3>
+              <p className="text-[11.5px] text-slate-400">Tambahkan shift emergency &amp; kirim notifikasi ke pegawai.</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-7 h-7 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center text-xs font-bold cursor-pointer transition-colors"
+          >
+            ✕
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4 text-left">
+          {/* Pilih Tanggal */}
+          <div>
+            <label className="block text-[12px] font-bold text-slate-800 mb-1">
+              Tanggal Shift Dadakan <span className="text-rose-600">*</span>
+            </label>
+            <input
+              type="date"
+              value={workDate}
+              onChange={(e) => setWorkDate(e.target.value)}
+              required
+              className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-2xl text-[12.5px] font-bold text-slate-800 focus:outline-none focus:border-[#16A34A] transition-all"
+            />
+          </div>
+
+          {/* Pilih Pegawai */}
+          <div>
+            <label className="block text-[12px] font-bold text-slate-800 mb-1">
+              Pilih Pegawai <span className="text-rose-600">*</span>
+            </label>
+            <input
+              type="text"
+              placeholder="Cari nama pegawai..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full px-3 py-1.5 mb-2 bg-slate-50 border border-slate-200 rounded-xl text-[11.5px] text-slate-700 focus:outline-none focus:border-[#16A34A]"
+            />
+            <select
+              value={selectedEmpId}
+              onChange={(e) => setSelectedEmpId(e.target.value ? Number(e.target.value) : '')}
+              required
+              className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-2xl text-[12.5px] font-semibold text-slate-800 focus:outline-none focus:border-[#16A34A] transition-all"
+            >
+              <option value="">-- Pilih Pegawai --</option>
+              {filteredEmps.map(emp => (
+                <option key={emp.id} value={emp.id}>
+                  {emp.name} ({emp.department || 'Staff'})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Pilih Shift Template */}
+          <div>
+            <label className="block text-[12px] font-bold text-slate-800 mb-1">
+              Pilih Master Shift / Jam Kerja <span className="text-rose-600">*</span>
+            </label>
+            <select
+              value={selectedShiftId}
+              onChange={(e) => setSelectedShiftId(e.target.value ? Number(e.target.value) : '')}
+              required
+              className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-2xl text-[12.5px] font-semibold text-slate-800 focus:outline-none focus:border-[#16A34A] transition-all"
+            >
+              <option value="">-- Pilih Shift / Template Jam Kerja --</option>
+              {flatShiftOptions.map(opt => (
+                <option key={opt.id} value={opt.id}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+
+            {activeSelectedShift && activeSelectedShift.start !== '--:--' && (
+              <div className="mt-2 p-2.5 bg-blue-50 border border-blue-100 rounded-xl text-[11.5px] text-blue-800 font-medium flex items-center gap-2">
+                <span>⏰ Jam Kerja Shift:</span>
+                <strong className="font-mono text-blue-900 bg-white px-2 py-0.5 rounded border border-blue-200">
+                  {activeSelectedShift.start} WIB – {activeSelectedShift.end} WIB
+                </strong>
+              </div>
+            )}
+          </div>
+
+          {/* Catatan Emergency */}
+          <div>
+            <label className="block text-[12px] font-bold text-slate-800 mb-1">
+              Catatan / Instruksi Panggilan (Opsional)
+            </label>
+            <textarea
+              rows={2}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Contoh: Panggilan darurat pengganti rekan sakit / lonjakan pasien IGD"
+              className="w-full px-3.5 py-2 border border-slate-200 rounded-2xl text-[12px] text-slate-800 focus:outline-none focus:border-[#16A34A] transition-all font-medium resize-none"
+            />
+          </div>
+
+          <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl text-[11.5px] text-rose-800 font-medium leading-snug">
+            💡 <strong>Info:</strong> Penugasan shift dadakan ini akan langsung ditambahkan ke jadwal harian pegawai dan notifikasi push/sistem akan langsung terkirim ke HP pegawai.
+          </div>
+
+          <div className="flex items-center gap-3 pt-2 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[12.5px] rounded-2xl transition-all cursor-pointer text-center"
+            >
+              Batal
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="flex-1 py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white font-bold text-[12.5px] rounded-2xl transition-all shadow-sm active:scale-95 cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {submitting ? 'Mengirim...' : '🚨 Kirim Shift Dadakan'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

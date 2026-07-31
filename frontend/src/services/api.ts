@@ -826,6 +826,17 @@ export const leaveApi = {
       `/leave-requests/${id}/cancel`,
       { cancellation_reason },
     ),
+  // Admin mengedit tanggal & detail pengajuan cuti
+  editAdmin: (
+    id: number,
+    start_date: string,
+    end_date: string,
+    admin_note?: string,
+  ) =>
+    api.put<{ success: boolean; data: LeaveRequest }>(
+      `/leave-requests/${id}/edit-admin`,
+      { start_date, end_date, admin_note },
+    ),
   // Admin mempersingkat pengajuan cuti (approved)
   shortenAdmin: (
     id: number,
@@ -1020,6 +1031,41 @@ export const reportApi = {
     api.get<{ success: boolean; data: MonthlyRekapRecord[] }>(
       `/reports/monthly-rekap?month=${month}&year=${year}`,
     ),
+  // Laporan keterlambatan & potongan Rupiah per menit
+  lateness: (month: number, year: number, department?: string) => {
+    const params = new URLSearchParams({ month: String(month), year: String(year) });
+    if (department && department !== "all") params.append("department", department);
+    return api.get<{
+      success: boolean;
+      data: {
+        month: number;
+        year: number;
+        rate_per_minute: number;
+        grand_total_late_mins: number;
+        grand_total_deduction: number;
+        records: Array<{
+          employee_id: number;
+          nik_ktp: string;
+          name: string;
+          department: string;
+          position: string;
+          total_late_days: number;
+          total_late_minutes: number;
+          rate_per_minute: number;
+          total_deduction: number;
+          details: Array<{
+            attendance_id: number | null;
+            date: string;
+            shift_name: string;
+            shift_start: string;
+            check_in: string;
+            late_minutes: number;
+            deduction: number;
+          }>;
+        }>;
+      };
+    }>(`/reports/lateness?${params.toString()}`);
+  },
 };
 
 // ─────────────────────────────────────────────────────────────────────
@@ -1061,6 +1107,7 @@ export interface AppSettings {
   overtime_grace_minutes?: string;
   checkin_tolerance_minutes?: string;
   early_checkin_window_minutes?: string;
+  late_fee_per_minute?: string;
 }
 
 /**
@@ -1216,6 +1263,17 @@ export const scheduleApi = {
     api.post<{ success: boolean; message: string }>(
       "/employee-schedules/assign-department",
       { department_id, day_of_week, schedule_id },
+    ),
+  // Tugaskan Shift Dadakan / On-Call
+  assignEmergencyShift: (data: {
+    employee_id: number;
+    schedule_id: number;
+    work_date: string;
+    note?: string;
+  }) =>
+    api.post<{ success: boolean; message: string; schedule: any }>(
+      "/employee-schedules/assign-emergency",
+      data,
     ),
   // Ambil info shift kerja yang berlaku untuk diri sendiri hari ini
   mySchedule: () =>

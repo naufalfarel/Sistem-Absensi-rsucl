@@ -39,13 +39,27 @@ class AttendanceController extends Controller
             return response()->json(['success' => false, 'message' => 'Data karyawan tidak ditemukan.'], 404);
         }
 
-        // Ambil data absensi hari ini jika ada
-        $record = Attendance::where('employee_id', $employee->id)
-                             ->where('date', today()->toDateString())
-                             ->first();
+        $todayStr = today()->toDateString();
+        $now = Carbon::now('Asia/Jakarta');
+
+        // Ambil seluruh data absensi hari ini jika ada
+        $allRecords = Attendance::where('employee_id', $employee->id)
+                             ->where('date', $todayStr)
+                             ->get();
+
+        $activeShift = AttendanceRules::resolveShiftFor($employee, $now, $now);
+        $allShifts   = AttendanceRules::resolveAllShiftsFor($employee, $now);
+
+        // Pilih record yang matching dengan activeShift atau record paling akhir
+        $record = null;
+        if ($activeShift) {
+            $record = $allRecords->firstWhere('schedule_id', $activeShift->id);
+        }
+        if (!$record) {
+            $record = $allRecords->last();
+        }
 
         // Cek apakah ada pengajuan cuti/izin/sakit yang aktif hari ini
-        $todayStr = today()->toDateString();
         $activeLeave = \App\Models\LeaveRequest::where('employee_id', $employee->id)
             ->where('status', 'approved')
             ->where('start_date', '<=', $todayStr)
@@ -93,6 +107,21 @@ class AttendanceController extends Controller
         return response()->json([
             'success' => true,
             'data'    => $record ? new AttendanceResource($record) : null,
+            'records' => AttendanceResource::collection($allRecords),
+            'active_shift' => $activeShift ? [
+                'id' => $activeShift->id,
+                'name' => $activeShift->name,
+                'start_time' => $activeShift->start_time,
+                'end_time' => $activeShift->end_time,
+                'color' => $activeShift->color,
+            ] : null,
+            'today_shifts' => array_map(fn($s) => [
+                'id' => $s->id,
+                'name' => $s->name,
+                'start_time' => $s->start_time,
+                'end_time' => $s->end_time,
+                'color' => $s->color,
+            ], $allShifts),
             'active_leave' => $leaveData,
             'holiday' => $holidayData,
             'is_exempt_from_gps' => $isExempt,
@@ -248,10 +277,27 @@ class AttendanceController extends Controller
 
         // 2. Validasi apakah karyawan bersangkutan sedang cuti/izin/sakit yang disetujui hari ini (diperbolehkan check-in untuk deteksi lapor masuk lebih awal)
 
-        // 3. Validasi absensi ganda pada hari yang sama
+        // 4. Tentukan waktu check-in & resolve active shift untuk saat ini
+        $now = Carbon::now('Asia/Jakarta');
+
+        $todayShift = AttendanceRules::resolveShiftFor($employee, $now, $now);
+        $isFallback = false;
+
+        if (!$todayShift) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda belum memiliki jadwal shift untuk saat ini. Silakan hubungi Penanggung Jawab Bagian atau Administrator.',
+            ], 422);
+        }
+
+        // 3. Validasi absensi ganda pada shift yang sama hari ini
         $existing = Attendance::withTrashed()
                               ->where('employee_id', $employee->id)
                               ->where('date', today()->toDateString())
+                              ->where(function($q) use ($todayShift) {
+                                  $q->where('schedule_id', $todayShift->id)
+                                    ->orWhereNull('schedule_id');
+                              })
                               ->first();
 
         if ($existing) {
@@ -272,24 +318,10 @@ class AttendanceController extends Controller
             if ($existing->check_in) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Anda sudah melakukan check-in hari ini pukul ' . substr($existing->check_in, 0, 5) . '.',
+                    'message' => 'Anda sudah melakukan check-in untuk ' . $todayShift->name . ' hari ini pukul ' . substr($existing->check_in, 0, 5) . '.',
                     'errors' => null,
                 ], 409);
             }
-        }
-
-        // 4. Tentukan waktu check-in
-        $now = Carbon::now('Asia/Jakarta');
-
-        // Pastikan karyawan memiliki jadwal shift dinas hari ini
-        $todayShift = AttendanceRules::resolveShiftFor($employee, $now);
-        $isFallback = false;
-
-        if (!$todayShift) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Anda belum memiliki jadwal shift untuk hari ini. Silakan hubungi Penanggung Jawab Bagian atau Administrator untuk pengisian jadwal dinas Anda.',
-            ], 422);
         }
 
         // Tentukan tipe shift harian
@@ -331,51 +363,39 @@ class AttendanceController extends Controller
             }
         }
 
-        // 6. Evaluasi waktu check-in berdasarkan konfigurasi shift
-        $earlyCheckinWindowOffset = (int) Setting::get('early_checkin_window_minutes', '150'); // 2 jam 30 menit
-        $shiftStartCarbon = $now->copy()->setTimeFromTimeString($todayShift->start_time);
-        $todayCandidateOpen = $shiftStartCarbon->copy()->subMinutes($earlyCheckinWindowOffset);
-
-        // Cek jika check-in dipanggil terlalu awal (sebelum 2 jam 30 menit dari jam masuk shift)
-        if ($now->lt($todayCandidateOpen)) {
-            $openStr = $todayCandidateOpen->format('H:i');
-            return response()->json([
-                'success' => false,
-                'message' => "Check-in belum dibuka. Waktu check-in dibuka mulai pukul {$openStr} WIB.",
-            ], 422);
-        }
-
-        $windowEnd = $now->copy()->setTimeFromTimeString($todayShift->end_time);
-        if ($windowEnd->lt($shiftStartCarbon)) {
-            $windowEnd->addDay();
-        }
-
-        // Jalankan klasifikasi check-in: Toleransi tepat waktu 10 menit dari jam masuk shift
-        $tepatWaktuMinutes = 10;
-        $toleranceMinutes = 10;
-        $classification = AttendanceRules::classifyCheckin($now, $shiftStartCarbon, $windowEnd, $tepatWaktuMinutes, $toleranceMinutes);
-
-        $status = $classification['status']; // 'hadir' atau 'telat'
-        $punctuality = $classification['punctuality']; // 'tepat_waktu' atau 'terlambat'
-        $effectiveCheckinTime = $classification['effective_checkin_time'];
-
-        // Simpan file foto check-in wajib
-        $photoUrl = null;
-        if ($request->hasFile('photo')) {
-            $path = $request->file('photo')->store('attendance-photos', 'public');
-            $photoUrl = '/storage/' . $path;
-        }
-
-        // 7. Simpan absensi baru ke database secara aman dengan transaksi & locking untuk mencegah race condition
+        // 6. Tentukan status ketepatan waktu check-in
         $today = today()->toDateString();
+        $dateObj = Carbon::parse($today);
+
+        // Cari jam mulai shift dari database / helper
+        $shiftStartTimeStr = $todayShift->start_time ?? ($shiftType === 'saturday' ? '08:30:00' : '08:30:00');
+        $shiftStart = Carbon::parse($today . ' ' . $shiftStartTimeStr);
+        $checkinWindowEnd = $shiftStart->copy()->addHours(6);
+
+        $tepatWaktuMinutes = (int) Setting::get('tepat_waktu_tolerance_minutes', '10');
+        $toleranceMinutes  = (int) Setting::get('attendance_late_tolerance_minutes', '10');
+
+        $classification = AttendanceRules::classifyCheckin($now, $shiftStart, $checkinWindowEnd, $tepatWaktuMinutes, $toleranceMinutes);
+        $status                 = $classification['status'];
+        $punctuality            = $classification['punctuality'];
+        $effectiveCheckinTime   = $classification['effective_checkin_time'];
+
+        $photoUrl = $request->input('photo_url');
+
+        // 7. Simpan atau update record absensi secara atomic (DB Transaction dengan Pessimistic Locking)
         try {
-            $record = \DB::transaction(function () use ($employee, $today, $request, $status, $clientLat, $clientLng, $clientAcc, $isWithinGeofence, $photoUrl, $distance, $now, $punctuality, $effectiveCheckinTime) {
-                // Kunci baris untuk mencegah race condition
-                $lockedExisting = Attendance::withTrashed()
-                                            ->where('employee_id', $employee->id)
-                                            ->where('date', $today)
-                                            ->lockForUpdate()
-                                            ->first();
+            $record = \Illuminate\Support\Facades\DB::transaction(function () use (
+                $employee, $today, $todayShift, $now, $status, $punctuality, $effectiveCheckinTime,
+                $clientLat, $clientLng, $clientAcc, $isWithinGeofence, $distance, $photoUrl, $request
+            ) {
+                $lockedExisting = Attendance::where('employee_id', $employee->id)
+                    ->where('date', $today)
+                    ->where(function($q) use ($todayShift) {
+                        $q->where('schedule_id', $todayShift->id)
+                          ->orWhereNull('schedule_id');
+                    })
+                    ->lockForUpdate()
+                    ->first();
 
                 if ($lockedExisting) {
                     if ($lockedExisting->trashed()) {
@@ -391,11 +411,12 @@ class AttendanceController extends Controller
 
                     if ($lockedExisting->check_in) {
                         $timeStr = substr($lockedExisting->check_in, 0, 5);
-                        throw new \Exception("Anda sudah melakukan check-in hari ini pukul {$timeStr}.", 409);
+                        throw new \Exception("Anda sudah melakukan check-in untuk {$todayShift->name} hari ini pukul {$timeStr}.", 409);
                     }
                 }
 
                 $attendanceData = [
+                    'schedule_id'             => $todayShift->id,
                     'check_in'                => $now->format('H:i:s'),
                     'status'                  => $status,
                     'note'                    => null, // Reset/clear stale leave note upon check-in
@@ -545,9 +566,32 @@ class AttendanceController extends Controller
         }
 
         // 1. Cari data check-in hari ini
-        $record = Attendance::where('employee_id', $employee->id)
-                            ->where('date', today()->toDateString())
-                            ->first();
+        $now = Carbon::now('Asia/Jakarta');
+        $todayShift = AttendanceRules::resolveShiftFor($employee, $now, $now);
+
+        $record = null;
+        if ($todayShift) {
+            $record = Attendance::where('employee_id', $employee->id)
+                                ->where('date', today()->toDateString())
+                                ->where('schedule_id', $todayShift->id)
+                                ->whereNotNull('check_in')
+                                ->whereNull('check_out')
+                                ->first();
+        }
+
+        if (!$record) {
+            $record = Attendance::where('employee_id', $employee->id)
+                                ->where('date', today()->toDateString())
+                                ->whereNotNull('check_in')
+                                ->whereNull('check_out')
+                                ->first();
+        }
+
+        if (!$record) {
+            $record = Attendance::where('employee_id', $employee->id)
+                                ->where('date', today()->toDateString())
+                                ->first();
+        }
 
         // 2. Fallback untuk shift lintas malam (Overnight / Night shift):
         // Jika check-in hari ini belum ada, cek apakah ada check-in kemarin yang belum di-checkout

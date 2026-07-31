@@ -51,6 +51,8 @@ class SettingController extends Controller
         'checkin_open_time',
         'checkin_late_after_time',
         'checkin_close_time',
+        // ── Potongan Keterlambatan per Menit ──
+        'late_fee_per_minute',
     ];
 
     /**
@@ -123,6 +125,7 @@ class SettingController extends Controller
             'checkin_open_time'               => 'sometimes|string',
             'checkin_late_after_time'         => 'sometimes|string',
             'checkin_close_time'              => 'sometimes|string',
+            'late_fee_per_minute'             => 'sometimes|integer|min:0',
         ]);
 
         // Proses khusus untuk upload logo instansi
@@ -264,6 +267,7 @@ class SettingController extends Controller
             'checkin_open_time'               => '08:00',
             'checkin_late_after_time'         => '08:30',
             'checkin_close_time'              => '09:00',
+            'late_fee_per_minute'             => '500',
             default                           => '',
         };
     }

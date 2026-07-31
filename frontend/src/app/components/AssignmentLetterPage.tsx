@@ -361,18 +361,35 @@ export default function AssignmentLetterPage() {
 
   useEffect(() => { fetchLetters(); }, [statusFilter]);
 
+  const [documentError, setDocumentError] = useState('');
+  const [reportProofError, setReportProofError] = useState('');
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { setFormError('Ukuran file maksimal 2MB.'); return; }
-    setDocumentFile(file); setFormError('');
+    if (file.size > 2 * 1024 * 1024) {
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+      setDocumentError(`⚠️ Ukuran file terlalu besar (${sizeMB}MB). Maksimal 2MB. Silakan pilih/kompres file di bawah 2MB.`);
+      setDocumentFile(null);
+      return;
+    }
+    setDocumentError('');
+    setDocumentFile(file);
+    setFormError('');
   };
 
   const handleReportProofChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { setReportError('Ukuran file foto maksimal 2MB.'); return; }
-    setReportProofFile(file); setReportError('');
+    if (file.size > 2 * 1024 * 1024) {
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+      setReportProofError(`⚠️ Ukuran foto terlalu besar (${sizeMB}MB). Maksimal 2MB. Silakan pilih foto di bawah 2MB.`);
+      setReportProofFile(null);
+      return;
+    }
+    setReportProofError('');
+    setReportProofFile(file);
+    setReportError('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -618,8 +635,10 @@ export default function AssignmentLetterPage() {
               <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">
                 Lampiran Surat / Undangan <span className="text-red-500">*</span>
               </label>
-              <label className="flex items-center gap-3 w-full border border-dashed border-gray-200 rounded-xl px-4 py-3 cursor-pointer bg-gray-50 hover:bg-gray-100 hover:border-green-300 transition-all">
-                <Paperclip size={16} className="text-gray-400 flex-shrink-0" />
+              <label className={`flex items-center gap-3 w-full border border-dashed rounded-xl px-4 py-3 cursor-pointer transition-all ${
+                documentError ? 'border-red-300 bg-red-50/40 hover:border-red-400' : 'border-gray-200 bg-gray-50 hover:bg-gray-100 hover:border-green-300'
+              }`}>
+                <Paperclip size={16} className={documentError ? 'text-red-500 flex-shrink-0' : 'text-gray-400 flex-shrink-0'} />
                 <div className="min-w-0">
                   <p className="text-[12px] font-semibold text-gray-700 truncate">
                     {documentFile ? documentFile.name : 'Pilih file surat undangan'}
@@ -628,6 +647,12 @@ export default function AssignmentLetterPage() {
                 </div>
                 <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={handleFileChange} className="hidden" />
               </label>
+              {documentError && (
+                <div className="mt-2 flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 text-[11.5px] px-3.5 py-2.5 rounded-xl font-semibold">
+                  <AlertCircle size={15} className="flex-shrink-0 text-red-600 mt-0.5" />
+                  <span>{documentError}</span>
+                </div>
+              )}
             </div>
 
             {/* Actions */}
@@ -749,8 +774,10 @@ export default function AssignmentLetterPage() {
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">
                   1. Foto Kegiatan / Bukti Kehadiran <span className="text-red-500">*</span>
                 </label>
-                <label className="flex items-center gap-3 w-full border border-dashed border-gray-200 rounded-xl px-4 py-3 cursor-pointer bg-emerald-50/30 hover:bg-emerald-50 hover:border-emerald-300 transition-all">
-                  <ImagePlus size={18} className="text-emerald-600 flex-shrink-0" />
+                <label className={`flex items-center gap-3 w-full border border-dashed rounded-xl px-4 py-3 cursor-pointer transition-all ${
+                  reportProofError ? 'border-red-300 bg-red-50/40 hover:border-red-400' : 'border-gray-200 bg-emerald-50/30 hover:bg-emerald-50 hover:border-emerald-300'
+                }`}>
+                  <ImagePlus size={18} className={reportProofError ? 'text-red-500 flex-shrink-0' : 'text-emerald-600 flex-shrink-0'} />
                   <div className="min-w-0">
                     <p className="text-[12px] font-semibold text-gray-700 truncate">
                       {reportProofFile
@@ -763,6 +790,12 @@ export default function AssignmentLetterPage() {
                   </div>
                   <input type="file" accept=".jpg,.jpeg,.png,.pdf" onChange={handleReportProofChange} className="hidden" />
                 </label>
+                {reportProofError && (
+                  <div className="mt-2 flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 text-[11.5px] px-3.5 py-2.5 rounded-xl font-semibold">
+                    <AlertCircle size={15} className="flex-shrink-0 text-red-600 mt-0.5" />
+                    <span>{reportProofError}</span>
+                  </div>
+                )}
               </div>
 
               {/* Keterangan laporan */}

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   ShieldAlert, AlertTriangle, FileText, Search, Plus, Filter, 
   Trash2, XCircle, CheckCircle2, ChevronLeft, ChevronRight, 
-  Paperclip, Loader2, Building2, User, Info, ExternalLink, Download
+  Paperclip, Loader2, Building2, User, Info, ExternalLink, Download, Calendar
 } from 'lucide-react';
 import { disciplinarySanctionApi, DisciplinarySanction, departmentApi, employeeApi, Employee } from '../../../services/api';
 import rsLogoImg from "../../../imports/rsucl_wide_logo.png";
@@ -304,6 +304,12 @@ export const DisciplinaryTab: React.FC = () => {
     }
   };
 
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1; // 1 - 12 (Maret = 3)
+  const currentDay = now.getDate();
+  const isMarch = currentMonth === 3;
+  const isLateMarch = isMarch && currentDay >= 22; // 10 hari sebelum akhir Maret (22–31 Maret)
+
   return (
     <div className="space-y-6 font-sans pb-12">
       {/* ── HEADER BANNER ─────────────────────────────────────────────── */}
@@ -337,6 +343,66 @@ export const DisciplinaryTab: React.FC = () => {
               <Plus size={16} /> Kirim Surat Peringatan / Sanksi
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* ── PERINGATAN OTOMATIS BULAN MARET (10 HARI SEBELUM 1 APRIL) ── */}
+      {isLateMarch && (
+        <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-red-600 rounded-3xl p-5 md:p-6 text-white shadow-lg border border-amber-400/40 relative overflow-hidden animate-pulse">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative z-10">
+            <div className="flex items-start gap-3.5">
+              <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-white flex-shrink-0 mt-0.5">
+                <AlertTriangle size={22} className="stroke-[2.5]" />
+              </div>
+              <div>
+                <div className="inline-flex items-center gap-1.5 bg-white/20 backdrop-blur-sm text-white px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider mb-1">
+                  <Calendar size={11} /> Periode Reset 1 April Tinggal {31 - currentDay + 1} Hari Lagi
+                </div>
+                <h3 className="text-base md:text-lg font-black leading-snug">
+                  Peringatan Simpan Data &amp; Rekap Sanksi Sebelum 1 April!
+                </h3>
+                <p className="text-[12px] text-amber-50 mt-1 leading-relaxed max-w-2xl">
+                  Saat ini memasuki 10 hari terakhir bulan Maret. Mohon ekspor &amp; simpan data sanksi disiplin dan laporan penting ke Excel/PDF sebagai arsip sebelum pergantian periode tahunan pada <strong>1 April</strong>.
+                  <br />
+                  <span className="text-white font-bold underline decoration-amber-200 mt-1 block">
+                    🔒 Catatan Keamanan: Data akun &amp; profil pegawai yang sudah terdaftar TIDAK AKAN HILANG atau terhapus (tidak perlu membuat akun dari awal).
+                  </span>
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleExportExcel}
+              className="w-full md:w-auto px-5 py-2.5 bg-white hover:bg-amber-50 text-orange-700 font-extrabold text-[12.5px] rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer flex-shrink-0"
+            >
+              <Download size={15} /> Simpan Data Sanksi (Excel)
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── INFORMASI CATATAN MARET & KEAMANAN DATA PEGAWAI ── */}
+      <div className="bg-amber-50/80 border border-amber-200/90 rounded-3xl p-4 md:p-5 flex items-start gap-3.5 text-slate-800 text-[12px] shadow-xs">
+        <div className="w-9 h-9 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center flex-shrink-0 mt-0.5">
+          <Info size={18} className="stroke-[2.5]" />
+        </div>
+        <div className="space-y-1.5 flex-1">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <h4 className="font-extrabold text-amber-950 text-[12.5px] uppercase tracking-wide">
+              Catatan Pengingat Periode Reset (1 April) &amp; Keamanan Akun Pegawai
+            </h4>
+            {isMarch && (
+              <span className="px-2.5 py-0.5 bg-amber-200 text-amber-900 font-extrabold rounded-full text-[10px] tracking-wider uppercase">
+                Bulan Maret Berjalan
+              </span>
+            )}
+          </div>
+          <p className="text-slate-700 leading-relaxed text-[12px]">
+            Setiap tanggal <strong>1 April</strong>, sistem melakukan pembaruan periode tahunan (reset kuota &amp; kalkulasi laporan).
+            <span className="font-bold text-amber-950"> Data akun, login, NIK KTP, dan profil seluruh pegawai yang telah terdaftar TIDAK AKAN HILANG / TERHAPUS.</span> Anda tidak perlu mendaftarkan atau membuat ulang akun pegawai dari awal.
+          </p>
+          <p className="text-amber-800 text-[11.5px] font-medium bg-white/70 border border-amber-200/60 p-2.5 rounded-xl">
+            📌 <strong>Petunjuk Simpan Data Bulan Maret:</strong> Pada bulan Maret (khususnya 10 hari menjelang akhir bulan Maret), Admin dan Super Admin diimbau mengunduh laporan sanksi disiplin dan rekap absensi melalui tombol <strong>Export Excel Sanksi</strong> untuk menyimpan salinan arsip tahunan secara rapi.
+          </p>
         </div>
       </div>
 

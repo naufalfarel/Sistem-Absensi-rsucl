@@ -121,6 +121,7 @@ export function SettingsTab() {
   const [overtimeGrace, setOvertimeGrace]           = useState('15');
   const [checkinTolerance, setCheckinTolerance]     = useState('10');
   const [earlyCheckinWindow, setEarlyCheckinWindow] = useState('150');
+  const [lateFeePerMinute, setLateFeePerMinute]     = useState('500');
 
   // ── State Pengontrol Status Sistem Absensi & Modal Konfirmasi ──
   const [systemActive, setSystemActive]         = useState(true);
@@ -183,6 +184,7 @@ export function SettingsTab() {
         if (res.data.overtime_grace_minutes !== undefined) setOvertimeGrace(res.data.overtime_grace_minutes);
         if (res.data.checkin_tolerance_minutes !== undefined) setCheckinTolerance(res.data.checkin_tolerance_minutes);
         if (res.data.early_checkin_window_minutes !== undefined) setEarlyCheckinWindow(res.data.early_checkin_window_minutes);
+        if (res.data.late_fee_per_minute !== undefined) setLateFeePerMinute(res.data.late_fee_per_minute);
         // Kuota Cuti
         if (res.data.leave_reset_month) setLeaveResetMonth(res.data.leave_reset_month);
         if (res.data.leave_reset_day) setLeaveResetDay(res.data.leave_reset_day);
@@ -466,6 +468,7 @@ export function SettingsTab() {
         overtime_grace_minutes: overtimeGrace,
         checkin_tolerance_minutes: checkinTolerance,
         early_checkin_window_minutes: earlyCheckinWindow,
+        late_fee_per_minute: lateFeePerMinute,
       });
       if (res.success) {
         setConfigSaved(true);
@@ -898,6 +901,23 @@ export function SettingsTab() {
             </div>
           </div>
 
+          {/* Catatan Keamanan Data Pegawai & Pengingat Ekspor Maret */}
+          <div className="p-3.5 bg-amber-50/80 border border-amber-200/90 rounded-xl flex items-start gap-3 text-slate-800 text-[11.5px]">
+            <Info size={16} className="text-amber-700 flex-shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-bold text-amber-950">
+                Penting: Keamanan Data &amp; Akun Pegawai Saat Reset Periode ({leaveResetDay} {monthNames[parseInt(leaveResetMonth)] ?? 'April'})
+              </p>
+              <p className="text-slate-700 leading-relaxed">
+                Pergantian periode tahunan hanya memperbarui hitungan kuota cuti. 
+                <span className="font-bold text-amber-950"> Data akun login, NIK KTP, dan profil seluruh pegawai TIDAK AKAN HILANG / TERHAPUS.</span> Anda tidak perlu membuat akun ulang.
+              </p>
+              <p className="text-amber-800 font-medium">
+                💡 <strong>Pengingat Admin:</strong> Pada bulan Maret (terutama 10 hari sebelum akhir bulan Maret), pastikan Anda melakukan <strong>Export Excel / Simpan Data</strong> sanksi disiplin dan rekap absensi untuk salinan arsip tahunan.
+              </p>
+            </div>
+          </div>
+
           {/* Reset Date */}
           <div>
             <h4 className="text-[12px] font-bold text-gray-800 mb-3 border-l-2 border-[#16A34A] pl-2 uppercase tracking-wider">Tanggal Reset Kuota</h4>
@@ -1272,6 +1292,30 @@ export function SettingsTab() {
                 />
                 <p className="text-[10px] text-gray-400 mt-1">Checkout setelah jam pulang shift plus toleransi ini = ditandai <span className="font-semibold text-blue-600">Lembur</span> otomatis.</p>
               </div>
+            </div>
+          </div>
+
+          {/* Section 5: Potongan Keterlambatan per Menit */}
+          <div className="pt-4 border-t border-gray-50">
+            <h4 className="text-[12px] font-bold text-gray-800 mb-1 border-l-2 border-red-500 pl-2 uppercase tracking-wider">Potongan Keterlambatan (Denda per Menit)</h4>
+            <p className="text-[11px] text-gray-400 mb-3 pl-2">Pengaturan nominal potongan Rupiah per 1 menit keterlambatan untuk Pegawai dan PJ Bagian.</p>
+            <div className="max-w-md">
+              <label className="block text-[11px] font-medium text-gray-500 mb-1.5">Nominal Potongan per Menit Keterlambatan (Rp)</label>
+              <div className="relative">
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[12px] font-bold text-gray-400">Rp</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="50"
+                  value={lateFeePerMinute}
+                  onChange={e => setLateFeePerMinute(e.target.value)}
+                  className="w-full pl-10 pr-3 py-2 border border-gray-200 rounded-xl text-[12px] font-semibold text-gray-800 focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/15 transition-all bg-gray-50/50"
+                  placeholder="500"
+                />
+              </div>
+              <p className="text-[10px] text-gray-400 mt-1">
+                Setiap 1 menit keterlambatan akan dikalikan nilai ini pada Laporan Keterlambatan (Contoh: 10 menit = Rp {((parseInt(lateFeePerMinute) || 0) * 10).toLocaleString('id-ID')}).
+              </p>
             </div>
           </div>
 

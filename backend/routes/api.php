@@ -140,6 +140,7 @@ Route::middleware('auth:sanctum')->group(function () {
         // Kalender bulanan (jadwal per-tanggal)
         Route::post('/employee-schedules/assign-date', [ScheduleController::class, 'assignEmployeeScheduleByDate']);
         Route::post('/employee-schedules/assign-bulk-date', [ScheduleController::class, 'assignBulkByDate']);
+        Route::post('/employee-schedules/assign-emergency', [ScheduleController::class, 'assignEmergencyShift']);
         // Shift (Schedules) CRUD for both Admin and PJ Bagian
         Route::post('/schedules', [ScheduleController::class, 'store']);
         Route::put('/schedules/{schedule}', [ScheduleController::class, 'update']);
@@ -223,6 +224,8 @@ Route::middleware('auth:sanctum')->group(function () {
         // ── Verifikasi Pengajuan Izin/Cuti
         // Batalkan pengajuan cuti yang sudah disetujui atau pending
         Route::put('/leave-requests/{id}/cancel', [LeaveRequestController::class, 'cancelApprovedOrPending']);
+        // Edit tanggal & detail pengajuan cuti oleh Admin
+        Route::put('/leave-requests/{id}/edit-admin', [LeaveRequestController::class, 'editLeaveAdmin']);
         // Persingkat pengajuan cuti yang sudah disetujui
         Route::put('/leave-requests/{id}/shorten', [LeaveRequestController::class, 'shortenApproved']);
         // Deteksi kemungkinan pegawai kembali lebih awal dari cuti
@@ -243,6 +246,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/reports/summary', [ReportController::class, 'summary']);
         // Mengambil rekapitulasi data absensi bulanan dalam format tabular untuk pelaporan/ekspor
         Route::get('/reports/monthly-rekap', [ReportController::class, 'monthlyRekap']);
+        // Mengambil laporan keterlambatan & potongan Rupiah per menit
+        Route::get('/reports/lateness', [ReportController::class, 'latenessRekap']);
         // Mengekspor data plat nomor kendaraan seluruh pegawai ke file Excel (.xlsx)
         Route::get('/reports/vehicles/export', [ReportController::class, 'exportVehicles']);
         // Mengekspor data media sosial seluruh pegawai ke file Excel (.xlsx)

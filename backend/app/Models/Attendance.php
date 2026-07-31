@@ -25,7 +25,7 @@ class Attendance extends Model
 
     // Kolom-kolom yang dapat diisi secara massal (mass assignment)
     protected $fillable = [
-        'employee_id', 'date', 'check_in', 'check_out',
+        'employee_id', 'schedule_id', 'is_emergency_callout', 'date', 'check_in', 'check_out',
         'status', 'latitude', 'longitude', 'accuracy',
         'is_within_geofence', 'note',
         'checkin_location_note', 'checkout_location_note',
@@ -48,8 +48,9 @@ class Attendance extends Model
 
     // Konversi tipe data otomatis oleh Eloquent
     protected $casts = [
-        'date'                => 'date',
-        'is_within_geofence'  => 'boolean',
+        'date'                  => 'date',
+        'is_emergency_callout'  => 'boolean',
+        'is_within_geofence'    => 'boolean',
         'accuracy'            => 'float',
         'is_early_checkout'   => 'boolean',
         'is_overtime'         => 'boolean',
@@ -73,6 +74,14 @@ class Attendance extends Model
     public function employee()
     {
         return $this->belongsTo(Employee::class);
+    }
+
+    /**
+     * Relasi ke model Schedule.
+     */
+    public function schedule()
+    {
+        return $this->belongsTo(Schedule::class, 'schedule_id');
     }
 
     /**

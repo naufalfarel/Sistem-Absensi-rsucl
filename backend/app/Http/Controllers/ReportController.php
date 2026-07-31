@@ -460,4 +460,126 @@ class ReportController extends Controller
     {
         return Excel::download(new SocialMediaExport, 'Data_Media_Sosial_Pegawai_RSUCL.xlsx');
     }
+
+    /**
+     * GET /api/reports/lateness
+     * 
+     * Menghasilkan laporan keterlambatan dan kalkulasi potongan Rupiah per pegawai.
+     * Tarif potongan per menit dibaca secara dinamis dari tabel settings (key: late_fee_per_minute).
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function latenessRekap(Request $request)
+    {
+        $month = (int)$request->query('month', now('Asia/Jakarta')->month);
+        $year  = (int)$request->query('year', now('Asia/Jakarta')->year);
+        $departmentFilter = $request->query('department', 'all');
+
+        $ratePerMinute = (int) \App\Models\Setting::get('late_fee_per_minute', '500');
+
+        $employeesQuery = Employee::with(['user', 'department', 'position', 'schedules'])
+            ->where('status', 'active');
+
+        if ($departmentFilter && $departmentFilter !== 'all') {
+            $employeesQuery->whereHas('department', function ($q) use ($departmentFilter) {
+                $q->where('name', $departmentFilter);
+            });
+        }
+
+        $employees = $employeesQuery->get()
+            ->sortBy(fn($emp) => ($emp->department?->name ?? 'Umum') . '_' . ($emp->user?->name ?? 'Karyawan'));
+
+        $records = Attendance::getMonthlyReportData($month, $year);
+        $recordsByEmployee = collect($records)->groupBy('employee_id');
+
+        $result = [];
+        $grandTotalLateMinutes = 0;
+        $grandTotalDeduction = 0;
+
+        foreach ($employees as $emp) {
+            $empRecords = $recordsByEmployee->get($emp->id, collect());
+            
+            // Filter hanya record yang berstatus terlambat (telat) atau checkin_punctuality === 'terlambat'
+            $lateRecords = $empRecords->filter(function ($r) {
+                return $r['status'] === 'telat' || ($r['checkin_punctuality'] ?? '') === 'terlambat';
+            });
+
+            $details = [];
+            $employeeLateMinutes = 0;
+
+            foreach ($lateRecords as $r) {
+                $checkIn = $r['check_in'];
+                $dateStr = $r['date'];
+                
+                $shiftName = $r['shift_name'] ?? 'Reguler';
+                $shiftStartStr = '08:30:00';
+                
+                if (isset($emp->schedules)) {
+                    $dayMap = [0 => 'Minggu', 1 => 'Senin', 2 => 'Selasa', 3 => 'Rabu', 4 => 'Kamis', 5 => 'Jumat', 6 => 'Sabtu'];
+                    $dateCarbon = \Carbon\Carbon::parse($dateStr);
+                    $dayName = $dayMap[$dateCarbon->dayOfWeek];
+                    $sched = $emp->schedules->first(fn($s) => $s->pivot->day_of_week === $dayName);
+                    if ($sched && $sched->start_time) {
+                        $shiftStartStr = $sched->start_time;
+                    }
+                }
+
+                $lateMins = 0;
+                if ($checkIn) {
+                    $inTimeSec = strtotime($dateStr . ' ' . $checkIn);
+                    $shiftStartSec = strtotime($dateStr . ' ' . $shiftStartStr);
+                    if ($inTimeSec > $shiftStartSec) {
+                        $lateMins = (int) floor(($inTimeSec - $shiftStartSec) / 60);
+                    }
+                }
+
+                if ($lateMins <= 0) {
+                    $lateMins = 1;
+                }
+
+                $deduction = $lateMins * $ratePerMinute;
+                $employeeLateMinutes += $lateMins;
+
+                $details[] = [
+                    'attendance_id'  => $r['id'] ?? null,
+                    'date'           => $dateStr,
+                    'shift_name'     => $shiftName,
+                    'shift_start'    => substr($shiftStartStr, 0, 5),
+                    'check_in'       => $checkIn ? substr($checkIn, 0, 5) : '--:--',
+                    'late_minutes'   => $lateMins,
+                    'deduction'      => $deduction,
+                ];
+            }
+
+            $totalEmpDeduction = $employeeLateMinutes * $ratePerMinute;
+            $grandTotalLateMinutes += $employeeLateMinutes;
+            $grandTotalDeduction += $totalEmpDeduction;
+
+            $result[] = [
+                'employee_id'        => $emp->id,
+                'nik_ktp'            => $emp->nik_ktp,
+                'name'               => $emp->user?->name ?? 'Karyawan',
+                'department'         => $emp->department?->name ?? 'Umum',
+                'position'           => $emp->position?->name ?? 'Staff',
+                'total_late_days'    => count($details),
+                'total_late_minutes' => $employeeLateMinutes,
+                'rate_per_minute'    => $ratePerMinute,
+                'total_deduction'    => $totalEmpDeduction,
+                'details'            => $details,
+            ];
+        }
+
+        return response()->json([
+            'success' => true,
+            'data'    => [
+                'month'                 => $month,
+                'year'                  => $year,
+                'rate_per_minute'       => $ratePerMinute,
+                'grand_total_late_mins' => $grandTotalLateMinutes,
+                'grand_total_deduction' => $grandTotalDeduction,
+                'records'               => $result,
+            ],
+        ]);
+    }
 }

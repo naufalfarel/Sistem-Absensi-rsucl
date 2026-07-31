@@ -1031,6 +1031,9 @@ export function AttendancePage() {
   const [todayShift, setTodayShift] = useState<
     MyShiftSchedule | null | undefined
   >(undefined);
+  const [todayShiftsList, setTodayShiftsList] = useState<any[]>([]);
+  const [todayRecordsList, setTodayRecordsList] = useState<any[]>([]);
+  const [selectedShiftId, setSelectedShiftId] = useState<number | null>(null);
 
   // Shift khusus hari Sabtu jika ada
   const [saturdayShift, setSaturdayShift] = useState<MyShiftSchedule | null>(
@@ -1176,6 +1179,12 @@ export function AttendancePage() {
       try {
         const res = await attendanceApi.today();
         if (res.success) {
+          if (res.today_shifts && res.today_shifts.length > 0) {
+            setTodayShiftsList(res.today_shifts);
+          }
+          if (res.records) {
+            setTodayRecordsList(res.records);
+          }
           if (res.data) {
             if (res.data.check_in) {
               setCheckInTime(res.data.check_in.substring(0, 5));
@@ -1673,6 +1682,58 @@ export function AttendancePage() {
                 )}
               </p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Multi-Shift Selector Banner */}
+      {todayShiftsList.length > 1 && (
+        <div className="mb-4 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl space-y-2 font-sans">
+          <div className="flex items-center justify-between">
+            <span className="text-[12px] font-bold text-blue-900 flex items-center gap-1.5">
+              <span>⚡</span> Multi-Shift Hari Ini ({todayShiftsList.length} Shift Terdaftar)
+            </span>
+            <span className="text-[11px] text-blue-600 font-medium">Pilih shift untuk melakukan absensi</span>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {todayShiftsList.map((s, idx) => {
+              const isSel = (selectedShiftId ?? todayShift?.id) === s.id;
+              const rec = todayRecordsList.find(r => r.schedule_id === s.id);
+              const statusLbl = rec?.check_out ? 'Selesai' : rec?.check_in ? 'Sudah Absen' : 'Belum Absen';
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedShiftId(s.id);
+                    setTodayShift(s);
+                    if (rec) {
+                      setCheckInTime(rec.check_in ? rec.check_in.substring(0, 5) : '');
+                      setCheckedIn(!!rec.check_in);
+                      setCheckOutTime(rec.check_out ? rec.check_out.substring(0, 5) : '');
+                      setCheckedOut(!!rec.check_out);
+                    } else {
+                      setCheckInTime('');
+                      setCheckedIn(false);
+                      setCheckOutTime('');
+                      setCheckedOut(false);
+                    }
+                  }}
+                  className={`px-3.5 py-2 rounded-xl text-[12px] font-bold flex items-center gap-2 transition-all cursor-pointer border ${
+                    isSel
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <span>Shift {idx + 1}: {s.name} ({s.start_time.substring(0, 5)}–{s.end_time.substring(0, 5)})</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                    isSel ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                  }`}>
+                    {statusLbl}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}

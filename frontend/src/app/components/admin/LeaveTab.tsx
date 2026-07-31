@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CheckCircle2, XCircle, Clock, FileText, Trash2, Paperclip, AlertCircle, Calendar, ChevronDown, Search, X, Printer } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, FileText, Trash2, Paperclip, AlertCircle, Calendar, ChevronDown, Search, X, Printer, Edit3 } from 'lucide-react';
 import { leaveApi, LeaveRequest, departmentApi, DepartmentModel, employeeApi, Employee } from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
 import { MonthYearDeptFilter } from '../ui/MonthYearDeptFilter';
@@ -82,14 +82,15 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
   // Menyimpan data dialog konfirmasi permohonan
   const [confirmModal, setConfirmModal] = useState<{ id: number; action: 'approve' | 'reject'; name: string } | null>(null);
   
-  // Modals untuk pembatalan dan perpendekan masa cuti oleh admin
+  // Modals untuk pembatalan dan edit/penyesuaian masa cuti oleh admin
   const [cancelModal, setCancelModal] = useState<{ id: number; name: string } | null>(null);
-  const [shortenModal, setShortenModal] = useState<{ id: number; name: string; startDate: string; endDate: string } | null>(null);
+  const [editModal, setEditModal] = useState<{ id: number; name: string; startDate: string; endDate: string; adminNote: string } | null>(null);
 
-  // Form states untuk input di modal cancel/shorten
+  // Form states untuk input di modal cancel/edit
   const [cancellationReason, setCancellationReason] = useState('');
-  const [actualEndDate, setActualEndDate] = useState('');
-  const [shortenedReason, setShortenedReason] = useState('');
+  const [editStartDate, setEditStartDate] = useState('');
+  const [editEndDate, setEditEndDate] = useState('');
+  const [editAdminNote, setEditAdminNote] = useState('');
 
   // Deteksi kemungkinan kembali lebih awal
   const [possibleReturns, setPossibleReturns] = useState<Array<{ leave_request: LeaveRequest; detected_dates: string[] }>>([]);
@@ -303,28 +304,29 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
     }
   };
 
-  const handleShortenAdmin = async (id: number, actualEnd: string, reason: string) => {
-    if (!actualEnd) {
-      alert('Tanggal efektif selesai wajib diisi.');
+  const handleEditAdmin = async (id: number, startDate: string, endDate: string, note: string) => {
+    if (!startDate || !endDate) {
+      alert('Tanggal mulai dan tanggal selesai wajib diisi.');
       return;
     }
-    if (!reason.trim()) {
-      alert('Alasan mempersingkat wajib diisi.');
+    if (endDate < startDate) {
+      alert('Tanggal selesai harus sama atau setelah tanggal mulai.');
       return;
     }
     try {
-      const res = await leaveApi.shortenAdmin(id, actualEnd, reason);
+      const res = await leaveApi.editAdmin(id, startDate, endDate, note);
       if (res.success) {
         setRequests(prev => prev.map(r => r.id === id ? res.data : r));
         loadPossibleReturns();
         if (onUpdateCount) onUpdateCount();
       }
     } catch (err: any) {
-      alert(err?.message ?? 'Gagal mempersingkat pengajuan.');
+      alert(err?.message ?? 'Gagal memperbarui pengajuan cuti.');
     } finally {
-      setShortenModal(null);
-      setActualEndDate('');
-      setShortenedReason('');
+      setEditModal(null);
+      setEditStartDate('');
+      setEditEndDate('');
+      setEditAdminNote('');
     }
   };
 
@@ -466,15 +468,21 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
                     </p>
                   </div>
                   <button 
-                    onClick={() => setShortenModal({ 
-                      id: leave_request.id, 
-                      name: leave_request.employee.name, 
-                      startDate: leave_request.start_date, 
-                      endDate: leave_request.end_date 
-                    })}
-                    className="px-3.5 py-2 bg-amber-605 hover:bg-amber-700 text-white rounded-xl text-[11px] font-semibold transition-all shadow-sm active:scale-95 border border-amber-600"
+                    onClick={() => {
+                      setEditModal({ 
+                        id: leave_request.id, 
+                        name: leave_request.employee.name, 
+                        startDate: leave_request.start_date, 
+                        endDate: leave_request.effective_end_date || leave_request.end_date,
+                        adminNote: leave_request.admin_note || ''
+                      });
+                      setEditStartDate(leave_request.start_date);
+                      setEditEndDate(leave_request.effective_end_date || leave_request.end_date);
+                      setEditAdminNote(leave_request.admin_note || '');
+                    }}
+                    className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-[11px] font-semibold transition-all shadow-sm active:scale-95 border border-amber-600 cursor-pointer"
                   >
-                    Persingkat Cuti Resmi
+                    Edit / Sesuaikan Cuti
                   </button>
                 </div>
               );
@@ -719,55 +727,98 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
                     </div>
                   </div>
                   {/* Actions */}
+                  {/* Actions */}
                   {req.status === 'pending' && (
-                    <div className="flex flex-col gap-2 flex-shrink-0">
+                    <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
                       {req.pj_status === 'pending' && (
-                        <div className="rounded-xl px-3 py-2 border border-amber-200 bg-amber-50 text-[10.5px] text-amber-800 font-semibold max-w-[200px] leading-normal">
+                        <div className="rounded-xl px-3 py-2 border border-amber-200 bg-amber-50 text-[10.5px] text-amber-800 font-semibold max-w-[200px] leading-normal w-full mb-1">
                           ⚠️ Belum di-ACC PJ Bagian.
                         </div>
                       )}
                       <button onClick={() => setConfirmModal({ id: req.id, action: 'approve', name: req.employee.name })}
-                        className="flex items-center gap-1.5 px-3.5 py-2 bg-[#16A34A] hover:bg-[#0d9240] text-white rounded-xl text-[12px] font-semibold transition-all shadow-sm shadow-green-200">
+                        className="flex items-center gap-1.5 px-3.5 py-2 bg-[#16A34A] hover:bg-[#0d9240] text-white rounded-xl text-[12px] font-semibold transition-all shadow-sm shadow-green-200 cursor-pointer">
                         <CheckCircle2 size={13} /> Setujui
                       </button>
+                      <button 
+                        onClick={() => {
+                          setEditModal({
+                            id: req.id,
+                            name: req.employee.name,
+                            startDate: req.start_date,
+                            endDate: req.effective_end_date || req.end_date,
+                            adminNote: req.admin_note || ''
+                          });
+                          setEditStartDate(req.start_date);
+                          setEditEndDate(req.effective_end_date || req.end_date);
+                          setEditAdminNote(req.admin_note || '');
+                        }}
+                        className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-xl text-[12px] font-semibold transition-all shadow-sm cursor-pointer"
+                      >
+                        <Edit3 size={13} /> Edit
+                      </button>
                       <button onClick={() => setConfirmModal({ id: req.id, action: 'reject', name: req.employee.name })}
-                        className="flex items-center gap-1.5 px-3.5 py-2 bg-red-50 border border-red-100 text-red-650 hover:bg-red-100 rounded-xl text-[12px] font-semibold transition-all">
+                        className="flex items-center gap-1.5 px-3.5 py-2 bg-red-50 border border-red-100 text-red-650 hover:bg-red-100 rounded-xl text-[12px] font-semibold transition-all cursor-pointer">
                         <XCircle size={13} /> Tolak
                       </button>
                     </div>
                   )}
                   {req.status === 'approved' && (
-                    <div className="flex flex-col md:flex-row items-center gap-2 flex-shrink-0">
-                      {showShorten && (
-                        <button 
-                          onClick={() => setShortenModal({ id: req.id, name: req.employee.name, startDate: req.start_date, endDate: req.end_date })}
-                          className="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-xl text-[11px] font-semibold transition-all shadow-sm"
-                        >
-                          Persingkat
-                        </button>
-                      )}
-                      {showCancel && (
-                        <button 
-                          onClick={() => setCancelModal({ id: req.id, name: req.employee.name })}
-                          className="px-3.5 py-2 bg-red-50 hover:bg-red-100 text-red-650 border border-red-200 rounded-xl text-[11px] font-semibold transition-all shadow-sm"
-                        >
-                          Batalkan
-                        </button>
-                      )}
+                    <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
+                      <button 
+                        onClick={() => {
+                          setEditModal({
+                            id: req.id,
+                            name: req.employee.name,
+                            startDate: req.start_date,
+                            endDate: req.effective_end_date || req.end_date,
+                            adminNote: req.admin_note || ''
+                          });
+                          setEditStartDate(req.start_date);
+                          setEditEndDate(req.effective_end_date || req.end_date);
+                          setEditAdminNote(req.admin_note || '');
+                        }}
+                        className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-xl text-[11px] font-semibold transition-all shadow-sm cursor-pointer"
+                      >
+                        <Edit3 size={13} /> Edit
+                      </button>
+                      <button 
+                        onClick={() => setCancelModal({ id: req.id, name: req.employee.name })}
+                        className="px-3.5 py-2 bg-red-50 hover:bg-red-100 text-red-650 border border-red-200 rounded-xl text-[11px] font-semibold transition-all shadow-sm cursor-pointer font-bold"
+                      >
+                        Batalkan
+                      </button>
                       <button onClick={() => handleDeleteIndividual(req.id)}
-                        className="w-8 h-8 rounded-xl bg-gray-50 hover:bg-red-50 hover:text-red-500 text-gray-400 flex items-center justify-center border border-gray-100 transition-colors"
+                        className="w-8 h-8 rounded-xl bg-gray-50 hover:bg-red-50 hover:text-red-500 text-gray-400 flex items-center justify-center border border-gray-100 transition-colors cursor-pointer"
                         title="Hapus Pengajuan">
                         <Trash2 size={14} />
                       </button>
                     </div>
                   )}
                   {(req.status === 'rejected' || req.status === 'cancelled') && (
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <div className="w-8 h-8 rounded-xl bg-red-50 flex items-center justify-center">
-                        <XCircle size={16} className="text-red-500" />
-                      </div>
+                    <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
+                      <button onClick={() => setConfirmModal({ id: req.id, action: 'approve', name: req.employee.name })}
+                        className="flex items-center gap-1.5 px-3.5 py-2 bg-[#16A34A] hover:bg-[#0d9240] text-white rounded-xl text-[11px] font-semibold transition-all shadow-sm shadow-green-200 cursor-pointer">
+                        <CheckCircle2 size={13} /> Setujui Kembali
+                      </button>
+                      <button 
+                        onClick={() => {
+                          setEditModal({
+                            id: req.id,
+                            name: req.employee.name,
+                            startDate: req.start_date,
+                            endDate: req.effective_end_date || req.end_date,
+                            adminNote: req.admin_note || ''
+                          });
+                          setEditStartDate(req.start_date);
+                          setEditEndDate(req.effective_end_date || req.end_date);
+                          setEditAdminNote(req.admin_note || '');
+                        }}
+                        className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-xl text-[11px] font-semibold transition-all shadow-sm cursor-pointer"
+                      >
+                        <Edit3 size={13} /> Edit
+                      </button>
                       <button onClick={() => handleDeleteIndividual(req.id)}
-                        className="w-8 h-8 rounded-xl bg-gray-50 hover:bg-red-50 hover:text-red-500 text-gray-400 flex items-center justify-center border border-gray-100 transition-colors"
+                        className="w-8 h-8 rounded-xl bg-gray-50 hover:bg-red-50 hover:text-red-500 text-gray-400 flex items-center justify-center border border-gray-100 transition-colors cursor-pointer"
                         title="Hapus Pengajuan">
                         <Trash2 size={14} />
                       </button>
@@ -854,52 +905,63 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
         </div>
       )}
 
-      {/* Shorten Modal */}
-      {shortenModal && (
+      {/* Edit / Penyesuaian Modal */}
+      {editModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-          <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => { setShortenModal(null); setActualEndDate(''); setShortenedReason(''); }} />
+          <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => { setEditModal(null); setEditStartDate(''); setEditEndDate(''); setEditAdminNote(''); }} />
           <div className="relative bg-white rounded-2xl p-6 shadow-2xl w-full max-w-sm">
-            <div className="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center mx-auto mb-4">
-              <Clock size={24} className="text-amber-600" />
+            <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center mx-auto mb-4">
+              <Edit3 size={22} className="text-amber-600" />
             </div>
-            <h3 className="text-[15px] font-semibold text-gray-900 text-center mb-1">
-              Persingkat Masa Cuti?
+            <h3 className="text-[15px] font-bold text-gray-900 text-center mb-1">
+              Edit Pengajuan Cuti / Sakit
             </h3>
-            <p className="text-[12px] text-gray-500 text-center mb-4">
-              Persingkat pengajuan dari <strong>{shortenModal.name}</strong>. Tanggal mulai asli: {formatDate(shortenModal.startDate)}.
+            <p className="text-[11.5px] text-gray-500 text-center mb-4 leading-relaxed">
+              Koreksi kesalahan tanggal atau sesuaikan durasi (persingkat / perpanjang) untuk <strong>{editModal.name}</strong>.
             </p>
-            <div className="space-y-4 mb-4">
+            <div className="space-y-3.5 mb-4">
               <div>
-                <label className="block text-[12px] font-medium text-gray-600 mb-1.5">Tanggal Efektif Selesai Baru</label>
+                <label className="block text-[12px] font-semibold text-gray-700 mb-1">Tanggal Mulai Baru</label>
                 <input 
                   type="date"
-                  value={actualEndDate}
-                  onChange={e => setActualEndDate(e.target.value)}
-                  min={shortenModal.startDate}
-                  max={shortenModal.endDate}
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-[12px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all cursor-pointer font-semibold text-gray-800"
+                  value={editStartDate}
+                  onChange={e => setEditStartDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[12px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all cursor-pointer font-semibold text-gray-800"
                 />
-                <p className="text-[10px] text-gray-400 mt-1">Harus di antara tanggal mulai dan sebelum selesai semula ({formatDate(shortenModal.endDate)}).</p>
               </div>
               <div>
-                <label className="block text-[12px] font-medium text-gray-600 mb-1.5">Alasan Mempersingkat (Wajib)</label>
+                <label className="block text-[12px] font-semibold text-gray-700 mb-1">Tanggal Selesai Baru</label>
+                <input 
+                  type="date"
+                  value={editEndDate}
+                  min={editStartDate}
+                  onChange={e => setEditEndDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[12px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all cursor-pointer font-semibold text-gray-800"
+                />
+              </div>
+              <div>
+                <label className="block text-[12px] font-semibold text-gray-700 mb-1">Catatan Admin / Alasan Perubahan</label>
                 <textarea 
-                  value={shortenedReason} 
-                  onChange={e => setShortenedReason(e.target.value)} 
+                  value={editAdminNote} 
+                  onChange={e => setEditAdminNote(e.target.value)} 
                   rows={2}
-                  placeholder="Masukkan alasan memperpendek durasi..."
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-[12px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all resize-none" 
+                  placeholder="Misal: Perbaikan kesalahan tanggal, perpanjangan masa cuti, persingkat cuti, dll..."
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[12px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all resize-none font-medium text-gray-800" 
                 />
               </div>
             </div>
             <div className="flex gap-2">
-              <button onClick={() => { setShortenModal(null); setActualEndDate(''); setShortenedReason(''); }}
-                className="flex-1 py-2.5 border border-gray-200 rounded-xl text-[13px] font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+              <button 
+                onClick={() => { setEditModal(null); setEditStartDate(''); setEditEndDate(''); setEditAdminNote(''); }}
+                className="flex-1 py-2.5 border border-gray-200 rounded-xl text-[12px] font-semibold text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer"
+              >
                 Batal
               </button>
-              <button onClick={() => handleShortenAdmin(shortenModal.id, actualEndDate, shortenedReason)}
-                className="flex-1 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-amber-600 hover:bg-amber-700 transition-all">
-                Simpan Penyesuaian
+              <button 
+                onClick={() => handleEditAdmin(editModal.id, editStartDate, editEndDate, editAdminNote)}
+                className="flex-1 py-2.5 rounded-xl text-[12px] font-bold text-white bg-[#16A34A] hover:bg-[#0d9240] transition-all shadow-sm cursor-pointer"
+              >
+                Simpan Edit
               </button>
             </div>
           </div>

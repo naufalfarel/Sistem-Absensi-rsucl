@@ -96,14 +96,20 @@ export function OvertimeRequestPage() {
     }
   }, [user, departments]);
 
+  const [photoError, setPhotoError] = useState('');
+
   // Handle Photo Select
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       if (file.size > 2097152) {
-        alert('Ukuran file maksimal 2MB.');
+        const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+        setPhotoError(`⚠️ Ukuran foto terlalu besar (${sizeMB}MB). Maksimal 2MB. Silakan pilih foto di bawah 2MB.`);
+        setPhoto(null);
+        setPhotoPreview(null);
         return;
       }
+      setPhotoError('');
       setPhoto(file);
       setPhotoPreview(URL.createObjectURL(file));
     }
@@ -503,9 +509,13 @@ export function OvertimeRequestPage() {
               {!photoPreview ? (
                 <div 
                   onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-slate-200 hover:border-[#16A34A]/40 hover:bg-emerald-50/10 rounded-2xl p-6 text-center cursor-pointer bg-slate-50/40 transition-all flex flex-col items-center justify-center gap-2.5 group"
+                  className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2.5 group ${
+                    photoError ? 'border-red-300 bg-red-50/40 hover:border-red-400' : 'border-slate-200 hover:border-[#16A34A]/40 hover:bg-emerald-50/10 bg-slate-50/40'
+                  }`}
                 >
-                  <div className="w-11 h-11 rounded-xl bg-white flex items-center justify-center text-slate-400 group-hover:text-[#16A34A] group-hover:border-[#16A34A]/25 shadow-xs transition-all border border-slate-200 flex-shrink-0">
+                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center shadow-xs transition-all border flex-shrink-0 ${
+                    photoError ? 'bg-red-50 text-red-500 border-red-200' : 'bg-white text-slate-400 group-hover:text-[#16A34A] group-hover:border-[#16A34A]/25 border-slate-200'
+                  }`}>
                     <Upload size={18} />
                   </div>
                   <div>
@@ -519,12 +529,19 @@ export function OvertimeRequestPage() {
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                     <button
                       type="button"
-                      onClick={() => { setPhoto(null); setPhotoPreview(null); }}
+                      onClick={() => { setPhoto(null); setPhotoPreview(null); setPhotoError(''); }}
                       className="w-8 h-8 rounded-full bg-red-600 text-white flex items-center justify-center hover:bg-red-700 shadow-md transition-transform hover:scale-105 cursor-pointer"
                     >
                       <X size={15} />
                     </button>
                   </div>
+                </div>
+              )}
+
+              {photoError && (
+                <div className="mt-2 flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 text-[11.5px] px-3.5 py-2.5 rounded-xl font-semibold">
+                  <AlertCircle size={15} className="flex-shrink-0 text-red-600 mt-0.5" />
+                  <span>{photoError}</span>
                 </div>
               )}
             </div>

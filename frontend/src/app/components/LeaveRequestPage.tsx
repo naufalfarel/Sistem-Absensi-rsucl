@@ -248,13 +248,29 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
     loadCategories();
   }, []);
 
+  const [attachmentError, setAttachmentError] = useState('');
+
   // ── Attachment Handler ─────────────────────────────────────────────────
   const handleAttachmentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { setFormError('Ukuran file maksimal adalah 2MB.'); return; }
+    if (file.size > 2 * 1024 * 1024) {
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+      setAttachmentError(`⚠️ Ukuran file terlalu besar (${sizeMB}MB). Maksimal ukuran file 2MB. Silakan pilih/kompres file lain di bawah 2MB.`);
+      setAttachmentName('');
+      setAttachmentFile(null);
+      setAttachmentBase64(null);
+      return;
+    }
     const allowed = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
-    if (!allowed.includes(file.type)) { setFormError('Format file harus PDF, PNG, atau JPG/JPEG.'); return; }
+    if (!allowed.includes(file.type)) {
+      setAttachmentError('⚠️ Format file harus berupa PDF, PNG, atau JPG/JPEG.');
+      setAttachmentName('');
+      setAttachmentFile(null);
+      setAttachmentBase64(null);
+      return;
+    }
+    setAttachmentError('');
     setFormError('');
     setAttachmentName(file.name);
     setAttachmentFile(file);
@@ -263,7 +279,12 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
     reader.readAsDataURL(file);
   };
 
-  const clearAttachment = () => { setAttachmentName(''); setAttachmentBase64(null); setAttachmentFile(null); };
+  const clearAttachment = () => {
+    setAttachmentName('');
+    setAttachmentBase64(null);
+    setAttachmentFile(null);
+    setAttachmentError('');
+  };
 
   // ── Calc Days ─────────────────────────────────────────────────────────
   const calcDays = () => {
@@ -885,7 +906,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
                       type="text"
                       value={customCategoryOther}
                       onChange={(e) => { setCustomCategoryOther(e.target.value); setFormError(''); }}
-                      placeholder={isSakit ? "Contoh: Tipes / Demam Berdarah / Pasca Operasi / Covid-19 / dll." : "Contoh: Khitanan Anak, Menikahkan Anak, dll."}
+                      placeholder={isSakit ? "Contoh: Tipes / TBC / Cacar / Liver / dll." : "Contoh: Khitanan Anak, Menikahkan Anak, dll."}
                       className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/15 transition-all font-semibold"
                     />
                   </div>
@@ -1090,8 +1111,10 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
                   <span className="text-gray-400 font-normal">PDF, PNG, JPG max 2MB</span>
                 </label>
                 {!attachmentName ? (
-                  <label className="flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-2xl p-5 cursor-pointer hover:border-[#16A34A] hover:bg-green-50/30 transition-all text-center">
-                    <Paperclip size={20} className="text-gray-300 mb-2" />
+                  <label className={`flex flex-col items-center justify-center border-2 border-dashed rounded-2xl p-5 cursor-pointer transition-all text-center ${
+                    attachmentError ? 'border-red-300 bg-red-50/40 hover:border-red-400' : 'border-gray-200 hover:border-[#16A34A] hover:bg-green-50/30'
+                  }`}>
+                    <Paperclip size={20} className={attachmentError ? 'text-red-400 mb-2' : 'text-gray-300 mb-2'} />
                     <span className="text-[12px] text-gray-500 font-medium">Klik untuk unggah dokumen (Wajib)</span>
                     <span className="text-[11px] text-gray-400 mt-0.5">Surat sakit, surat tugas, atau dokumen pendukung lainnya</span>
                     <input type="file" onChange={handleAttachmentChange} accept=".pdf,image/png,image/jpeg,image/jpg" className="hidden" />
@@ -1105,6 +1128,12 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
                     <button type="button" onClick={clearAttachment} className="w-6 h-6 rounded-lg hover:bg-red-100 flex items-center justify-center text-gray-400 hover:text-red-500 transition-colors flex-shrink-0">
                       <X size={13} />
                     </button>
+                  </div>
+                )}
+                {attachmentError && (
+                  <div className="mt-2 flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 text-[11.5px] px-3.5 py-2.5 rounded-xl font-semibold">
+                    <AlertCircle size={15} className="flex-shrink-0 text-red-600 mt-0.5" />
+                    <span>{attachmentError}</span>
                   </div>
                 )}
               </div>

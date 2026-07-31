@@ -67,6 +67,7 @@ export const ResignationRequestPage: React.FC<ResignationRequestPageProps> = ({ 
   const [effectiveDate, setEffectiveDate] = useState<string>('');
   const [reason, setReason] = useState<string>('');
   const [attachment, setAttachment] = useState<File | null>(null);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
 
   // Status Feedback
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -648,30 +649,45 @@ export const ResignationRequestPage: React.FC<ResignationRequestPageProps> = ({ 
                 <label className="block text-[12px] font-bold text-slate-800 mb-1">
                   Unggah Berkas Surat Resign Fisik (PDF saja) <span className="text-rose-600">*</span>
                 </label>
-                <div className="border border-dashed border-slate-300 rounded-2xl p-3.5 bg-slate-50 hover:bg-slate-100/80 transition-colors text-center cursor-pointer relative">
+                <div className={`border border-dashed rounded-2xl p-3.5 transition-colors text-center cursor-pointer relative ${
+                  attachmentError ? 'border-red-300 bg-red-50/40' : 'border-slate-300 bg-slate-50 hover:bg-slate-100/80'
+                }`}>
                   <input
                     type="file"
                     accept=".pdf"
                     onChange={(e) => {
                       const file = e.target.files?.[0] || null;
-                      if (file && file.type !== 'application/pdf') {
-                        alert('Format berkas wajib berupa PDF saja!');
-                        e.target.value = '';
+                      if (!file) return;
+                      if (file.type !== 'application/pdf') {
+                        setAttachmentError('⚠️ Format berkas wajib berupa file PDF!');
                         setAttachment(null);
-                      } else {
-                        setAttachment(file);
+                        return;
                       }
+                      if (file.size > 2 * 1024 * 1024) {
+                        const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+                        setAttachmentError(`⚠️ Ukuran berkas terlalu besar (${sizeMB}MB). Maksimal 2MB. Silakan kompres PDF di bawah 2MB.`);
+                        setAttachment(null);
+                        return;
+                      }
+                      setAttachmentError(null);
+                      setAttachment(file);
                     }}
                     className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                   />
                   <div className="flex flex-col items-center gap-1 text-slate-500">
-                    <Upload size={18} className="text-[#16A34A]" />
+                    <Upload size={18} className={attachmentError ? 'text-red-500' : 'text-[#16A34A]'} />
                     <span className="text-[12px] font-bold text-slate-700">
-                      {attachment ? attachment.name : 'Pilih berkas surat resign (Format PDF, Maks. 5MB)'}
+                      {attachment ? attachment.name : 'Pilih berkas surat resign (Format PDF, Maks. 2MB)'}
                     </span>
-                    <span className="text-[10px] text-slate-400">PDF saja</span>
+                    <span className="text-[10px] text-slate-400">PDF saja — Maksimal 2MB</span>
                   </div>
                 </div>
+                {attachmentError && (
+                  <div className="mt-2 flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 text-[11.5px] px-3.5 py-2.5 rounded-xl font-semibold">
+                    <AlertTriangle size={15} className="flex-shrink-0 text-red-600 mt-0.5" />
+                    <span>{attachmentError}</span>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center gap-3 pt-3 border-t border-slate-100">

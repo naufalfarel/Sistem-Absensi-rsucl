@@ -728,7 +728,7 @@ class LeaveRequestController extends Controller
             }
         }
 
-        if ($lr->status !== 'pending') {
+        if (!in_array($lr->status, ['pending', 'cancelled', 'rejected']) || (!$user->isAdmin() && $lr->status !== 'pending')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Pengajuan ini sudah diproses secara final sebelumnya.',
@@ -843,14 +843,15 @@ class LeaveRequestController extends Controller
 
             // Update status pengajuan beserta data reviewer (Admin)
             $lr->update([
-                'status'      => $newStatus,
-                'reviewed_by' => $user->id,
-                'reviewed_at' => now(),
-                'admin_note'  => $data['admin_note'] ?? null,
-                'pj_status'   => $lr->pj_status,
-                'pj_reviewed_by' => $lr->pj_reviewed_by,
-                'pj_reviewed_at' => $lr->pj_reviewed_at,
-                'pj_note'     => $lr->pj_note,
+                'status'          => $newStatus,
+                'actual_end_date' => $newStatus === 'approved' ? null : $lr->actual_end_date,
+                'reviewed_by'     => $user->id,
+                'reviewed_at'     => now(),
+                'admin_note'      => $data['admin_note'] ?? null,
+                'pj_status'       => $lr->pj_status,
+                'pj_reviewed_by'  => $lr->pj_reviewed_by,
+                'pj_reviewed_at'  => $lr->pj_reviewed_at,
+                'pj_note'         => $lr->pj_note,
             ]);
 
             // Jika disetujui, buat/perbarui record absensi harian karyawan tersebut
@@ -1029,7 +1030,7 @@ class LeaveRequestController extends Controller
         }
 
         $request->validate([
-            'cancellation_reason' => 'required|string|max:255',
+            'cancellation_reason' => 'nullable|string|max:255',
         ]);
 
         $lr = LeaveRequest::findOrFail($id);
@@ -1042,12 +1043,13 @@ class LeaveRequestController extends Controller
         }
 
         $wasApproved = $lr->status === 'approved';
+        $reason = $request->input('cancellation_reason') ?: 'Dibatalkan oleh Admin';
 
         $lr->update([
-            'status' => 'cancelled',
-            'cancelled_by' => $request->user()->id,
-            'cancelled_at' => now(),
-            'cancellation_reason' => $request->input('cancellation_reason'),
+            'status'              => 'cancelled',
+            'cancelled_by'        => $request->user()->id,
+            'cancelled_at'        => now(),
+            'cancellation_reason' => $reason,
         ]);
 
         // If it was approved, delete the generated attendance records
@@ -1062,7 +1064,7 @@ class LeaveRequestController extends Controller
         Notification::create([
             'user_id' => $lr->employee->user_id,
             'title'   => 'Pengajuan Cuti Dibatalkan Admin ❌',
-            'body'    => 'Pengajuan ' . $lr->type . ' Anda untuk tanggal ' . $lr->start_date->toDateString() . ' s/d ' . $lr->end_date->toDateString() . ' telah dibatalkan oleh admin. Alasan: ' . $request->input('cancellation_reason'),
+            'body'    => 'Pengajuan ' . $lr->type . ' Anda untuk tanggal ' . $lr->start_date->toDateString() . ' s/d ' . $lr->end_date->toDateString() . ' telah dibatalkan oleh admin. Alasan: ' . $reason,
             'type'    => 'leave',
             'data'    => ['leave_request_id' => $lr->id],
         ]);
@@ -1147,6 +1149,74 @@ class LeaveRequestController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Pengajuan cuti berhasil dipersingkat.',
+            'data'    => $this->format($lr),
+        ]);
+    }
+
+    /**
+     * PUT /api/leave-requests/{id}/edit-admin
+     *
+     * Edit dates and details of any leave request (Admin/Super Admin only).
+     * Supports lengthening, shortening, or correcting input mistakes in start/end dates.
+     */
+    public function editLeaveAdmin(Request $request, $id)
+    {
+        if (!$request->user()->isAdmin()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
+        }
+
+        $request->validate([
+            'start_date' => 'required|date',
+            'end_date'   => 'required|date|after_or_equal:start_date',
+            'admin_note' => 'nullable|string|max:255',
+        ]);
+
+        $lr = LeaveRequest::findOrFail($id);
+
+        $newStart = \Carbon\Carbon::parse($request->input('start_date'));
+        $newEnd   = \Carbon\Carbon::parse($request->input('end_date'));
+        $adminNote = $request->input('admin_note');
+
+        $updateData = [
+            'start_date'        => $newStart->toDateString(),
+            'end_date'          => $newEnd->toDateString(),
+            'actual_end_date'   => null,
+            'shortened_by'      => $request->user()->id,
+            'shortened_at'      => now(),
+        ];
+
+        if ($adminNote !== null && trim($adminNote) !== '') {
+            $updateData['admin_note'] = trim($adminNote);
+            $updateData['shortened_reason'] = trim($adminNote);
+        }
+
+        $lr->update($updateData);
+
+        // Jika permohonan disetujui, bersihkan data kehadiran pseudo di luar rentang baru
+        if ($lr->status === 'approved') {
+            \App\Models\Attendance::where('employee_id', $lr->employee_id)
+                ->whereIn('status', ['cuti', 'izin', 'sakit'])
+                ->where(function($q) use ($newStart, $newEnd) {
+                    $q->where('date', '<', $newStart->toDateString())
+                      ->orWhere('date', '>', $newEnd->toDateString());
+                })
+                ->delete();
+        }
+
+        // Kirim notifikasi ke pegawai
+        Notification::create([
+            'user_id' => $lr->employee->user_id,
+            'title'   => 'Pengajuan Cuti/Sakit Diperbarui ✏️',
+            'body'    => 'Pengajuan ' . $lr->type . ' Anda telah disesuaikan oleh Admin menjadi tanggal ' . $newStart->toDateString() . ' s/d ' . $newEnd->toDateString() . ($adminNote ? '. Catatan Admin: ' . $adminNote : ''),
+            'type'    => 'leave',
+            'data'    => ['leave_request_id' => $lr->id],
+        ]);
+
+        $lr->load(['employee.user', 'employee.department', 'reviewer']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Pengajuan cuti berhasil diperbarui.',
             'data'    => $this->format($lr),
         ]);
     }

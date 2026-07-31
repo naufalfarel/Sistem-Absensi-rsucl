@@ -47,6 +47,8 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
   // State jadwal shift kerja yang berlaku hari ini
   const [todayShift, setTodayShift] = useState<MyShiftSchedule | null | undefined>(undefined); // undefined = sedang memuat
   const [shiftDay, setShiftDay] = useState<string>('');
+  const [todayShiftsList, setTodayShiftsList] = useState<any[]>([]);
+  const [todayRecordsList, setTodayRecordsList] = useState<any[]>([]);
  
   // ── State GPS / Geofencing RSUCL ──────────────────────────────────────────
   
@@ -84,6 +86,12 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
 
       if (attendRes.status === 'fulfilled' && attendRes.value.success) {
         setTodayRecord(attendRes.value.data);
+        if (attendRes.value.today_shifts && attendRes.value.today_shifts.length > 0) {
+          setTodayShiftsList(attendRes.value.today_shifts);
+        }
+        if (attendRes.value.records) {
+          setTodayRecordsList(attendRes.value.records);
+        }
         if (attendRes.value.holiday) {
           setTodayHoliday(attendRes.value.holiday);
         }
@@ -397,8 +405,83 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
             </div>
             <span className="text-[12px] text-gray-400">{dateStr}</span>
           </div>
-          <div className="p-5 space-y-3">
-            {todayShift === undefined ? (
+          <div className="p-5 space-y-4">
+            {todayShiftsList.length > 0 ? (
+              todayShiftsList.map((sItem: any, sIdx: number) => {
+                const rItem = todayRecordsList.find((r: any) => r.schedule_id === sItem.id) || (sIdx === 0 ? todayRecord : null);
+                const sName = sItem.name || 'Shift Regular';
+                const sStart = sItem.start_time ? sItem.start_time.substring(0, 5) : '--:--';
+                const sEnd = sItem.end_time ? sItem.end_time.substring(0, 5) : '--:--';
+                const sColor = sItem.color || '#16A34A';
+
+                return (
+                  <div key={sItem.id || sIdx} className="space-y-3 p-3.5 rounded-2xl bg-slate-50/60 border border-slate-150">
+                    <div className="flex items-center gap-3 p-3 rounded-xl border bg-white" style={{ borderColor: sColor + '30' }}>
+                      <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 text-white font-bold text-[12px]" style={{ background: sColor }}>
+                        #{sIdx + 1}
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="text-[13px] font-bold text-gray-900">{sName}</p>
+                          {sItem.is_emergency_callout && (
+                            <span className="text-[9.5px] font-extrabold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200">
+                              🚨 Shift Dadakan
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11.5px] text-gray-500 mt-0.5">{shiftDay} · {sStart} – {sEnd} WIB</p>
+                      </div>
+                      <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full text-white" style={{ background: sColor }}>
+                        {rItem?.check_out ? 'Selesai' : rItem?.check_in ? 'Sudah Absen' : 'Aktif'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2.5">
+                      {[
+                        {
+                          label: 'Jam Masuk',
+                          value: sStart,
+                          sub: 'WIB',
+                          color: '#000000',
+                          bg: '#F0FDF4',
+                        },
+                        {
+                          label: 'Check-In Aktual',
+                          value: rItem?.check_in ? rItem.check_in.substring(0, 5) : '--:--',
+                          sub: rItem?.check_in
+                            ? (rItem.status === 'telat' ? 'Terlambat' : 'Tepat Waktu')
+                            : (isOffDuty ? (leaveType ?? 'Bebas Tugas') : 'Belum Absen'),
+                          color: rItem?.check_in ? '#000000' : '#9CA3AF',
+                          bg: rItem?.check_in ? (rItem.status === 'telat' ? '#FFFBEB' : '#F0FDF4') : '#FFFFFF',
+                        },
+                        {
+                          label: 'Jam Pulang',
+                          value: sEnd,
+                          sub: 'WIB',
+                          color: '#000000',
+                          bg: '#F0FDF4',
+                        },
+                      ].map((b, i) => (
+                        <div key={i} className="rounded-xl p-2.5 text-center border border-slate-100" style={{ background: b.bg }}>
+                          <p className="text-[10px] text-gray-400 mb-0.5">{b.label}</p>
+                          <p className="text-[16px] font-bold font-mono" style={{ color: b.color }}>{b.value}</p>
+                          <p className="text-[10px] text-gray-400 mt-0.5">{b.sub}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {rItem?.check_out && (
+                      <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-100 rounded-xl">
+                        <span className="text-sm">✅</span>
+                        <p className="text-[11.5px] text-green-700">
+                          Check-out tercatat pukul <strong>{rItem.check_out.substring(0, 5)} WIB</strong>.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            ) : todayShift === undefined ? (
               /* Status memuat */
               <div className="flex items-center gap-3 p-3.5 rounded-xl bg-gray-50 border border-gray-100 animate-pulse">
                 <div className="w-9 h-9 rounded-xl bg-gray-200 flex-shrink-0" />
@@ -407,7 +490,7 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
                   <div className="h-3 bg-gray-200 rounded w-48" />
                 </div>
               </div>
-            ) : todayShift === null ? (
+            ) : (
               /* Tidak ada jadwal shift */
               <div className="flex items-center gap-3 p-3.5 rounded-xl bg-gray-50 border border-gray-100">
                 <div className="w-9 h-9 rounded-xl bg-gray-200 flex items-center justify-center flex-shrink-0">
@@ -418,65 +501,6 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
                   <p className="text-[12px] text-gray-400 mt-0.5">{shiftDay} · Tidak ada shift yang ditugaskan</p>
                 </div>
                 <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-gray-500">Libur</span>
-              </div>
-            ) : (
-              /* Badge shift */
-              <div className="flex items-center gap-3 p-3.5 rounded-xl border" style={{ background: todayShift.color + '15', borderColor: todayShift.color + '30' }}>
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: todayShift.color }}>
-                  <Clock size={16} className="text-white" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-[13px] font-semibold text-gray-800">{shiftName}</p>
-                  <p className="text-[12px] text-gray-500 mt-0.5">{shiftDay} · {shiftRange}</p>
-                </div>
-                <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full text-white" style={{ background: todayShift.color }}>Aktif</span>
-              </div>
-            )}
-
-            {/* Blok waktu */}
-            {todayShift !== undefined && (
-              <div className="grid grid-cols-3 gap-2.5">
-                {[
-                  {
-                    label: 'Jam Masuk',
-                    value: todayShift ? shiftStartTime : '--:--',
-                    sub: todayShift ? 'WIB' : '—',
-                    color: todayShift ? '#000000' : '#9CA3AF',
-                    bg: todayShift ? '#F0FDF4' : '#F9FAFB',
-                  },
-                  {
-                    label: 'Check-In Aktual',
-                    value: todayRecord?.check_in ? todayRecord.check_in.substring(0, 5) : '--:--',
-                    sub: todayRecord?.check_in 
-                      ? (todayRecord.status === 'telat' ? 'Terlambat' : 'Tepat Waktu') 
-                      : (isOffDuty ? (leaveType ?? 'Bebas Tugas') : 'Belum Absen'),
-                    color: todayRecord?.check_in ? '#000000' : '#9CA3AF',
-                    bg: todayRecord?.check_in ? (todayRecord.status === 'telat' ? '#FFFBEB' : '#F0FDF4') : '#F9FAFB',
-                  },
-                  {
-                    label: 'Jam Pulang',
-                    value: todayShift ? shiftEndTime : '--:--',
-                    sub: todayShift ? 'WIB' : '—',
-                    color: todayShift ? '#000000' : '#9CA3AF',
-                    bg: todayShift ? '#F0FDF4' : '#F9FAFB',
-                  },
-                ].map((b, i) => (
-                  <div key={i} className="rounded-xl p-3 text-center" style={{ background: b.bg }}>
-                    <p className="text-[10px] text-gray-400 mb-1">{b.label}</p>
-                    <p className="text-[17px] font-bold font-mono" style={{ color: b.color }}>{b.value}</p>
-                    <p className="text-[10px] text-gray-400 mt-0.5">{b.sub}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Informasi check-out */}
-            {todayRecord?.check_out && (
-              <div className="flex items-center gap-2.5 px-3.5 py-2.5 bg-green-50 border border-green-100 rounded-xl">
-                <span className="text-base">✅</span>
-                <p className="text-[12px] text-green-700">
-                  Check-out tercatat pukul <strong>{todayRecord.check_out.substring(0, 5)} WIB</strong>. Absensi hari ini selesai.
-                </p>
               </div>
             )}
 

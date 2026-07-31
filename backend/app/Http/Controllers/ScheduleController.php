@@ -798,11 +798,11 @@ class ScheduleController extends Controller
                 }
             }
 
-            // Tier 2: Timpa dengan penugasan per-tanggal spesifik (work_date)
+            // Tier 2: Penugasan per-tanggal spesifik (work_date) - mendukung multi-shift per hari
             if ($dateAssignments->has($emp->id)) {
                 foreach ($dateAssignments->get($emp->id) as $row) {
                     $dateKey = $row->work_date; // YYYY-MM-DD
-                    $assignMap[$dateKey] = [
+                    $shiftItem = [
                         'schedule_id' => $row->schedule_id,
                         'name'        => $row->schedule_name,
                         'color'       => $row->color,
@@ -812,6 +812,20 @@ class ScheduleController extends Controller
                         'end_time'    => $row->end_time   ? substr($row->end_time, 0, 5)   : null,
                         'is_weekly'   => false,
                     ];
+
+                    if (!isset($assignMap[$dateKey]) || !empty($assignMap[$dateKey]['is_weekly'])) {
+                        $assignMap[$dateKey] = array_merge($shiftItem, [
+                            'all_shifts' => [$shiftItem]
+                        ]);
+                    } else {
+                        if (!isset($assignMap[$dateKey]['all_shifts'])) {
+                            $assignMap[$dateKey]['all_shifts'] = [$assignMap[$dateKey]];
+                        }
+                        $exists = collect($assignMap[$dateKey]['all_shifts'])->contains('schedule_id', $row->schedule_id);
+                        if (!$exists) {
+                            $assignMap[$dateKey]['all_shifts'][] = $shiftItem;
+                        }
+                    }
                 }
             }
 
@@ -1343,6 +1357,76 @@ class ScheduleController extends Controller
             'success' => true,
             'message' => 'Keterangan jadwal berhasil disimpan.',
             'note'    => $noteObj->note
+        ]);
+    }
+
+    /**
+     * POST /api/schedules/assign-emergency
+     * 
+     * Penugasan Shift Dadakan / On-Call (Emergency Call-In) oleh PJ Bagian atau Admin.
+     * Langsung menambahkan jadwal shift tanggal ini ke tabel employee_schedule dan mengirim notifikasi ke pegawai.
+     */
+    public function assignEmergencyShift(Request $request)
+    {
+        $user = $request->user();
+        if (!$user->isAdmin() && !$user->isPjBagian()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
+        }
+
+        $data = $request->validate([
+            'employee_id' => 'required|exists:employees,id',
+            'schedule_id' => 'required|exists:schedules,id',
+            'work_date'   => 'required|date',
+            'note'        => 'nullable|string|max:255',
+        ]);
+
+        $employee = \App\Models\Employee::findOrFail($data['employee_id']);
+        $schedule = \App\Models\Schedule::findOrFail($data['schedule_id']);
+
+        // Jika PJ Bagian, pastikan pegawai tersebut berada di departemen yang diawasi
+        if ($user->isPjBagian() && !$user->isAdmin()) {
+            $deptIds = $user->getPjDepartmentIds();
+            if (!in_array($employee->department_id, $deptIds)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Anda hanya dapat menugaskan shift dadakan kepada pegawai di unit kerja Anda.',
+                ], 403);
+            }
+        }
+
+        // Simpan ke employee_schedule
+        \Illuminate\Support\Facades\DB::table('employee_schedule')->insert([
+            'employee_id' => $employee->id,
+            'schedule_id' => $schedule->id,
+            'work_date'   => $data['work_date'],
+            'created_at'  => now(),
+            'updated_at'  => now(),
+        ]);
+
+        // Kirim notifikasi instan ke pegawai
+        if ($employee->user_id) {
+            \App\Models\Notification::create([
+                'user_id' => $employee->user_id,
+                'title'   => '🚨 Penugasan Shift Dadakan / On-Call',
+                'body'    => 'Anda telah ditugaskan untuk ' . $schedule->name . ' pada tanggal ' . $data['work_date'] . ' oleh ' . $user->name . '. Window absen telah terbuka.',
+                'type'    => 'schedule',
+                'data'    => [
+                    'schedule_id' => $schedule->id,
+                    'work_date'   => $data['work_date'],
+                ],
+            ]);
+        }
+
+        return response()->json([
+            'success'  => true,
+            'message'  => 'Shift dadakan / On-Call berhasil ditugaskan dan notifikasi telah dikirim ke pegawai.',
+            'schedule' => [
+                'id'         => $schedule->id,
+                'name'       => $schedule->name,
+                'start_time' => $schedule->start_time,
+                'end_time'   => $schedule->end_time,
+                'color'      => $schedule->color,
+            ]
         ]);
     }
 }

@@ -651,7 +651,18 @@ export default function AssignmentLetterTab() {
                   <input
                     type="file"
                     accept=".pdf,.jpg,.jpeg,.png"
-                    onChange={e => e.target.files && setReplyDocumentFile(e.target.files[0])}
+                    onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      if (file.size > 2 * 1024 * 1024) {
+                        const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+                        setModalError(`⚠️ Ukuran file balasan terlalu besar (${sizeMB}MB). Maksimal 2MB. Silakan pilih/kompres file di bawah 2MB.`);
+                        setReplyDocumentFile(null);
+                        return;
+                      }
+                      setModalError('');
+                      setReplyDocumentFile(file);
+                    }}
                     className="hidden"
                   />
                 </label>
@@ -835,7 +846,18 @@ export default function AssignmentLetterTab() {
                   <input
                     type="file"
                     accept=".pdf,.jpg,.jpeg,.png"
-                    onChange={e => e.target.files && setAdminCreateDocument(e.target.files[0])}
+                    onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      if (file.size > 2 * 1024 * 1024) {
+                        const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+                        setAdminCreateError(`⚠️ Ukuran file surat tugas terlalu besar (${sizeMB}MB). Maksimal 2MB. Silakan pilih/kompres file di bawah 2MB.`);
+                        setAdminCreateDocument(null);
+                        return;
+                      }
+                      setAdminCreateError('');
+                      setAdminCreateDocument(file);
+                    }}
                     className="hidden"
                     required
                   />
