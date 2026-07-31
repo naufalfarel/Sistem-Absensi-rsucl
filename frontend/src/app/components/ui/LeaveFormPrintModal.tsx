@@ -65,16 +65,19 @@ export function LeaveFormPrintModal({
     return words[n] || String(n);
   };
 
-  // Calculate return date (start_date + days)
+  // Calculate return date (end_date + 1 day, skipping Sunday if it lands on Sunday)
   const calculateReturnDate = (startStr: string, days: number) => {
     if (!startStr) return "";
     const d = new Date(startStr);
     d.setDate(d.getDate() + (days || 1));
+    if (d.getDay() === 0) { // If Sunday, return on Monday
+      d.setDate(d.getDate() + 1);
+    }
     return formatDateFull(d.toISOString().slice(0, 10));
   };
 
   const returnDateStr = calculateReturnDate(
-    request.end_date || request.start_date,
+    request.actual_end_date || request.end_date || request.start_date,
     1,
   );
 

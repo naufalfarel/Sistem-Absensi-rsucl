@@ -565,10 +565,26 @@ export function ProfilePage({
     loadCategories();
   }, []);
 
+  const countWorkDays = (startStr: string, endStr: string): number => {
+    if (!startStr || !endStr) return 0;
+    const start = new Date(startStr);
+    const end   = new Date(endStr);
+    if (start > end) return 0;
+
+    let count = 0;
+    const cur = new Date(start);
+    while (cur <= end) {
+      if (cur.getDay() !== 0) { // Exclude Sunday
+        count++;
+      }
+      cur.setDate(cur.getDate() + 1);
+    }
+    return count;
+  };
+
   const calcDays = () => {
     if (!startDate || !endDate) return 0;
-    const diff = new Date(endDate).getTime() - new Date(startDate).getTime();
-    return Math.max(1, Math.floor(diff / 86400000) + 1);
+    return countWorkDays(startDate, endDate);
   };
 
   const getDateLimits = () => {
@@ -620,16 +636,24 @@ export function ProfilePage({
     return { min: minStr, max: maxStr };
   };
 
+  const addWorkDaysProfile = (startStr: string, targetWorkDays: number): string => {
+    if (!startStr) return '';
+    const cur = new Date(startStr);
+    let workDays = cur.getDay() !== 0 ? 1 : 0;
+    while (workDays < targetWorkDays) {
+      cur.setDate(cur.getDate() + 1);
+      if (cur.getDay() !== 0) {
+        workDays++;
+      }
+    }
+    const year = cur.getFullYear();
+    const month = String(cur.getMonth() + 1).padStart(2, '0');
+    const day = String(cur.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const getEndDateLimits = () => {
     if (!startDate) return { min: '', max: '' };
-
-    const start = new Date(startDate);
-    const formatDateForInput = (d: Date) => {
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    };
 
     let maxStr = '';
 
@@ -638,27 +662,17 @@ export function ProfilePage({
       if (cat) {
         const catName = cat.name.toLowerCase();
         if (catName.includes('menikah')) {
-          const maxDate = new Date(start);
-          maxDate.setDate(start.getDate() + 2);
-          maxStr = formatDateForInput(maxDate);
+          maxStr = addWorkDaysProfile(startDate, 3);
         } else if (catName.includes('melahirkan') || catName.includes('keguguran')) {
-          const maxDate = new Date(start);
-          maxDate.setDate(start.getDate() + 89);
-          maxStr = formatDateForInput(maxDate);
+          maxStr = addWorkDaysProfile(startDate, 90);
         } else if (catName.includes('meninggal') || catName.includes('duka') || catName.includes('kepergian')) {
-          const maxDate = new Date(start);
-          maxDate.setDate(start.getDate() + 2);
-          maxStr = formatDateForInput(maxDate);
+          maxStr = addWorkDaysProfile(startDate, 3);
         }
       }
     } else if (leaveType === 'cuti') {
-      const maxDate = new Date(start);
-      maxDate.setDate(start.getDate() + 3);
-      maxStr = formatDateForInput(maxDate);
+      maxStr = addWorkDaysProfile(startDate, 4);
     } else if (leaveType === 'sakit') {
-      const maxDate = new Date(start);
-      maxDate.setDate(start.getDate() + 2);
-      maxStr = formatDateForInput(maxDate);
+      maxStr = addWorkDaysProfile(startDate, 3);
     }
 
     return { min: startDate, max: maxStr };

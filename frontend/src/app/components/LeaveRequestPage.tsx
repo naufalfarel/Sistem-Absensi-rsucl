@@ -133,21 +133,33 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
     }
   }, [user]);
 
-  // Helper to get max selectable end date based on type
+  // Helper to add N work days excluding Sundays (0 = Sunday in JS Date)
+  const addWorkDays = (startStr: string, targetWorkDays: number): string => {
+    if (!startStr) return '';
+    const cur = new Date(startStr);
+    let workDays = cur.getDay() !== 0 ? 1 : 0;
+    while (workDays < targetWorkDays) {
+      cur.setDate(cur.getDate() + 1);
+      if (cur.getDay() !== 0) {
+        workDays++;
+      }
+    }
+    const year = cur.getFullYear();
+    const month = String(cur.getMonth() + 1).padStart(2, '0');
+    const day = String(cur.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // Helper to get max selectable end date based on type (counting only work days, excluding Sundays)
   const getMaxEndDate = (): string | undefined => {
     if (!startDate) return undefined;
-    const start = new Date(startDate);
     
     if (leaveType === 'cuti') {
-      const maxDate = new Date(start);
-      maxDate.setDate(start.getDate() + 3);
-      return maxDate.toISOString().split('T')[0];
+      return addWorkDays(startDate, 4);
     }
     
     if (leaveType === 'sakit') {
-      const maxDate = new Date(start);
-      maxDate.setDate(start.getDate() + 2);
-      return maxDate.toISOString().split('T')[0];
+      return addWorkDays(startDate, 3);
     }
     
     if (leaveType === 'cuti_khusus') {
@@ -155,19 +167,13 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
       const catName = (cat?.name || '').toLowerCase();
       
       if (catName.includes('menikah')) {
-        const maxDate = new Date(start);
-        maxDate.setDate(start.getDate() + 2);
-        return maxDate.toISOString().split('T')[0];
+        return addWorkDays(startDate, 3);
       }
       if (catName.includes('melahirkan') || catName.includes('keguguran')) {
-        const maxDate = new Date(start);
-        maxDate.setDate(start.getDate() + 89);
-        return maxDate.toISOString().split('T')[0];
+        return addWorkDays(startDate, 90);
       }
       if (catName.includes('meninggal') || catName.includes('duka') || catName.includes('kepergian')) {
-        const maxDate = new Date(start);
-        maxDate.setDate(start.getDate() + 2);
-        return maxDate.toISOString().split('T')[0];
+        return addWorkDays(startDate, 3);
       }
     }
     
@@ -286,14 +292,32 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
     setAttachmentError('');
   };
 
+  // Helper to count work days excluding Sundays (0 = Sunday in JS Date)
+  const countWorkDays = (startStr: string, endStr: string): number => {
+    if (!startStr || !endStr) return 0;
+    const start = new Date(startStr);
+    const end   = new Date(endStr);
+    if (start > end) return 0;
+
+    let count = 0;
+    const cur = new Date(start);
+    while (cur <= end) {
+      if (cur.getDay() !== 0) { // Exclude Sunday
+        count++;
+      }
+      cur.setDate(cur.getDate() + 1);
+    }
+    return count;
+  };
+
   // ── Calc Days ─────────────────────────────────────────────────────────
   const calcDays = () => {
     if (!startDate || !endDate) return 0;
-    return Math.max(1, Math.floor((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000) + 1);
+    return countWorkDays(startDate, endDate);
   };
 
   /**
-   * Hitung berapa hari pengajuan baru (startDate..endDate) jatuh di bulan Y-M.
+   * Hitung berapa hari kerja pengajuan baru (startDate..endDate) jatuh di bulan Y-M (dikecualikan hari Minggu).
    */
   const calcNewDaysInMonth = (year: number, month: number): number => {
     if (!startDate || !endDate) return 0;
@@ -304,11 +328,18 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
     const overlapStart = rStart > mStart ? rStart : mStart;
     const overlapEnd   = rEnd < mEnd   ? rEnd   : mEnd;
     if (overlapStart > overlapEnd) return 0;
-    return Math.floor((overlapEnd.getTime() - overlapStart.getTime()) / 86400000) + 1;
+
+    let count = 0;
+    const cur = new Date(overlapStart);
+    while (cur <= overlapEnd) {
+      if (cur.getDay() !== 0) count++;
+      cur.setDate(cur.getDate() + 1);
+    }
+    return count;
   };
 
   /**
-   * Hitung total hari cuti (approved+pending) dari `requests` yang jatuh di bulan Y-M.
+   * Hitung total hari cuti (approved+pending) dari `requests` yang jatuh di bulan Y-M (dikecualikan hari Minggu).
    * Tidak menghitung request sementara (hanya dari data server yang sudah ada).
    */
   const existingCutiDaysInMonth = (year: number, month: number): number => {
@@ -323,7 +354,14 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
         const oStart = rStart > mStart ? rStart : mStart;
         const oEnd   = rEnd < mEnd   ? rEnd   : mEnd;
         if (oStart > oEnd) return total;
-        return total + Math.floor((oEnd.getTime() - oStart.getTime()) / 86400000) + 1;
+
+        let count = 0;
+        const cur = new Date(oStart);
+        while (cur <= oEnd) {
+          if (cur.getDay() !== 0) count++;
+          cur.setDate(cur.getDate() + 1);
+        }
+        return total + count;
       }, 0);
   };
 
@@ -382,8 +420,8 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
         return;
       }
     } else {
-      if (!startDate || !endDate || !reason.trim() || !attachmentFile) {
-        setFormError('Tanggal mulai, tanggal selesai, keterangan, dan dokumen pendukung wajib diisi/diunggah.');
+      if (!startDate || !endDate || !reason.trim()) {
+        setFormError('Tanggal mulai, tanggal selesai, dan keterangan wajib diisi.');
         return;
       }
     }
@@ -1107,7 +1145,10 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
               {/* Lampiran */}
               <div>
                 <label className="block text-[12px] font-semibold text-gray-600 mb-1.5">
-                  Dokumen Pendukung <span className="text-red-500">* (Wajib)</span>{' '}
+                  Dokumen Pendukung{' '}
+                  <span className={leaveType === 'cuti' ? 'text-gray-400 font-normal' : 'text-red-500 font-bold'}>
+                    {leaveType === 'cuti' ? '(Opsional)' : '* (Wajib)'}
+                  </span>{' '}
                   <span className="text-gray-400 font-normal">PDF, PNG, JPG max 2MB</span>
                 </label>
                 {!attachmentName ? (
@@ -1115,7 +1156,9 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
                     attachmentError ? 'border-red-300 bg-red-50/40 hover:border-red-400' : 'border-gray-200 hover:border-[#16A34A] hover:bg-green-50/30'
                   }`}>
                     <Paperclip size={20} className={attachmentError ? 'text-red-400 mb-2' : 'text-gray-300 mb-2'} />
-                    <span className="text-[12px] text-gray-500 font-medium">Klik untuk unggah dokumen (Wajib)</span>
+                    <span className="text-[12px] text-gray-500 font-medium">
+                      Klik untuk unggah dokumen {leaveType === 'cuti' ? '(Opsional)' : '(Wajib)'}
+                    </span>
                     <span className="text-[11px] text-gray-400 mt-0.5">Surat sakit, surat tugas, atau dokumen pendukung lainnya</span>
                     <input type="file" onChange={handleAttachmentChange} accept=".pdf,image/png,image/jpeg,image/jpg" className="hidden" />
                   </label>
@@ -1159,7 +1202,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
                   onClick={handleSubmit}
                   disabled={
                     submitting ||
-                    !attachmentFile ||
+                    (!attachmentFile && leaveType !== 'cuti') ||
                     (leaveType === 'cuti_khusus' && (
                       !selectedCategory || 
                       ((() => {

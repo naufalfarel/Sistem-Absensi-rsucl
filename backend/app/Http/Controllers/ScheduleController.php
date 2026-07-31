@@ -440,23 +440,27 @@ class ScheduleController extends Controller
         }
 
         // ── Prioritas 1: Cek jadwal tanggal spesifik (work_date) ──────────────
-        $dateRow = \Illuminate\Support\Facades\DB::table('employee_schedule')
+        $dateRows = \Illuminate\Support\Facades\DB::table('employee_schedule')
             ->join('schedules', 'employee_schedule.schedule_id', '=', 'schedules.id')
             ->where('employee_schedule.employee_id', $employee->id)
             ->where('employee_schedule.work_date', $today)
             ->whereNotNull('employee_schedule.work_date')
             ->select('schedules.*')
-            ->first();
+            ->get();
 
-        if ($dateRow) {
+        if ($dateRows->isNotEmpty()) {
+            $now = \Carbon\Carbon::now('Asia/Jakarta');
+            $activeShift = \App\Support\AttendanceRules::resolveShiftFor($employee, $now, $now);
+            $matchedRow = ($activeShift ? $dateRows->firstWhere('id', $activeShift->id) : null) ?? $dateRows->first();
+
             $todayData = [
-                'id'         => $dateRow->id,
-                'name'       => $dateRow->name,
-                'start_time' => $dateRow->start_time,
-                'end_time'   => $dateRow->end_time,
-                'color'      => $dateRow->color,
-                'icon'       => $dateRow->icon,
-                'shift_type' => $dateRow->shift_type ?? 'normal',
+                'id'         => $matchedRow->id,
+                'name'       => $matchedRow->name,
+                'start_time' => $matchedRow->start_time,
+                'end_time'   => $matchedRow->end_time,
+                'color'      => $matchedRow->color,
+                'icon'       => $matchedRow->icon,
+                'shift_type' => $matchedRow->shift_type ?? 'normal',
             ];
 
             return response()->json([

@@ -216,85 +216,79 @@ class Attendance extends Model
                 $key = $emp->id . '_' . $dateStr;
 
                 // Kasus A: Karyawan melakukan absensi (Check-in/Check-out ada)
-                // Kasus A: Karyawan melakukan absensi (Check-in/Check-out ada)
                 if (isset($attendances[$key])) {
-                    $attRecord = $attendances[$key]->first();
-                    
-                    $checkOut = $attRecord->check_out;
-                    $durationMin = $attRecord->duration_minutes;
-                    if ($attRecord->overtime_status === 'rejected' && $attRecord->jam_pulang_normal) {
-                        $checkOut = $attRecord->jam_pulang_normal;
-                        if ($attRecord->check_in) {
-                            $inSec = strtotime($attRecord->check_in);
-                            $outSec = strtotime($attRecord->jam_pulang_normal);
-                            if ($outSec < $inSec) {
-                                $outSec += 86400; // overnight shift
+                    foreach ($attendances[$key] as $attRecord) {
+                        $checkOut = $attRecord->check_out;
+                        $durationMin = $attRecord->duration_minutes;
+                        if ($attRecord->overtime_status === 'rejected' && $attRecord->jam_pulang_normal) {
+                            $checkOut = $attRecord->jam_pulang_normal;
+                            if ($attRecord->check_in) {
+                                $inSec = strtotime($attRecord->check_in);
+                                $outSec = strtotime($attRecord->jam_pulang_normal);
+                                if ($outSec < $inSec) {
+                                    $outSec += 86400; // overnight shift
+                                }
+                                $durationMin = (int) round(($outSec - $inSec) / 60);
+                                if ($durationMin < 0) $durationMin = 0;
                             }
-                            $durationMin = (int) round(($outSec - $inSec) / 60);
-                            if ($durationMin < 0) $durationMin = 0;
                         }
+
+                        $isIncomplete = \App\Support\AttendanceRules::isAttendanceIncomplete($attRecord, $emp);
+                        $displayStatus = $isIncomplete ? 'tidak_lengkap' : $attRecord->status;
+
+                        // Jika absensi tidak lengkap, sembunyikan checkout dan durasi
+                        if ($isIncomplete) {
+                            $checkOut    = null;
+                            $durationMin = null;
+                        }
+
+                        $reportRecords[] = [
+                            'id' => $attRecord->id,
+                            'employee_id' => $emp->id,
+                            'date' => $dateStr,
+                            'check_in' => $attRecord->check_in,
+                            'check_out' => $checkOut,
+                            'status' => $attRecord->status,
+                            'display_status' => $displayStatus,
+                            'checkin_punctuality' => $attRecord->checkin_punctuality,
+                            'effective_checkin_time' => $attRecord->effective_checkin_time,
+                            'duration_min' => $durationMin,
+                            'latitude' => $attRecord->latitude,
+                            'longitude' => $attRecord->longitude,
+                            'accuracy' => $attRecord->accuracy,
+                            'is_within_geofence' => (bool)$attRecord->is_within_geofence,
+                            'note' => $attRecord->note,
+                            'checkin_location_note' => $attRecord->checkin_location_note,
+                            'checkout_location_note' => $attRecord->checkout_location_note,
+                            'employee' => [
+                                'id' => $emp->id,
+                                'name' => $emp->user?->name ?? 'Karyawan',
+                                'nik_ktp' => $emp->nik_ktp,
+                                'department' => $emp->department?->name ?? 'Umum',
+                                'position' => $emp->position?->name ?? 'Staff',
+                            ],
+                            'image_check_in' => $attRecord->image_check_in,
+                            'image_check_out' => $attRecord->image_check_out,
+                            'checkin_photo_url' => $attRecord->checkin_photo_url ? url($attRecord->checkin_photo_url) : null,
+                            'checkout_photo_url' => $attRecord->checkout_photo_url ? url($attRecord->checkout_photo_url) : null,
+                            'checkin_latitude' => $attRecord->checkin_latitude,
+                            'checkin_longitude' => $attRecord->checkin_longitude,
+                            'checkout_latitude' => $attRecord->checkout_latitude,
+                            'checkout_longitude' => $attRecord->checkout_longitude,
+                            'checkin_distance_meters' => $attRecord->checkin_distance_meters,
+                            'checkout_distance_meters' => $attRecord->checkout_distance_meters,
+                            'jam_pulang_normal' => $attRecord->jam_pulang_normal,
+                            'is_lembur' => (bool)$attRecord->is_lembur,
+                            'durasi_lembur_menit' => $attRecord->durasi_lembur_menit,
+                            'keterangan_lembur' => $attRecord->keterangan_lembur,
+                            'status_approval_lembur' => $attRecord->status_approval_lembur,
+                            'is_overtime' => (bool)$attRecord->is_overtime,
+                            'overtime_minutes' => $attRecord->overtime_minutes,
+                            'overtime_status' => $attRecord->overtime_status,
+                            'shift_name' => $attRecord->schedule ? $attRecord->schedule->name : $shiftName,
+                            'shift_type' => $matchingShift ? ($matchingShift->shift_type ?? 'normal') : 'normal',
+                        ];
                     }
-
-                    $isIncomplete = \App\Support\AttendanceRules::isAttendanceIncomplete($attRecord, $emp);
-                    $displayStatus = $isIncomplete ? 'tidak_lengkap' : $attRecord->status;
-
-                    // Jika absensi tidak lengkap, sembunyikan checkout dan durasi
-                    if ($isIncomplete) {
-                        $checkOut    = null;
-                        $durationMin = null;
-                    }
-
-                    $reportRecords[] = [
-                        'id' => $attRecord->id,
-                        'employee_id' => $emp->id,
-                        'date' => $dateStr,
-                        'check_in' => $attRecord->check_in,
-                        'check_out' => $checkOut,
-                        'status' => $attRecord->status,
-                        'display_status' => $displayStatus,
-                        'checkin_punctuality' => $attRecord->checkin_punctuality,
-                        'effective_checkin_time' => $attRecord->effective_checkin_time,
-                        'duration_min' => $durationMin,
-                        'latitude' => $attRecord->latitude,
-                        'longitude' => $attRecord->longitude,
-                        'accuracy' => $attRecord->accuracy,
-                        'is_within_geofence' => (bool)$attRecord->is_within_geofence,
-                        'note' => $attRecord->note,
-                        'checkin_location_note' => $attRecord->checkin_location_note,
-                        'checkout_location_note' => $attRecord->checkout_location_note,
-                        'employee' => [
-                            'id' => $emp->id,
-                            'name' => $emp->user?->name ?? 'Karyawan',
-                            'nik_ktp' => $emp->nik_ktp,
-                            'department' => $emp->department?->name ?? 'Umum',
-                            'position' => $emp->position?->name ?? 'Staff',
-                        ],
-                        'image_check_in' => $attRecord->image_check_in,
-                        'image_check_out' => $attRecord->image_check_out,
-                        
-                        // New fields
-                        'checkin_photo_url'        => $attRecord->checkin_photo_url ? url($attRecord->checkin_photo_url) : null,
-                        'checkout_photo_url'       => $attRecord->checkout_photo_url ? url($attRecord->checkout_photo_url) : null,
-                        'checkin_latitude'         => $attRecord->checkin_latitude,
-                        'checkin_longitude'        => $attRecord->checkin_longitude,
-                        'checkout_latitude'        => $attRecord->checkout_latitude,
-                        'checkout_longitude'       => $attRecord->checkout_longitude,
-                        'checkin_distance_meters'  => $attRecord->checkin_distance_meters,
-                        'checkout_distance_meters' => $attRecord->checkout_distance_meters,
-                        
-                        // Overtime fields
-                        'jam_pulang_normal'        => $attRecord->jam_pulang_normal,
-                        'is_lembur'                => (bool)$attRecord->is_lembur,
-                        'durasi_lembur_menit'      => $attRecord->durasi_lembur_menit,
-                        'keterangan_lembur'        => $attRecord->keterangan_lembur,
-                        'status_approval_lembur'   => $attRecord->status_approval_lembur,
-                        'is_overtime'              => (bool)$attRecord->is_overtime,
-                        'overtime_minutes'         => $attRecord->overtime_minutes,
-                        'overtime_status'          => $attRecord->overtime_status,
-                        
-                        'shift_name' => $shiftName,
-                        'shift_type' => $matchingShift ? ($matchingShift->shift_type ?? 'normal') : 'normal',
-                    ];
                 } else {
                     // Kasus B: Karyawan tidak absen. Periksa apakah sedang cuti/izin/sakit
                     $empLeaves = $leaveRequests->get($emp->id, collect());
