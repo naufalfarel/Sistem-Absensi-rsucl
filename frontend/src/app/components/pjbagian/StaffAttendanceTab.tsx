@@ -46,7 +46,7 @@ export function StaffAttendanceTab({ user }: StaffAttendanceTabProps) {
         setDepartments(user.pj_departments);
       } else {
         try {
-          const res = await departmentApi.index();
+          const res = await departmentApi.list();
           if (res.success && res.data) {
             setDepartments(res.data);
           }

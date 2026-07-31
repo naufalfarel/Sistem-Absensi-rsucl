@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   User, Mail, Lock, Eye, EyeOff, CheckCircle2, Save, Shield, MapPin, Clock,
-  Bell, ToggleLeft, ToggleRight, Power, Upload, RotateCcw, AlertTriangle, ImageIcon, Trash2, Sparkles, Calendar, Edit2
+  Bell, ToggleLeft, ToggleRight, Power, Upload, RotateCcw, AlertTriangle, ImageIcon, Trash2, Sparkles, Calendar, Edit2, Info
 } from 'lucide-react';
 import logoImg from '../../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
 import { settingApi, profileApi } from '../../../services/api';

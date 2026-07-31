@@ -26,23 +26,25 @@ class ScheduleController extends Controller
         if ($user->isPjBagian()) {
             $deptIds = $user->getPjDepartmentIds();
             $deptId = $request->query('department_id');
-            if (!$deptId || !in_array((int)$deptId, $deptIds)) {
-                $deptId = !empty($deptIds) ? $deptIds[0] : null;
+            if ($deptId && in_array((int)$deptId, $deptIds)) {
+                $targetDeptIds = [(int)$deptId];
+            } else {
+                $targetDeptIds = $deptIds;
             }
             
-            // PJ Bagian hanya melihat master shift yang dimiliki oleh departemennya sendiri ATAU shift umum
-            $query->where(function ($q) use ($deptId) {
-                $q->where('owner_department_id', $deptId)
+            // PJ Bagian melihat master shift yang dimiliki oleh seluruh departemennya ATAU shift umum
+            $query->where(function ($q) use ($targetDeptIds) {
+                $q->whereIn('owner_department_id', $targetDeptIds)
                   ->orWhereNull('owner_department_id');
             });
 
-            // Filter relasi pegawai agar hanya mengembalikan yang satu departemen dengan PJ Bagian
+            // Filter relasi pegawai agar hanya mengembalikan yang berada dalam departemen yang dikelola PJ Bagian
             $query->with([
                 'creator',
                 'updater',
                 'ownerDepartment',
-                'children.employees' => function ($q) use ($deptId) {
-                    $q->where('department_id', $deptId);
+                'children.employees' => function ($q) use ($targetDeptIds) {
+                    $q->whereIn('department_id', $targetDeptIds);
                 },
                 'children.employees.user',
                 'children.employees.department'
@@ -76,6 +78,10 @@ class ScheduleController extends Controller
         // Validasi input data shift baru
         $data = $request->validated();
         $user = $request->user();
+
+        $shiftName = $data['name'] ?? '';
+        $isLiburJaga = str_contains(strtolower($shiftName), 'libur jaga') || strtoupper(trim($shiftName)) === 'LJ';
+
         if ($user->isPjBagian()) {
             $deptIds = $user->getPjDepartmentIds();
             $deptId = $request->input('department_id') ?? $request->input('owner_department_id');
@@ -87,8 +93,9 @@ class ScheduleController extends Controller
             }
             $data['owner_department_id'] = $deptId;
             $data['created_by'] = $user->id;
-            $data['status'] = 'pending';
-            $data['proposed_by'] = $user->id;
+            // Libur Jaga (LJ) tidak memerlukan pengajuan/persetujuan admin
+            $data['status'] = $isLiburJaga ? 'approved' : 'pending';
+            $data['proposed_by'] = $isLiburJaga ? null : $user->id;
         } else {
             $data['created_by'] = $user->id;
             $data['status'] = 'approved';
@@ -158,7 +165,7 @@ class ScheduleController extends Controller
 
         $schedule->load(['creator', 'updater', 'ownerDepartment', 'children']);
 
-        if ($user->isPjBagian()) {
+        if ($user->isPjBagian() && !$isLiburJaga) {
             $this->notifyAdmins(
                 'Usulan Shift Baru',
                 'PJ Bagian mengusulkan shift baru: "' . $schedule->name . '" untuk unit ' . ($schedule->ownerDepartment->name ?? '') . '.',

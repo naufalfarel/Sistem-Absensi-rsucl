@@ -464,6 +464,8 @@ export const attendanceApi = {
       holiday?: { name: string; is_assigned: boolean } | null;
       is_exempt_from_gps?: boolean;
       dinas_reason?: string | null;
+      today_shifts?: any[];
+      records?: any[];
     }>("/attendance/today"),
   // Ambil semua daftar hadir hari ini (untuk dashboard admin)
   allToday: () =>
@@ -1213,6 +1215,15 @@ export interface EmployeeMonthlySchedule {
       shift_type?: string;
       start_time?: string | null;
       end_time?: string | null;
+      all_shifts?: Array<{
+        schedule_id: number;
+        name: string;
+        color: string;
+        icon: string;
+        shift_type?: string;
+        start_time?: string | null;
+        end_time?: string | null;
+      }>;
     }
   >;
 }
@@ -1221,9 +1232,12 @@ export interface EmployeeMonthlySchedule {
  * Layanan CRUD shift kerja dan pengaturan plot jadwal mingguan karyawan.
  */
 export const scheduleApi = {
-  // Ambil daftar semua master shift
-  list: () =>
-    api.get<{ success: boolean; data: ShiftSchedule[] }>("/schedules"),
+  // Ambil daftar semua master shift (opsional: filter department_id)
+  list: (departmentId?: number) => {
+    let path = "/schedules";
+    if (departmentId) path += `?department_id=${departmentId}`;
+    return api.get<{ success: boolean; data: ShiftSchedule[] }>(path);
+  },
   // Buat shift kerja baru
   create: (data: Omit<ShiftSchedule, "id" | "employees_count">) =>
     api.post<{ success: boolean; data: ShiftSchedule }>("/schedules", data),

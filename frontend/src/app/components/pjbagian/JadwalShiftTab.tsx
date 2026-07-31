@@ -68,7 +68,13 @@ interface SubShiftEntry {
   end: string;
 }
 
-function AddShiftModal({ onClose, onAdd }: { onClose: () => void; onAdd: (s: ShiftSchedule) => void }) {
+function AddShiftModal({ onClose, onAdd, user, activeDeptId }: { onClose: () => void; onAdd: (s: ShiftSchedule) => void; user: any; activeDeptId?: number }) {
+  const pjDepts: Array<{ id: number; name: string }> = user?.pj_departments || [];
+  const [selectedDeptId, setSelectedDeptId] = useState<number>(() => {
+    if (activeDeptId && activeDeptId !== 0) return activeDeptId;
+    if (pjDepts.length > 0) return pjDepts[0].id;
+    return user?.pj_bagian_department_id || 0;
+  });
   const [name, setName]       = useState('');
   const [icon, setIcon]       = useState<IconKey>('sun');
   const [colorId, setColorId] = useState('green');
@@ -123,6 +129,7 @@ function AddShiftModal({ onClose, onAdd }: { onClose: () => void; onAdd: (s: Shi
         color: preset.color,
         icon,
         shift_type: shiftType,
+        owner_department_id: selectedDeptId || null,
         children: filledChildren,
       } as any);
       if (res.success) { onAdd(res.data); onClose(); }
@@ -163,6 +170,22 @@ function AddShiftModal({ onClose, onAdd }: { onClose: () => void; onAdd: (s: Shi
         </div>
 
         <div className="space-y-4">
+          {/* Unit Kerja Selection if multiple */}
+          {pjDepts.length > 1 && (
+            <div>
+              <label className="block text-[12px] font-semibold text-gray-700 mb-1.5">Unit Kerja / Bagian</label>
+              <select
+                value={selectedDeptId}
+                onChange={e => setSelectedDeptId(Number(e.target.value))}
+                className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all cursor-pointer font-semibold text-gray-800"
+              >
+                {pjDepts.map(d => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {/* Nama Shift */}
           <div>
             <label className="block text-[12px] font-semibold text-gray-700 mb-1.5">Nama Shift (Template)</label>
@@ -687,10 +710,7 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
   const [daysInMonth, setDaysInMonth] = useState(0);
 
   const pjDepts = (user as any)?.pj_departments || [];
-  const [activeDeptId, setActiveDeptId] = useState<number>(() => {
-    if (pjDepts && pjDepts.length > 0) return pjDepts[0].id;
-    return user.pj_bagian_department_id || 0;
-  });
+  const [activeDeptId, setActiveDeptId] = useState<number>(0);
   const [shifts, setShifts]         = useState<ShiftSchedule[]>([]);
   const [monthlyData, setMonthlyData] = useState<EmployeeMonthlySchedule[]>([]);
   const [employees, setEmployees]   = useState<any[]>([]);
@@ -760,7 +780,7 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
       const res = await scheduleApi.update(id, {
         name: editName.trim(),
         shift_type: 'normal', // Selalu 'normal' (GPS Wajib) untuk PJ Bagian
-        owner_department_id: user.pj_bagian_department_id || null, // Otomatis ke departemen PJ Bagian
+        owner_department_id: activeDeptId || user.pj_bagian_department_id || null, // Otomatis ke departemen aktif/PJ Bagian
         children: editChildren.map(c => ({
           id: c.id,
           name: c.name,
@@ -810,8 +830,8 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
     setLoading(true);
     try {
       const [sRes, mRes, eRes] = await Promise.all([
-        scheduleApi.list(),
-        scheduleApi.getMonthlySchedule(viewYear, viewMonth, activeDeptId),
+        scheduleApi.list(activeDeptId || undefined),
+        scheduleApi.getMonthlySchedule(viewYear, viewMonth, activeDeptId || undefined),
         employeeApi.list(),
       ]);
       if (sRes.success) setShifts(sRes.data);
@@ -821,9 +841,15 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
         setHolidays(mRes.holidays || []);
       }
       if (eRes.success) {
-        const filtered = eRes.data.filter((e: any) =>
-          Number(e.department_id) === Number(activeDeptId)
-        );
+        const pjDeptIds = pjDepts.map((d: any) => Number(d.id));
+        const filtered = eRes.data.filter((e: any) => {
+          if (activeDeptId === 0) {
+            return pjDeptIds.length > 0
+              ? pjDeptIds.includes(Number(e.department_id))
+              : Number(e.department_id) === Number(user.pj_bagian_department_id);
+          }
+          return Number(e.department_id) === Number(activeDeptId);
+        });
         // Tambahkan PJ Bagian itu sendiri jika belum ada di list (department_id bisa beda)
         const pjUserId = (user as any)?.id;
         const selfInList = pjUserId && eRes.data.find((e: any) => Number(e.user_id) === Number(pjUserId));
@@ -838,7 +864,7 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
     } finally {
       setLoading(false);
     }
-  }, [viewYear, viewMonth, activeDeptId, user]);
+  }, [viewYear, viewMonth, activeDeptId, user, pjDepts]);
 
 
   useEffect(() => {
@@ -1000,7 +1026,7 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
             end_time: schedInfo.end_time?.substring(0, 5),
             is_weekly: false,
           } : null;
-        }).filter(Boolean);
+        }).filter((item): item is NonNullable<typeof item> => item !== null);
 
         if (newShiftsList.length > 0) {
           newDates[dateStr] = {
@@ -1417,7 +1443,11 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
         <div>
           <h2 className="text-[17px] font-bold text-gray-900">Jadwal Shift Bulanan</h2>
           <p className="text-[12px] text-gray-400 mt-0.5">
-            Unit: <span className="font-semibold text-gray-600">{user.pj_bagian_department || 'Unit Kerja'}</span>
+            Unit: <span className="font-semibold text-gray-600">
+              {activeDeptId === 0
+                ? (pjDepts.length > 0 ? pjDepts.map((d: any) => d.name).join(', ') : user.pj_bagian_department || 'Semua Unit Kerja')
+                : (pjDepts.find((d: any) => Number(d.id) === Number(activeDeptId))?.name || user.pj_bagian_department || 'Unit Kerja')}
+            </span>
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -1476,7 +1506,7 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
                         {shift.owner_department_id ? (
                           <>
                             <span className="inline-block text-[9px] font-semibold px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200">
-                              Unit: {user.pj_bagian_department || 'Unit Kerja'}
+                              Unit: {shift.owner_department_name || user.pj_bagian_department || 'Unit Kerja'}
                             </span>
                             {shift.status && (
                               <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-full ${
@@ -1769,11 +1799,9 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
             embedded={true}
             onMonthChange={setViewMonth}
             onYearChange={setViewYear}
-            deptId={activeDeptId}
+            deptId={activeDeptId === 0 ? 'all' : activeDeptId}
             onDeptChange={(id) => {
-              if (id !== 'all') {
-                setActiveDeptId(Number(id));
-              }
+              setActiveDeptId(id === 'all' ? 0 : Number(id));
             }}
             departments={(user as any)?.pj_departments || (user.pj_bagian_department_id ? [{ id: user.pj_bagian_department_id, name: user.pj_bagian_department || 'Departemen Anda' }] : [])}
           />
@@ -2094,7 +2122,7 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
       )}
 
       {/* Modals */}
-      {showAddModal && <AddShiftModal onClose={() => setShowAddModal(false)} onAdd={handleAdd} />}
+      {showAddModal && <AddShiftModal onClose={() => setShowAddModal(false)} onAdd={handleAdd} user={user} activeDeptId={activeDeptId} />}
       {showBulkModal && (
         <BulkAssignModal
           user={user}

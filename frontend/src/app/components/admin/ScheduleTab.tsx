@@ -976,7 +976,7 @@ export function ScheduleTab() {
             end_time: schedInfo.end_time?.substring(0, 5),
             is_weekly: false,
           } : null;
-        }).filter(Boolean);
+        }).filter((item): item is NonNullable<typeof item> => item !== null);
 
         if (newShiftsList.length > 0) {
           newDates[dateStr] = {
@@ -2241,12 +2241,12 @@ export function ScheduleTab() {
       {showEmergencyModal && (
         <AdminEmergencyShiftModal
           user={user}
-          employees={allEmployees}
+          employees={employeeSchedules.map(e => ({ id: e.employee_id, name: e.name }))}
           shifts={shifts}
           onClose={() => setShowEmergencyModal(false)}
           onSaved={() => {
-            fetchSchedules();
-            fetchCalMonthlyData();
+            loadShifts();
+            loadMonthlyCalendar();
           }}
         />
       )}
