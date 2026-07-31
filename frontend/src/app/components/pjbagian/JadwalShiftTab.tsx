@@ -560,41 +560,51 @@ function BulkAssignModal({ user, shifts, employees, year, month, daysInMonth, on
 // ── Popover Pilih Shift (untuk klik sel kalender) ─────────────────────
 interface ShiftPopoverProps {
   shifts: ShiftSchedule[];
-  currentScheduleId?: number;
-  onSelect: (scheduleId: number | null) => void;
+  currentScheduleIds: number[];
+  onToggleSelect: (scheduleId: number | null) => void;
   onSelectSpecial: (type: 'lj') => void;
   onClose: () => void;
   style?: React.CSSProperties;
 }
 
-function ShiftPopover({ shifts, currentScheduleId, onSelect, onSelectSpecial, onClose, style }: ShiftPopoverProps) {
+function ShiftPopover({ shifts, currentScheduleIds, onToggleSelect, onSelectSpecial, onClose, style }: ShiftPopoverProps) {
   return (
     <div className="fixed inset-0 z-[9999]" onClick={onClose}>
       <div
-        className="fixed bg-white rounded-2xl border border-gray-200 shadow-2xl py-2 w-64 max-h-[360px] overflow-y-auto z-[10000] animate-fade-in text-left font-sans"
+        className="fixed bg-white rounded-2xl border border-gray-200 shadow-2xl py-2 w-64 max-h-[380px] overflow-y-auto z-[10000] animate-fade-in text-left font-sans"
         style={style}
         onClick={e => e.stopPropagation()}
       >
         <div className="px-3 py-1.5 border-b border-gray-100 flex items-center justify-between">
-          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Atur Shift & Status Staf</p>
+          <div>
+            <p className="text-[10px] font-bold text-gray-700 uppercase tracking-wider">Atur Shift Staf</p>
+            <p className="text-[9px] text-gray-400">Centang 1 atau 2 shift (Double Shift)</p>
+          </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 cursor-pointer">
             <X size={14} />
           </button>
         </div>
 
         {/* Section 1: Libur & Status Staf (Hanya Libur dan Libur Jaga) */}
-        <p className="text-[9px] font-bold text-gray-400 px-3 pt-2 pb-1 uppercase tracking-wider">Status Libur Staf</p>
+        <div className="px-3 pt-2 pb-1 flex items-center justify-between">
+          <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Status Libur Staf</span>
+          {currentScheduleIds.length > 1 && (
+            <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+              {currentScheduleIds.length} Shift Terpilih
+            </span>
+          )}
+        </div>
         
         {/* Libur */}
         <button
-          onClick={() => onSelect(null)}
+          onClick={() => onToggleSelect(null)}
           className="w-full text-left px-3 py-1.5 text-[11.5px] font-semibold text-gray-600 hover:bg-gray-50 flex items-center gap-2 transition-colors cursor-pointer"
         >
           <span className="w-5 h-5 rounded-md bg-gray-100 border border-gray-200 text-gray-500 font-bold text-[10px] flex items-center justify-center">
             –
           </span>
           <span>Libur / OFF</span>
-          {!currentScheduleId && <Check size={13} className="ml-auto text-[#16A34A]" />}
+          {currentScheduleIds.length === 0 && <Check size={13} className="ml-auto text-[#16A34A]" />}
         </button>
 
         {/* Libur Jaga (LJ) */}
@@ -611,35 +621,55 @@ function ShiftPopover({ shifts, currentScheduleId, onSelect, onSelectSpecial, on
         <div className="h-px bg-gray-100 my-1.5" />
 
         {/* Section 2: Master Shift Kerja */}
-        <p className="text-[9px] font-bold text-gray-400 px-3 py-1 uppercase tracking-wider">Shift Jam Kerja</p>
+        <p className="text-[9px] font-bold text-gray-400 px-3 py-1 uppercase tracking-wider">Shift Jam Kerja (Bisa Centang &gt;1 Shift)</p>
 
         {shifts.map(parent => (
           <div key={parent.id} className="mt-1 font-sans">
             {parent.children && parent.children.length > 0 ? (
               <div>
                 <p className="text-[9px] font-bold text-gray-400 px-3 pt-2 pb-1 uppercase tracking-wider">{parent.name}</p>
-                {parent.children.map(child => (
-                  <button key={child.id} onClick={() => onSelect(child.id)}
-                    className="w-full text-left px-3 py-1.5 text-[11px] hover:bg-gray-50 flex items-center gap-2 transition-colors cursor-pointer">
-                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: child.color || '#16A34A' }} />
-                    <span className="font-medium text-gray-700 truncate">{child.name}</span>
-                    <span className="ml-auto text-[10px] text-gray-400 font-mono flex-shrink-0">
-                      {child.start_time?.substring(0, 5)}–{child.end_time?.substring(0, 5)}
-                    </span>
-                    {currentScheduleId === child.id && <Check size={12} className="ml-1 text-[#16A34A] flex-shrink-0" />}
-                  </button>
-                ))}
+                {parent.children.map(child => {
+                  const isChecked = currentScheduleIds.includes(child.id);
+                  return (
+                    <button key={child.id} onClick={() => onToggleSelect(child.id)}
+                      className={`w-full text-left px-3 py-1.5 text-[11px] hover:bg-gray-50 flex items-center gap-2 transition-colors cursor-pointer ${
+                        isChecked ? 'bg-green-50/70 font-semibold' : ''
+                      }`}>
+                      <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center text-[9px] font-bold ${
+                        isChecked ? 'bg-[#16A34A] border-[#16A34A] text-white' : 'border-gray-300 bg-white'
+                      }`}>
+                        {isChecked ? '✓' : ''}
+                      </span>
+                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: child.color || '#16A34A' }} />
+                      <span className="font-medium text-gray-700 truncate">{child.name}</span>
+                      <span className="ml-auto text-[10px] text-gray-400 font-mono flex-shrink-0">
+                        {child.start_time?.substring(0, 5)}–{child.end_time?.substring(0, 5)}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             ) : (
-              <button onClick={() => onSelect(parent.id)}
-                className="w-full text-left px-3 py-1.5 text-[11px] hover:bg-gray-50 flex items-center gap-2 transition-colors cursor-pointer">
-                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: parent.color }} />
-                <span className="font-medium text-gray-700 truncate">{parent.name}</span>
-                <span className="ml-auto text-[10px] text-gray-400 font-mono flex-shrink-0">
-                  {parent.start_time?.substring(0, 5)}–{parent.end_time?.substring(0, 5)}
-                </span>
-                {currentScheduleId === parent.id && <Check size={12} className="ml-1 text-[#16A34A] flex-shrink-0" />}
-              </button>
+              (() => {
+                const isChecked = currentScheduleIds.includes(parent.id);
+                return (
+                  <button key={parent.id} onClick={() => onToggleSelect(parent.id)}
+                    className={`w-full text-left px-3 py-1.5 text-[11px] hover:bg-gray-50 flex items-center gap-2 transition-colors cursor-pointer ${
+                      isChecked ? 'bg-green-50/70 font-semibold' : ''
+                    }`}>
+                    <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center text-[9px] font-bold ${
+                      isChecked ? 'bg-[#16A34A] border-[#16A34A] text-white' : 'border-gray-300 bg-white'
+                    }`}>
+                      {isChecked ? '✓' : ''}
+                    </span>
+                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: parent.color }} />
+                    <span className="font-medium text-gray-700 truncate">{parent.name}</span>
+                    <span className="ml-auto text-[10px] text-gray-400 font-mono flex-shrink-0">
+                      {parent.start_time?.substring(0, 5)}–{parent.end_time?.substring(0, 5)}
+                    </span>
+                  </button>
+                );
+              })()
             )}
           </div>
         ))}
@@ -890,47 +920,105 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
     setPopover({ empId, dateStr, x, y });
   };
 
-  // Assign shift melalui popover -> SIMPAN KE DRAFT PENDING CHANGES
-  const handleAssign = (scheduleId: number | null) => {
+  const getCellAssignedShiftIds = (empId: number, dateStr: string): number[] => {
+    const changeKey = `${empId}-${dateStr}`;
+    if (pendingChanges[changeKey]) {
+      const p: any = pendingChanges[changeKey];
+      if (p.schedule_ids) return p.schedule_ids;
+      if (p.schedule_id) return [p.schedule_id];
+      return [];
+    }
+    const row = monthlyData.find(r => r.employee_id === empId);
+    if (!row || !row.dates || !row.dates[dateStr]) return [];
+    const assigned = row.dates[dateStr];
+    if (assigned.all_shifts && assigned.all_shifts.length > 0) {
+      return assigned.all_shifts.map((s: any) => s.schedule_id).filter(Boolean);
+    }
+    if (assigned.schedule_id && assigned.schedule_id !== 99999) {
+      return [assigned.schedule_id];
+    }
+    return [];
+  };
+
+  const handleToggleShift = (scheduleId: number | null) => {
     if (!popover) return;
     const { empId, dateStr } = popover;
-    setPopover(null);
-
     const changeKey = `${empId}-${dateStr}`;
+
+    if (scheduleId === null) {
+      setPendingChanges(prev => ({
+        ...prev,
+        [changeKey]: { employee_id: empId, work_date: dateStr, schedule_id: null, schedule_ids: [] }
+      }));
+
+      setMonthlyData(prev => prev.map(row => {
+        if (row.employee_id !== empId) return row;
+        const newDates = { ...row.dates };
+        delete newDates[dateStr];
+        return { ...row, dates: newDates };
+      }));
+      return;
+    }
+
+    const currentIds = getCellAssignedShiftIds(empId, dateStr);
+    let newIds: number[] = [];
+
+    if (currentIds.includes(scheduleId)) {
+      newIds = currentIds.filter(id => id !== scheduleId);
+    } else {
+      newIds = [...currentIds, scheduleId];
+    }
+
     setPendingChanges(prev => ({
       ...prev,
-      [changeKey]: { employee_id: empId, work_date: dateStr, schedule_id: scheduleId }
+      [changeKey]: { employee_id: empId, work_date: dateStr, schedule_id: newIds[0] ?? null, schedule_ids: newIds }
     }));
 
-    // Optimistic update visual tabel secara langsung
     setMonthlyData(prev => prev.map(row => {
       if (row.employee_id !== empId) return row;
       const newDates = { ...row.dates };
-      if (scheduleId === null) {
+
+      if (newIds.length === 0) {
         delete newDates[dateStr];
       } else {
-        let schedInfo: any = null;
-        for (const s of shifts) {
-          if (s.id === scheduleId) { schedInfo = s; break; }
-          for (const c of (s.children ?? [])) {
-            if (c.id === scheduleId) { schedInfo = c; break; }
+        const newShiftsList = newIds.map(sId => {
+          let schedInfo: any = null;
+          for (const s of shifts) {
+            if (s.id === sId) { schedInfo = s; break; }
+            for (const c of (s.children ?? [])) {
+              if (c.id === sId) { schedInfo = c; break; }
+            }
+            if (schedInfo) break;
           }
-          if (schedInfo) break;
-        }
-        if (schedInfo) {
-          newDates[dateStr] = {
-            schedule_id: scheduleId,
+          return schedInfo ? {
+            schedule_id: sId,
             name: schedInfo.name,
             color: schedInfo.color,
             icon: schedInfo.icon,
             shift_type: schedInfo.shift_type,
             start_time: schedInfo.start_time?.substring(0, 5),
             end_time: schedInfo.end_time?.substring(0, 5),
+            is_weekly: false,
+          } : null;
+        }).filter(Boolean);
+
+        if (newShiftsList.length > 0) {
+          newDates[dateStr] = {
+            ...newShiftsList[0],
+            all_shifts: newShiftsList
           };
+        } else {
+          delete newDates[dateStr];
         }
       }
       return { ...row, dates: newDates };
     }));
+  };
+
+  // Assign shift melalui popover -> SIMPAN KE DRAFT PENDING CHANGES
+  const handleAssign = (scheduleId: number | null) => {
+    handleToggleShift(scheduleId);
+    setPopover(null);
   };
 
   // Simpan seluruh draft perubahan sekaligus ke backend
@@ -2042,8 +2130,8 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
       {popover && (
         <ShiftPopover
           shifts={shifts.filter(s => s.status === 'approved')}
-          currentScheduleId={monthlyData.find(r => r.employee_id === popover.empId)?.dates[popover.dateStr]?.schedule_id}
-          onSelect={handleAssign}
+          currentScheduleIds={getCellAssignedShiftIds(popover.empId, popover.dateStr)}
+          onToggleSelect={handleToggleShift}
           onSelectSpecial={handleAssignSpecial}
           onClose={() => setPopover(null)}
           style={{ top: popover.y, left: popover.x }}

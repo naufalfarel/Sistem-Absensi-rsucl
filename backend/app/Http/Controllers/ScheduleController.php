@@ -922,9 +922,11 @@ class ScheduleController extends Controller
     public function assignEmployeeScheduleByDate(Request $request)
     {
         $data = $request->validate([
-            'employee_id' => 'required|exists:employees,id',
-            'work_date'   => 'required|date_format:Y-m-d',
-            'schedule_id' => 'nullable|exists:schedules,id',
+            'employee_id'  => 'required|exists:employees,id',
+            'work_date'    => 'required|date_format:Y-m-d',
+            'schedule_id'  => 'nullable',
+            'schedule_ids' => 'nullable|array',
+            'schedule_ids.*' => 'nullable|exists:schedules,id',
         ]);
 
         $emp = \App\Models\Employee::findOrFail($data['employee_id']);
@@ -962,19 +964,29 @@ class ScheduleController extends Controller
             ->whereNotNull('work_date')
             ->delete();
 
+        $idsToInsert = [];
+        if (isset($data['schedule_ids']) && is_array($data['schedule_ids'])) {
+            $idsToInsert = array_values(array_unique(array_filter($data['schedule_ids'])));
+        } elseif (!empty($data['schedule_id'])) {
+            $idsToInsert = [$data['schedule_id']];
+        }
+
         $scheduleName = 'Libur';
-        if (!empty($data['schedule_id'])) {
-            // Sisipkan record baru
-            \Illuminate\Support\Facades\DB::table('employee_schedule')->insert([
-                'employee_id' => $emp->id,
-                'schedule_id' => $data['schedule_id'],
-                'work_date'   => $data['work_date'],
-                'day_of_week' => null,
-                'created_at'  => now(),
-                'updated_at'  => now(),
-            ]);
-            $schedObj = \App\Models\Schedule::find($data['schedule_id']);
-            if ($schedObj) $scheduleName = $schedObj->name;
+        if (count($idsToInsert) > 0) {
+            $names = [];
+            foreach ($idsToInsert as $sId) {
+                \Illuminate\Support\Facades\DB::table('employee_schedule')->insert([
+                    'employee_id' => $emp->id,
+                    'schedule_id' => $sId,
+                    'work_date'   => $data['work_date'],
+                    'day_of_week' => null,
+                    'created_at'  => now(),
+                    'updated_at'  => now(),
+                ]);
+                $schedObj = \App\Models\Schedule::find($sId);
+                if ($schedObj) $names[] = $schedObj->name;
+            }
+            $scheduleName = implode(' + ', $names);
         }
 
         $updater  = $request->user()->role === 'pj_bagian' ? 'Penanggung Jawab Bagian' : 'Administrator';
@@ -1003,16 +1015,17 @@ class ScheduleController extends Controller
     public function assignBulkByDate(Request $request)
     {
         $data = $request->validate([
-            'assignments'               => 'required|array|min:1',
-            'assignments.*.employee_id' => 'required|exists:employees,id',
-            'assignments.*.work_date'   => 'required|date_format:Y-m-d',
-            'assignments.*.schedule_id' => 'nullable|exists:schedules,id',
+            'assignments'                => 'required|array|min:1',
+            'assignments.*.employee_id'  => 'required|exists:employees,id',
+            'assignments.*.work_date'    => 'required|date_format:Y-m-d',
+            'assignments.*.schedule_id'  => 'nullable',
+            'assignments.*.schedule_ids' => 'nullable|array',
+            'assignments.*.schedule_ids.*' => 'nullable|exists:schedules,id',
         ]);
 
         $authUser = $request->user();
         $deptIds  = $authUser->isPjBagian() ? $authUser->getPjDepartmentIds() : null;
 
-        $scheduleCache = [];
         $inserted = 0;
 
         foreach ($data['assignments'] as $assignment) {
@@ -1038,6 +1051,7 @@ class ScheduleController extends Controller
                     })
                     ->exists();
                 if ($hasApprovedLeave) continue;
+
             // Hapus record lama tanggal itu
             \Illuminate\Support\Facades\DB::table('employee_schedule')
                 ->where('employee_id', $emp->id)
@@ -1045,10 +1059,17 @@ class ScheduleController extends Controller
                 ->whereNotNull('work_date')
                 ->delete();
 
-            if (!empty($assignment['schedule_id'])) {
+            $idsToInsert = [];
+            if (isset($assignment['schedule_ids']) && is_array($assignment['schedule_ids'])) {
+                $idsToInsert = array_values(array_unique(array_filter($assignment['schedule_ids'])));
+            } elseif (!empty($assignment['schedule_id'])) {
+                $idsToInsert = [$assignment['schedule_id']];
+            }
+
+            foreach ($idsToInsert as $schedId) {
                 \Illuminate\Support\Facades\DB::table('employee_schedule')->insert([
                     'employee_id' => $emp->id,
-                    'schedule_id' => $assignment['schedule_id'],
+                    'schedule_id' => $schedId,
                     'work_date'   => $assignment['work_date'],
                     'day_of_week' => null,
                     'created_at'  => now(),

@@ -1299,22 +1299,24 @@ export const scheduleApi = {
       data: EmployeeMonthlySchedule[];
     }>(path);
   },
-  // Tugaskan shift ke satu karyawan untuk satu tanggal spesifik
+  // Tugaskan shift ke satu karyawan untuk satu tanggal spesifik (bisa 1 atau banyak shift)
   assignByDate: (
     employee_id: number,
     work_date: string,
-    schedule_id: number | null,
+    schedule_id?: number | null,
+    schedule_ids?: number[] | null,
   ) =>
     api.post<{ success: boolean; message: string }>(
       "/employee-schedules/assign-date",
-      { employee_id, work_date, schedule_id },
+      { employee_id, work_date, schedule_id, schedule_ids },
     ),
-  // Tugaskan shift ke banyak karyawan & banyak tanggal sekaligus
+  // Tugaskan shift ke banyak karyawan & banyak tanggal sekaligus (bisa multi-shift)
   assignBulkByDate: (
     assignments: Array<{
       employee_id: number;
       work_date: string;
-      schedule_id: number | null;
+      schedule_id?: number | null;
+      schedule_ids?: number[] | null;
     }>,
   ) =>
     api.post<{ success: boolean; message: string }>(

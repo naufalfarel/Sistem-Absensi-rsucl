@@ -896,39 +896,104 @@ export function ScheduleTab() {
     setCalPopover({ empId, dateStr, x: rect.left, y: rect.bottom + 4 });
   };
 
-  // Simpan pilihan ke draft pending changes (tanpa auto save instan)
-  const handleCalAssign = (scheduleId: number | null) => {
+  const getCellAssignedShiftIds = (empId: number, dateStr: string): number[] => {
+    const changeKey = `${empId}-${dateStr}`;
+    if (calPendingChanges[changeKey]) {
+      const p: any = calPendingChanges[changeKey];
+      if (p.schedule_ids) return p.schedule_ids;
+      if (p.schedule_id) return [p.schedule_id];
+      return [];
+    }
+    const row = monthlyData.find(r => r.employee_id === empId);
+    if (!row || !row.dates || !row.dates[dateStr]) return [];
+    const assigned = row.dates[dateStr];
+    if (assigned.all_shifts && assigned.all_shifts.length > 0) {
+      return assigned.all_shifts.map((s: any) => s.schedule_id).filter(Boolean);
+    }
+    if (assigned.schedule_id && assigned.schedule_id !== 99999) {
+      return [assigned.schedule_id];
+    }
+    return [];
+  };
+
+  const handleCalToggleShift = (scheduleId: number | null) => {
     if (!calPopover) return;
     const { empId, dateStr } = calPopover;
-    setCalPopover(null);
-
     const changeKey = `${empId}-${dateStr}`;
+
+    if (scheduleId === null) {
+      setCalPendingChanges(prev => ({
+        ...prev,
+        [changeKey]: { employee_id: empId, work_date: dateStr, schedule_id: null, schedule_ids: [] }
+      }));
+
+      setMonthlyData(prev => prev.map(row => {
+        if (row.employee_id !== empId) return row;
+        const newDates = { ...row.dates };
+        delete newDates[dateStr];
+        return { ...row, dates: newDates };
+      }));
+      return;
+    }
+
+    const currentIds = getCellAssignedShiftIds(empId, dateStr);
+    let newIds: number[] = [];
+
+    if (currentIds.includes(scheduleId)) {
+      newIds = currentIds.filter(id => id !== scheduleId);
+    } else {
+      newIds = [...currentIds, scheduleId];
+    }
+
     setCalPendingChanges(prev => ({
       ...prev,
-      [changeKey]: { employee_id: empId, work_date: dateStr, schedule_id: scheduleId }
+      [changeKey]: { employee_id: empId, work_date: dateStr, schedule_id: newIds[0] ?? null, schedule_ids: newIds }
     }));
 
-    // Optimistic update
     setMonthlyData(prev => prev.map(row => {
       if (row.employee_id !== empId) return row;
       const newDates = { ...row.dates };
-      if (scheduleId === null) {
+
+      if (newIds.length === 0) {
         delete newDates[dateStr];
       } else {
-        let schedInfo: any = null;
-        for (const s of shifts) {
-          if (s.id === scheduleId) { schedInfo = s; break; }
-          for (const c of (s.children ?? [])) {
-            if (c.id === scheduleId) { schedInfo = c; break; }
+        const newShiftsList = newIds.map(sId => {
+          let schedInfo: any = null;
+          for (const s of shifts) {
+            if (s.id === sId) { schedInfo = s; break; }
+            for (const c of (s.children ?? [])) {
+              if (c.id === sId) { schedInfo = c; break; }
+            }
+            if (schedInfo) break;
           }
-          if (schedInfo) break;
-        }
-        if (schedInfo) {
-          newDates[dateStr] = { schedule_id: scheduleId, name: schedInfo.name, color: schedInfo.color, icon: schedInfo.icon, shift_type: schedInfo.shift_type, start_time: schedInfo.start_time?.substring(0,5), end_time: schedInfo.end_time?.substring(0,5) };
+          return schedInfo ? {
+            schedule_id: sId,
+            name: schedInfo.name,
+            color: schedInfo.color,
+            icon: schedInfo.icon,
+            shift_type: schedInfo.shift_type,
+            start_time: schedInfo.start_time?.substring(0, 5),
+            end_time: schedInfo.end_time?.substring(0, 5),
+            is_weekly: false,
+          } : null;
+        }).filter(Boolean);
+
+        if (newShiftsList.length > 0) {
+          newDates[dateStr] = {
+            ...newShiftsList[0],
+            all_shifts: newShiftsList
+          };
+        } else {
+          delete newDates[dateStr];
         }
       }
       return { ...row, dates: newDates };
     }));
+  };
+
+  const handleCalAssign = (scheduleId: number | null) => {
+    handleCalToggleShift(scheduleId);
+    setCalPopover(null);
   };
 
   // Simpan seluruh draft perubahan sekaligus ke backend
@@ -2056,70 +2121,118 @@ export function ScheduleTab() {
       {calPopover && (
         <div className="fixed inset-0 z-30" onClick={() => setCalPopover(null)}>
           <div
-            className="absolute bg-white rounded-2xl border border-gray-200 shadow-2xl py-2 min-w-[200px] max-h-[320px] overflow-y-auto z-40"
-            style={{ top: calPopover.y, left: Math.min(calPopover.x, window.innerWidth - 220) }}
+            className="absolute bg-white rounded-2xl border border-gray-200 shadow-2xl py-2 min-w-[250px] max-h-[380px] overflow-y-auto z-40 text-left font-sans"
+            style={{ top: calPopover.y, left: Math.min(calPopover.x, window.innerWidth - 260) }}
             onClick={e => e.stopPropagation()}>
-            <p className="text-[9px] font-bold text-gray-400 px-3 py-1 uppercase tracking-wider border-b border-gray-100 mb-1">Pilih Shift</p>
-            <button onClick={() => handleCalAssign(null)}
-              className="w-full text-left px-3 py-2 text-[11px] font-bold text-gray-500 hover:bg-gray-50 flex items-center gap-2">
-              <Coffee size={13} className="text-gray-400" /> Libur / OFF
-            </button>
-            <button onClick={async () => {
-              let foundShift = shifts.find(s => s.name.toLowerCase().includes('libur jaga') || s.name.toUpperCase() === 'LJ');
-              if (!foundShift) {
-                try {
-                  const createRes = await scheduleApi.create({
-                    name: 'Libur Jaga (LJ)',
-                    start_time: '00:00',
-                    end_time: '00:00',
-                    color: '#475569',
-                    icon: 'moon',
-                    shift_type: 'normal',
-                  } as any);
-                  if (createRes.success) {
-                    foundShift = createRes.data;
-                    setShifts(prev => [...prev, createRes.data]);
-                  }
-                } catch (err) {
-                  console.error(err);
-                }
-              }
-              if (foundShift) {
-                await handleCalAssign(foundShift.id);
-              }
-            }}
-              className="w-full text-left px-3 py-2 text-[11px] font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-slate-600 flex-shrink-0" /> Libur Jaga (LJ)
-            </button>
-            <div className="h-px bg-gray-100 my-1" />
-            {shifts.map(parent => (
-              <div key={parent.id} className="mt-1 font-sans">
-                {parent.children && parent.children.length > 0 ? (
-                  <div>
-                    <p className="text-[9px] font-bold text-gray-400 px-3 pt-2 pb-1 uppercase tracking-wider">{parent.name}</p>
-                    {parent.children.map(child => {
-                      const cur = monthlyData.find(r => r.employee_id === calPopover.empId)?.dates[calPopover.dateStr]?.schedule_id;
-                      return (
-                        <button key={child.id} onClick={() => handleCalAssign(child.id)}
-                          className="w-full text-left px-3 py-1.5 text-[11px] hover:bg-gray-50 flex items-center gap-2 transition-colors cursor-pointer">
-                          <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: child.color || '#16A34A' }} />
-                          <span className="font-medium text-gray-700 truncate">{child.name}</span>
-                          <span className="ml-auto text-[10px] text-gray-400 font-mono flex-shrink-0">{child.start_time?.substring(0,5)}–{child.end_time?.substring(0,5)}</span>
-                          {cur === child.id && <Check size={12} className="ml-1 text-[#16A34A] flex-shrink-0" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <button onClick={() => handleCalAssign(parent.id)}
-                    className="w-full text-left px-3 py-1.5 text-[11px] hover:bg-gray-50 flex items-center gap-2 transition-colors cursor-pointer">
-                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: parent.color }} />
-                    <span className="font-medium text-gray-700 truncate">{parent.name}</span>
-                    <span className="ml-auto text-[10px] text-gray-400 font-mono flex-shrink-0">{parent.start_time?.substring(0,5)}–{parent.end_time?.substring(0,5)}</span>
-                  </button>
-                )}
+            <div className="px-3 py-1.5 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-bold text-gray-700 uppercase tracking-wider">Atur Shift Kerjasama</p>
+                <p className="text-[9px] text-gray-400">Centang 1 atau 2 shift (Double Shift)</p>
               </div>
-            ))}
+              <button onClick={() => setCalPopover(null)} className="text-gray-400 hover:text-gray-600">
+                <X size={13} />
+              </button>
+            </div>
+
+            {(() => {
+              const currentSelectedIds = getCellAssignedShiftIds(calPopover.empId, calPopover.dateStr);
+              return (
+                <>
+                  <div className="px-3 pt-2 pb-1 flex items-center justify-between">
+                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Status Libur Staf</span>
+                    {currentSelectedIds.length > 1 && (
+                      <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                        {currentSelectedIds.length} Shift Terpilih
+                      </span>
+                    )}
+                  </div>
+                  
+                  <button onClick={() => handleCalToggleShift(null)}
+                    className="w-full text-left px-3 py-1.5 text-[11px] font-bold text-gray-500 hover:bg-gray-50 flex items-center gap-2 transition-colors cursor-pointer">
+                    <Coffee size={13} className="text-gray-400" /> Libur / OFF
+                    {currentSelectedIds.length === 0 && <Check size={13} className="ml-auto text-[#16A34A]" />}
+                  </button>
+
+                  <button onClick={async () => {
+                    let foundShift = shifts.find(s => s.name.toLowerCase().includes('libur jaga') || s.name.toUpperCase() === 'LJ');
+                    if (!foundShift) {
+                      try {
+                        const createRes = await scheduleApi.create({
+                          name: 'Libur Jaga (LJ)',
+                          start_time: '00:00',
+                          end_time: '00:00',
+                          color: '#475569',
+                          icon: 'moon',
+                          shift_type: 'normal',
+                        } as any);
+                        if (createRes.success) {
+                          foundShift = createRes.data;
+                          setShifts(prev => [...prev, createRes.data]);
+                        }
+                      } catch (err) {
+                        console.error(err);
+                      }
+                    }
+                    if (foundShift) {
+                      handleCalToggleShift(foundShift.id);
+                    }
+                  }}
+                    className="w-full text-left px-3 py-1.5 text-[11px] font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors cursor-pointer">
+                    <span className="w-2.5 h-2.5 rounded-full bg-slate-600 flex-shrink-0" /> Libur Jaga (LJ)
+                  </button>
+
+                  <div className="h-px bg-gray-100 my-1.5" />
+                  <p className="text-[9px] font-bold text-gray-400 px-3 py-1 uppercase tracking-wider">Shift Jam Kerja (Bisa Centang &gt;1 Shift)</p>
+
+                  {shifts.map(parent => (
+                    <div key={parent.id} className="mt-1 font-sans">
+                      {parent.children && parent.children.length > 0 ? (
+                        <div>
+                          <p className="text-[9px] font-bold text-gray-400 px-3 pt-1.5 pb-0.5 uppercase tracking-wider">{parent.name}</p>
+                          {parent.children.map(child => {
+                            const isChecked = currentSelectedIds.includes(child.id);
+                            return (
+                              <button key={child.id} onClick={() => handleCalToggleShift(child.id)}
+                                className={`w-full text-left px-3 py-1.5 text-[11px] hover:bg-gray-50 flex items-center gap-2 transition-colors cursor-pointer ${
+                                  isChecked ? 'bg-green-50/70 font-semibold' : ''
+                                }`}>
+                                <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center text-[9px] font-bold ${
+                                  isChecked ? 'bg-[#16A34A] border-[#16A34A] text-white' : 'border-gray-300 bg-white'
+                                }`}>
+                                  {isChecked ? '✓' : ''}
+                                </span>
+                                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: child.color || '#16A34A' }} />
+                                <span className="text-gray-700 truncate">{child.name}</span>
+                                <span className="ml-auto text-[10px] text-gray-400 font-mono flex-shrink-0">{child.start_time?.substring(0,5)}–{child.end_time?.substring(0,5)}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        (() => {
+                          const isChecked = currentSelectedIds.includes(parent.id);
+                          return (
+                            <button key={parent.id} onClick={() => handleCalToggleShift(parent.id)}
+                              className={`w-full text-left px-3 py-1.5 text-[11px] hover:bg-gray-50 flex items-center gap-2 transition-colors cursor-pointer ${
+                                isChecked ? 'bg-green-50/70 font-semibold' : ''
+                              }`}>
+                              <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center text-[9px] font-bold ${
+                                isChecked ? 'bg-[#16A34A] border-[#16A34A] text-white' : 'border-gray-300 bg-white'
+                              }`}>
+                                {isChecked ? '✓' : ''}
+                              </span>
+                              <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: parent.color }} />
+                              <span className="text-gray-700 truncate">{parent.name}</span>
+                              <span className="ml-auto text-[10px] text-gray-400 font-mono flex-shrink-0">{parent.start_time?.substring(0,5)}–{parent.end_time?.substring(0,5)}</span>
+                            </button>
+                          );
+                        })()
+                      )}
+                    </div>
+                  ))}
+                </>
+              );
+            })()}
           </div>
         </div>
       )}
