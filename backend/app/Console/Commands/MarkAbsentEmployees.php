@@ -71,14 +71,30 @@ class MarkAbsentEmployees extends Command
                 continue;
             }
 
-            // Check schedule for today
-            $schedule = $emp->schedules()->wherePivot('day_of_week', $dayName)->first();
-            if (!$schedule) {
+            // Check schedule for today (date-specific work_date roster or weekly schedule)
+            $dateRow = \Illuminate\Support\Facades\DB::table('employee_schedule')
+                ->join('schedules', 'employee_schedule.schedule_id', '=', 'schedules.id')
+                ->where('employee_schedule.employee_id', $emp->id)
+                ->where('employee_schedule.work_date', $dateStr)
+                ->select('schedules.name')
+                ->first();
+
+            $scheduleName = null;
+            if ($dateRow) {
+                $scheduleName = $dateRow->name;
+            } else {
+                $sched = $emp->schedules()->wherePivot('day_of_week', $dayName)->first();
+                if ($sched) {
+                    $scheduleName = $sched->name;
+                }
+            }
+
+            if (!$scheduleName) {
                 continue;
             }
 
             // Check if it's an off/libur/libur jaga shift
-            $uName = strtoupper($schedule->name);
+            $uName = strtoupper($scheduleName);
             if (str_contains($uName, 'LIBUR') || str_contains($uName, 'LJ') || str_contains($uName, 'OFF')) {
                 continue;
             }

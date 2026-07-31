@@ -181,6 +181,16 @@ class Attendance extends Model
             ? Carbon::parse($firstAttendanceDate)->startOfDay()
             : $today; // Jika tidak ada data sama sekali, gunakan hari ini sebagai default
 
+        // Pre-fetch semua roster tanggal spesifik (work_date) untuk bulan ini
+        $dateRosters = \Illuminate\Support\Facades\DB::table('employee_schedule')
+            ->join('schedules', 'employee_schedule.schedule_id', '=', 'schedules.id')
+            ->whereYear('employee_schedule.work_date', $year)
+            ->whereMonth('employee_schedule.work_date', $month)
+            ->whereNotNull('employee_schedule.work_date')
+            ->select('employee_schedule.employee_id', 'employee_schedule.work_date', 'schedules.name', 'schedules.shift_type', 'schedules.id as schedule_id')
+            ->get()
+            ->groupBy(fn($r) => $r->employee_id . '_' . $r->work_date);
+
         $reportRecords = [];
 
         // 5. Lakukan looping untuk setiap hari kalender dalam bulan tersebut
@@ -189,29 +199,43 @@ class Attendance extends Model
             $dayOfWeekName = $dayMap[$date->dayOfWeek];
 
             foreach ($employees as $emp) {
-                // Periksa apakah karyawan memiliki jadwal shift pada hari tersebut
-                $hasShift = $emp->schedules->contains(function($schedule) use ($dayOfWeekName) {
-                    return $schedule->pivot->day_of_week === $dayOfWeekName;
-                });
+                $keyDate = $emp->id . '_' . $dateStr;
+                $hasShift = false;
+                $matchingShiftName = null;
+                $matchingShiftType = 'normal';
 
-                $matchingShift = $emp->schedules->first(function($schedule) use ($dayOfWeekName) {
-                    return $schedule->pivot->day_of_week === $dayOfWeekName;
-                });
+                // Prioritas 1: Cek Roster Tanggal Spesifik (work_date)
+                if (isset($dateRosters[$keyDate]) && $dateRosters[$keyDate]->isNotEmpty()) {
+                    $roster = $dateRosters[$keyDate]->first();
+                    $hasShift = true;
+                    $matchingShiftName = $roster->name;
+                    $matchingShiftType = $roster->shift_type ?? 'normal';
+                } else {
+                    // Prioritas 2: Fallback ke Jadwal Mingguan
+                    $matchingShift = $emp->schedules->first(function($schedule) use ($dayOfWeekName) {
+                        return $schedule->pivot->day_of_week === $dayOfWeekName;
+                    });
+                    if ($matchingShift) {
+                        $hasShift = true;
+                        $matchingShiftName = $matchingShift->name;
+                        $matchingShiftType = $matchingShift->shift_type ?? 'normal';
+                    }
+                }
 
                 $isOffShift = false;
-                if ($matchingShift) {
-                    $uName = strtoupper($matchingShift->name);
+                if ($matchingShiftName) {
+                    $uName = strtoupper($matchingShiftName);
                     if (str_contains($uName, 'LIBUR') || str_contains($uName, 'LJ') || str_contains($uName, 'OFF')) {
                         $isOffShift = true;
                     }
                 }
 
-                // Jika tidak ada shift (hari libur/off), lewati pengecekan
+                // Jika tidak ada shift (hari libur/off/Libur Jaga), lewati pengecekan Alpa
                 if (!$hasShift || $isOffShift) {
                     continue;
                 }
 
-                $shiftName = $matchingShift ? $matchingShift->name : 'Reguler';
+                $shiftName = $matchingShiftName ?? 'Reguler';
 
                 $key = $emp->id . '_' . $dateStr;
 

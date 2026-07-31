@@ -79,7 +79,7 @@ class LeaveRequest extends Model
 
     /**
      * Accessor untuk menghitung jumlah hari pengajuan cuti/izin berdasarkan tanggal efektif.
-     * Hari Minggu (Sunday) dikecualikan dari perhitungan karena merupakan hari libur.
+     * Hari Minggu (Sunday) dikecualikan untuk unit kerja reguler, namun tetap dihitung untuk unit kerja 24 jam / shift.
      */
     public function getDaysAttribute(): int
     {
@@ -89,9 +89,11 @@ class LeaveRequest extends Model
         $end   = \Carbon\Carbon::parse($this->effective_end_date);
         if ($start->gt($end)) return 0;
 
+        $countSunday = $this->employee ? $this->employee->shouldCountSundayInLeave() : false;
+
         $days = 0;
         for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
-            if (!$date->isSunday()) {
+            if ($countSunday || !$date->isSunday()) {
                 $days++;
             }
         }

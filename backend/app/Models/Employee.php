@@ -131,4 +131,12 @@ class Employee extends Model
     {
         return $this->approvedAssignmentLetterOn($date) !== null;
     }
+
+    /**
+     * Memeriksa apakah unit kerja tempat pegawai bertugas menganggap hari Minggu sebagai hari kerja/cuti (unit 24 jam/shift).
+     */
+    public function shouldCountSundayInLeave(): bool
+    {
+        return $this->department ? (bool) $this->department->count_sunday_in_leave : false;
+    }
 }

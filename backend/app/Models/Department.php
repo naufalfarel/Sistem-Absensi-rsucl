@@ -12,7 +12,11 @@ use Illuminate\Database\Eloquent\Model;
 class Department extends Model
 {
     // Kolom yang dapat diisi secara massal
-    protected $fillable = ['name'];
+    protected $fillable = ['name', 'count_sunday_in_leave'];
+
+    protected $casts = [
+        'count_sunday_in_leave' => 'boolean',
+    ];
 
     /**
      * Relasi ke model Employee.

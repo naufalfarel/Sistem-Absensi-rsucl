@@ -207,23 +207,26 @@ class LeaveQuotaHelper
     }
 
     /**
-     * Menghitung total hari kerja (non-Minggu) antara dua tanggal (inklusif).
-     * Hari Minggu (Sunday) dikecualikan karena merupakan hari libur.
+     * Menghitung total hari kerja antara dua tanggal (inklusif).
+     * Hari Minggu (Sunday) dikecualikan untuk unit reguler, namun dihitung untuk unit kerja 24 jam / shift.
      *
      * @param Carbon|string $startDate
      * @param Carbon|string $endDate
+     * @param Employee|null $employee
      * @return int
      */
-    public static function countLeaveDays($startDate, $endDate): int
+    public static function countLeaveDays($startDate, $endDate, ?Employee $employee = null): int
     {
         if (!$startDate || !$endDate) return 0;
         $start = Carbon::parse($startDate);
         $end   = Carbon::parse($endDate);
         if ($start->gt($end)) return 0;
 
+        $countSunday = $employee ? $employee->shouldCountSundayInLeave() : false;
+
         $days = 0;
         for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
-            if (!$date->isSunday()) {
+            if ($countSunday || !$date->isSunday()) {
                 $days++;
             }
         }
@@ -236,7 +239,7 @@ class LeaveQuotaHelper
      *
      * Digunakan untuk validasi batas maksimal 4 hari cuti per bulan kalender.
      * Setiap pengajuan yang rentang tanggalnya mencakup bulan tersebut akan
-     * dihitung hanya untuk hari-hari yang jatuh di dalam bulan itu (dikecualikan hari Minggu).
+     * dihitung hanya untuk hari-hari yang jatuh di dalam bulan itu.
      *
      * @param Employee $employee   Karyawan yang dicek
      * @param int      $year       Tahun bulan yang dicek (contoh: 2026)
@@ -264,10 +267,10 @@ class LeaveQuotaHelper
 
         $total = 0;
         foreach ($leaveRequests as $lr) {
-            // Hitung overlap antara rentang leave request dengan bulan ini (dikecualikan hari Minggu)
+            // Hitung overlap antara rentang leave request dengan bulan ini
             $lrStart     = Carbon::parse(max($lr->start_date->toDateString(), $monthStart));
             $lrEnd       = Carbon::parse(min($lr->end_date->toDateString(),   $monthEnd));
-            $daysInMonth = self::countLeaveDays($lrStart, $lrEnd);
+            $daysInMonth = self::countLeaveDays($lrStart, $lrEnd, $employee);
             $total += max(0, $daysInMonth);
         }
 

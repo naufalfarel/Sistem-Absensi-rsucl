@@ -47,6 +47,7 @@ export function DepartmentsTab({ onRefreshDepartments }: DepartmentsTabProps) {
     null,
   );
   const [formName, setFormName] = useState("");
+  const [formCountSunday, setFormCountSunday] = useState(false);
   const [modalError, setModalError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -147,6 +148,7 @@ export function DepartmentsTab({ onRefreshDepartments }: DepartmentsTabProps) {
 
   const openAdd = () => {
     setFormName("");
+    setFormCountSunday(false);
     setModalError("");
     setSelectedDept(null);
     setModalType("add");
@@ -154,6 +156,7 @@ export function DepartmentsTab({ onRefreshDepartments }: DepartmentsTabProps) {
 
   const openEdit = (dept: DepartmentModel) => {
     setFormName(dept.name);
+    setFormCountSunday(dept.count_sunday_in_leave ?? false);
     setModalError("");
     setSelectedDept(dept);
     setModalType("edit");
@@ -181,13 +184,17 @@ export function DepartmentsTab({ onRefreshDepartments }: DepartmentsTabProps) {
     setModalError("");
     try {
       if (modalType === "add") {
-        const res = await departmentApi.create({ name: formName.trim() });
+        const res = await departmentApi.create({
+          name: formName.trim(),
+          count_sunday_in_leave: formCountSunday,
+        });
         if (res.success) {
           setDepartments((prev) => [...prev, res.data]);
         }
       } else if (modalType === "edit" && selectedDept) {
         const res = await departmentApi.update(selectedDept.id, {
           name: formName.trim(),
+          count_sunday_in_leave: formCountSunday,
         });
         if (res.success) {
           setDepartments((prev) =>
@@ -220,6 +227,19 @@ export function DepartmentsTab({ onRefreshDepartments }: DepartmentsTabProps) {
       setModalError(err?.message ?? "Gagal menghapus data.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleToggleSunday = async (dept: DepartmentModel) => {
+    const nextVal = !dept.count_sunday_in_leave;
+    try {
+      const res = await departmentApi.update(dept.id, { count_sunday_in_leave: nextVal });
+      if (res.success) {
+        setDepartments(prev => prev.map(d => d.id === dept.id ? { ...d, count_sunday_in_leave: nextVal } : d));
+        if (onRefreshDepartments) onRefreshDepartments();
+      }
+    } catch (err: any) {
+      alert(err?.message ?? "Gagal memperbarui pengaturan hari Minggu.");
     }
   };
 
@@ -305,6 +325,7 @@ export function DepartmentsTab({ onRefreshDepartments }: DepartmentsTabProps) {
                 {[
                   "Nama Unit kerja",
                   "Jumlah Pegawai",
+                  "Aturan Cuti Hari Minggu",
                   "Tanggal Dibuat",
                   "Aksi",
                 ].map((h, i) => (
@@ -348,6 +369,20 @@ export function DepartmentsTab({ onRefreshDepartments }: DepartmentsTabProps) {
                       <Users size={13} className="text-gray-400 group-hover/cell:text-[#16A34A]/80" />
                       <span>{dept.employees_count ?? 0} Pegawai</span>
                     </div>
+                  </td>
+                  <td className="px-5 py-4">
+                    <button
+                      onClick={() => handleToggleSunday(dept)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11.5px] font-bold border transition-all cursor-pointer ${
+                        dept.count_sunday_in_leave
+                          ? "bg-amber-50 text-amber-900 border-amber-250 hover:bg-amber-100"
+                          : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                      }`}
+                      title="Klik untuk mengubah apakah hari Minggu dihitung memotong cuti atau libur"
+                    >
+                      <span className={`w-2 h-2 rounded-full ${dept.count_sunday_in_leave ? "bg-amber-500 animate-pulse" : "bg-slate-400"}`} />
+                      {dept.count_sunday_in_leave ? "Hitung Minggu (Shift 24h)" : "Minggu Libur (Reguler)"}
+                    </button>
                   </td>
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-1.5 text-[12px] text-gray-500">
@@ -456,6 +491,25 @@ export function DepartmentsTab({ onRefreshDepartments }: DepartmentsTabProps) {
                   className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all"
                   autoFocus
                 />
+              </div>
+
+              <div className="pt-2 border-t border-gray-100">
+                <label className="flex items-start gap-3 p-3.5 bg-amber-50/70 border border-amber-200/80 rounded-2xl cursor-pointer hover:bg-amber-50 transition-all">
+                  <input
+                    type="checkbox"
+                    checked={formCountSunday}
+                    onChange={(e) => setFormCountSunday(e.target.checked)}
+                    className="w-4 h-4 text-[#16A34A] rounded border-gray-300 focus:ring-[#16A34A] mt-0.5 cursor-pointer"
+                  />
+                  <div>
+                    <p className="text-[12.5px] font-bold text-amber-950">
+                      Hitung Hari Minggu Saat Cuti (Unit Shift 24 Jam)
+                    </p>
+                    <p className="text-[11px] text-amber-800/90 mt-0.5 leading-relaxed">
+                      Centang untuk unit beroperasi 24 jam seperti <strong>IGD, Rawat Inap, ICU, NICU, Depo, Kasir, Laundry, Gizi, dll.</strong> agar hari Minggu tetap dihitung memotong cuti.
+                    </p>
+                  </div>
+                </label>
               </div>
             </div>
 

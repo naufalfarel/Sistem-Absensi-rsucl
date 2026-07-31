@@ -93,9 +93,9 @@ class ScheduleController extends Controller
             }
             $data['owner_department_id'] = $deptId;
             $data['created_by'] = $user->id;
-            // Libur Jaga (LJ) tidak memerlukan pengajuan/persetujuan admin
-            $data['status'] = $isLiburJaga ? 'approved' : 'pending';
-            $data['proposed_by'] = $isLiburJaga ? null : $user->id;
+            // Shift buatan PJ Bagian langsung aktif tanpa perlu persetujuan admin
+            $data['status'] = 'approved';
+            $data['proposed_by'] = null;
         } else {
             $data['created_by'] = $user->id;
             $data['status'] = 'approved';
@@ -460,14 +460,18 @@ class ScheduleController extends Controller
             $activeShift = \App\Support\AttendanceRules::resolveShiftFor($employee, $now, $now);
             $matchedRow = ($activeShift ? $dateRows->firstWhere('id', $activeShift->id) : null) ?? $dateRows->first();
 
+            $uName = strtoupper($matchedRow->name);
+            $isLiburJaga = str_contains($uName, 'LIBUR') || str_contains($uName, 'LJ') || str_contains($uName, 'OFF');
+
             $todayData = [
-                'id'         => $matchedRow->id,
-                'name'       => $matchedRow->name,
-                'start_time' => $matchedRow->start_time,
-                'end_time'   => $matchedRow->end_time,
-                'color'      => $matchedRow->color,
-                'icon'       => $matchedRow->icon,
-                'shift_type' => $matchedRow->shift_type ?? 'normal',
+                'id'            => $matchedRow->id,
+                'name'          => $matchedRow->name,
+                'start_time'    => $matchedRow->start_time,
+                'end_time'      => $matchedRow->end_time,
+                'color'         => $matchedRow->color,
+                'icon'          => $matchedRow->icon,
+                'shift_type'    => $matchedRow->shift_type ?? 'normal',
+                'is_libur_jaga' => $isLiburJaga,
             ];
 
             return response()->json([
@@ -518,17 +522,21 @@ class ScheduleController extends Controller
                 ];
             }
 
+            $uNameWeek = strtoupper($matchedShift->name);
+            $isLiburJagaWeek = str_contains($uNameWeek, 'LIBUR') || str_contains($uNameWeek, 'LJ') || str_contains($uNameWeek, 'OFF');
+
             return response()->json([
                 'success'        => true,
                 'day'            => $todayName,
                 'data'           => [
-                    'id'         => $matchedShift->id,
-                    'name'       => $matchedShift->name,
-                    'start_time' => $matchedShift->start_time ?? '08:30:00',
-                    'end_time'   => $matchedShift->end_time ?? '17:00:00',
-                    'color'      => $matchedShift->color,
-                    'icon'       => $matchedShift->icon,
-                    'shift_type' => $matchedShift->shift_type ?? 'normal',
+                    'id'            => $matchedShift->id,
+                    'name'          => $matchedShift->name,
+                    'start_time'    => $matchedShift->start_time ?? '08:30:00',
+                    'end_time'      => $matchedShift->end_time ?? '17:00:00',
+                    'color'         => $matchedShift->color,
+                    'icon'          => $matchedShift->icon,
+                    'shift_type'    => $matchedShift->shift_type ?? 'normal',
+                    'is_libur_jaga' => $isLiburJagaWeek,
                 ],
                 'saturday_shift' => $saturdayData,
                 'source'         => 'weekly',

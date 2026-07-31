@@ -1738,44 +1738,66 @@ export function AttendancePage() {
         </div>
       )}
 
-      {/* Info Shift Hari Ini */}
+      {/* Info Shift Hari Ini / Libur Jaga Banner */}
       {todayShift !== undefined && (
-        <div
-          className={`mb-4 flex items-center gap-3 px-4 py-3 rounded-xl border text-[12px] font-medium ${
-            todayShift && !isLiburShift
-              ? "border-green-200 bg-green-50 text-green-800"
-              : "border-gray-200 bg-gray-50 text-gray-500"
-          }`}
-        >
+        isLiburShift ? (
+          <div className="mb-4 rounded-2xl border border-purple-200 bg-purple-50/80 p-4.5 text-[12.5px] leading-relaxed shadow-sm font-sans">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-purple-100 flex items-center justify-center flex-shrink-0 text-purple-700">
+                <Moon size={18} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <p className="font-bold text-[14px] text-purple-950">Jadwal Hari Ini: {todayShift?.name || 'Libur Jaga (LJ)'}</p>
+                  <span className="text-[10px] font-extrabold px-2 py-0.5 bg-purple-200 text-purple-800 rounded-full border border-purple-300">
+                    Libur Jaga / OFF
+                  </span>
+                </div>
+                <p className="mt-1 text-purple-800 text-[11.5px] leading-relaxed">
+                  ✨ Hari ini Anda sedang dalam jadwal <strong>Libur Jaga (LJ)</strong>. 
+                  Anda <strong>TIDAK PERLU ABSEN Presensi</strong> (masuk maupun pulang). Status kehadiran Anda tidak akan dihitung Alpa / Tanpa Keterangan.
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : (
           <div
-            className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-            style={{ background: todayShift && !isLiburShift ? todayShift.color : "#E5E7EB" }}
-          >
-            <Clock size={13} className="text-white" />
-          </div>
-          <div className="flex-1">
-            {todayShift && !isLiburShift ? (
-              <>
-                <span className="font-semibold">Shift {todayShift.name}</span>
-                <span className="text-green-600 ml-2">
-                  {todayShift.start_time.substring(0, 5)} –{" "}
-                  {todayShift.end_time.substring(0, 5)} WIB
-                </span>
-              </>
-            ) : (
-              <span>Tidak ada jadwal shift hari ini {todayShift ? `(${todayShift.name})` : ''}</span>
-            )}
-          </div>
-          <span
-            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-              todayShift && !isLiburShift
-                ? "bg-green-200 text-green-800"
-                : "bg-gray-200 text-gray-600"
+            className={`mb-4 flex items-center gap-3 px-4 py-3 rounded-xl border text-[12px] font-medium ${
+              todayShift
+                ? "border-green-200 bg-green-50 text-green-800"
+                : "border-gray-200 bg-gray-50 text-gray-500"
             }`}
           >
-            {todayShift && !isLiburShift ? "Aktif" : "Libur"}
-          </span>
-        </div>
+            <div
+              className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+              style={{ background: todayShift ? todayShift.color : "#E5E7EB" }}
+            >
+              <Clock size={13} className="text-white" />
+            </div>
+            <div className="flex-1">
+              {todayShift ? (
+                <>
+                  <span className="font-semibold">Shift {todayShift.name}</span>
+                  <span className="text-green-600 ml-2">
+                    {todayShift.start_time.substring(0, 5)} –{" "}
+                    {todayShift.end_time.substring(0, 5)} WIB
+                  </span>
+                </>
+              ) : (
+                <span>Tidak ada jadwal shift hari ini</span>
+              )}
+            </div>
+            <span
+              className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                todayShift
+                  ? "bg-green-200 text-green-800"
+                  : "bg-gray-200 text-gray-600"
+              }`}
+            >
+              {todayShift ? "Aktif" : "Libur"}
+            </span>
+          </div>
+        )
       )}
 
       {/* Sedang Dinas Banner */}

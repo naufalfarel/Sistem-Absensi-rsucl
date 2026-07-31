@@ -153,16 +153,32 @@ class AttendanceController extends Controller
         // Ambil data absensi aktual hari ini
         $attendances = Attendance::where('date', $todayStr)->get()->keyBy('employee_id');
 
+        // Pre-fetch roster tanggal spesifik (work_date) hari ini
+        $todayRosters = \Illuminate\Support\Facades\DB::table('employee_schedule')
+            ->join('schedules', 'employee_schedule.schedule_id', '=', 'schedules.id')
+            ->where('employee_schedule.work_date', $todayStr)
+            ->whereNotNull('employee_schedule.work_date')
+            ->select('employee_schedule.employee_id', 'schedules.*')
+            ->get()
+            ->keyBy('employee_id');
+
         $records = [];
         foreach ($employees as $emp) {
             if ($attendances->has($emp->id)) {
                 $att = $attendances->get($emp->id);
                 $records[] = $this->formatRecord($att, withEmployee: true);
             } else {
-                // Cari jadwal shift hari ini
-                $schedule = $emp->schedules->first(function($s) use ($todayName) {
-                    return $s->pivot->day_of_week === $todayName;
-                });
+                // Cari jadwal shift hari ini (Prioritas 1: Roster tanggal spesifik, Prioritas 2: Mingguan)
+                $dateRoster = $todayRosters->get($emp->id);
+                $schedule = null;
+
+                if ($dateRoster) {
+                    $schedule = $dateRoster;
+                } else {
+                    $schedule = $emp->schedules->first(function($s) use ($todayName) {
+                        return $s->pivot->day_of_week === $todayName;
+                    });
+                }
 
                 $isOffShift = false;
                 if ($schedule) {
@@ -175,7 +191,7 @@ class AttendanceController extends Controller
                 if (!$schedule || $isOffShift) {
                     $status = 'tidak_ada_shift';
                     $shiftName = $schedule ? $schedule->name : 'Tidak Ada Shift';
-                    $note = 'Hari Libur / Tidak Ada Shift';
+                    $note = $isOffShift ? 'Libur Jaga (LJ) — Tidak Wajib Absen' : 'Hari Libur / Tidak Ada Shift';
                 } else {
                     $shiftName = $schedule->name;
                     

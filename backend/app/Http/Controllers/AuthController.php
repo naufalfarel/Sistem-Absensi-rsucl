@@ -87,6 +87,7 @@ class AuthController extends Controller
             if ($emp) {
                 $userData['employee_id'] = $emp->id;
                 $userData['department']  = $emp->department?->name;
+                $userData['count_sunday_in_leave'] = (bool) $emp->department?->count_sunday_in_leave;
                 $userData['position']    = $emp->position?->name;
                 $userData['phone']       = $emp->phone;
                 $userData['gender']      = $emp->gender;
@@ -154,6 +155,7 @@ class AuthController extends Controller
             if ($emp) {
                 $data['employee_id'] = $emp->id;
                 $data['department']  = $emp->department?->name;
+                $data['count_sunday_in_leave'] = (bool) $emp->department?->count_sunday_in_leave;
                 $data['position']    = $emp->position?->name;
                 $data['phone']       = $emp->phone;
                 $data['gender']      = $emp->gender;
@@ -316,6 +318,7 @@ class AuthController extends Controller
             if ($emp) {
                 $data['employee_id'] = $emp->id;
                 $data['department']  = $emp->department?->name;
+                $data['count_sunday_in_leave'] = (bool) $emp->department?->count_sunday_in_leave;
                 $data['position']    = $emp->position?->name;
                 $data['phone']       = $emp->phone;
                 $data['gender']      = $emp->gender;

@@ -142,6 +142,7 @@ export interface AuthUser {
   pj_bagian_department?: string;
   employee_id?: number;
   department?: string;
+  count_sunday_in_leave?: boolean;
   position?: string;
   phone?: string;
   gender?: string;
@@ -348,6 +349,7 @@ export const employeeApi = {
 export interface DepartmentModel {
   id: number;
   name: string;
+  count_sunday_in_leave?: boolean;
   employees_count?: number;
   created_at?: string;
   updated_at?: string;
@@ -361,9 +363,9 @@ export const departmentApi = {
     api.get<{ success: boolean; data: DepartmentModel[] }>("/departments"),
   show: (id: number) =>
     api.get<{ success: boolean; data: DepartmentModel }>(`/departments/${id}`),
-  create: (data: { name: string }) =>
+  create: (data: { name: string; count_sunday_in_leave?: boolean }) =>
     api.post<{ success: boolean; data: DepartmentModel }>("/departments", data),
-  update: (id: number, data: { name: string }) =>
+  update: (id: number, data: { name?: string; count_sunday_in_leave?: boolean }) =>
     api.put<{ success: boolean; data: DepartmentModel }>(
       `/departments/${id}`,
       data,

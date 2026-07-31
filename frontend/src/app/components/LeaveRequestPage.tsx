@@ -133,14 +133,15 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
     }
   }, [user]);
 
-  // Helper to add N work days excluding Sundays (0 = Sunday in JS Date)
+  // Helper to add N work days (respecting unit count_sunday_in_leave rule)
   const addWorkDays = (startStr: string, targetWorkDays: number): string => {
     if (!startStr) return '';
     const cur = new Date(startStr);
-    let workDays = cur.getDay() !== 0 ? 1 : 0;
+    const countSunday = !!user?.count_sunday_in_leave;
+    let workDays = (countSunday || cur.getDay() !== 0) ? 1 : 0;
     while (workDays < targetWorkDays) {
       cur.setDate(cur.getDate() + 1);
-      if (cur.getDay() !== 0) {
+      if (countSunday || cur.getDay() !== 0) {
         workDays++;
       }
     }
@@ -292,17 +293,19 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
     setAttachmentError('');
   };
 
-  // Helper to count work days excluding Sundays (0 = Sunday in JS Date)
+  // Helper to count work days (respecting unit count_sunday_in_leave rule)
   const countWorkDays = (startStr: string, endStr: string): number => {
     if (!startStr || !endStr) return 0;
     const start = new Date(startStr);
     const end   = new Date(endStr);
     if (start > end) return 0;
 
+    const countSunday = !!user?.count_sunday_in_leave;
+
     let count = 0;
     const cur = new Date(start);
     while (cur <= end) {
-      if (cur.getDay() !== 0) { // Exclude Sunday
+      if (countSunday || cur.getDay() !== 0) {
         count++;
       }
       cur.setDate(cur.getDate() + 1);
@@ -317,7 +320,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
   };
 
   /**
-   * Hitung berapa hari kerja pengajuan baru (startDate..endDate) jatuh di bulan Y-M (dikecualikan hari Minggu).
+   * Hitung berapa hari kerja pengajuan baru (startDate..endDate) jatuh di bulan Y-M.
    */
   const calcNewDaysInMonth = (year: number, month: number): number => {
     if (!startDate || !endDate) return 0;
@@ -329,20 +332,23 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
     const overlapEnd   = rEnd < mEnd   ? rEnd   : mEnd;
     if (overlapStart > overlapEnd) return 0;
 
+    const countSunday = !!user?.count_sunday_in_leave;
+
     let count = 0;
     const cur = new Date(overlapStart);
     while (cur <= overlapEnd) {
-      if (cur.getDay() !== 0) count++;
+      if (countSunday || cur.getDay() !== 0) count++;
       cur.setDate(cur.getDate() + 1);
     }
     return count;
   };
 
   /**
-   * Hitung total hari cuti (approved+pending) dari `requests` yang jatuh di bulan Y-M (dikecualikan hari Minggu).
+   * Hitung total hari cuti (approved+pending) dari `requests` yang jatuh di bulan Y-M.
    * Tidak menghitung request sementara (hanya dari data server yang sudah ada).
    */
   const existingCutiDaysInMonth = (year: number, month: number): number => {
+    const countSunday = !!user?.count_sunday_in_leave;
     return requests
       .filter(r => r.type === 'cuti' && (r.status === 'approved' || r.status === 'pending'))
       .reduce((total, r) => {
@@ -358,7 +364,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
         let count = 0;
         const cur = new Date(oStart);
         while (cur <= oEnd) {
-          if (cur.getDay() !== 0) count++;
+          if (countSunday || cur.getDay() !== 0) count++;
           cur.setDate(cur.getDate() + 1);
         }
         return total + count;
@@ -1001,6 +1007,15 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
                       )}
                     </p>
                   </div>
+                  {user?.count_sunday_in_leave ? (
+                    <p className="text-[10.5px] text-amber-800 font-medium">
+                      ℹ️ Hari Minggu <strong>tetap dihitung hari cuti</strong> karena Unit Kerja <strong>{user?.department || 'Anda'}</strong> beroperasi 24 jam / shift.
+                    </p>
+                  ) : (
+                    <p className="text-[10.5px] text-gray-500 font-medium">
+                      ℹ️ Hari Minggu <strong>dikecualikan</strong> dari perhitungan cuti (libur reguler).
+                    </p>
+                  )}
                   {/* Monthly limit warning */}
                   {leaveType === 'cuti' && !!checkMonthlyLimit() && (
                     <div className="flex items-start gap-1.5 mt-0.5">

@@ -42,7 +42,8 @@ class DepartmentController extends Controller
     {
         // Validasi input nama departemen
         $data = $request->validate([
-            'name' => 'required|string|max:100|unique:departments,name',
+            'name'                  => 'required|string|max:100|unique:departments,name',
+            'count_sunday_in_leave' => 'nullable|boolean',
         ], [
             'name.required' => 'Nama Unit kerja wajib diisi.',
             'name.unique'   => 'Nama Unit kerja sudah terdaftar.',
@@ -92,7 +93,8 @@ class DepartmentController extends Controller
     {
         // Validasi nama baru (mengabaikan nama unik untuk ID departemen itu sendiri)
         $data = $request->validate([
-            'name' => 'required|string|max:100|unique:departments,name,' . $department->id,
+            'name'                  => 'required|string|max:100|unique:departments,name,' . $department->id,
+            'count_sunday_in_leave' => 'nullable|boolean',
         ], [
             'name.required' => 'Nama Unit kerja wajib diisi.',
             'name.unique'   => 'Nama Unit kerja sudah terdaftar.',

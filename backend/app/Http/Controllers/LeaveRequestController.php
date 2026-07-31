@@ -230,7 +230,7 @@ class LeaveRequestController extends Controller
             $remaining     = LeaveQuotaHelper::remainingDays($employee, $now);
             $startDate     = \Carbon\Carbon::parse($data['start_date']);
             $endDate       = \Carbon\Carbon::parse($data['end_date']);
-            $daysRequested = LeaveQuotaHelper::countLeaveDays($startDate, $endDate);
+            $daysRequested = LeaveQuotaHelper::countLeaveDays($startDate, $endDate, $employee);
 
             // ── Aturan Baru: Diajukan paling lambat 2 minggu (14 hari) sebelum pelaksanaan ──
             $today = \Carbon\Carbon::today();
@@ -290,7 +290,7 @@ class LeaveRequestController extends Controller
                 $monthEnd   = \Carbon\Carbon::create($y, $mo, 1)->endOfMonth();
                 $overlapStart = $startDate->copy()->max($monthStart);
                 $overlapEnd   = $endDate->copy()->min($monthEnd);
-                $newDaysThisMonth = LeaveQuotaHelper::countLeaveDays($overlapStart, $overlapEnd);
+                $newDaysThisMonth = LeaveQuotaHelper::countLeaveDays($overlapStart, $overlapEnd, $employee);
 
                 // Hitung cuti yang sudah committed di bulan ini
                 $existingDaysThisMonth = LeaveQuotaHelper::committedDaysInMonth($employee, $y, $mo);
@@ -316,7 +316,7 @@ class LeaveRequestController extends Controller
         if ($data['type'] === 'sakit' && !$user->isAdmin()) {
             $startDate     = \Carbon\Carbon::parse($data['start_date']);
             $endDate       = \Carbon\Carbon::parse($data['end_date']);
-            $daysRequested = LeaveQuotaHelper::countLeaveDays($startDate, $endDate);
+            $daysRequested = LeaveQuotaHelper::countLeaveDays($startDate, $endDate, $employee);
 
             // ── Aturan 1: Maksimal 3 hari per pengajuan ──────────────────────
             if ($daysRequested > 3) {
@@ -352,7 +352,7 @@ class LeaveRequestController extends Controller
                 $monthEnd   = \Carbon\Carbon::create($y, $mo, 1)->endOfMonth();
                 $overlapStart = $startDate->copy()->max($monthStart);
                 $overlapEnd   = $endDate->copy()->min($monthEnd);
-                $newDaysThisMonth = LeaveQuotaHelper::countLeaveDays($overlapStart, $overlapEnd);
+                $newDaysThisMonth = LeaveQuotaHelper::countLeaveDays($overlapStart, $overlapEnd, $employee);
 
                 // Hitung sakit yang sudah committed di bulan ini (dikecualikan hari Minggu)
                 $q = $employee->leaveRequests()
@@ -392,7 +392,7 @@ class LeaveRequestController extends Controller
                 $categoryName = strtolower($category->name);
                 $startDate = \Carbon\Carbon::parse($data['start_date']);
                 $endDate = \Carbon\Carbon::parse($data['end_date']);
-                $daysRequested = LeaveQuotaHelper::countLeaveDays($startDate, $endDate);
+                $daysRequested = LeaveQuotaHelper::countLeaveDays($startDate, $endDate, $employee);
                 $today = \Carbon\Carbon::today();
 
                 // 1. Validasi Cuti Menikah (Dikunci 3 hari per pengajuan & Maksimal 3 hari dalam 1 TAHUN)
@@ -593,11 +593,12 @@ class LeaveRequestController extends Controller
         ]);
 
         if ($user->isAdmin()) {
-            // Generate attendance records immediately (dikecualikan hari Minggu)
+            // Generate attendance records immediately
+            $countSunday = $employee->shouldCountSundayInLeave();
             $start = \Carbon\Carbon::parse($lr->start_date);
             $end = \Carbon\Carbon::parse($lr->end_date);
             for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
-                if ($date->isSunday()) {
+                if (!$countSunday && $date->isSunday()) {
                     continue;
                 }
                 $dateStr = $date->toDateString();
@@ -865,12 +866,13 @@ class LeaveRequestController extends Controller
                 'pj_note'         => $lr->pj_note,
             ]);
 
-            // Jika disetujui, buat/perbarui record absensi harian karyawan tersebut (dikecualikan hari Minggu)
+            // Jika disetujui, buat/perbarui record absensi harian karyawan tersebut
             if ($newStatus === 'approved') {
+                $countSunday = $lr->employee ? $lr->employee->shouldCountSundayInLeave() : false;
                 $start = \Carbon\Carbon::parse($lr->start_date);
                 $end = \Carbon\Carbon::parse($lr->end_date);
                 for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
-                    if ($date->isSunday()) {
+                    if (!$countSunday && $date->isSunday()) {
                         continue;
                     }
                     $dateStr = $date->toDateString();
