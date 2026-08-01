@@ -393,7 +393,7 @@ class Attendance extends Model
                                     $shiftStartCarbon = Carbon::today('Asia/Jakarta')->setTimeFromTimeString($shiftStart);
                                     $closeLimitCarbon = Carbon::today('Asia/Jakarta')->setTimeFromTimeString($resolvedCloseTime);
 
-                                    if ($now->lte($closeLimitCarbon)) {
+                                    if ($date->isToday()) {
                                         $status = 'belum_hadir';
                                         $note = 'Belum Absen Masuk';
                                     }

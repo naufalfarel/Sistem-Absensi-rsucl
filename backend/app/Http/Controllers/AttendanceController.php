@@ -216,14 +216,9 @@ class AttendanceController extends Controller
                     $holiday = AttendanceRules::holidayOn(Carbon::today('Asia/Jakarta'));
                     $isAssigned = $holiday ? AttendanceRules::isAssignedToWorkOnHoliday($emp, $holiday) : false;
 
-                    if ($now->gt($closeLimitCarbon)) {
-                        if ($holiday && !$isAssigned) {
-                            $status = 'belum_hadir';
-                            $note = 'Hari Libur (Tidak Wajib)';
-                        } else {
-                            $status = 'alpha';
-                            $note = 'Tidak Hadir Tanpa Keterangan';
-                        }
+                    if ($holiday && !$isAssigned) {
+                        $status = 'belum_hadir';
+                        $note = 'Hari Libur (Tidak Wajib)';
                     } else {
                         $status = 'belum_hadir';
                         $note = 'Belum Absen Masuk';
@@ -1567,10 +1562,10 @@ class AttendanceController extends Controller
                             $shiftStartCarbon = Carbon::today('Asia/Jakarta')->setTimeFromTimeString($shiftStart);
                             $closeLimitCarbon = Carbon::today('Asia/Jakarta')->setTimeFromTimeString($resolvedCloseTime);
 
-                            if ($now->lte($closeLimitCarbon)) {
-                                $status = 'belum_hadir';
-                                $note = 'Belum Absen Masuk';
-                            }
+                        if ($carbonDate->isToday()) {
+                            $status = 'belum_hadir';
+                            $note = 'Belum Absen Masuk';
+                        }
                         }
 
                         $rows[] = $this->formatRowForAbsent($emp, $targetDate, $status, $note, $matchingShift);

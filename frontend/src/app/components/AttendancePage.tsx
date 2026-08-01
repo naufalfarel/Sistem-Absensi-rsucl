@@ -16,6 +16,7 @@ import {
   Camera,
   Calendar,
   RotateCw,
+  Info,
 } from "lucide-react";
 import { useRealtimeGps } from "../../hooks/useRealtimeGps";
 import {
@@ -1148,71 +1149,6 @@ export function AttendancePage() {
             ? (shiftRes.value.saturday_shift ?? null)
             : null;
         setSaturdayShift(satShift);
-
-        // Gunakan shift kustom jika ada, jika tidak, gunakan default "08:00" - "17:00"
-        const startTime = shift ? shift.start_time : "08:00:00";
-        const endTime = shift ? shift.end_time : "17:00:00";
-
-        const startHHmm = startTime.substring(0, 5); // "HH:mm"
-        const endHHmm = endTime.substring(0, 5); // "HH:mm"
-        const startMins = parseMins(startHHmm);
-        const endMins = parseMins(endHHmm);
-        const overnight = endMins < startMins; // shift lintas tengah malam
-
-        // Sabtu Checkout menggunakan end_time dari shift Sabtu (default ke 13:00 jika tidak ada)
-        const satEndTime = satShift ? satShift.end_time : "13:00:00";
-        const satEndHHmm = satEndTime.substring(0, 5);
-
-        const checkinOpenOffset = parseInt(base.checkin_open) || 0;
-        const lateLimitOffset = parseInt(base.late_limit) || 0;
-        const closeCheckinOffset = parseInt(base.close_checkin) || 0;
-        const checkoutOpenOffset = parseInt(base.checkout_open) || 0;
-        const checkoutCloseOffset = parseInt(base.checkout_close) || 0;
-        const satCheckoutOpenOffset = parseInt(base.sat_checkout_open) || 0;
-        const satCheckoutCloseOffset = parseInt(base.sat_checkout_close) || 0;
-
-        // Jam buka check-in = 2 jam 30 menit (150 menit) sebelum jam masuk shift
-        const openHHmm = subMins(startHHmm, 150);
-        // Batas toleransi tepat waktu = 10 menit setelah jam masuk shift
-        const lateHHmm = addMins(startHHmm, 10);
-        // Tutup check-in = jam selesai shift (atau jam kerja berikutnya)
-        const closeHHmm = endHHmm;
-
-        // Checkout = jam selesai shift - checkoutOpenOffset; batas = selesai + checkoutCloseOffset
-        const checkoutOpenHHmm = subMins(endHHmm, checkoutOpenOffset);
-        const checkoutCloseHHmm = addMins(endHHmm, checkoutCloseOffset);
-
-        // Sabtu Checkout = Sabtu selesai - satCheckoutOpenOffset; batas = Sabtu selesai + satCheckoutCloseOffset
-        const satCheckoutOpenHHmm = subMins(satEndHHmm, satCheckoutOpenOffset);
-        const satCheckoutCloseHHmm = addMins(
-          satEndHHmm,
-          satCheckoutCloseOffset,
-        );
-
-        // Break hanya relevan jika jatuh di dalam rentang shift
-        // Untuk shift non-reguler, nonaktifkan break (set = checkout_open)
-        const globalBreakStart = parseMins(base.break_start);
-        const globalBreakEnd = parseMins(base.break_end);
-        const breakInShift =
-          !overnight &&
-          globalBreakStart > parseMins(closeHHmm) &&
-          globalBreakEnd <= endMins;
-
-        base.checkin_open = openHHmm;
-        base.late_limit = lateHHmm;
-        base.close_checkin = closeHHmm;
-        base.checkout_open = checkoutOpenHHmm;
-        base.checkout_close = checkoutCloseHHmm;
-        base.sat_checkout_open = satCheckoutOpenHHmm;
-        base.sat_checkout_close = satCheckoutCloseHHmm;
-        base.isOvernight = overnight;
-
-        if (!breakInShift) {
-          // Nonaktifkan break (set ke waktu yang tidak pernah selesai)
-          base.break_start = checkoutOpenHHmm;
-          base.break_end = checkoutOpenHHmm;
-        }
-
         setShiftSettings(base);
       })
       .catch((err) => {
@@ -1220,6 +1156,37 @@ export function AttendancePage() {
         setTodayShift(null);
       });
   }, []);
+
+  // Dynamically update shiftSettings whenever todayShift or saturdayShift changes
+  useEffect(() => {
+    const startTime = todayShift ? todayShift.start_time : "08:30:00";
+    const endTime = todayShift ? todayShift.end_time : "17:00:00";
+
+    const startHHmm = startTime.substring(0, 5);
+    const endHHmm = endTime.substring(0, 5);
+    const startMins = parseMins(startHHmm);
+    const endMins = parseMins(endHHmm);
+    const overnight = endMins < startMins;
+
+    const satEndTime = saturdayShift ? saturdayShift.end_time : "13:00:00";
+    const satEndHHmm = satEndTime.substring(0, 5);
+
+    const openHHmm = subMins(startHHmm, 150); // 2.5 jam sebelum shift
+    const lateHHmm = addMins(startHHmm, 10);  // Toleransi 10 menit
+    const closeHHmm = endHHmm;
+
+    setShiftSettings((prev) => ({
+      ...prev,
+      checkin_open: openHHmm,
+      late_limit: lateHHmm,
+      close_checkin: closeHHmm,
+      checkout_open: endHHmm,
+      checkout_close: addMins(endHHmm, 60),
+      sat_checkout_open: satEndHHmm,
+      sat_checkout_close: addMins(satEndHHmm, 60),
+      isOvernight: overnight,
+    }));
+  }, [todayShift, saturdayShift]);
 
   // Load today's record on mount
   useEffect(() => {
@@ -2271,59 +2238,69 @@ export function AttendancePage() {
 
 
 
-      {/* Rules footer */}
-      <div className="mt-4 px-4 py-3 bg-gray-50 rounded-xl border border-gray-100">
-        <p className="text-[11px] font-semibold text-gray-500 mb-2">
-          Ketentuan Absensi RSUCL
-        </p>
-        <div className="space-y-1.5">
-          {[
-            [
-              "Shift Aktif Hari Ini",
-              todayShift
-                ? `${todayShift.name} (${todayShift.start_time.substring(0, 5)} – ${todayShift.end_time.substring(0, 5)} WIB)`
-                : "Libur / Tidak Ada Shift",
-              "text-green-700 font-semibold",
-            ],
-            [
-              "Pintu Check-In Dibuka",
-              `${shiftSettings.checkin_open} WIB (2.5 Jam Sebelum Shift)`,
-              "text-black font-medium",
-            ],
-            [
-              "Rentang Tepat Waktu",
-              `${shiftSettings.checkin_open} – ${shiftSettings.late_limit} WIB (Toleransi 10 Menit)`,
-              "text-green-700 font-semibold",
-            ],
-            [
-              "Status Terlambat",
-              `Lewat ${shiftSettings.late_limit} WIB – ${shiftSettings.close_checkin} WIB (Tetap Bisa Absen)`,
-              "text-orange-700 font-semibold",
-            ],
-            [
-              "Batas Akhir Check-In (Tutup)",
-              `${shiftSettings.close_checkin} WIB (Lewat = Alpha)`,
-              "text-red-700 font-semibold",
-            ],
-            [
-              "Waktu Check-Out (Pulang)",
-              `${shiftSettings.checkout_open} WIB` +
-                (saturdayShift
-                  ? ` (Sabtu: ${shiftSettings.sat_checkout_open} WIB)`
-                  : ""),
-              "text-black font-medium",
-            ],
-            [
-              "Batas Akhir Check-Out",
-              "Mohon lakukan checkout tepat saat Anda selesai bekerja",
-              "text-amber-600 font-semibold",
-            ],
-          ].map(([label, value, cls], i) => (
-            <div key={i} className="flex justify-between text-[11px]">
-              <span className="text-gray-500">{label}</span>
-              <span className={`font-medium ${cls}`}>{value}</span>
+      {/* Ketentuan Absensi RSUCL Card */}
+      <div className="mt-4 p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80 shadow-2xs font-sans space-y-3">
+        <div className="flex items-center justify-between border-b border-slate-200/60 pb-2.5">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+              <Info size={14} />
             </div>
-          ))}
+            <p className="text-[12px] font-bold text-slate-800 tracking-wide">
+              Ketentuan Absensi RSUCL
+            </p>
+          </div>
+          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+            Shift Hari Ini
+          </span>
+        </div>
+
+        <div className="space-y-2 text-[11.5px]">
+          {/* Shift Aktif */}
+          <div className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-slate-150 shadow-2xs">
+            <span className="text-slate-500 font-medium">Jadwal Shift:</span>
+            <span className="font-bold text-emerald-800 text-right">
+              {todayShift
+                ? (() => {
+                    const nameHasTime = todayShift.name.includes(":") || todayShift.name.includes("00");
+                    const timeRange = `${todayShift.start_time.substring(0, 5)} – ${todayShift.end_time.substring(0, 5)} WIB`;
+                    return nameHasTime ? `${todayShift.name}` : `${todayShift.name} (${timeRange})`;
+                  })()
+                : "Libur / Tidak Ada Shift"}
+            </span>
+          </div>
+
+          {/* Pintu Check-in */}
+          <div className="flex items-center justify-between px-2.5 py-1.5">
+            <span className="text-slate-500">Pintu Check-In Dibuka:</span>
+            <span className="font-semibold text-slate-800">
+              {shiftSettings.checkin_open} WIB <span className="text-[10px] text-slate-400 font-normal">(2.5 Jam Sebelum Shift)</span>
+            </span>
+          </div>
+
+          {/* Rentang Tepat Waktu */}
+          <div className="flex items-center justify-between px-2.5 py-1.5 bg-emerald-50/50 rounded-xl border border-emerald-150/60">
+            <span className="text-emerald-800 font-medium">Tepat Waktu (Hadir):</span>
+            <span className="font-bold text-emerald-700">
+              {shiftSettings.checkin_open} – {shiftSettings.late_limit} WIB
+            </span>
+          </div>
+
+          {/* Status Terlambat */}
+          <div className="flex items-center justify-between px-2.5 py-1.5 bg-amber-50/50 rounded-xl border border-amber-150/60">
+            <span className="text-amber-800 font-medium">Status Terlambat:</span>
+            <span className="font-bold text-amber-700">
+              Lewat {shiftSettings.late_limit} WIB <span className="text-[10px] text-amber-600 font-normal">(Tetap Bisa Absen)</span>
+            </span>
+          </div>
+
+          {/* Waktu Check-Out */}
+          <div className="flex items-center justify-between px-2.5 py-1.5">
+            <span className="text-slate-500">Waktu Check-Out (Pulang):</span>
+            <span className="font-semibold text-slate-800">
+              {shiftSettings.checkout_open} WIB
+              {saturdayShift ? ` (Sabtu: ${shiftSettings.sat_checkout_open} WIB)` : ""}
+            </span>
+          </div>
         </div>
       </div>
 

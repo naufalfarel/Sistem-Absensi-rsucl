@@ -477,18 +477,21 @@ function BulkAssignModal({ user, shifts, employees, year, month, daysInMonth, on
                   const n = s.name.toLowerCase();
                   return !n.includes('cuti') && !n.includes('sakit') && !n.includes('izin') && !n.includes('dinas luar') && !n.includes('libur jaga') && n !== 'lj';
                 })
-                .map(parent => (
-                  <optgroup key={parent.id} label={parent.name}>
-                    {parent.children && parent.children.length > 0
-                      ? parent.children.map(child => (
-                          <option key={child.id} value={child.id}>
-                            {child.name} ({child.start_time?.substring(0, 5)} – {child.end_time?.substring(0, 5)})
-                          </option>
-                        ))
-                      : <option value={parent.id}>{parent.name} ({parent.start_time?.substring(0, 5)} – {parent.end_time?.substring(0, 5)})</option>
-                    }
-                  </optgroup>
-                ))}
+                .map(parent => {
+                  const deptTag = parent.owner_department_name ? ` (Unit: ${parent.owner_department_name})` : ' (Office)';
+                  return (
+                    <optgroup key={parent.id} label={`${parent.name}${deptTag}`}>
+                      {parent.children && parent.children.length > 0
+                        ? parent.children.map(child => (
+                            <option key={child.id} value={child.id}>
+                              {child.name} ({child.start_time?.substring(0, 5)} – {child.end_time?.substring(0, 5)}){deptTag}
+                            </option>
+                          ))
+                        : <option value={parent.id}>{parent.name} ({parent.start_time?.substring(0, 5)} – {parent.end_time?.substring(0, 5)}){deptTag}</option>
+                      }
+                    </optgroup>
+                  );
+                })}
             </select>
           </div>
 
@@ -648,7 +651,9 @@ function ShiftPopover({ shifts, currentScheduleIds, onToggleSelect, onSelectSpec
           <div key={parent.id} className="mt-1 font-sans">
             {parent.children && parent.children.length > 0 ? (
               <div>
-                <p className="text-[9px] font-bold text-gray-400 px-3 pt-2 pb-1 uppercase tracking-wider">{parent.name}</p>
+                <p className="text-[9px] font-bold text-[#16A34A] px-3 pt-2 pb-1 uppercase tracking-wider bg-slate-50/50">
+                  {parent.name} {parent.owner_department_name ? `(${parent.owner_department_name})` : '(Office)'}
+                </p>
                 {parent.children.map(child => {
                   const isChecked = currentScheduleIds.includes(child.id);
                   return (
@@ -1615,20 +1620,6 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
                               </button>
                             )}
                           </div>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="text-[10px] text-gray-400 font-semibold uppercase">Limit Absen:</span>
-                            <input
-                              type="time"
-                              value={child.checkin_window_end_time || ''}
-                              onChange={e => handleUpdateEditChild(index, 'checkin_window_end_time', e.target.value)}
-                              className="px-2 py-1 border border-gray-200 rounded-lg text-[11px] font-mono bg-white focus:outline-none focus:border-[#16A34A] w-24"
-                            />
-                            {!child.checkin_window_end_time && (
-                              <span className="text-[9px] text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded border border-amber-200/50">
-                                Fallback aktif
-                              </span>
-                            )}
-                          </div>
                         </div>
                       ))}
                     </div>
@@ -1637,49 +1628,18 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
                   <div className="space-y-1.5 mt-1 font-sans">
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Daftar Sub-Waktu</p>
                     {shift.children && shift.children.length > 0 ? (
-                      shift.children.map(child => {
-                        const hasNoWindow = !child.checkin_window_end_time;
-                        const fallbackVal = (() => {
-                          if (!hasNoWindow) return '';
-                          try {
-                            const [sh, sm] = child.start_time.split(':').map(Number);
-                            const [eh, em] = child.end_time.split(':').map(Number);
-                            let startM = sh * 60 + sm;
-                            let endM = eh * 60 + em;
-                            if (endM < startM) endM += 1440;
-                            const dur = endM - startM;
-                            const half = Math.floor(dur / 2);
-                            const fallM = (startM + half) % 1440;
-                            const hh = String(Math.floor(fallM / 60)).padStart(2, '0');
-                            const mm = String(fallM % 60).padStart(2, '0');
-                            return `${hh}:${mm}`;
-                          } catch {
-                            return '--:--';
-                          }
-                        })();
-
-                        return (
-                          <div key={child.id} className="flex flex-col gap-1 w-full border-b border-gray-50 pb-2 last:border-0 last:pb-0">
-                            <div className="flex justify-between items-center text-[12px] py-1.5 px-3 rounded-xl bg-gray-50 border border-gray-100/50 font-medium">
-                              <span className="text-gray-600 text-[11px] truncate max-w-[150px]">{child.name}</span>
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono text-black font-semibold bg-white border border-gray-100 px-2 py-0.5 rounded-lg text-[11px]">
-                                  {child.start_time.substring(0, 5)} – {child.end_time.substring(0, 5)}
-                                </span>
-                                {child.checkin_window_end_time ? (
-                                  <span className="text-[10px] text-gray-500 font-mono bg-gray-100 border border-gray-200 px-1.5 py-0.5 rounded-lg" title="Batas absen masuk">
-                                    Batas: {child.checkin_window_end_time.substring(0, 5)}
-                                  </span>
-                                ) : (
-                                  <span className="text-[10px] text-amber-600 font-bold font-mono bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-lg" title="Menggunakan batas bawaan/sementara">
-                                    Batas: {fallbackVal}*
-                                  </span>
-                                )}
-                              </div>
+                      shift.children.map(child => (
+                        <div key={child.id} className="flex flex-col gap-1 w-full border-b border-gray-50 pb-2 last:border-0 last:pb-0">
+                          <div className="flex justify-between items-center text-[12px] py-1.5 px-3 rounded-xl bg-gray-50 border border-gray-100/50 font-medium">
+                            <span className="text-gray-600 text-[11px] truncate max-w-[200px]">{child.name}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-black font-semibold bg-white border border-gray-100 px-2.5 py-0.5 rounded-lg text-[11px]">
+                                {child.start_time.substring(0, 5)} – {child.end_time.substring(0, 5)}
+                              </span>
                             </div>
                           </div>
-                        );
-                      })
+                        </div>
+                      ))
                     ) : (
                       <p className="text-[11px] text-gray-400 italic">Belum ada sub-waktu diatur.</p>
                     )}
@@ -1700,14 +1660,37 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
               </div>
 
               {/* Employee list toggle */}
-              <button onClick={() => setExpandedShift(isExpanded ? null : shift.id)}
-                className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 transition-colors border-b border-gray-50">
-                <div className="flex items-center gap-2">
-                  <Users size={13} className="text-gray-400" />
-                  <span className="text-[12px] text-gray-500">{shift.employees_count || 0} karyawan</span>
-                </div>
-                <span className="text-[11px] text-gray-400">{isExpanded ? '▲' : '▼'}</span>
-              </button>
+              {(() => {
+                const filteredEmpsForShift = Array.from(
+                  new Map(
+                    shift.children
+                      ?.flatMap(child => child.employees ?? [])
+                      ?.filter((emp: any) => {
+                        if (shift.owner_department_name) {
+                          const empDeptName = emp.department?.name || emp.department || '';
+                          return empDeptName === shift.owner_department_name;
+                        }
+                        if (shift.owner_department_id) {
+                          const empDeptId = emp.department_id || emp.department?.id;
+                          return empDeptId ? Number(empDeptId) === Number(shift.owner_department_id) : true;
+                        }
+                        return true;
+                      })
+                      ?.map((emp: any) => [emp.id, emp]) ?? []
+                  ).values()
+                );
+
+                return (
+                  <button onClick={() => setExpandedShift(isExpanded ? null : shift.id)}
+                    className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 transition-colors border-b border-gray-50">
+                    <div className="flex items-center gap-2">
+                      <Users size={13} className="text-gray-400" />
+                      <span className="text-[12px] text-gray-500 font-medium">{filteredEmpsForShift.length} karyawan</span>
+                    </div>
+                    <span className="text-[11px] text-gray-400">{isExpanded ? '▲' : '▼'}</span>
+                  </button>
+                );
+              })()}
 
               {/* Expanded Employee List */}
               {isExpanded && (
@@ -1716,12 +1699,25 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
                     {(() => {
                       const distinctEmployees = Array.from(
                         new Map(
-                          shift.children?.flatMap(child => child.employees ?? [])?.map(emp => [emp.id, emp]) ?? []
+                          shift.children
+                            ?.flatMap(child => child.employees ?? [])
+                            ?.filter((emp: any) => {
+                              if (shift.owner_department_name) {
+                                const empDeptName = emp.department?.name || emp.department || '';
+                                return empDeptName === shift.owner_department_name;
+                              }
+                              if (shift.owner_department_id) {
+                                const empDeptId = emp.department_id || emp.department?.id;
+                                return empDeptId ? Number(empDeptId) === Number(shift.owner_department_id) : true;
+                              }
+                              return true;
+                            })
+                            ?.map((emp: any) => [emp.id, emp]) ?? []
                         ).values()
                       );
 
                       if (distinctEmployees.length === 0) {
-                        return <p className="text-[11px] text-gray-400 text-center py-2">Belum ada karyawan ditugaskan di shift ini.</p>;
+                        return <p className="text-[11px] text-gray-400 text-center py-2">Belum ada karyawan unit ini ditugaskan di shift ini.</p>;
                       }
 
                       return distinctEmployees.map(emp => {
@@ -1744,7 +1740,11 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
                             }) ?? []
                         ) ?? [];
 
-                        const daysLabel = days.length > 0 ? ` · ${days.join(', ')}` : '';
+                        const daysLabel = days.length > 0 
+                          ? days.length > 5 
+                            ? ` · ${days.slice(0, 4).join(', ')}... (+${days.length - 4} tanggal)` 
+                            : ` · ${days.join(', ')}` 
+                          : '';
 
                         return (
                           <div key={emp.id} className="flex items-center justify-between bg-white px-3.5 py-2.5 rounded-xl border border-gray-100 shadow-sm">

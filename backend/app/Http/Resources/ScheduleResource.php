@@ -22,17 +22,27 @@ class ScheduleResource extends JsonResource
                 $allEmployees = collect();
                 foreach ($this->children as $child) {
                     if ($child->relationLoaded('employees')) {
-                        $allEmployees = $allEmployees->concat($child->employees);
+                        $emps = $child->employees;
+                        if ($this->owner_department_id) {
+                            $emps = $emps->filter(fn($e) => (int)$e->department_id === (int)$this->owner_department_id);
+                        }
+                        $allEmployees = $allEmployees->concat($emps);
                     }
                 }
                 $employeesCount = $allEmployees->unique('id')->count();
             } else {
                 $employeesCount = \App\Models\Employee::whereHas('schedules', function ($q) {
                     $q->where('parent_id', $this->id);
+                })->when($this->owner_department_id, function($q) {
+                    $q->where('department_id', $this->owner_department_id);
                 })->count();
             }
         } else {
-            $employeesCount = $this->relationLoaded('employees') ? $this->employees->unique('id')->count() : 0;
+            $emps = $this->relationLoaded('employees') ? $this->employees : collect();
+            if ($this->parent && $this->parent->owner_department_id) {
+                $emps = $emps->filter(fn($e) => (int)$e->department_id === (int)$this->parent->owner_department_id);
+            }
+            $employeesCount = $emps->unique('id')->count();
         }
 
         $data = [
@@ -62,7 +72,12 @@ class ScheduleResource extends JsonResource
         }
 
         if ($this->relationLoaded('employees')) {
-            $data['employees'] = $this->employees->map(function ($emp) {
+            $emps = $this->employees;
+            $parentOwnerDeptId = $this->owner_department_id ?? ($this->parent ? $this->parent->owner_department_id : null);
+            if ($parentOwnerDeptId) {
+                $emps = $emps->filter(fn($e) => (int)$e->department_id === (int)$parentOwnerDeptId);
+            }
+            $data['employees'] = $emps->map(function ($emp) {
                 return [
                     'id'         => $emp->id,
                     'nik_ktp'    => $emp->nik_ktp,

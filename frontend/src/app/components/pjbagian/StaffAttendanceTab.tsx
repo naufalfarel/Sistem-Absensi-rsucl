@@ -2,13 +2,63 @@ import React, { useState, useEffect } from 'react';
 import {
   Calendar, Search, RefreshCw, CheckCircle2, Clock, XCircle, FileText,
   Eye, Building2, UserCheck, AlertTriangle, ChevronLeft, ChevronRight, X, Image as ImageIcon,
-  FileSpreadsheet, Download
+  FileSpreadsheet, Download, MapPin
 } from 'lucide-react';
-import { attendanceApi, AttendanceRecord, departmentApi } from '../../../services/api';
+import {
+  MapContainer,
+  TileLayer,
+  Circle,
+  Marker,
+  Popup,
+} from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import { attendanceApi, AttendanceRecord, departmentApi, settingApi } from '../../../services/api';
 import { MonthYearDeptFilter, INDO_MONTHS } from '../ui/MonthYearDeptFilter';
 import * as XLSX from 'xlsx';
 // @ts-ignore
 import XLSXStyle from 'xlsx-js-style';
+
+// Fix Leaflet default marker icon broken by bundlers
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl:
+    'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+  iconUrl:
+    'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+  shadowUrl:
+    'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+});
+
+const hospIcon = L.divIcon({
+  html: `<div style="background:#16A34A;border:2px solid #0d9240;border-radius:50% 50% 50% 0;width:28px;height:28px;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(22,163,74,0.5)">
+           <span style="transform:rotate(45deg);color:white;font-size:11px;font-weight:bold">RS</span>
+         </div>`,
+  className: '',
+  iconSize: [28, 28],
+  iconAnchor: [14, 28],
+  popupAnchor: [0, -30],
+});
+
+const staffCheckinIcon = L.divIcon({
+  html: `<div style="background:#16A34A;border:2px solid #15803D;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(22,163,74,0.5)">
+           <div style="width:10px;height:10px;background:white;border-radius:50%"></div>
+         </div>`,
+  className: '',
+  iconSize: [24, 24],
+  iconAnchor: [12, 12],
+  popupAnchor: [0, -15],
+});
+
+const staffCheckoutIcon = L.divIcon({
+  html: `<div style="background:#2563EB;border:2px solid #1D4ED8;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(37,99,235,0.5)">
+           <div style="width:10px;height:10px;background:white;border-radius:50%"></div>
+         </div>`,
+  className: '',
+  iconSize: [24, 24],
+  iconAnchor: [12, 12],
+  popupAnchor: [0, -15],
+});
 
 interface StaffAttendanceTabProps {
   user: {
@@ -38,6 +88,24 @@ export function StaffAttendanceTab({ user }: StaffAttendanceTabProps) {
   // Department Filter State (Bisa Pilih Unit Kerja Spesifik)
   const [departments, setDepartments] = useState<Array<{ id: number; name: string }>>([]);
   const [selectedDeptId, setSelectedDeptId] = useState<string>('all');
+
+  // Hospital Coordinates Settings for Leaflet Geofence Map
+  const [hospLat, setHospLat] = useState<number>(5.552740480177099);
+  const [hospLng, setHospLng] = useState<number>(95.33486560781716);
+  const [hospRadius, setHospRadius] = useState<number>(40);
+
+  useEffect(() => {
+    settingApi.get().then(res => {
+      if (res.success && res.data) {
+        const lat = parseFloat(res.data.hospital_latitude || res.data.hospital_lat);
+        const lng = parseFloat(res.data.hospital_longitude || res.data.hospital_lng);
+        const rad = parseFloat(res.data.attendance_radius_meters || res.data.gps_radius);
+        if (!isNaN(lat)) setHospLat(lat);
+        if (!isNaN(lng)) setHospLng(lng);
+        if (!isNaN(rad) && rad > 0) setHospRadius(rad);
+      }
+    }).catch(() => {});
+  }, []);
 
   // Fetch Available Departments for PJ Bagian
   useEffect(() => {
@@ -233,13 +301,19 @@ export function StaffAttendanceTab({ user }: StaffAttendanceTabProps) {
       case 'alpha':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-50 text-red-600 border border-red-200 rounded-full text-[11px] font-bold">
-            <XCircle size={12} /> Alpa / Belum Absen
+            <XCircle size={12} /> Alpa / Tidak Hadir
+          </span>
+        );
+      case 'belum_hadir':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-rose-50 text-rose-600 border border-rose-200 rounded-full text-[11px] font-bold">
+            <Clock size={12} /> Belum Absen Masuk
           </span>
         );
       case 'tidak_lengkap':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-orange-50 text-orange-700 border border-orange-200 rounded-full text-[11px] font-bold">
-            <AlertTriangle size={12} /> Tidak Lengkap
+            <AlertTriangle size={12} /> Tidak Lengkap (Belum Pulang)
           </span>
         );
       case 'cuti':
@@ -253,8 +327,8 @@ export function StaffAttendanceTab({ user }: StaffAttendanceTabProps) {
         );
       default:
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-50 text-gray-500 border border-gray-200 rounded-full text-[11px] font-medium">
-            Libur / Off
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 text-gray-600 border border-gray-200 rounded-full text-[11px] font-semibold">
+            Libur / Off (Tidak Ada Shift)
           </span>
         );
     }
@@ -632,8 +706,10 @@ export function StaffAttendanceTab({ user }: StaffAttendanceTabProps) {
                 { id: 'all', label: 'Semua Status' },
                 { id: 'hadir', label: 'Hadir' },
                 { id: 'telat', label: 'Terlambat' },
-                { id: 'alpha', label: 'Alpa' },
-                { id: 'cuti', label: 'Cuti / Sakit' }
+                { id: 'alpha', label: 'Alpa / Belum Absen' },
+                { id: 'tidak_lengkap', label: 'Tidak Lengkap' },
+                { id: 'cuti', label: 'Cuti / Sakit' },
+                { id: 'tidak_ada_shift', label: 'Libur / Off' }
               ].map(f => (
                 <button
                   key={f.id}
@@ -862,9 +938,138 @@ export function StaffAttendanceTab({ user }: StaffAttendanceTabProps) {
                 </div>
                 <div className="p-3 bg-gray-50/70 border border-gray-100 rounded-2xl">
                   <span className="text-gray-400 text-[10px] font-bold uppercase tracking-wider block">Jadwal Shift</span>
-                  <span className="font-bold text-gray-800 mt-1 block">{detailModalRecord.shift_name || 'Reguler'}</span>
+                  <span className="font-bold text-gray-800 mt-1 block">
+                    {detailModalRecord.shift_name || 'Reguler'}
+                    {detailModalRecord.shift_type === 'dinas_luar' && (
+                      <span className="ml-1.5 text-[9.5px] font-extrabold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">
+                        Dinas Luar
+                      </span>
+                    )}
+                  </span>
                 </div>
               </div>
+
+              {/* ── PEMANTAUAN PETA LOKASI GPS STAF ──────────────────────────────── */}
+              {(() => {
+                const inLat = detailModalRecord.checkin_latitude ?? detailModalRecord.latitude;
+                const inLng = detailModalRecord.checkin_longitude ?? detailModalRecord.longitude;
+                const outLat = detailModalRecord.checkout_latitude;
+                const outLng = detailModalRecord.checkout_longitude;
+                const activeLat = inLat ?? outLat ?? hospLat;
+                const activeLng = inLng ?? outLng ?? hospLng;
+                const hasGps = !!(inLat && inLng) || !!(outLat && outLng);
+                const isDinas = detailModalRecord.shift_type === 'dinas_luar';
+                const isGeofenceOk = isDinas || detailModalRecord.is_within_geofence;
+
+                return (
+                  <div className="space-y-3 p-4 bg-[#F8FAFC] rounded-2xl border border-slate-200">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                        <MapPin size={14} className="text-[#16A34A]" /> Pemantauan Peta Lokasi GPS Staf
+                      </p>
+                      <span className={`text-[10.5px] font-bold px-2.5 py-0.5 rounded-full border ${
+                        isDinas
+                          ? 'bg-purple-50 text-purple-700 border-purple-200'
+                          : isGeofenceOk
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : 'bg-rose-50 text-rose-700 border-rose-200'
+                      }`}>
+                        {isDinas ? '📍 Dinas Luar (Bebas GPS)' : isGeofenceOk ? '✓ Dalam Area Geofence' : '⚠ Di Luar Area Geofence'}
+                      </span>
+                    </div>
+
+                    {/* Leaflet Interactive Map */}
+                    {hasGps ? (
+                      <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-xs h-52 w-full relative" style={{ isolation: 'isolate' }}>
+                        <MapContainer
+                          key={`${detailModalRecord.id}-${activeLat}-${activeLng}`}
+                          center={[activeLat, activeLng]}
+                          zoom={16}
+                          style={{ height: '100%', width: '100%' }}
+                          zoomControl={false}
+                          attributionControl={false}
+                        >
+                          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                          
+                          {/* Circle Geofence RS */}
+                          <Circle
+                            center={[hospLat, hospLng]}
+                            radius={hospRadius}
+                            pathOptions={{
+                              color: isGeofenceOk ? '#16A34A' : '#DC2626',
+                              fillColor: isGeofenceOk ? '#16A34A' : '#DC2626',
+                              fillOpacity: 0.08,
+                              weight: 2,
+                              dashArray: '6 4',
+                            }}
+                          />
+
+                          {/* Marker RSUCL */}
+                          <Marker position={[hospLat, hospLng]} icon={hospIcon}>
+                            <Popup>
+                              <span className="text-[12px] font-bold">RSUCL (Pusat Geofence)</span>
+                            </Popup>
+                          </Marker>
+
+                          {/* Marker Check-In Staf */}
+                          {inLat && inLng && (
+                            <Marker position={[inLat, inLng]} icon={staffCheckinIcon}>
+                              <Popup>
+                                <div className="text-[11.5px] font-sans">
+                                  <strong>{detailModalRecord.employee?.name}</strong> (Check-In)<br />
+                                  Jam: {detailModalRecord.check_in ? detailModalRecord.check_in.substring(0, 5) + ' WIB' : '-'}<br />
+                                  {detailModalRecord.accuracy ? `Akurasi: ±${detailModalRecord.accuracy}m` : ''}
+                                </div>
+                              </Popup>
+                            </Marker>
+                          )}
+
+                          {/* Marker Check-Out Staf */}
+                          {outLat && outLng && (
+                            <Marker position={[outLat, outLng]} icon={staffCheckoutIcon}>
+                              <Popup>
+                                <div className="text-[11.5px] font-sans">
+                                  <strong>{detailModalRecord.employee?.name}</strong> (Check-Out)<br />
+                                  Jam: {detailModalRecord.check_out ? detailModalRecord.check_out.substring(0, 5) + ' WIB' : '-'}<br />
+                                </div>
+                              </Popup>
+                            </Marker>
+                          )}
+                        </MapContainer>
+                      </div>
+                    ) : (
+                      <div className="p-4 bg-white border border-dashed border-slate-200 rounded-2xl text-center text-slate-400 text-[11.5px]">
+                        <MapPin size={22} className="mx-auto mb-1 opacity-40 text-slate-400" />
+                        <span>Koordinat peta GPS tidak terekam pada absensi ini.</span>
+                      </div>
+                    )}
+
+                    {/* Metadata GPS Grid */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+                      <div className="bg-white p-2.5 rounded-xl border border-slate-200">
+                        <span className="text-[9px] text-slate-400 font-bold uppercase block">Latitude</span>
+                        <span className="font-bold text-slate-800 font-mono">{inLat ? `${inLat.toFixed(6)}°` : '-'}</span>
+                      </div>
+                      <div className="bg-white p-2.5 rounded-xl border border-slate-200">
+                        <span className="text-[9px] text-slate-400 font-bold uppercase block">Longitude</span>
+                        <span className="font-bold text-slate-800 font-mono">{inLng ? `${inLng.toFixed(6)}°` : '-'}</span>
+                      </div>
+                      <div className="bg-white p-2.5 rounded-xl border border-slate-200">
+                        <span className="text-[9px] text-slate-400 font-bold uppercase block">Akurasi GPS</span>
+                        <span className="font-bold text-slate-800 font-mono">{detailModalRecord.accuracy ? `±${detailModalRecord.accuracy}m` : '-'}</span>
+                      </div>
+                      <div className="bg-white p-2.5 rounded-xl border border-slate-200">
+                        <span className="text-[9px] text-slate-400 font-bold uppercase block">Jarak RSUCL</span>
+                        <span className="font-bold text-slate-800 font-mono">
+                          {detailModalRecord.checkin_distance_meters !== null && detailModalRecord.checkin_distance_meters !== undefined
+                            ? `~${Math.round(detailModalRecord.checkin_distance_meters)}m`
+                            : isDinas ? 'Dinas Luar' : '-'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Foto Selfie Check-in & Check-out */}
               <div className="space-y-3">
