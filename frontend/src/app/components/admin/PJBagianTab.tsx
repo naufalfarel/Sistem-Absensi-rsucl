@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Shield, ShieldAlert, Plus, Trash2, Search, CheckCircle2, UserCheck, RefreshCw, X, ChevronDown } from 'lucide-react';
+import { Shield, ShieldAlert, Plus, Trash2, Search, CheckCircle2, UserCheck, RefreshCw, X, ChevronDown, Edit3, AlertCircle } from 'lucide-react';
 import { 
   pjBagianApi, 
   employeeApi, 
@@ -158,6 +158,43 @@ export function PJBagianTab() {
   const [search, setSearch] = useState('');
 
   const [revokingPj, setRevokingPj] = useState<PjBagianUser | null>(null);
+
+  // Edit PJ State
+  const [editingPj, setEditingPj] = useState<PjBagianUser | null>(null);
+  const [editDepartmentIds, setEditDepartmentIds] = useState<number[]>([]);
+
+  const handleEditPj = (pj: PjBagianUser) => {
+    setEditingPj(pj);
+    setErrorMsg('');
+    const deptIds = pj.pj_departments && pj.pj_departments.length > 0
+      ? pj.pj_departments.map(d => d.id)
+      : (pj.pj_bagian_department_id ? [pj.pj_bagian_department_id] : []);
+    setEditDepartmentIds(deptIds);
+  };
+
+  const handleSaveEditPj = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPj || !editingPj.employee_id) return;
+    if (editDepartmentIds.length === 0) {
+      setErrorMsg('Pilih minimal 1 unit kerja / departemen untuk diawasi.');
+      return;
+    }
+
+    setSubmitting(true);
+    setErrorMsg('');
+    try {
+      const res = await pjBagianApi.assign(editingPj.employee_id, editDepartmentIds);
+      if (res.success) {
+        setEditingPj(null);
+        setEditDepartmentIds([]);
+        loadData();
+      }
+    } catch (err: any) {
+      setErrorMsg(err?.message ?? 'Gagal memperbarui wewenang PJ Bagian.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const handleRevoke = (pj: PjBagianUser) => {
     setRevokingPj(pj);
@@ -341,12 +378,22 @@ export function PJBagianTab() {
                   </td>
 
                   <td className="py-3 px-4 text-right">
-                    <button
-                      onClick={() => handleRevoke(pj)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[10.5px] text-red-650 bg-red-50 hover:bg-red-650 hover:text-white border border-red-200/50 rounded-xl font-bold transition-all active:scale-95 shadow-xs"
-                    >
-                      <Trash2 size={12} className="flex-shrink-0" /> Cabut Wewenang
-                    </button>
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        onClick={() => handleEditPj(pj)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[10.5px] text-emerald-700 bg-emerald-50 hover:bg-emerald-600 hover:text-white border border-emerald-200/60 rounded-xl font-bold transition-all active:scale-95 shadow-xs cursor-pointer"
+                        title="Tambah / Kurang Unit Kerja yang Dipimpin"
+                      >
+                        <Edit3 size={11} className="flex-shrink-0" /> Edit Wewenang
+                      </button>
+                      <button
+                        onClick={() => handleRevoke(pj)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[10.5px] text-red-650 bg-red-50 hover:bg-red-650 hover:text-white border border-red-200/50 rounded-xl font-bold transition-all active:scale-95 shadow-xs cursor-pointer"
+                        title="Cabut Seluruh Wewenang PJ Bagian"
+                      >
+                        <Trash2 size={12} className="flex-shrink-0" /> Cabut Wewenang
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -376,7 +423,7 @@ export function PJBagianTab() {
               </div>
               
               <div className="flex items-center justify-between gap-2 pt-1">
-                <div className="flex flex-wrap gap-1 max-w-[180px]">
+                <div className="flex flex-wrap gap-1 max-w-[170px]">
                   {pj.pj_departments && pj.pj_departments.length > 0 ? (
                     pj.pj_departments.map(dept => (
                       <span key={dept.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-50 text-[#16A34A] font-semibold text-[9px]">
@@ -389,12 +436,20 @@ export function PJBagianTab() {
                     </span>
                   )}
                 </div>
-                <button
-                  onClick={() => handleRevoke(pj)}
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-red-650 bg-red-50 hover:bg-red-650 hover:text-white border border-red-200/50 rounded-xl font-bold transition-all text-[10.5px] active:scale-95 shadow-xs"
-                >
-                  <Trash2 size={11} className="flex-shrink-0" /> Cabut
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => handleEditPj(pj)}
+                    className="inline-flex items-center gap-1 px-2 py-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-600 hover:text-white border border-emerald-200/60 rounded-xl font-bold transition-all text-[10px] active:scale-95 shadow-xs cursor-pointer"
+                  >
+                    <Edit3 size={10} className="flex-shrink-0" /> Edit
+                  </button>
+                  <button
+                    onClick={() => handleRevoke(pj)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-red-650 bg-red-50 hover:bg-red-650 hover:text-white border border-red-200/50 rounded-xl font-bold transition-all text-[10.5px] active:scale-95 shadow-xs cursor-pointer"
+                  >
+                    <Trash2 size={11} className="flex-shrink-0" /> Cabut
+                  </button>
+                </div>
               </div>
             </div>
           ))}
@@ -544,6 +599,128 @@ export function PJBagianTab() {
                 {submitting ? 'Mencabut...' : 'Ya, Cabut'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit PJ Wewenang Modal */}
+      {editingPj && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 font-sans">
+          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-xs animate-fade-in" onClick={() => setEditingPj(null)} />
+          <div className="relative bg-white rounded-3xl p-6 shadow-2xl w-full max-w-md z-10 border border-emerald-150 overflow-hidden transform transition-all animate-scale-up text-left">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-green-600" />
+
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3.5 mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-700">
+                  <Edit3 size={17} />
+                </div>
+                <div>
+                  <h3 className="text-[14px] font-bold text-gray-900 leading-tight">
+                    Edit Wewenang Unit Kerja
+                  </h3>
+                  <p className="text-[10.5px] text-gray-400">Atur unit yang dipimpin oleh PJ Bagian ini</p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setEditingPj(null)} 
+                className="w-7 h-7 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-400 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            <div className="p-3 bg-emerald-50/40 border border-emerald-100/60 rounded-2xl text-[11px] mb-4 space-y-1">
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Pegawai:</span>
+                <span className="font-bold text-slate-900">{editingPj.name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">NIK KTP:</span>
+                <span className="font-mono font-bold text-slate-700">{editingPj.nik_ktp}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Jabatan Utama:</span>
+                <span className="font-bold text-slate-700">{editingPj.position || 'Staf'}</span>
+              </div>
+            </div>
+
+            {errorMsg && (
+              <div className="mb-3.5 p-3 bg-red-50 border border-red-200 rounded-xl text-[11px] text-red-700 font-semibold flex items-center gap-2">
+                <AlertCircle size={15} className="flex-shrink-0 text-red-600" />
+                <span>{errorMsg}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveEditPj} className="space-y-4">
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-[11px] font-bold text-gray-700">
+                    Pilih Unit Kerja / Departemen ({editDepartmentIds.length} Terpilih)
+                  </label>
+                  <span className="text-[9.5px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    Bisa Tambah / Kurang
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 gap-1.5 max-h-60 overflow-y-auto p-2.5 border border-gray-200 rounded-2xl bg-gray-50/50">
+                  {departments.map(dept => {
+                    const isChecked = editDepartmentIds.includes(dept.id);
+                    return (
+                      <label
+                        key={dept.id}
+                        className={`flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all border ${
+                          isChecked
+                            ? 'bg-emerald-50/90 border-emerald-300 text-emerald-950 font-bold shadow-2xs'
+                            : 'bg-white border-gray-150 hover:bg-gray-50 text-gray-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => {
+                              if (isChecked) {
+                                setEditDepartmentIds(prev => prev.filter(id => id !== dept.id));
+                              } else {
+                                setEditDepartmentIds(prev => [...prev, dept.id]);
+                              }
+                            }}
+                            className="rounded text-[#16A34A] focus:ring-[#16A34A] w-4 h-4 cursor-pointer"
+                          />
+                          <span className="text-[11.5px] truncate select-none">
+                            {dept.name}
+                          </span>
+                        </div>
+                        {isChecked && (
+                          <span className="text-[9.5px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            Aktif Dipimpin
+                          </span>
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingPj(null)}
+                  className="flex-1 py-2.5 border border-gray-200 hover:bg-gray-50 rounded-xl text-[11px] font-bold text-gray-600 transition-all cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="flex-1 py-2.5 bg-[#16A34A] hover:bg-[#15803d] text-white rounded-xl text-[11px] font-bold transition-all shadow-xs active:scale-95 disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  {submitting ? 'Menyimpan...' : 'Simpan Perubahan'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
