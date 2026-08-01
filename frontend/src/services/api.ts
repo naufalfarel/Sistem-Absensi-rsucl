@@ -21,26 +21,54 @@ const TOKEN_KEY = "rsucl_token";
 // ── Helper Token ─────────────────────────────────────────────────────
 
 /**
- * Mengambil token autentikasi yang tersimpan di localStorage.
+ * Mengambil token autentikasi yang tersimpan di localStorage / Cookie (Fallback iOS Safari).
  */
 export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
+  try {
+    let token = localStorage.getItem(TOKEN_KEY);
+    if (token) return token;
+
+    // Fallback pencarian token di document.cookie (Khusus iPhone / iOS Safari yang menghapus localStorage)
+    const match = document.cookie.match(new RegExp('(?:^|; )' + TOKEN_KEY.replace(/([\.$?*|{}\(\)\[\]\\\/\+^])/g, '\\$1') + '=([^;]*)'));
+    if (match) {
+      token = decodeURIComponent(match[1]);
+      if (token) {
+        // Restore ke localStorage agar sinkron kembali
+        localStorage.setItem(TOKEN_KEY, token);
+        return token;
+      }
+    }
+  } catch (e) {
+    console.warn('Error reading auth token:', e);
+  }
+  return null;
 }
 
 /**
- * Menyimpan token autentikasi baru ke localStorage.
+ * Menyimpan token autentikasi baru ke localStorage & persistent Cookie (1 tahun).
  *
  * @param token JWT/Sanctum Token dari backend
  */
 export function setToken(token: string): void {
-  localStorage.setItem(TOKEN_KEY, token);
+  try {
+    localStorage.setItem(TOKEN_KEY, token);
+    // Simpan juga ke cookie berumur 1 tahun (365 hari) agar tidak terhapus saat Safari iOS ditutup
+    document.cookie = `${TOKEN_KEY}=${encodeURIComponent(token)}; path=/; max-age=31536000; SameSite=Lax`;
+  } catch (e) {
+    console.warn('Error setting auth token:', e);
+  }
 }
 
 /**
- * Menghapus token autentikasi dari localStorage (misal saat logout).
+ * Menghapus token autentikasi dari localStorage & Cookie (misal saat logout).
  */
 export function clearToken(): void {
-  localStorage.removeItem(TOKEN_KEY);
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+    document.cookie = `${TOKEN_KEY}=; path=/; max-age=0; SameSite=Lax`;
+  } catch (e) {
+    console.warn('Error clearing auth token:', e);
+  }
 }
 
 // ── Wrapper Fetch Utama ───────────────────────────────────────────────

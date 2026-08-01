@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { CheckCircle2, Clock, Stethoscope, MapPin, Calendar, ChevronRight, Bell, TrendingUp, Users, User, Activity, BookOpen } from 'lucide-react';
+import { CheckCircle2, Clock, Stethoscope, MapPin, Calendar, ChevronRight, Bell, TrendingUp, Users, User, Activity, BookOpen, RotateCw } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { attendanceApi, AttendanceRecord, notificationApi, AppNotification, scheduleApi, MyShiftSchedule, settingApi } from '../../services/api';
+import { useRealtimeGps } from '../../hooks/useRealtimeGps';
 
 /** Format "HH:mm:ss" atau "HH:mm" menjadi "HH:mm" */
 function fmtTime(t: string | undefined | null): string {
@@ -60,9 +61,6 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
   
   // Radius maksimal toleransi absensi (meter)
   const [hospRadius, setHospRadius] = useState<number>(40);
-  
-  // Koordinat aktual perangkat karyawan saat ini
-  const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
   
   // Status keberadaan GPS ('loading', 'in' = dalam area, 'out' = di luar area, 'unavailable')
   const [gpsStatus, setGpsStatus] = useState<'loading' | 'in' | 'out' | 'unavailable'>('loading');
@@ -131,27 +129,21 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
     }).catch(() => { /* gunakan koordinat default jika API bermasalah */ });
   }, []);
 
-  // ── Pemantauan GPS Terus Menerus (Real-time Watcher) ──────────────────────
+  // ── Pemantauan GPS Terus Menerus (Real-time Watcher ramah iOS) ──────────────────────
+  const { location: userCoords, gpsActive, loading: gpsLoading, refreshLocation } = useRealtimeGps();
+
   useEffect(() => {
-    if (!navigator.geolocation) {
+    if (gpsLoading && !userCoords) {
+      setGpsStatus('loading');
+      return;
+    }
+    if (!gpsActive || !userCoords) {
       setGpsStatus('unavailable');
       return;
     }
-    const watchId = navigator.geolocation.watchPosition(
-      (pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        setUserCoords({ lat, lng });
-        
-        // Hitung jarak haversine antara posisi user dan koordinat RSUCL
-        const dist = haversine(lat, lng, hospLat, hospLng);
-        setGpsStatus(dist <= hospRadius ? 'in' : 'out');
-      },
-      () => setGpsStatus('unavailable'),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
-    return () => navigator.geolocation.clearWatch(watchId);
-  }, [hospLat, hospLng, hospRadius]);
+    const dist = haversine(userCoords.lat, userCoords.lng, hospLat, hospLng);
+    setGpsStatus(dist <= hospRadius ? 'in' : 'out');
+  }, [userCoords, gpsActive, gpsLoading, hospLat, hospLng, hospRadius]);
 
   // Array nama hari & bulan bahasa Indonesia
   const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
@@ -304,7 +296,8 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
            : gpsStatus === 'in'      ? 'Dalam Area'
            : gpsStatus === 'out'     ? 'Luar Area'
            : 'GPS Nonaktif',
-      sub: 'RSUCL',
+      sub: 'RSUCL (Klik untuk Refresh)',
+      isGpsCard: true,
       color: gpsStatus === 'in'  ? '#16A34A'
            : gpsStatus === 'out' ? '#DC2626'
            : gpsStatus === 'unavailable' ? '#6B7280'
@@ -379,7 +372,12 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
       {/* Stat Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
         {stats.map((s, i) => (
-          <div key={i} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
+          <div
+            key={i}
+            onClick={s.isGpsCard ? refreshLocation : undefined}
+            className={`bg-white rounded-2xl border border-gray-100 p-4 shadow-sm ${s.isGpsCard ? 'cursor-pointer hover:border-green-300 hover:shadow-md transition-all active:scale-[0.98] group' : ''}`}
+            title={s.isGpsCard ? "Klik untuk memperbarui lokasi GPS secara realtime" : undefined}
+          >
             <div className="flex items-start justify-between mb-3">
               <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: s.bg }}>
                 <s.icon size={16} style={{ color: s.color }} />
@@ -388,7 +386,10 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
                 {s.badge}
               </span>
             </div>
-            <div className="text-[15px] font-semibold text-gray-900">{s.value}</div>
+            <div className="text-[15px] font-semibold text-gray-900 flex items-center justify-between">
+              <span>{s.value}</span>
+              {s.isGpsCard && <RotateCw size={13} className="text-gray-400 group-hover:text-[#16A34A] transition-colors" />}
+            </div>
             <div className="text-[11px] text-gray-400">{s.label}</div>
             <div className="text-[11px] text-gray-500 mt-0.5">{s.sub}</div>
           </div>

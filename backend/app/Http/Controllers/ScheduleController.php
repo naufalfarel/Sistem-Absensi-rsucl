@@ -742,57 +742,6 @@ class ScheduleController extends Controller
         $data = $employees->map(function ($emp) use ($dateAssignments, $weeklyAssignments, $approvedLeaves, $startDate, $endDate, $dayMap, $holidays, $holidayAssignments) {
             $assignMap = [];
 
-            // Lapis 0 (Khusus PJ Bagian): Set default jam kantor reguler pada hari kerja (Senin - Sabtu)
-            $isPj = $emp->user && $emp->user->role === 'pj_bagian';
-            if ($isPj) {
-                $regulerParent = \App\Models\Schedule::whereNull('parent_id')
-                    ->where(function($q) {
-                        $q->where('name', 'like', '%Reguler%')
-                          ->orWhere('name', 'like', '%Administrasi%')
-                          ->orWhere('name', 'like', '%Kantor%');
-                    })
-                    ->first();
-
-                $seninSub = null;
-                $sabtuSub = null;
-                if ($regulerParent) {
-                    $seninSub = $regulerParent->children()->where(function($q) {
-                        $q->where('name', 'like', '%Senin%')
-                          ->orWhere('name', 'like', '%Normal%');
-                    })->first();
-                    $sabtuSub = $regulerParent->children()->where('name', 'like', '%Sabtu%')->first();
-                }
-
-                $curr = $startDate->copy();
-                while ($curr->lte($endDate)) {
-                    if ($curr->dayOfWeek !== 0) { // Bukan hari Minggu
-                        $dateKey = $curr->toDateString();
-                        $isSabtu = ($curr->dayOfWeek === 6);
-                        $targetSub = $isSabtu ? $sabtuSub : $seninSub;
-
-                        $schedId    = $targetSub ? $targetSub->id : ($isSabtu ? 88889 : 88888);
-                        $schedName  = $targetSub ? $targetSub->name : ($isSabtu ? 'Sabtu' : 'Senin s/d Jum\'at (08:30–17:00)');
-                        $schedColor = $targetSub ? $targetSub->color : '#16A34A';
-                        $schedIcon  = $targetSub ? $targetSub->icon : ($isSabtu ? 'calendar' : 'sun');
-                        $schedType  = $targetSub ? $targetSub->shift_type : 'normal';
-                        $schedStart = $targetSub ? substr($targetSub->start_time, 0, 5) : '08:30';
-                        $schedEnd   = $targetSub ? substr($targetSub->end_time, 0, 5) : ($isSabtu ? '13:00' : '17:00');
-
-                        $assignMap[$dateKey] = [
-                            'schedule_id' => $schedId,
-                            'name'        => $schedName,
-                            'color'       => $schedColor,
-                            'icon'        => $schedIcon,
-                            'shift_type'  => $schedType,
-                            'start_time'  => $schedStart,
-                            'end_time'    => $schedEnd,
-                            'is_weekly'   => true,
-                        ];
-                    }
-                    $curr->addDay();
-                }
-            }
-
             // Tier 1: Isi terlebih dahulu dari jadwal mingguan (day_of_week) untuk seluruh tanggal dalam bulan
             if ($weeklyAssignments->has($emp->id)) {
                 $empWeekly = $weeklyAssignments->get($emp->id)->keyBy('day_of_week');
@@ -952,7 +901,8 @@ class ScheduleController extends Controller
 
         if ($request->user()->role === 'pj_bagian') {
             $deptIds = $request->user()->getPjDepartmentIds();
-            if (!in_array($emp->department_id, $deptIds)) {
+            $isSelf  = $emp->id === ($request->user()->employee?->id);
+            if (!in_array($emp->department_id, $deptIds) && !$isSelf) {
                 return response()->json(['success' => false, 'message' => 'Anda hanya dapat mengatur jadwal staf di departemen Anda.'], 403);
             }
         }
@@ -1053,7 +1003,8 @@ class ScheduleController extends Controller
 
             // PJ Bagian hanya boleh atur staf departemennya dan tidak boleh mengoverwrite cuti/sakit/izin
             if ($deptIds) {
-                if (!in_array($emp->department_id, $deptIds)) continue;
+                $isSelf = $emp->id === ($authUser->employee?->id);
+                if (!in_array($emp->department_id, $deptIds) && !$isSelf) continue;
             }
 
             $hasApprovedLeave = \App\Models\LeaveRequest::where('employee_id', $emp->id)
@@ -1127,7 +1078,8 @@ class ScheduleController extends Controller
 
         if ($request->user()->role === 'pj_bagian') {
             $deptIds = $request->user()->getPjDepartmentIds();
-            if (!in_array($emp->department_id, $deptIds)) {
+            $isSelf  = $emp->id === ($request->user()->employee?->id);
+            if (!in_array($emp->department_id, $deptIds) && !$isSelf) {
                 return response()->json(['success' => false, 'message' => 'Anda hanya dapat mengatur jadwal staf di departemen Anda.'], 403);
             }
         }
@@ -1426,7 +1378,8 @@ class ScheduleController extends Controller
         // Jika PJ Bagian, pastikan pegawai tersebut berada di departemen yang diawasi
         if ($user->isPjBagian() && !$user->isAdmin()) {
             $deptIds = $user->getPjDepartmentIds();
-            if (!in_array($employee->department_id, $deptIds)) {
+            $isSelf  = $employee->id === ($user->employee?->id);
+            if (!in_array($employee->department_id, $deptIds) && !$isSelf) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Anda hanya dapat menugaskan shift dadakan kepada pegawai di unit kerja Anda.',

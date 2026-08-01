@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import {
   CheckCircle2, Clock, Stethoscope, MapPin, Calendar,
-  ChevronRight, Bell, TrendingUp, User, Activity, CheckSquare,
+  ChevronRight, Bell, TrendingUp, User, Activity, CheckSquare, RotateCw,
 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import {
   attendanceApi, AttendanceRecord, notificationApi, AppNotification,
   scheduleApi, MyShiftSchedule, settingApi,
 } from '../../../services/api';
+import { useRealtimeGps } from '../../../hooks/useRealtimeGps';
 
 function fmtTime(t: string | undefined | null): string {
   if (!t) return '--:--';
@@ -47,7 +48,6 @@ export function PJBagianDashboard({ pendingLeaveCount, pendingOvertimeCount, pen
   const [hospLat, setHospLat] = useState<number>(5.552740480177099);
   const [hospLng, setHospLng] = useState<number>(95.33486560781716);
   const [hospRadius, setHospRadius] = useState<number>(40);
-  const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [gpsStatus, setGpsStatus] = useState<'loading' | 'in' | 'out' | 'unavailable'>('loading');
 
   useEffect(() => {
@@ -103,20 +103,20 @@ export function PJBagianDashboard({ pendingLeaveCount, pendingOvertimeCount, pen
     }).catch(() => {});
   }, []);
 
+  const { location: userCoords, gpsActive, loading: gpsLoading, refreshLocation } = useRealtimeGps();
+
   useEffect(() => {
-    if (!navigator.geolocation) { setGpsStatus('unavailable'); return; }
-    const watchId = navigator.geolocation.watchPosition(
-      (pos) => {
-        const { latitude: lat, longitude: lng } = pos.coords;
-        setUserCoords({ lat, lng });
-        const dist = haversine(lat, lng, hospLat, hospLng);
-        setGpsStatus(dist <= hospRadius ? 'in' : 'out');
-      },
-      () => setGpsStatus('unavailable'),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
-    return () => navigator.geolocation.clearWatch(watchId);
-  }, [hospLat, hospLng, hospRadius]);
+    if (gpsLoading && !userCoords) {
+      setGpsStatus('loading');
+      return;
+    }
+    if (!gpsActive || !userCoords) {
+      setGpsStatus('unavailable');
+      return;
+    }
+    const dist = haversine(userCoords.lat, userCoords.lng, hospLat, hospLng);
+    setGpsStatus(dist <= hospRadius ? 'in' : 'out');
+  }, [userCoords, gpsActive, gpsLoading, hospLat, hospLng, hospRadius]);
 
   const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
   const months = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
@@ -214,7 +214,8 @@ export function PJBagianDashboard({ pendingLeaveCount, pendingOvertimeCount, pen
       icon: MapPin,
       label: 'Status Lokasi',
       value: gpsStatus === 'loading' ? 'Memuat GPS…' : gpsStatus === 'in' ? 'Dalam Area' : gpsStatus === 'out' ? 'Luar Area' : 'GPS Nonaktif',
-      sub: 'RSUCL',
+      sub: 'RSUCL (Klik untuk Refresh)',
+      isGpsCard: true,
       color: gpsStatus === 'in' ? '#16A34A' : gpsStatus === 'out' ? '#DC2626' : '#6B7280',
       bg: gpsStatus === 'in' ? '#DCFCE7' : gpsStatus === 'out' ? '#FEE2E2' : '#F9FAFB',
       badge: gpsStatus === 'loading' ? 'GPS…' : gpsStatus === 'in' ? 'GPS On' : gpsStatus === 'out' ? 'GPS On' : 'GPS Off',
@@ -278,7 +279,12 @@ export function PJBagianDashboard({ pendingLeaveCount, pendingOvertimeCount, pen
       {/* Stat Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
         {stats.map((s, i) => (
-          <div key={i} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
+          <div
+            key={i}
+            onClick={(s as any).isGpsCard ? refreshLocation : undefined}
+            className={`bg-white rounded-2xl border border-gray-100 p-4 shadow-sm ${(s as any).isGpsCard ? 'cursor-pointer hover:border-green-300 hover:shadow-md transition-all active:scale-[0.98] group' : ''}`}
+            title={(s as any).isGpsCard ? "Klik untuk memperbarui lokasi GPS secara realtime" : undefined}
+          >
             <div className="flex items-start justify-between mb-3">
               <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: s.bg }}>
                 <s.icon size={16} style={{ color: s.color }} />
@@ -288,7 +294,10 @@ export function PJBagianDashboard({ pendingLeaveCount, pendingOvertimeCount, pen
                 {s.badge}
               </span>
             </div>
-            <div className="text-[15px] font-semibold text-gray-900">{s.value}</div>
+            <div className="text-[15px] font-semibold text-gray-900 flex items-center justify-between">
+              <span>{s.value}</span>
+              {(s as any).isGpsCard && <RotateCw size={13} className="text-gray-400 group-hover:text-[#16A34A] transition-colors" />}
+            </div>
             <div className="text-[11px] text-gray-400">{s.label}</div>
             <div className="text-[11px] text-gray-500 mt-0.5">{s.sub}</div>
           </div>

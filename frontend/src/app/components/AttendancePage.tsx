@@ -15,7 +15,9 @@ import {
   Sunset,
   Camera,
   Calendar,
+  RotateCw,
 } from "lucide-react";
+import { useRealtimeGps } from "../../hooks/useRealtimeGps";
 import {
   MapContainer,
   TileLayer,
@@ -631,6 +633,7 @@ function GPSCard({
   hospLng,
   hospRadius,
   isDinasLuar = false,
+  onRefreshLocation,
 }: {
   userLocation: { lat: number; lng: number; accuracy: number } | null;
   gpsActive: boolean;
@@ -640,6 +643,7 @@ function GPSCard({
   hospLng: number;
   hospRadius: number;
   isDinasLuar?: boolean;
+  onRefreshLocation?: () => void;
 }) {
   // Kekuatan sinyal diukur dari akurasi GPS (di bawah 15 meter dianggap sangat bagus)
   const signalBars = gpsActive
@@ -687,7 +691,18 @@ function GPSCard({
             Lokasi GPS
           </span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
+          {onRefreshLocation && (
+            <button
+              type="button"
+              onClick={onRefreshLocation}
+              className="flex items-center gap-1.5 text-[11px] font-bold text-[#16A34A] bg-green-50 border border-green-200 px-2.5 py-1 rounded-xl hover:bg-green-100 transition-all active:scale-95 cursor-pointer"
+              title="Muat ulang GPS realtime"
+            >
+              <RotateCw size={12} />
+              <span>Refresh GPS</span>
+            </button>
+          )}
           {/* Signal bars */}
           <div className="flex items-end gap-[3px]">
             {[1, 2, 3, 4].map((bar) => (
@@ -712,7 +727,39 @@ function GPSCard({
       </div>
 
       {/* Leaflet Map */}
-      <div className="h-52 w-full relative" style={{ isolation: "isolate" }}>
+      <div className="h-56 w-full relative" style={{ isolation: "isolate" }}>
+        {/* Floating Refresh Location Button on Map Overlay */}
+        {onRefreshLocation && (
+          <button
+            type="button"
+            onClick={onRefreshLocation}
+            className="absolute top-3 right-3 z-[1000] bg-white/95 hover:bg-white text-gray-800 border border-gray-200 shadow-lg rounded-xl px-3 py-1.5 text-[11.5px] font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer backdrop-blur-xs"
+            title="Muat Ulang Koordinat GPS Realtime"
+          >
+            <RotateCw size={13} className="text-[#16A34A] animate-spin-once" />
+            <span>Refresh Maps GPS</span>
+          </button>
+        )}
+
+        {/* Searching Overlay if Location is not yet acquired */}
+        {!userLocation && (
+          <div className="absolute inset-0 z-[999] bg-slate-900/40 backdrop-blur-xs flex flex-col items-center justify-center p-4 text-center">
+            <MapPin size={24} className="text-white animate-bounce mb-1.5" />
+            <p className="text-white text-[12.5px] font-bold">Membaca Koordinat GPS Realtime...</p>
+            <p className="text-slate-200 text-[11px] mt-0.5 mb-3">Pastikan izin lokasi (GPS) pada browser/HP diizinkan.</p>
+            {onRefreshLocation && (
+              <button
+                type="button"
+                onClick={onRefreshLocation}
+                className="bg-[#16A34A] hover:bg-[#0d9240] text-white px-4 py-2 rounded-xl text-[12px] font-bold shadow-lg flex items-center gap-2 transition-all active:scale-95 cursor-pointer"
+              >
+                <RotateCw size={14} />
+                <span>Refresh & Dapatkan Lokasi Saya</span>
+              </button>
+            )}
+          </div>
+        )}
+
         <MapContainer
           center={mapCenter}
           zoom={17}
@@ -1044,12 +1091,13 @@ export function AttendancePage() {
   const HOSP_LAT = shiftSettings.hospital_lat;
   const HOSP_LNG = shiftSettings.hospital_lng;
   const HOSP_RADIUS = shiftSettings.gps_radius;
-  const [userLocation, setUserLocation] = useState<{
-    lat: number;
-    lng: number;
-    accuracy: number;
-  } | null>(null);
-  const [gpsActive, setGpsActive] = useState<boolean>(false);
+
+  // Realtime GPS pelacakan presisi (Ramah iOS / iPhone)
+  const {
+    location: userLocation,
+    gpsActive,
+    refreshLocation,
+  } = useRealtimeGps();
 
   // Load shift settings + jadwal shift karyawan dari API
   useEffect(() => {
@@ -1218,30 +1266,7 @@ export function AttendancePage() {
     loadTodayRecord();
   }, []);
 
-  // Browser watch geolocation effect
-  useEffect(() => {
-    if (!navigator.geolocation) {
-      console.warn("Browser Anda tidak mendukung Geolocation GPS.");
-      setGpsActive(false);
-      return;
-    }
-
-    const id = navigator.geolocation.watchPosition(
-      (pos) => {
-        setUserLocation({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          accuracy: Math.round(pos.coords.accuracy),
-        });
-        setGpsActive(true);
-      },
-      (err) => {
-        console.warn(err);
-        setGpsActive(false);
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
-    );
-  }, []);
+  // Geolocation sudah ditangani secara realtime & otomatis oleh useRealtimeGps hook
 
   const getDistance = (
     lat1: number,
@@ -1963,6 +1988,135 @@ export function AttendancePage() {
         activeLeave={activeLeave}
       />
 
+      {/* CTA Button (Dipindahkan ke Atas Map GPS) */}
+      <div className="mb-4">
+        {checkedOut ? (
+          <div className="bg-green-50 border border-green-200 rounded-2xl p-5 text-center">
+            <CheckCircle2 size={32} className="text-[#16A34A] mx-auto mb-2" />
+            <p className="text-[15px] font-semibold text-gray-800">
+              Absensi Selesai
+            </p>
+            <p className="text-[13px] text-gray-500 mt-1">
+              Terima kasih · Sampai jumpa besok!
+            </p>
+            <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+              <div>
+                <p className="text-[10px] text-gray-400">Masuk</p>
+                <p className="text-[13px] font-bold text-black">{checkInTime}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-gray-400">Keluar</p>
+                <p className="text-[13px] font-bold text-black">{checkOutTime}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-gray-400">Durasi</p>
+                <p className="text-[13px] font-bold text-black">
+                  {getDuration()}
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : canCheckIn ? (
+          <div className="space-y-2">
+            {(!faceVerified || !inGeofence) && (
+              <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl">
+                <AlertCircle size={14} className="text-amber-500 flex-shrink-0" />
+                <p className="text-[12px] text-amber-700">
+                  {!faceVerified
+                    ? "Selesaikan verifikasi wajah terlebih dahulu"
+                    : "Anda harus berada di dalam area geofence RSUCL"}
+                </p>
+              </div>
+            )}
+            <button
+              onClick={handleAction}
+              disabled={!faceVerified || !inGeofence}
+              className={`w-full py-4 rounded-2xl font-semibold text-[16px] transition-all flex items-center justify-center gap-3 ${
+                faceVerified && inGeofence
+                  ? "bg-[#16A34A] hover:bg-[#0d9240] text-white shadow-lg shadow-green-200/60 active:scale-[0.98]"
+                  : "bg-gray-100 text-gray-300 cursor-not-allowed border-2 border-dashed border-gray-200"
+              }`}
+            >
+              {faceVerified && inGeofence ? (
+                <CheckCircle2 size={20} />
+              ) : (
+                <Lock size={18} />
+              )}
+              {faceVerified && inGeofence
+                ? "CHECK IN"
+                : !inGeofence
+                  ? "Di Luar Area Geofence"
+                  : "Verifikasi Wajah Diperlukan"}
+            </button>
+          </div>
+        ) : canCheckOut ? (
+          <div className="space-y-2">
+            {(!faceVerified || !inGeofence) && (
+              <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl">
+                <AlertCircle size={14} className="text-amber-500 flex-shrink-0" />
+                <p className="text-[12px] text-amber-700">
+                  {!faceVerified
+                    ? "Selesaikan verifikasi wajah untuk check-out"
+                    : "Anda harus berada di dalam area geofence RSUCL"}
+                </p>
+              </div>
+            )}
+            <button
+              onClick={handleAction}
+              disabled={!faceVerified || !inGeofence}
+              className={`w-full py-4 rounded-2xl font-semibold text-[16px] transition-all flex items-center justify-center gap-3 ${
+                faceVerified && inGeofence
+                  ? "bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-200/60 active:scale-[0.98]"
+                  : "bg-gray-100 text-gray-300 cursor-not-allowed border-2 border-dashed border-gray-200"
+              }`}
+            >
+              {faceVerified && inGeofence ? (
+                <Clock size={20} />
+              ) : (
+                <Lock size={18} />
+              )}
+              {faceVerified && inGeofence
+                ? "CHECK OUT"
+                : !inGeofence
+                  ? "Di Luar Area Geofence"
+                  : "Verifikasi Wajah Diperlukan"}
+            </button>
+          </div>
+        ) : checkedIn && !checkedOut ? (
+          <div className="w-full py-4 rounded-2xl flex flex-col items-center justify-center gap-1.5 border-2 cursor-not-allowed bg-orange-50 border-orange-300 text-orange-700">
+            <div className="flex items-center gap-2">
+              <AlertCircle size={18} />
+              <span className="text-[15px] font-semibold">
+                Batas Waktu Check-Out Sudah Lewat
+              </span>
+            </div>
+            <span className="text-[11px] text-orange-600">
+              Jam Masuk: {checkInTime} · Hubungi admin jika ada kendala
+            </span>
+          </div>
+        ) : (
+          <div
+            className={`w-full py-4 rounded-2xl flex items-center justify-center gap-3 border-2 cursor-not-allowed
+              ${
+                attendanceWindow === "break"
+                  ? "bg-purple-50 border-purple-200 text-purple-400"
+                  : attendanceWindow === "sunday" ||
+                      attendanceWindow === "no_shift" ||
+                      attendanceWindow === "ended"
+                    ? "bg-gray-100 border-gray-200 text-gray-400"
+                    : attendanceWindow === "too_early"
+                      ? "bg-amber-50 border-amber-200 text-amber-400"
+                      : attendanceWindow === "late_locked"
+                        ? "bg-red-50 border-red-200 text-red-400"
+                        : "bg-blue-50 border-blue-200 text-blue-400"
+              }`}
+          >
+            <Lock size={18} />
+            <span className="text-[15px] font-semibold">{lockedLabel()}</span>
+          </div>
+        )}
+      </div>
+
       {/* GPS Map Geofence Card */}
       <GPSCard
         userLocation={userLocation}
@@ -1973,6 +2127,7 @@ export function AttendancePage() {
         hospLng={HOSP_LNG}
         hospRadius={HOSP_RADIUS}
         isDinasLuar={isDinasLuar}
+        onRefreshLocation={refreshLocation}
       />
 
       {/* Rekap if checked in */}
@@ -2114,134 +2269,7 @@ export function AttendancePage() {
         ))}
       </div>
 
-      {/* CTA Button */}
-      {checkedOut ? (
-        <div className="bg-green-50 border border-green-200 rounded-2xl p-5 text-center">
-          <CheckCircle2 size={32} className="text-[#16A34A] mx-auto mb-2" />
-          <p className="text-[15px] font-semibold text-gray-800">
-            Absensi Selesai
-          </p>
-          <p className="text-[13px] text-gray-500 mt-1">
-            Terima kasih · Sampai jumpa besok!
-          </p>
-          <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-            <div>
-              <p className="text-[10px] text-gray-400">Masuk</p>
-              <p className="text-[13px] font-bold text-black">{checkInTime}</p>
-            </div>
-            <div>
-              <p className="text-[10px] text-gray-400">Keluar</p>
-              <p className="text-[13px] font-bold text-black">{checkOutTime}</p>
-            </div>
-            <div>
-              <p className="text-[10px] text-gray-400">Durasi</p>
-              <p className="text-[13px] font-bold text-black">
-                {getDuration()}
-              </p>
-            </div>
-          </div>
-        </div>
-      ) : canCheckIn ? (
-        <div className="space-y-2">
-          {(!faceVerified || !inGeofence) && (
-            <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl">
-              <AlertCircle size={14} className="text-amber-500 flex-shrink-0" />
-              <p className="text-[12px] text-amber-700">
-                {!faceVerified
-                  ? "Selesaikan verifikasi wajah terlebih dahulu"
-                  : "Anda harus berada di dalam area geofence RSUCL"}
-              </p>
-            </div>
-          )}
-          <button
-            onClick={handleAction}
-            disabled={!faceVerified || !inGeofence}
-            className={`w-full py-4 rounded-2xl font-semibold text-[16px] transition-all flex items-center justify-center gap-3 ${
-              faceVerified && inGeofence
-                ? "bg-[#16A34A] hover:bg-[#0d9240] text-white shadow-lg shadow-green-200/60 active:scale-[0.98]"
-                : "bg-gray-100 text-gray-300 cursor-not-allowed border-2 border-dashed border-gray-200"
-            }`}
-          >
-            {faceVerified && inGeofence ? (
-              <CheckCircle2 size={20} />
-            ) : (
-              <Lock size={18} />
-            )}
-            {faceVerified && inGeofence
-              ? "CHECK IN"
-              : !inGeofence
-                ? "Di Luar Area Geofence"
-                : "Verifikasi Wajah Diperlukan"}
-          </button>
-        </div>
-      ) : canCheckOut ? (
-        <div className="space-y-2">
-          {(!faceVerified || !inGeofence) && (
-            <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl">
-              <AlertCircle size={14} className="text-amber-500 flex-shrink-0" />
-              <p className="text-[12px] text-amber-700">
-                {!faceVerified
-                  ? "Selesaikan verifikasi wajah untuk check-out"
-                  : "Anda harus berada di dalam area geofence RSUCL"}
-              </p>
-            </div>
-          )}
-          <button
-            onClick={handleAction}
-            disabled={!faceVerified || !inGeofence}
-            className={`w-full py-4 rounded-2xl font-semibold text-[16px] transition-all flex items-center justify-center gap-3 ${
-              faceVerified && inGeofence
-                ? "bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-200/60 active:scale-[0.98]"
-                : "bg-gray-100 text-gray-300 cursor-not-allowed border-2 border-dashed border-gray-200"
-            }`}
-          >
-            {faceVerified && inGeofence ? (
-              <Clock size={20} />
-            ) : (
-              <Lock size={18} />
-            )}
-            {faceVerified && inGeofence
-              ? "CHECK OUT"
-              : !inGeofence
-                ? "Di Luar Area Geofence"
-                : "Verifikasi Wajah Diperlukan"}
-          </button>
-        </div>
-      ) : // Kasus: terkunci (tidak bisa check-in atau check-out)
-      // Bedakan antara: (a) sudah check-in tapi belum check-out & waktu lewat, vs (b) status lain
-      checkedIn && !checkedOut ? (
-        <div className="w-full py-4 rounded-2xl flex flex-col items-center justify-center gap-1.5 border-2 cursor-not-allowed bg-orange-50 border-orange-300 text-orange-700">
-          <div className="flex items-center gap-2">
-            <AlertCircle size={18} />
-            <span className="text-[15px] font-semibold">
-              Batas Waktu Check-Out Sudah Lewat
-            </span>
-          </div>
-          <span className="text-[11px] text-orange-600">
-            Jam Masuk: {checkInTime} · Hubungi admin jika ada kendala
-          </span>
-        </div>
-      ) : (
-        <div
-          className={`w-full py-4 rounded-2xl flex items-center justify-center gap-3 border-2 cursor-not-allowed
-            ${
-              attendanceWindow === "break"
-                ? "bg-purple-50 border-purple-200 text-purple-400"
-                : attendanceWindow === "sunday" ||
-                    attendanceWindow === "no_shift" ||
-                    attendanceWindow === "ended"
-                  ? "bg-gray-100 border-gray-200 text-gray-400"
-                  : attendanceWindow === "too_early"
-                    ? "bg-amber-50 border-amber-200 text-amber-400"
-                    : attendanceWindow === "late_locked"
-                      ? "bg-red-50 border-red-200 text-red-400"
-                      : "bg-blue-50 border-blue-200 text-blue-400"
-            }`}
-        >
-          <Lock size={18} />
-          <span className="text-[15px] font-semibold">{lockedLabel()}</span>
-        </div>
-      )}
+
 
       {/* Rules footer */}
       <div className="mt-4 px-4 py-3 bg-gray-50 rounded-xl border border-gray-100">

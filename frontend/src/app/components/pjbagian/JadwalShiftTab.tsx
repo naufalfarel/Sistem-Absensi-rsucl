@@ -351,9 +351,7 @@ function BulkAssignModal({ user, shifts, employees, year, month, daysInMonth, on
   const [search, setSearch] = useState('');
 
   const filteredEmps = employees.filter(
-    e => e.name.toLowerCase().includes(search.toLowerCase()) &&
-    e.id !== user.id &&
-    e.name.toLowerCase().trim() !== user.name.toLowerCase().trim()
+    e => e.name.toLowerCase().includes(search.toLowerCase())
   );
 
   const toggleEmp = (id: number) => setSelectedEmpIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -1936,30 +1934,6 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
                               {isSaving ? (
                                 <div className="flex items-center justify-center h-7">
                                   <Loader2 size={12} className="animate-spin text-[#16A34A]" />
-                                </div>
-                              ) : isSelfPj ? (
-                                /* Sel dikunci khusus untuk PJ Bagian (Otomatis Jam Kantor Reguler, KECUALI bila ada Cuti/Sakit/Dinas Luar yang disetujui) */
-                                <div className="relative inline-block">
-                                  <button
-                                    disabled
-                                    className={`w-8 h-7 mx-auto rounded-lg text-[10px] font-extrabold border flex items-center justify-center cursor-not-allowed opacity-90 ${
-                                      assigned
-                                        ? 'shadow-sm'
-                                        : 'border-slate-100 bg-slate-50 text-slate-400'
-                                    }`}
-                                    style={assigned && pr ? {
-                                      background: pr.bg,
-                                      borderColor: pr.border,
-                                      color: assigned.color,
-                                    } : {}}
-                                    title={
-                                      assigned
-                                        ? `[DISETUJUI] ${assigned.name}`
-                                        : "Hari Libur / OFF. Akun PJ Bagian otomatis mengikuti Jam Kantor."
-                                    }
-                                  >
-                                    {assigned ? badge : '-'}
-                                  </button>
                                 </div>
                               ) : isLeave ? (
                                 /* Sel dikunci karena merupakan Cuti / Sakit / Izin dari Admin */

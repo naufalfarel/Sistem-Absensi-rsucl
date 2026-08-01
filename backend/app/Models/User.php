@@ -123,7 +123,15 @@ class User extends Authenticatable
     public function getPjDepartmentIds(): array
     {
         if ($this->isPjBagian()) {
-            return $this->pjDepartments()->pluck('departments.id')->toArray();
+            $ids = $this->pjDepartments()->pluck('departments.id')->toArray();
+            if (empty($ids) && $this->pj_bagian_department_id) {
+                $ids[] = (int) $this->pj_bagian_department_id;
+            }
+            if ($this->employee && $this->employee->department_id) {
+                $ids[] = (int) $this->employee->department_id;
+            }
+            return array_values(array_unique($ids));
         }
         return [];
-    }}
+    }
+}
