@@ -279,15 +279,23 @@ export function EmployeeRegistrationTab() {
         </div>
 
         {/* Search */}
-        <div className="relative w-full sm:w-72">
+        <div className="relative w-full sm:w-80">
           <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
-            placeholder="Cari nama, NIK, email, no ref..."
+            placeholder="Cari nama, NIK, NIP, email, no HP, dept..."
             value={searchVal}
             onChange={(e) => setSearchVal(e.target.value)}
-            className="w-full pl-9 pr-4 py-1.5 border border-gray-200 rounded-xl text-[12px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:bg-white transition-all font-medium"
+            className="w-full pl-9 pr-8 py-1.5 border border-gray-200 rounded-xl text-[12px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:bg-white transition-all font-medium"
           />
+          {searchVal && (
+            <button
+              onClick={() => setSearchVal('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
       </div>
 

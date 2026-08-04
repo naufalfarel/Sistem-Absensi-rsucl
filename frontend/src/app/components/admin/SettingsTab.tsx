@@ -101,11 +101,12 @@ export function SettingsTab() {
   const [notifSystem, setNotifSystem] = useState(false);
 
   // ── States Konfigurasi Geofencing RSUCL ──
-  const [radius, setRadius]   = useState('100');
-  const [hospLat, setHospLat] = useState('5.552740480177099');
-  const [hospLng, setHospLng] = useState('95.33486560781716');
-  const [configSaved, setConfigSaved] = useState(false);
-  const [configError, setConfigError] = useState('');
+  const [radius, setRadius]               = useState('100');
+  const [hospLat, setHospLat]             = useState('5.552740480177099');
+  const [hospLng, setHospLng]             = useState('95.33486560781716');
+  const [enableGpsValidation, setEnableGpsValidation] = useState(true);
+  const [configSaved, setConfigSaved]     = useState(false);
+  const [configError, setConfigError]     = useState('');
 
   // ── States Toleransi Waktu & Jadwal Absensi ──
   const [checkinOpen, setCheckinOpen]           = useState('0');
@@ -167,6 +168,7 @@ export function SettingsTab() {
         setRadius(res.data.attendance_radius_meters || res.data.gps_radius);
         setHospLat(res.data.hospital_latitude || res.data.hospital_lat || '5.552740480177099');
         setHospLng(res.data.hospital_longitude || res.data.hospital_lng || '95.33486560781716');
+        if (res.data.enable_gps_validation !== undefined) setEnableGpsValidation(res.data.enable_gps_validation === '1');
         if (res.data.notif_email !== undefined) setNotifEmail(res.data.notif_email === '1');
         if (res.data.notif_late !== undefined) setNotifLate(res.data.notif_late === '1');
         if (res.data.notif_leave !== undefined) setNotifLeave(res.data.notif_leave === '1');
@@ -443,8 +445,8 @@ export function SettingsTab() {
     setConfigSaved(false);
     setConfigError('');
     const parsedRadius = Number(radius);
-    if (parsedRadius < 10 || parsedRadius > 25) {
-      setConfigError('Radius Geofence GPS harus bernilai antara 10 hingga 25 meter.');
+    if (parsedRadius < 1 || parsedRadius > 50000) {
+      setConfigError('Radius Geofence GPS harus bernilai antara 1 hingga 50.000 meter.');
       return;
     }
     try {
@@ -455,6 +457,7 @@ export function SettingsTab() {
         hospital_latitude: hospLat,
         hospital_longitude: hospLng,
         attendance_radius_meters: radius,
+        enable_gps_validation: enableGpsValidation ? '1' : '0',
         checkin_open: checkinOpen,
         late_limit: lateLimit,
         close_checkin: closeCheckin,
@@ -1339,14 +1342,30 @@ export function SettingsTab() {
           <p className="text-[14px] font-semibold text-gray-800">Konfigurasi Sistem Absensi</p>
         </div>
         <div className="p-5 space-y-4">
+          {/* Toggle Sakelar Validasi GPS */}
+          <div className="flex items-center justify-between p-3.5 bg-gray-50/80 rounded-2xl border border-gray-100 mb-2">
+            <div className="pr-4">
+              <p className="text-[13px] font-bold text-gray-800 flex items-center gap-2">
+                <MapPin size={14} className={enableGpsValidation ? "text-[#16A34A]" : "text-gray-400"} />
+                Validasi Lokasi GPS (Geofencing)
+              </p>
+              <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+                {enableGpsValidation
+                  ? "Status Aktif: Karyawan wajib berada dalam radius lokasi RSUCL untuk dapat melakukan absensi."
+                  : "Status Nonaktif: Karyawan dapat absen dari mana saja tanpa dibatasi radius GPS (Solusi jika GPS pengguna iOS/iPhone sering melenceng/kabur)."}
+              </p>
+            </div>
+            <Toggle value={enableGpsValidation} onChange={() => setEnableGpsValidation(!enableGpsValidation)} />
+          </div>
+
           <div>
             <label className="block text-[12px] font-medium text-gray-600 mb-1.5">Radius Geofence GPS (meter)</label>
             <div className="relative">
               <MapPin size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input type="number" value={radius} onChange={e => setRadius(e.target.value)} min="10" max="25"
+              <input type="number" value={radius} onChange={e => setRadius(e.target.value)} min="1" max="50000"
                 className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all" />
             </div>
-            <p className="text-[11px] text-gray-400 mt-1">Karyawan hanya dapat absen dalam radius {radius}m dari RSUCL</p>
+            <p className="text-[11px] text-gray-400 mt-1">Dapat diatur bebas oleh Admin (contoh: 100m, 500m, 1.000m, dll). Karyawan hanya dapat absen dalam radius ini jika Validasi GPS diaktifkan.</p>
           </div>
 
           {/* Koordinat RS */}

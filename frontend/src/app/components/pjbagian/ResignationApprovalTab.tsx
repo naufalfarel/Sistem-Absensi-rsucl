@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle2, XCircle, Clock, FileText, ExternalLink } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, FileText, ExternalLink, Search, X } from 'lucide-react';
 import { resignationApi, ResignationRequest } from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
 import { MonthYearDeptFilter } from '../ui/MonthYearDeptFilter';
@@ -15,6 +15,7 @@ interface ResignationApprovalTabProps {
 export function ResignationApprovalTab({ user, onUpdateCount }: ResignationApprovalTabProps) {
   const [requests, setRequests] = useState<ResignationRequest[]>([]);
   const [filter, setFilter] = useState('Menunggu');
+  const [searchQuery, setSearchQuery] = useState('');
   const [filterMonth, setFilterMonth] = useState<number>(0);
   const [filterYear, setFilterYear]   = useState<number>(new Date().getFullYear());
   const [confirmModal, setConfirmModal] = useState<{ id: number; action: 'approve' | 'reject'; name: string } | null>(null);
@@ -46,12 +47,16 @@ export function ResignationApprovalTab({ user, onUpdateCount }: ResignationAppro
       (filter === 'Disetujui' && r.pj_status === 'approved') ||
       (filter === 'Ditolak' && r.pj_status === 'rejected');
 
+    const matchSearch = !searchQuery ||
+      (r.employee?.user?.name && r.employee.user.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (r.employee?.nik_ktp && r.employee.nik_ktp.includes(searchQuery));
+
     if (r.effective_date) {
       const d = new Date(r.effective_date);
       if (filterMonth > 0 && d.getMonth() + 1 !== filterMonth) return false;
       if (filterYear > 0 && d.getFullYear() !== filterYear) return false;
     }
-    return matchFilter;
+    return matchFilter && matchSearch;
   });
 
   const pendingCount = requests.filter(r => r.pj_status === 'pending' && r.status === 'pending').length;
@@ -116,14 +121,32 @@ export function ResignationApprovalTab({ user, onUpdateCount }: ResignationAppro
         onYearChange={setFilterYear}
       />
 
-      {/* Filter tabs */}
-      <div className="flex gap-1 bg-white rounded-xl border border-gray-100 p-1 shadow-xs w-fit overflow-x-auto">
-        {filterTabs.map(f => (
-          <button key={f} onClick={() => setFilter(f)}
-            className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all whitespace-nowrap ${f === filter ? 'bg-[#16A34A] text-white shadow-xs' : 'text-gray-500 hover:text-gray-700'}`}>
-            {f}
-          </button>
-        ))}
+      {/* Filter tabs & Search Bar */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        <div className="flex gap-1 bg-[#ffffff] rounded-xl border border-gray-100 p-1 shadow-xs overflow-x-auto">
+          {filterTabs.map(f => (
+            <button key={f} onClick={() => setFilter(f)}
+              className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all whitespace-nowrap ${f === filter ? 'bg-[#16A34A] text-white shadow-xs' : 'text-gray-500 hover:text-gray-700'}`}>
+              {f}
+            </button>
+          ))}
+        </div>
+
+        <div className="relative w-full sm:w-64">
+          <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Cari nama staf atau NIK..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="w-full pl-9 pr-8 py-1.5 border border-gray-200 rounded-xl text-[12px] bg-white focus:outline-none focus:border-[#16A34A] transition-all font-medium"
+          />
+          {searchQuery && (
+            <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+              <X size={13} />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* List */}

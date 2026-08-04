@@ -59,6 +59,7 @@ export default function AssignmentLetterTab() {
 
   // Admin Direct Issue Modal State (Skenario 2)
   const [showAdminCreateModal, setShowAdminCreateModal] = useState(false);
+  const [employeeSearchFilter, setEmployeeSearchFilter] = useState('');
   const [adminCreateEmployeeId, setAdminCreateEmployeeId] = useState('');
   const [adminCreateTitle, setAdminCreateTitle] = useState('');
   const [adminCreateInstitution, setAdminCreateInstitution] = useState('');
@@ -740,19 +741,38 @@ export default function AssignmentLetterTab() {
                 <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1.5">
                   Pilih Pegawai Penerima Surat Tugas <span className="text-red-500">*</span>
                 </label>
-                <select
-                  value={adminCreateEmployeeId}
-                  onChange={e => setAdminCreateEmployeeId(e.target.value)}
-                  className="w-full px-3.5 py-2.5 border border-gray-250 rounded-xl text-[12.5px] bg-white focus:outline-none focus:border-[#16A34A] font-semibold text-gray-800 cursor-pointer"
-                  required
-                >
-                  <option value="">-- Pilih Pegawai --</option>
-                  {allEmployees.map(emp => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.name} (NIK: {emp.nik_ktp}) - {emp.department || 'Umum'}
-                    </option>
-                  ))}
-                </select>
+                <div className="space-y-2">
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Cari nama atau NIK pegawai..."
+                      value={employeeSearchFilter}
+                      onChange={e => setEmployeeSearchFilter(e.target.value)}
+                      className="w-full pl-9 pr-3 py-1.5 border border-gray-200 rounded-xl text-[12px] bg-slate-50 focus:outline-none focus:border-[#16A34A]"
+                    />
+                  </div>
+                  <select
+                    value={adminCreateEmployeeId}
+                    onChange={e => setAdminCreateEmployeeId(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border border-gray-250 rounded-xl text-[12.5px] bg-white focus:outline-none focus:border-[#16A34A] font-semibold text-gray-800 cursor-pointer"
+                    required
+                  >
+                    <option value="">-- Pilih Pegawai --</option>
+                    {allEmployees
+                      .filter(emp =>
+                        !employeeSearchFilter.trim() ||
+                        emp.name.toLowerCase().includes(employeeSearchFilter.toLowerCase()) ||
+                        (emp.nik_ktp && emp.nik_ktp.includes(employeeSearchFilter)) ||
+                        (emp.department && emp.department.toLowerCase().includes(employeeSearchFilter.toLowerCase()))
+                      )
+                      .map(emp => (
+                        <option key={emp.id} value={emp.id}>
+                          {emp.name} (NIK: {emp.nik_ktp}) - {emp.department || 'Umum'}
+                        </option>
+                      ))}
+                  </select>
+                </div>
               </div>
 
               {/* Judul Kegiatan / Perihal */}

@@ -16,7 +16,7 @@ class AttendanceService
      * @param Carbon|null $shiftDate Tanggal shift (date record absensi)
      * @return array ['is_lembur' => bool, 'durasi_lembur_menit' => int, 'jam_pulang_normal' => string]
      */
-    public function hitungStatusLembur(Employee $employee, Carbon $checkoutTime, ?Carbon $shiftDate = null): array
+    public function hitungStatusLembur(Employee $employee, Carbon $checkoutTime, ?Carbon $shiftDate = null, ?\App\Models\Schedule $shift = null): array
     {
         if (!$shiftDate) {
             $shiftDate = $checkoutTime->copy()->startOfDay();
@@ -28,8 +28,13 @@ class AttendanceService
         ];
         $dayName = $dayMap[$shiftDate->dayOfWeek];
 
-        // Cari shift/schedule untuk hari ini
-        $shift = $employee->schedules()->wherePivot('day_of_week', $dayName)->first();
+        // Cari shift/schedule jika tidak diberikan secara eksplisit
+        if (!$shift) {
+            $shift = \App\Support\AttendanceRules::resolveShiftFor($employee, $shiftDate);
+        }
+        if (!$shift) {
+            $shift = $employee->schedules()->wherePivot('day_of_week', $dayName)->first();
+        }
 
         // Tentukan jam pulang normal
         if ($shift) {

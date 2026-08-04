@@ -31,6 +31,7 @@ export const DisciplinaryTab: React.FC = () => {
 
   // Form Modal state
   const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
+  const [employeeSearchFilter, setEmployeeSearchFilter] = useState<string>('');
   const [selectedType, setSelectedType] = useState<'teguran' | 'sp1' | 'sp2' | 'phk'>('teguran');
   const [selectedDeptId, setSelectedDeptId] = useState<string>('');
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<number[]>([]);
@@ -730,34 +731,56 @@ export const DisciplinaryTab: React.FC = () => {
                 <label className="block text-[11px] font-bold text-slate-550 uppercase tracking-wider mb-1.5">
                   Pilih Pegawai Penerima <span className="text-rose-600">*</span> (Bisa lebih dari 1)
                 </label>
-                <div className="border border-slate-200 rounded-2xl p-3 max-h-40 overflow-y-auto space-y-2 bg-slate-50/50">
-                  {departmentEmployees.length === 0 ? (
-                    <p className="text-[11.5px] text-slate-400 text-center py-4">Tidak ada pegawai dalam departemen ini.</p>
-                  ) : (
-                    departmentEmployees.map(emp => {
-                      const isChecked = selectedEmployeeIds.includes(emp.id);
-                      return (
-                        <label key={emp.id} className="flex items-center gap-2.5 px-2 py-1.5 hover:bg-white rounded-xl cursor-pointer select-none transition-all">
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={() => {
-                              if (isChecked) {
-                                setSelectedEmployeeIds(prev => prev.filter(id => id !== emp.id));
-                              } else {
-                                setSelectedEmployeeIds(prev => [...prev, emp.id]);
-                              }
-                            }}
-                            className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500 border-slate-300"
-                          />
-                          <div className="text-left">
-                            <p className="text-[12px] font-bold text-slate-800">{emp.name}</p>
-                            <p className="text-[9.5px] text-slate-400 font-mono">NIK: {emp.nik_ktp} · {emp.department || 'Umum'}</p>
-                          </div>
-                        </label>
-                      );
-                    })
-                  )}
+                <div className="space-y-2">
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Cari nama atau NIK pegawai..."
+                      value={employeeSearchFilter}
+                      onChange={e => setEmployeeSearchFilter(e.target.value)}
+                      className="w-full pl-9 pr-3 py-1.5 border border-slate-200 rounded-xl text-[12px] bg-slate-50 focus:outline-none focus:border-rose-500"
+                    />
+                  </div>
+                  <div className="border border-slate-200 rounded-2xl p-3 max-h-40 overflow-y-auto space-y-2 bg-slate-50/50">
+                    {departmentEmployees.filter(emp =>
+                      !employeeSearchFilter.trim() ||
+                      emp.name.toLowerCase().includes(employeeSearchFilter.toLowerCase()) ||
+                      (emp.nik_ktp && emp.nik_ktp.includes(employeeSearchFilter))
+                    ).length === 0 ? (
+                      <p className="text-[11.5px] text-slate-400 text-center py-4">Tidak ada pegawai yang cocok.</p>
+                    ) : (
+                      departmentEmployees
+                        .filter(emp =>
+                          !employeeSearchFilter.trim() ||
+                          emp.name.toLowerCase().includes(employeeSearchFilter.toLowerCase()) ||
+                          (emp.nik_ktp && emp.nik_ktp.includes(employeeSearchFilter))
+                        )
+                        .map(emp => {
+                          const isChecked = selectedEmployeeIds.includes(emp.id);
+                          return (
+                            <label key={emp.id} className="flex items-center gap-2.5 px-2 py-1.5 hover:bg-white rounded-xl cursor-pointer select-none transition-all">
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => {
+                                  if (isChecked) {
+                                    setSelectedEmployeeIds(prev => prev.filter(id => id !== emp.id));
+                                  } else {
+                                    setSelectedEmployeeIds(prev => [...prev, emp.id]);
+                                  }
+                                }}
+                                className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500 border-slate-300"
+                              />
+                              <div className="text-left">
+                                <p className="text-[12px] font-bold text-slate-800">{emp.name}</p>
+                                <p className="text-[9.5px] text-slate-400 font-mono">NIK: {emp.nik_ktp} · {emp.department || 'Umum'}</p>
+                              </div>
+                            </label>
+                          );
+                        })
+                    )}
+                  </div>
                 </div>
               </div>
 

@@ -345,14 +345,14 @@ export function OvertimeTab({ onUpdateCount }: OvertimeTabProps) {
         <div className="flex flex-wrap gap-3 items-center flex-1 md:flex-initial">
 
           {/* Search */}
-          <div className="relative flex-1 md:w-64">
+          <div className="relative flex-1 md:w-72">
             <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
-              placeholder="Cari nama atau NIK KTP..."
+              placeholder="Cari nama, NIK KTP, dept, atau alasan..."
               value={searchVal}
               onChange={e => setSearchVal(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-100 rounded-xl text-[12px] bg-white shadow-sm focus:outline-none focus:border-[#16A34A] transition-all placeholder:text-gray-300 font-medium"
+              className="w-full pl-10 pr-8 py-2 border border-gray-100 rounded-xl text-[12px] bg-white shadow-sm focus:outline-none focus:border-[#16A34A] transition-all placeholder:text-gray-300 font-medium"
             />
             {searchVal && (
               <button

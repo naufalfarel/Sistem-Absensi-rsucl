@@ -325,11 +325,16 @@ export function PJBagianTab() {
           <Search size={14} className="text-gray-400" />
           <input
             type="text"
-            placeholder="Cari PJ, NIK KTP, atau departemen..."
+            placeholder="Cari nama PJ, NIK KTP, atau departemen..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="text-[11px] w-full focus:outline-none placeholder-gray-400 bg-transparent"
+            className="text-[11px] w-full focus:outline-none placeholder-gray-400 bg-transparent font-medium"
           />
+          {search && (
+            <button onClick={() => setSearch('')} className="text-gray-400 hover:text-gray-600">
+              <X size={13} />
+            </button>
+          )}
           <button onClick={loadData} className="text-gray-400 hover:text-gray-600" title="Refresh">
             <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
           </button>

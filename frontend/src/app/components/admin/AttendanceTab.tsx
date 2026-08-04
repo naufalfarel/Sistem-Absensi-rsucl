@@ -632,36 +632,71 @@ export function AttendanceTab() {
             </div>
 
             {/* Selfie Photo display if available */}
-            {(selected.imageCheckIn || selected.imageCheckOut) && (
+            {(selected.imageCheckIn || selected.imageCheckOut || selected.checkinPhotoUrl || selected.checkoutPhotoUrl) && (
               <div className="mb-5 space-y-2.5">
                 <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
                   Foto Selfie Absensi
                 </p>
-                <div className="flex gap-2">
-                  {selected.imageCheckIn && (
-                    <div className="flex-1 text-center bg-gray-50 rounded-xl p-2 border border-gray-100 shadow-sm">
-                      <p className="text-[9px] font-bold text-gray-400 mb-1.5 uppercase">
-                        Selfie Masuk
-                      </p>
-                      <img
-                        src={selected.imageCheckIn}
-                        alt="Check In Selfie"
-                        className="w-full aspect-square object-cover rounded-lg border"
-                      />
-                    </div>
-                  )}
-                  {selected.imageCheckOut && (
-                    <div className="flex-1 text-center bg-gray-50 rounded-xl p-2 border border-gray-100 shadow-sm">
-                      <p className="text-[9px] font-bold text-gray-400 mb-1.5 uppercase">
-                        Selfie Pulang
-                      </p>
-                      <img
-                        src={selected.imageCheckOut}
-                        alt="Check Out Selfie"
-                        className="w-full aspect-square object-cover rounded-lg border"
-                      />
-                    </div>
-                  )}
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="text-center bg-gray-50 rounded-xl p-2 border border-gray-100 shadow-sm">
+                    <p className="text-[9px] font-bold text-gray-400 mb-1.5 uppercase">
+                      Selfie Masuk
+                    </p>
+                    {selected.imageCheckIn || selected.checkinPhotoUrl ? (
+                      <div
+                        onClick={() => {
+                          const imgUrl = selected.imageCheckIn || selected.checkinPhotoUrl;
+                          if (imgUrl) {
+                            setPreviewPhoto({
+                              url: imgUrl,
+                              name: `Selfie Masuk - ${selected.name}`,
+                            });
+                          }
+                        }}
+                        className="cursor-zoom-in hover:scale-105 active:scale-95 transition-all"
+                      >
+                        <img
+                          src={selected.imageCheckIn || selected.checkinPhotoUrl || ""}
+                          alt="Check In Selfie"
+                          className="w-full aspect-square object-cover rounded-lg border border-gray-200 bg-gray-900"
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-full aspect-square rounded-lg border border-dashed border-gray-200 bg-gray-100/60 flex flex-col items-center justify-center text-gray-300">
+                        <span className="text-[10px]">Tidak ada foto</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="text-center bg-gray-50 rounded-xl p-2 border border-gray-100 shadow-sm">
+                    <p className="text-[9px] font-bold text-gray-400 mb-1.5 uppercase">
+                      Selfie Pulang
+                    </p>
+                    {selected.imageCheckOut || selected.checkoutPhotoUrl ? (
+                      <div
+                        onClick={() => {
+                          const imgUrl = selected.imageCheckOut || selected.checkoutPhotoUrl;
+                          if (imgUrl) {
+                            setPreviewPhoto({
+                              url: imgUrl,
+                              name: `Selfie Pulang - ${selected.name}`,
+                            });
+                          }
+                        }}
+                        className="cursor-zoom-in hover:scale-105 active:scale-95 transition-all"
+                      >
+                        <img
+                          src={selected.imageCheckOut || selected.checkoutPhotoUrl || ""}
+                          alt="Check Out Selfie"
+                          className="w-full aspect-square object-cover rounded-lg border border-gray-200 bg-gray-900"
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-full aspect-square rounded-lg border border-dashed border-gray-200 bg-gray-100/60 flex flex-col items-center justify-center text-gray-300">
+                        <span className="text-[10px]">Belum Pulang</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}

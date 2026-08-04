@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\Setting;
 use App\Models\Employee;
+use App\Models\Schedule;
 use Carbon\Carbon;
 
 class AttendanceRules
@@ -40,9 +41,13 @@ class AttendanceRules
      */
     public static function isWithinGeofence(float $lat, float $lon): bool
     {
-        $hospLat    = (float) Setting::get('hospital_latitude',  '5.552740480177099');
-        $hospLng    = (float) Setting::get('hospital_longitude',  '95.33486560781716');
-        $hospRadius = (float) Setting::get('attendance_radius_meters', '100');
+        if (Setting::get('enable_gps_validation', '1') === '0') {
+            return true;
+        }
+
+        $hospLat    = (float) Setting::get('hospital_latitude', Setting::get('hospital_lat', '5.552740480177099'));
+        $hospLng    = (float) Setting::get('hospital_longitude', Setting::get('hospital_lng', '95.33486560781716'));
+        $hospRadius = (float) Setting::get('attendance_radius_meters', Setting::get('gps_radius', '100'));
 
         $distance = self::haversineDistanceMeters($lat, $lon, $hospLat, $hospLng);
 

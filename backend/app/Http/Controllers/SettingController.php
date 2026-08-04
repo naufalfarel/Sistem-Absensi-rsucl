@@ -41,10 +41,11 @@ class SettingController extends Controller
         // ── Toleransi Pulang Cepat & Lembur ──
         'early_checkout_grace_minutes', // Toleransi menit sebelum dianggap pulang cepat (default: 15)
         'overtime_grace_minutes',       // Toleransi menit sebelum dianggap lembur (default: 15)
-        // ── GPS Wajib (Baru) ──
+        // ── GPS Wajib & Sakelar Validasi ──
         'hospital_latitude',
         'hospital_longitude',
         'attendance_radius_meters',
+        'enable_gps_validation',     // Status keaktifan validasi radius GPS (1 = aktif, 0 = nonaktif)
         // ── Toleransi Check-in & Jendela Absen Baru ──
         'checkin_tolerance_minutes',
         'early_checkin_window_minutes',
@@ -100,7 +101,7 @@ class SettingController extends Controller
             'checkout_close'          => 'sometimes|integer|min:0|max:1440',
             'sat_checkout_open'       => 'sometimes|integer|min:0|max:1440',
             'sat_checkout_close'      => 'sometimes|integer|min:0|max:1440',
-            'gps_radius'              => 'sometimes|integer|min:10|max:25',
+            'gps_radius'              => 'sometimes|integer|min:1|max:50000',
             'hospital_lat'            => 'sometimes|numeric',
             'hospital_lng'            => 'sometimes|numeric',
             'logo_url'                => 'sometimes|string|nullable',
@@ -115,10 +116,11 @@ class SettingController extends Controller
             // Toleransi Pulang Cepat & Lembur
             'early_checkout_grace_minutes'    => 'sometimes|integer|min:0|max:480',
             'overtime_grace_minutes'          => 'sometimes|integer|min:0|max:480',
-            // GPS Wajib (Baru)
+            // GPS Wajib & Sakelar Validasi
             'hospital_latitude'               => 'sometimes|numeric',
             'hospital_longitude'              => 'sometimes|numeric',
-            'attendance_radius_meters'        => 'sometimes|integer|min:10|max:25',
+            'attendance_radius_meters'        => 'sometimes|integer|min:1|max:50000',
+            'enable_gps_validation'           => 'sometimes|in:0,1',
             // Toleransi Check-in & Jendela Absen Baru
             'checkin_tolerance_minutes'       => 'sometimes|integer|min:0|max:1440',
             'early_checkin_window_minutes'    => 'sometimes|integer|min:0|max:1440',
@@ -244,12 +246,13 @@ class SettingController extends Controller
             'checkout_close'          => '60',
             'sat_checkout_open'       => '0',
             'sat_checkout_close'      => '60',
-            'gps_radius'              => '10',
+            'gps_radius'              => '100',
             'hospital_lat'            => '5.552740480177099',
             'hospital_lng'            => '95.33486560781716',
             'hospital_latitude'       => '5.552740480177099',
             'hospital_longitude'      => '95.33486560781716',
-            'attendance_radius_meters'=> '10',
+            'attendance_radius_meters'=> '100',
+            'enable_gps_validation'   => '1',
             'notif_email'             => '1',
             'notif_late'              => '1',
             'notif_leave'             => '1',

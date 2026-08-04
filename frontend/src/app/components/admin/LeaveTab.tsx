@@ -108,6 +108,7 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
   const [showAddLeaveModal, setShowAddLeaveModal] = useState(false);
   const [employeesList, setEmployeesList] = useState<Employee[]>([]);
   const [loadingEmployees, setLoadingEmployees] = useState(false);
+  const [empFilter, setEmpFilter] = useState('');
   
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const [leaveType, setLeaveType] = useState<'cuti' | 'izin' | 'sakit' | 'cuti_khusus'>('cuti');
@@ -995,8 +996,27 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
             
             <form onSubmit={handleAddLeaveSubmit} className="space-y-4">
               <div>
-                <label className="block text-[12px] font-medium text-gray-600 mb-1.5">Pilih Pegawai</label>
-                <div className="relative">
+                <label className="block text-[12px] font-medium text-gray-600 mb-1.5">Pilih Pegawai (Cari Nama / NIK / Departemen)</label>
+                <div className="space-y-2">
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Ketik nama atau NIK pegawai untuk memfilter..."
+                      value={empFilter}
+                      onChange={(e) => setEmpFilter(e.target.value)}
+                      className="w-full pl-9 pr-8 py-2 border border-gray-200 rounded-xl text-[12px] bg-white focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all"
+                    />
+                    {empFilter && (
+                      <button
+                        type="button"
+                        onClick={() => setEmpFilter('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
                   {loadingEmployees ? (
                     <div className="text-[12px] text-gray-400 py-2">Memuat daftar pegawai...</div>
                   ) : (
@@ -1005,11 +1025,18 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
                       onChange={(e) => setSelectedEmployeeId(e.target.value)}
                       className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all cursor-pointer font-semibold"
                     >
-                      {employeesList.map((emp) => (
-                        <option key={emp.id} value={emp.id}>
-                          {emp.name} ({emp.department})
-                        </option>
-                      ))}
+                      {employeesList
+                        .filter((emp) =>
+                          !empFilter.trim() ||
+                          emp.name.toLowerCase().includes(empFilter.toLowerCase()) ||
+                          (emp.nik_ktp && emp.nik_ktp.includes(empFilter)) ||
+                          (emp.department && emp.department.toLowerCase().includes(empFilter.toLowerCase()))
+                        )
+                        .map((emp) => (
+                          <option key={emp.id} value={emp.id}>
+                            {emp.name} ({emp.department || 'Umum'})
+                          </option>
+                        ))}
                     </select>
                   )}
                 </div>

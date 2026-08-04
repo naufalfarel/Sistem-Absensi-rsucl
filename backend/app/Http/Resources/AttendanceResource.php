@@ -81,6 +81,16 @@ class AttendanceResource extends JsonResource
             $durationMin = null;
         }
 
+        $formatPhotoUrl = function (?string $path): ?string {
+            if (empty($path)) {
+                return null;
+            }
+            if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://') || str_starts_with($path, 'data:')) {
+                return $path;
+            }
+            return url($path);
+        };
+
         $data = [
             'id'                 => $this->id,
             'date'               => $this->date ? Carbon::parse($this->date)->toDateString() : null,
@@ -98,12 +108,12 @@ class AttendanceResource extends JsonResource
             'note'               => $this->note,
             'checkin_location_note'  => $this->checkin_location_note,
             'checkout_location_note' => $this->checkout_location_note,
-            'image_check_in'     => $this->image_check_in  ? url($this->image_check_in)  : null,
-            'image_check_out'    => $this->image_check_out ? url($this->image_check_out) : null,
+            'image_check_in'     => $formatPhotoUrl($this->image_check_in),
+            'image_check_out'    => $formatPhotoUrl($this->image_check_out),
             
             // New photo and GPS columns
-            'checkin_photo_url'        => $this->checkin_photo_url ? url($this->checkin_photo_url) : null,
-            'checkout_photo_url'       => $this->checkout_photo_url ? url($this->checkout_photo_url) : null,
+            'checkin_photo_url'        => $formatPhotoUrl($this->checkin_photo_url ?? $this->image_check_in),
+            'checkout_photo_url'       => $formatPhotoUrl($this->checkout_photo_url ?? $this->image_check_out),
             'checkin_latitude'         => $this->checkin_latitude,
             'checkin_longitude'        => $this->checkin_longitude,
             'checkout_latitude'        => $this->checkout_latitude,
@@ -148,7 +158,7 @@ class AttendanceResource extends JsonResource
                 'name'       => $this->employee->user?->name,
                 'nik_ktp'    => $this->employee->nik_ktp,
                 'department' => $this->employee->department?->name,
-                'profile_picture' => $this->employee->user?->profile_picture ? url($this->employee->user->profile_picture) : null,
+                'profile_picture' => $formatPhotoUrl($this->employee->user?->profile_picture),
             ];
         }
 

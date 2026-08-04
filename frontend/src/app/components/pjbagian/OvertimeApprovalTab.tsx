@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CheckCircle2, XCircle, Clock, FileText, MapPin, Eye, Printer, X } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, FileText, MapPin, Eye, Printer, X, Search } from 'lucide-react';
 import { overtimeApi, OvertimeRequest } from '../../../services/api';
 import qrCodeImg from '../../../imports/qr_code_cempaka_lima.png';
 import qrHrdImg from '../../../imports/qr_hrd_rsucl.png';
@@ -26,6 +26,7 @@ export function OvertimeApprovalTab({ user, onUpdateCount }: OvertimeApprovalTab
   const { logoUrl } = useAuth();
   const [records, setRecords] = useState<OvertimeRequest[]>([]);
   const [filter, setFilter] = useState<'pending' | 'approved' | 'rejected' | 'all'>('pending');
+  const [searchQuery, setSearchQuery] = useState('');
   const [filterMonth, setFilterMonth] = useState<number>(0);
   const [filterYear, setFilterYear]   = useState<number>(new Date().getFullYear());
   const [confirmModal, setConfirmModal] = useState<{ id: number; action: 'approve' | 'reject'; name: string } | null>(null);
@@ -61,6 +62,12 @@ export function OvertimeApprovalTab({ user, onUpdateCount }: OvertimeApprovalTab
       const d = new Date(r.date);
       if (filterMonth > 0 && d.getMonth() + 1 !== filterMonth) return false;
       if (filterYear > 0 && d.getFullYear() !== filterYear) return false;
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchName = r.employee?.name?.toLowerCase().includes(q);
+      const matchNik = r.employee?.nik_ktp?.includes(q);
+      if (!matchName && !matchNik) return false;
     }
     return true;
   });
@@ -131,14 +138,32 @@ export function OvertimeApprovalTab({ user, onUpdateCount }: OvertimeApprovalTab
         onYearChange={setFilterYear}
       />
 
-      {/* Filter Tabs */}
-      <div className="flex gap-1 bg-white rounded-xl border border-gray-100 p-1 shadow-xs w-fit overflow-x-auto">
-        {(['all', 'pending', 'approved', 'rejected'] as const).map(f => (
-          <button key={f} onClick={() => setFilter(f)}
-            className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all whitespace-nowrap capitalize ${f === filter ? 'bg-[#16A34A] text-white shadow-xs' : 'text-gray-500 hover:text-gray-700'}`}>
-            {f === 'all' ? 'Semua' : f === 'pending' ? 'Menunggu' : f === 'approved' ? 'Disetujui' : 'Ditolak'}
-          </button>
-        ))}
+      {/* Filter Tabs & Search Bar */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        <div className="flex gap-1 bg-white rounded-xl border border-gray-100 p-1 shadow-xs overflow-x-auto">
+          {(['all', 'pending', 'approved', 'rejected'] as const).map(f => (
+            <button key={f} onClick={() => setFilter(f)}
+              className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all whitespace-nowrap capitalize ${f === filter ? 'bg-[#16A34A] text-[#ffffff] shadow-xs' : 'text-gray-500 hover:text-gray-700'}`}>
+              {f === 'all' ? 'Semua' : f === 'pending' ? 'Menunggu' : f === 'approved' ? 'Disetujui' : 'Ditolak'}
+            </button>
+          ))}
+        </div>
+
+        <div className="relative w-full sm:w-64">
+          <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Cari nama staf atau NIK..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="w-full pl-9 pr-8 py-1.5 border border-gray-200 rounded-xl text-[12px] bg-white focus:outline-none focus:border-[#16A34A] transition-all font-medium"
+          />
+          {searchQuery && (
+            <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+              <X size={13} />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* List */}

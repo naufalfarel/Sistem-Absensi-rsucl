@@ -118,10 +118,10 @@ interface ShiftSettings {
   checkout_open: string; // '17:00'
   checkout_close: string; // '18:00'
   sat_checkout_open: string; // '13:00'
-  sat_checkout_close: string; // '13:00'
   hospital_lat: number;
   hospital_lng: number;
   gps_radius: number;
+  enable_gps_validation?: boolean;
   isOvernight: boolean; // shift lintas tengah malam (mis. Malam 21:00-07:00)
   early_checkout_grace_minutes?: string;
   overtime_grace_minutes?: string;
@@ -139,7 +139,8 @@ const DEFAULT_SHIFT: ShiftSettings = {
   sat_checkout_close: "13:00",
   hospital_lat: 5.552740480177099,
   hospital_lng: 95.33486560781716,
-  gps_radius: 40,
+  gps_radius: 100,
+  enable_gps_validation: true,
   isOvernight: false,
   early_checkout_grace_minutes: "15",
   overtime_grace_minutes: "15",
@@ -441,8 +442,8 @@ function FaceVerificationCard({
                   x2="0%"
                   y2="100%"
                 >
-                  <stop offset="0%" stop-color="#15A34A" />
-                  <stop offset="100%" stop-color="#4ADE80" />
+                  <stop offset="0%" stopColor="#15A34A" />
+                  <stop offset="100%" stopColor="#4ADE80" />
                 </linearGradient>
               </defs>
               <circle cx="50" cy="38" r="16" fill="url(#userScanGradient)" />
@@ -634,6 +635,7 @@ function GPSCard({
   hospLng,
   hospRadius,
   isDinasLuar = false,
+  isGpsDisabledByAdmin = false,
   onRefreshLocation,
 }: {
   userLocation: { lat: number; lng: number; accuracy: number } | null;
@@ -644,6 +646,7 @@ function GPSCard({
   hospLng: number;
   hospRadius: number;
   isDinasLuar?: boolean;
+  isGpsDisabledByAdmin?: boolean;
   onRefreshLocation?: () => void;
 }) {
   // Kekuatan sinyal diukur dari akurasi GPS (di bawah 15 meter dianggap sangat bagus)
@@ -868,13 +871,15 @@ function GPSCard({
             <p
               className={`text-[11px] font-semibold ${inGeofence ? "text-green-800" : "text-red-800"}`}
             >
-              {isDinasLuar
-                ? "Dinas Luar: Validasi Radius GPS Dikecualikan"
-                : inGeofence
-                  ? `Di dalam area RS (~${Math.round(distance ?? 0)} meter)`
-                  : distance !== null
-                    ? `Di luar area RS (~${Math.round(distance)} meter)`
-                    : "Menunggu lokasi GPS..."}
+              {isGpsDisabledByAdmin
+                ? "Validasi GPS Nonaktif oleh Admin (Bisa Absen)"
+                : isDinasLuar
+                  ? "Dinas Luar: Validasi Radius GPS Dikecualikan"
+                  : inGeofence
+                    ? `Di dalam area RS (~${Math.round(distance ?? 0)} meter)`
+                    : distance !== null
+                      ? `Di luar area RS (~${Math.round(distance)} meter)`
+                      : "Menunggu lokasi GPS..."}
             </p>
             <p
               className={`text-[10px] ${inGeofence ? "text-green-600" : "text-red-600"} truncate`}
@@ -1132,7 +1137,11 @@ export function AttendancePage() {
               ? Number(d.attendance_radius_meters)
               : d.gps_radius
                 ? Number(d.gps_radius)
-                : 40,
+                : 100,
+            enable_gps_validation:
+              d.enable_gps_validation !== undefined
+                ? d.enable_gps_validation === "1"
+                : true,
             early_checkout_grace_minutes:
               d.early_checkout_grace_minutes ?? "15",
             overtime_grace_minutes: d.overtime_grace_minutes ?? "15",
@@ -1259,8 +1268,9 @@ export function AttendancePage() {
     ? getDistance(userLocation.lat, userLocation.lng, HOSP_LAT, HOSP_LNG)
     : null;
 
+  const isGpsDisabledByAdmin = shiftSettings.enable_gps_validation === false;
   const isDinasLuar =
-    todayShift?.shift_type === "dinas_luar" || isExemptFromGps;
+    todayShift?.shift_type === "dinas_luar" || isExemptFromGps || isGpsDisabledByAdmin;
 
   const inGeofence = isDinasLuar
     ? true
@@ -1284,7 +1294,17 @@ export function AttendancePage() {
 
   const attendanceWindow =
     (todayShift === null || isLiburShift) ? "no_shift" : getWindow(current, shiftSettings);
-  const wc = windowConfig[attendanceWindow];
+  const wc = (!checkedIn && (attendanceWindow === "working" || attendanceWindow === "checkout" || attendanceWindow === "late_locked" || attendanceWindow === "break"))
+    ? {
+        icon: AlertCircle,
+        iconColor: "#D97706",
+        bg: "#FFFBEB",
+        border: "#FDE68A",
+        title: "Check-In Terlambat",
+        desc: "Waktu shift telah berjalan. Anda tetap dapat melakukan Check-In (dicatat Terlambat).",
+        sub: "Silakan lengkapi verifikasi foto wajah untuk submit Check-In.",
+      }
+    : windowConfig[attendanceWindow];
   const dayId = DAYS_ID[current.getDay()];
   const isSaturday = current.getDay() === 6;
   const timeStr = current.toLocaleTimeString("id-ID", {
@@ -1293,8 +1313,9 @@ export function AttendancePage() {
   });
   const dateStr = `${dayId}, ${current.getDate()} ${["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"][current.getMonth()]} ${current.getFullYear()}`;
 
-  const canCheckIn = attendanceWindow === "checkin" && !checkedIn;
-  // canCheckOut: izinkan aksi checkout kapan saja setelah check-in dan belum check-out
+  // Karyawan dapat check-in selama belum check-in hari ini dan bukan hari libur/off/terlalu awal
+  const canCheckIn = !checkedIn && attendanceWindow !== "no_shift" && attendanceWindow !== "sunday" && attendanceWindow !== "too_early";
+  // Karyawan dapat check-out kapan saja setelah check-in dan belum check-out
   const canCheckOut = checkedIn && !checkedOut;
 
   const faceVerified = faceStep === "confirmed";
@@ -2094,6 +2115,7 @@ export function AttendancePage() {
         hospLng={HOSP_LNG}
         hospRadius={HOSP_RADIUS}
         isDinasLuar={isDinasLuar}
+        isGpsDisabledByAdmin={isGpsDisabledByAdmin}
         onRefreshLocation={refreshLocation}
       />
 

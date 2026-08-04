@@ -101,8 +101,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // ── Fitur Sanksi Disiplin (Disciplinary Sanctions)
     Route::get('/disciplinary-sanctions', [\App\Http\Controllers\Api\DisciplinarySanctionController::class, 'index']);
     
-    // Endpoint Kategori Cuti Khusus (Umum untuk Karyawan & Admin)
+    // Endpoint Kategori Cuti Khusus & List Departemen (Umum untuk Karyawan & Admin)
     Route::get('/special-leave-categories', [\App\Http\Controllers\SpecialLeaveCategoryController::class, 'index']);
+    Route::get('/departments', [\App\Http\Controllers\DepartmentController::class, 'index']);
 
     // ── Fitur Jadwal Shift
     Route::get('/my-schedule', [ScheduleController::class, 'mySchedule']);

@@ -32,7 +32,7 @@ class ScheduleRules
      * @param  Carbon   $date     Tanggal yang diperiksa (gunakan timezone Asia/Jakarta)
      * @return Carbon             Carbon object jam checkout yang diharapkan di hari itu
      */
-    public static function expectedCheckoutTime(Employee $employee, Carbon $date): Carbon
+    public static function expectedCheckoutTime(Employee $employee, Carbon $date, ?\App\Models\Schedule $shift = null): Carbon
     {
         $dayMap = [
             0 => 'Minggu', 1 => 'Senin', 2 => 'Selasa',
@@ -40,8 +40,15 @@ class ScheduleRules
         ];
         $dayName = $dayMap[$date->dayOfWeek];
 
-        // Coba ambil shift karyawan untuk hari ini
-        $shift = $employee->schedules()->wherePivot('day_of_week', $dayName)->first();
+        // 1. Gunakan $shift yang diberikan secara eksplisit, atau coba dapatkan via AttendanceRules
+        if (!$shift) {
+            $shift = AttendanceRules::resolveShiftFor($employee, $date);
+        }
+
+        // 2. Fallback ke pivot jadwal mingguan jika belum ditemukan
+        if (!$shift) {
+            $shift = $employee->schedules()->wherePivot('day_of_week', $dayName)->first();
+        }
 
         if ($shift) {
             // Gunakan end_time dari jadwal shift

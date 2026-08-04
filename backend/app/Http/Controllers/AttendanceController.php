@@ -150,8 +150,18 @@ class AttendanceController extends Controller
                              ->where('status', 'active')
                              ->get();
 
-        // Ambil data absensi aktual hari ini
-        $attendances = Attendance::where('date', $todayStr)->get()->keyBy('employee_id');
+        // Ambil data absensi aktual hari ini (utamakan record yang sudah memiliki check_in dan check_out)
+        $attendancesList = Attendance::where('date', $todayStr)
+            ->orderByRaw('CASE WHEN check_in IS NOT NULL AND check_out IS NOT NULL THEN 1 WHEN check_in IS NOT NULL THEN 2 WHEN check_out IS NOT NULL THEN 3 ELSE 4 END')
+            ->orderBy('id', 'desc')
+            ->get();
+
+        $attendances = collect();
+        foreach ($attendancesList as $attRec) {
+            if (!$attendances->has($attRec->employee_id)) {
+                $attendances->put($attRec->employee_id, $attRec);
+            }
+        }
 
         // Pre-fetch roster tanggal spesifik (work_date) hari ini
         $todayRosters = \Illuminate\Support\Facades\DB::table('employee_schedule')
@@ -343,17 +353,23 @@ class AttendanceController extends Controller
         $clientLng  = $request->input('longitude');
         $clientAcc  = $request->input('accuracy');
 
+        $enableGpsValidation = (Setting::get('enable_gps_validation', '1') !== '0');
         $isWithinGeofence = false;
         $distance = null;
 
         if ($clientLat !== null && $clientLng !== null) {
-            $refLat  = (float) Setting::get('hospital_latitude',  '5.552740480177099');
-            $refLng  = (float) Setting::get('hospital_longitude',  '95.33486560781716');
+            $refLat  = (float) Setting::get('hospital_latitude', Setting::get('hospital_lat', '5.552740480177099'));
+            $refLng  = (float) Setting::get('hospital_longitude', Setting::get('hospital_lng', '95.33486560781716'));
             $distance = AttendanceRules::haversineDistanceMeters((float)$clientLat, (float)$clientLng, $refLat, $refLng);
-            $isWithinGeofence = ($distance <= (float) Setting::get('attendance_radius_meters', '10'));
+            $maxRadius = (float) Setting::get('attendance_radius_meters', Setting::get('gps_radius', '100'));
+            $isWithinGeofence = ($distance <= $maxRadius);
         }
 
-        if (!AttendanceRules::isExemptFromGps($employee, $now)) {
+        if (!$enableGpsValidation) {
+            $isWithinGeofence = true;
+        }
+
+        if ($enableGpsValidation && !AttendanceRules::isExemptFromGps($employee, $now)) {
             if ($clientLat === null || $clientLng === null) {
                 return response()->json([
                     'success' => false,
@@ -391,7 +407,15 @@ class AttendanceController extends Controller
         $punctuality            = $classification['punctuality'];
         $effectiveCheckinTime   = $classification['effective_checkin_time'];
 
-        $photoUrl = $request->input('photo_url');
+        // Simpan file foto check-in (sama seperti check-out)
+        $photoUrl = null;
+        if ($request->hasFile('photo')) {
+            $path = $request->file('photo')->store('attendance-photos', 'public');
+            $photoUrl = '/storage/' . $path;
+        } elseif ($request->input('photo_url')) {
+            // Fallback: jika dikirim sebagai string URL (base64 atau URL langsung)
+            $photoUrl = $request->input('photo_url');
+        }
 
         // 7. Simpan atau update record absensi secara atomic (DB Transaction dengan Pessimistic Locking)
         try {
@@ -601,6 +625,7 @@ class AttendanceController extends Controller
         if (!$record) {
             $record = Attendance::where('employee_id', $employee->id)
                                 ->where('date', today()->toDateString())
+                                ->whereNotNull('check_in')
                                 ->first();
         }
 
@@ -639,7 +664,16 @@ class AttendanceController extends Controller
 
         // Gunakan tanggal dari record check-in asli untuk validasi shift
         $shiftDate = Carbon::parse($record->date);
-        $todayShift = $this->getEmployeeTodayShift($employee, $shiftDate);
+        $todayShift = null;
+        if ($record->schedule_id) {
+            $todayShift = \App\Models\Schedule::find($record->schedule_id);
+        }
+        if (!$todayShift) {
+            $todayShift = AttendanceRules::resolveShiftFor($employee, $shiftDate, $now);
+        }
+        if (!$todayShift) {
+            $todayShift = $this->getEmployeeTodayShift($employee, $shiftDate);
+        }
 
         if (!$todayShift) {
             return response()->json([
@@ -656,17 +690,23 @@ class AttendanceController extends Controller
         $clientLng  = $request->input('longitude');
         $clientAcc  = $request->input('accuracy');
 
+        $enableGpsValidation = (Setting::get('enable_gps_validation', '1') !== '0');
         $isWithinGeofence = false;
         $distance = null;
 
         if ($clientLat !== null && $clientLng !== null) {
-            $refLat  = (float) Setting::get('hospital_latitude',  '5.552740480177099');
-            $refLng  = (float) Setting::get('hospital_longitude',  '95.33486560781716');
+            $refLat  = (float) Setting::get('hospital_latitude', Setting::get('hospital_lat', '5.552740480177099'));
+            $refLng  = (float) Setting::get('hospital_longitude', Setting::get('hospital_lng', '95.33486560781716'));
             $distance = AttendanceRules::haversineDistanceMeters((float)$clientLat, (float)$clientLng, $refLat, $refLng);
-            $isWithinGeofence = ($distance <= (float) Setting::get('attendance_radius_meters', '100'));
+            $maxRadius = (float) Setting::get('attendance_radius_meters', Setting::get('gps_radius', '100'));
+            $isWithinGeofence = ($distance <= $maxRadius);
         }
 
-        if (!AttendanceRules::isExemptFromGps($employee, $shiftDate)) {
+        if (!$enableGpsValidation) {
+            $isWithinGeofence = true;
+        }
+
+        if ($enableGpsValidation && !AttendanceRules::isExemptFromGps($employee, $shiftDate)) {
             if ($clientLat === null || $clientLng === null) {
                 return response()->json([
                     'success' => false,
@@ -718,7 +758,7 @@ class AttendanceController extends Controller
 
         // 6. Klasifikasi Pulang Cepat / Lembur
         $employee->load('schedules'); // Pastikan relasi ter-load untuk ScheduleRules
-        $expectedCheckout = ScheduleRules::expectedCheckoutTime($employee, $shiftDate);
+        $expectedCheckout = ScheduleRules::expectedCheckoutTime($employee, $shiftDate, $todayShift);
         $earlyGrace    = (int) Setting::get('early_checkout_grace_minutes', '15');
         $overtimeGrace = (int) Setting::get('overtime_grace_minutes', '15');
 
@@ -763,7 +803,7 @@ class AttendanceController extends Controller
 
         // Data lembur (Sistem Baru & Lama Berdampingan untuk Kompatibilitas)
         $attendanceService = new \App\Services\AttendanceService();
-        $overtimeCalc = $attendanceService->hitungStatusLembur($employee, $now, $shiftDate);
+        $overtimeCalc = $attendanceService->hitungStatusLembur($employee, $now, $shiftDate, $todayShift);
 
         if ($overtimeCalc['is_lembur']) {
             // Simpan ke kolom baru (internal detection)
@@ -932,12 +972,19 @@ class AttendanceController extends Controller
      */
     private function getEmployeeTodayShift(\App\Models\Employee $employee, Carbon $now): ?\App\Models\Schedule
     {
+        // 1. Coba resolve via AttendanceRules (Mendukung work_date, roster tanggal spesifik & sub-shift)
+        $schedule = AttendanceRules::resolveShiftFor($employee, $now, $now);
+
         $dayMap = [
             0 => 'Minggu', 1 => 'Senin', 2 => 'Selasa',
             3 => 'Rabu',   4 => 'Kamis', 5 => 'Jumat', 6 => 'Sabtu',
         ];
         $todayName = $dayMap[$now->dayOfWeek];
-        $schedule = $employee->schedules()->wherePivot('day_of_week', $todayName)->first();
+
+        // 2. Fallback ke pivot mingguan
+        if (!$schedule) {
+            $schedule = $employee->schedules()->wherePivot('day_of_week', $todayName)->first();
+        }
 
         if (!$schedule) {
             return null;
@@ -1100,6 +1147,17 @@ class AttendanceController extends Controller
         return '/storage/selfies/' . $fileName;
     }
 
+    private function formatPhotoUrl(?string $path): ?string
+    {
+        if (empty($path)) {
+            return null;
+        }
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://') || str_starts_with($path, 'data:')) {
+            return $path;
+        }
+        return url($path);
+    }
+
     /**
      * Memformat output record absensi agar konsisten untuk dikonsumsi frontend.
      * 
@@ -1154,8 +1212,10 @@ class AttendanceController extends Controller
             'note'               => $r->note,
             'checkin_location_note'  => $r->checkin_location_note,
             'checkout_location_note' => $r->checkout_location_note,
-            'image_check_in'     => $r->image_check_in  ? url($r->image_check_in)  : null,
-            'image_check_out'    => $r->image_check_out ? url($r->image_check_out) : null,
+            'image_check_in'     => $this->formatPhotoUrl($r->image_check_in),
+            'image_check_out'    => $this->formatPhotoUrl($r->image_check_out),
+            'checkin_photo_url'  => $this->formatPhotoUrl($r->checkin_photo_url ?? $r->image_check_in),
+            'checkout_photo_url' => $this->formatPhotoUrl($r->checkout_photo_url ?? $r->image_check_out),
             'shift_name'         => $shiftName,
             // ── Pulang Cepat ──────────────────────────────────────────────
             'is_early_checkout'        => (bool) $r->is_early_checkout,
@@ -1174,7 +1234,7 @@ class AttendanceController extends Controller
                 'name'       => $r->employee->user?->name,
                 'nik_ktp'    => $r->employee->nik_ktp,
                 'department' => $r->employee->department?->name,
-                'profile_picture' => $r->employee->user?->profile_picture ? url($r->employee->user->profile_picture) : null,
+                'profile_picture' => $this->formatPhotoUrl($r->employee->user?->profile_picture),
             ];
         }
 
@@ -1476,12 +1536,43 @@ class AttendanceController extends Controller
             $carbonDate = Carbon::parse($targetDate);
             $dayName = $dayMap[$carbonDate->dayOfWeek];
 
-            // Fetch attendances for this single date
-            $attendances = Attendance::whereIn('employee_id', $employeeIds)
+            // Fetch attendances for this single date (gabungkan row check_in & check_out jika terpisah)
+            $attList = Attendance::whereIn('employee_id', $employeeIds)
                 ->whereDate('date', $targetDate)
                 ->with(['holiday'])
+                ->orderBy('id', 'asc')
                 ->get()
-                ->keyBy('employee_id');
+                ->groupBy('employee_id');
+
+            $attendances = collect();
+            foreach ($attList as $empId => $attGroup) {
+                if ($attGroup->count() === 1) {
+                    $attendances->put($empId, $attGroup->first());
+                } else {
+                    $checkInRow = $attGroup->first(fn($a) => !empty($a->check_in));
+                    $checkOutRow = $attGroup->first(fn($a) => !empty($a->check_out));
+
+                    if ($checkInRow && $checkOutRow && $checkInRow->id !== $checkOutRow->id) {
+                        $merged = clone $checkOutRow;
+                        $merged->check_in = $checkInRow->check_in;
+                        $merged->image_check_in = $checkInRow->image_check_in;
+                        $merged->checkin_photo_url = $checkInRow->checkin_photo_url ?? $checkInRow->image_check_in;
+                        $merged->checkin_latitude = $checkInRow->checkin_latitude;
+                        $merged->checkin_longitude = $checkInRow->checkin_longitude;
+                        $merged->checkin_distance_meters = $checkInRow->checkin_distance_meters;
+                        $merged->checkin_location_note = $checkInRow->checkin_location_note;
+                        $attendances->put($empId, $merged);
+                    } else {
+                        $best = $attGroup->sortBy(function($a) {
+                            if (!empty($a->check_in) && !empty($a->check_out)) return 1;
+                            if (!empty($a->check_in)) return 2;
+                            if (!empty($a->check_out)) return 3;
+                            return 4;
+                        })->first();
+                        $attendances->put($empId, $best);
+                    }
+                }
+            }
 
             // Fetch approved leaves overlapping this single date
             $leaves = \App\Models\LeaveRequest::where('status', 'approved')
@@ -1660,10 +1751,10 @@ class AttendanceController extends Controller
             'note' => (in_array($displayStatus, ['hadir', 'telat']) && $att->note && str_starts_with($att->note, 'Masa ')) ? null : $att->note,
             'checkin_location_note' => $att->checkin_location_note,
             'checkout_location_note' => $att->checkout_location_note,
-            'checkin_photo_url' => $att->checkin_photo_url ? url($att->checkin_photo_url) : null,
-            'checkout_photo_url' => $att->checkout_photo_url ? url($att->checkout_photo_url) : null,
-            'image_check_in' => $att->image_check_in ? url($att->image_check_in) : null,
-            'image_check_out' => $att->image_check_out ? url($att->image_check_out) : null,
+            'checkin_photo_url' => $this->formatPhotoUrl($att->checkin_photo_url ?? $att->image_check_in),
+            'checkout_photo_url' => $this->formatPhotoUrl($att->checkout_photo_url ?? $att->image_check_out),
+            'image_check_in' => $this->formatPhotoUrl($att->image_check_in),
+            'image_check_out' => $this->formatPhotoUrl($att->image_check_out),
             'checkin_latitude' => $att->checkin_latitude,
             'checkin_longitude' => $att->checkin_longitude,
             'checkout_latitude' => $att->checkout_latitude,
@@ -1681,7 +1772,7 @@ class AttendanceController extends Controller
                 'nik_ktp' => $emp->nik_ktp,
                 'department' => $emp->department?->name,
                 'position' => $emp->position?->name,
-                'profile_picture' => $emp->user?->profile_picture ? url($emp->user->profile_picture) : null,
+                'profile_picture' => $this->formatPhotoUrl($emp->user?->profile_picture),
             ],
         ];
     }
@@ -1727,7 +1818,7 @@ class AttendanceController extends Controller
                 'nik_ktp' => $emp->nik_ktp,
                 'department' => $emp->department?->name,
                 'position' => $emp->position?->name,
-                'profile_picture' => $emp->user?->profile_picture ? url($emp->user->profile_picture) : null,
+                'profile_picture' => $this->formatPhotoUrl($emp->user?->profile_picture),
             ],
         ];
     }
@@ -1770,7 +1861,7 @@ class AttendanceController extends Controller
                 'nik_ktp' => $emp->nik_ktp,
                 'department' => $emp->department?->name,
                 'position' => $emp->position?->name,
-                'profile_picture' => $emp->user?->profile_picture ? url($emp->user->profile_picture) : null,
+                'profile_picture' => $this->formatPhotoUrl($emp->user?->profile_picture),
             ],
         ];
     }

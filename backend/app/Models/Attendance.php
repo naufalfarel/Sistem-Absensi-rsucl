@@ -193,6 +193,12 @@ class Attendance extends Model
 
         $reportRecords = [];
 
+        $fmtUrl = function(?string $path): ?string {
+            if (empty($path)) return null;
+            if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://') || str_starts_with($path, 'data:')) return $path;
+            return url($path);
+        };
+
         // 5. Lakukan looping untuk setiap hari kalender dalam bulan tersebut
         for ($date = $startDate->copy(); $date->lte($endDate); $date->addDay()) {
             $dateStr = $date->toDateString();
@@ -290,11 +296,12 @@ class Attendance extends Model
                                 'nik_ktp' => $emp->nik_ktp,
                                 'department' => $emp->department?->name ?? 'Umum',
                                 'position' => $emp->position?->name ?? 'Staff',
+                                'profile_picture' => $fmtUrl($emp->user?->profile_picture),
                             ],
-                            'image_check_in' => $attRecord->image_check_in,
-                            'image_check_out' => $attRecord->image_check_out,
-                            'checkin_photo_url' => $attRecord->checkin_photo_url ? url($attRecord->checkin_photo_url) : null,
-                            'checkout_photo_url' => $attRecord->checkout_photo_url ? url($attRecord->checkout_photo_url) : null,
+                            'image_check_in' => $fmtUrl($attRecord->image_check_in),
+                            'image_check_out' => $fmtUrl($attRecord->image_check_out),
+                            'checkin_photo_url' => $fmtUrl($attRecord->checkin_photo_url ?? $attRecord->image_check_in),
+                            'checkout_photo_url' => $fmtUrl($attRecord->checkout_photo_url ?? $attRecord->image_check_out),
                             'checkin_latitude' => $attRecord->checkin_latitude,
                             'checkin_longitude' => $attRecord->checkin_longitude,
                             'checkout_latitude' => $attRecord->checkout_latitude,
@@ -340,6 +347,7 @@ class Attendance extends Model
                                 'nik_ktp' => $emp->nik_ktp,
                                 'department' => $emp->department?->name ?? 'Umum',
                                 'position' => $emp->position?->name ?? 'Staff',
+                                'profile_picture' => $fmtUrl($emp->user?->profile_picture),
                             ],
                             'image_check_in' => null,
                             'image_check_out' => null,
@@ -419,6 +427,7 @@ class Attendance extends Model
                                     'nik_ktp' => $emp->nik_ktp,
                                     'department' => $emp->department?->name ?? 'Umum',
                                     'position' => $emp->position?->name ?? 'Staff',
+                                    'profile_picture' => $fmtUrl($emp->user?->profile_picture),
                                 ],
                                 'image_check_in' => null,
                                 'image_check_out' => null,

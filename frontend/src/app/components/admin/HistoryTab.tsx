@@ -571,12 +571,49 @@ export function HistoryTab() {
                       className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors"
                     >
                       <td className="px-4 py-3">
-                        <p className="text-[13px] font-medium text-gray-800">
-                          {r.employee?.name}
-                        </p>
-                        <p className="text-[10px] text-gray-400 font-mono mt-0.5">
-                          {r.employee?.nik_ktp}
-                        </p>
+                        <div className="flex items-center gap-2.5">
+                          <div
+                            onClick={() => {
+                              if (r.employee?.profile_picture) {
+                                setPreviewPhoto({
+                                  url: r.employee.profile_picture,
+                                  name: r.employee.name,
+                                });
+                              }
+                            }}
+                            className={`w-8 h-8 rounded-xl bg-gray-50 flex items-center justify-center flex-shrink-0 overflow-hidden border border-gray-100 ${
+                              r.employee?.profile_picture
+                                ? "cursor-zoom-in hover:scale-105 active:scale-95 transition-all"
+                                : ""
+                            }`}
+                            style={{ background: sc.bg }}
+                          >
+                            {r.employee?.profile_picture ? (
+                              <img
+                                src={r.employee.profile_picture}
+                                alt={r.employee.name}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <span
+                                className="text-[11px] font-bold"
+                                style={{ color: sc.color }}
+                              >
+                                {(r.employee?.name ?? "K")
+                                  .replace(/^(dr\.|Ns\.|Dr\.)\s*/i, "")
+                                  .charAt(0)}
+                              </span>
+                            )}
+                          </div>
+                          <div>
+                            <p className="text-[13px] font-medium text-gray-800">
+                              {r.employee?.name}
+                            </p>
+                            <p className="text-[10px] text-gray-400 font-mono mt-0.5">
+                              {r.employee?.nik_ktp}
+                            </p>
+                          </div>
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-[12px] text-gray-500">
                         {r.employee?.department || "Umum"}
@@ -845,40 +882,66 @@ export function HistoryTab() {
                 <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
                   Foto Selfie Absensi
                 </p>
-                <div className="flex gap-2">
-                  {(selected.checkin_photo_url || selected.image_check_in) && (
-                    <div className="flex-1 text-center bg-gray-50 rounded-xl p-2 border border-gray-100 shadow-sm">
-                      <p className="text-[9px] font-bold text-gray-400 mb-1.5 uppercase">
-                        Selfie Masuk
-                      </p>
-                      <img
-                        src={
-                          selected.checkin_photo_url ||
-                          selected.image_check_in ||
-                          undefined
-                        }
-                        alt="Check In Selfie"
-                        className="w-full aspect-square object-cover rounded-lg border animate-fade-in"
-                      />
-                    </div>
-                  )}
-                  {(selected.checkout_photo_url ||
-                    selected.image_check_out) && (
-                    <div className="flex-1 text-center bg-gray-50 rounded-xl p-2 border border-gray-100 shadow-sm">
-                      <p className="text-[9px] font-bold text-gray-400 mb-1.5 uppercase">
-                        Selfie Pulang
-                      </p>
-                      <img
-                        src={
-                          selected.checkout_photo_url ||
-                          selected.image_check_out ||
-                          undefined
-                        }
-                        alt="Check Out Selfie"
-                        className="w-full aspect-square object-cover rounded-lg border animate-fade-in"
-                      />
-                    </div>
-                  )}
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="text-center bg-gray-50 rounded-xl p-2 border border-gray-100 shadow-sm">
+                    <p className="text-[9px] font-bold text-gray-400 mb-1.5 uppercase">
+                      Selfie Masuk
+                    </p>
+                    {selected.checkin_photo_url || selected.image_check_in ? (
+                      <div
+                        onClick={() => {
+                          const url = selected.checkin_photo_url || selected.image_check_in;
+                          if (url) {
+                            setPreviewPhoto({
+                              url,
+                              name: `Selfie Masuk - ${selected.employee?.name ?? ''}`,
+                            });
+                          }
+                        }}
+                        className="cursor-zoom-in hover:scale-105 active:scale-95 transition-all"
+                      >
+                        <img
+                          src={selected.checkin_photo_url || selected.image_check_in || ''}
+                          alt="Check In Selfie"
+                          className="w-full aspect-square object-cover rounded-lg border border-gray-200 bg-gray-900 animate-fade-in"
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-full aspect-square rounded-lg border border-dashed border-gray-200 bg-gray-100/60 flex flex-col items-center justify-center text-gray-300">
+                        <span className="text-[10px]">Tidak ada foto</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="text-center bg-gray-50 rounded-xl p-2 border border-gray-100 shadow-sm">
+                    <p className="text-[9px] font-bold text-gray-400 mb-1.5 uppercase">
+                      Selfie Pulang
+                    </p>
+                    {selected.checkout_photo_url || selected.image_check_out ? (
+                      <div
+                        onClick={() => {
+                          const url = selected.checkout_photo_url || selected.image_check_out;
+                          if (url) {
+                            setPreviewPhoto({
+                              url,
+                              name: `Selfie Pulang - ${selected.employee?.name ?? ''}`,
+                            });
+                          }
+                        }}
+                        className="cursor-zoom-in hover:scale-105 active:scale-95 transition-all"
+                      >
+                        <img
+                          src={selected.checkout_photo_url || selected.image_check_out || ''}
+                          alt="Check Out Selfie"
+                          className="w-full aspect-square object-cover rounded-lg border border-gray-200 bg-gray-900 animate-fade-in"
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-full aspect-square rounded-lg border border-dashed border-gray-200 bg-gray-100/60 flex flex-col items-center justify-center text-gray-300">
+                        <span className="text-[10px]">Belum Pulang</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
