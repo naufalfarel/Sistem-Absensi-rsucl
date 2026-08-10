@@ -17,6 +17,7 @@ import {
   Calendar,
   RotateCw,
   Info,
+  Upload,
 } from "lucide-react";
 import { useRealtimeGps } from "../../hooks/useRealtimeGps";
 import {
@@ -300,42 +301,78 @@ function FaceVerificationCard({
   capturedImage: string | null;
   activeLeave: { type: string; reason: string } | null;
 }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [cameraError, setCameraError] = useState<string | null>(null);
+
+  const setVideoRef = useCallback((node: HTMLVideoElement | null) => {
+    videoRef.current = node;
+    if (node && streamRef.current) {
+      node.srcObject = streamRef.current;
+      node.play().catch(() => {});
+    }
+  }, []);
 
   const startCamera = useCallback(async () => {
     setCameraError(null);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: "user",
-          width: { ideal: 640 },
-          height: { ideal: 480 },
-        },
-      });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: "user",
+            width: { ideal: 640 },
+            height: { ideal: 480 },
+          },
+        });
+      } catch (err) {
+        // Fallback constraint if facingMode: "user" fails on desktop/other devices
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      }
       streamRef.current = stream;
-      if (videoRef.current) videoRef.current.srcObject = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(() => {});
+      }
     } catch (err) {
       console.error("Camera access error:", err);
       setCameraError(
-        "Gagal mengaktifkan kamera. Pastikan Anda telah memberikan izin akses kamera pada browser.",
+        "Kamera tidak dapat diakses secara otomatis. Silakan gunakan tombol 'Upload Foto Selfie' di bawah untuk mengambil atau memilih foto.",
       );
     }
   }, []);
 
   const stopCamera = useCallback(() => {
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
   }, []);
 
   useEffect(() => {
     if (faceStep === "scanning") {
       startCamera();
-    } else stopCamera();
+    } else {
+      stopCamera();
+    }
     return () => stopCamera();
   }, [faceStep, startCamera, stopCamera]);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      if (dataUrl) {
+        stopCamera();
+        onCapture(dataUrl);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleCaptureClick = async () => {
     let capturedDataUrl = "";
@@ -363,16 +400,12 @@ function FaceVerificationCard({
       }
     }
 
-    if (!capturedDataUrl) {
-      const canvas = document.createElement("canvas");
-      canvas.width = 320;
-      canvas.height = 240;
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        ctx.fillStyle = "#16A34A";
-        ctx.fillRect(0, 0, 320, 240);
+    if (!capturedDataUrl || capturedDataUrl.length < 100) {
+      // Prompt user to pick/take a photo if canvas capture is blank/empty
+      if (fileInputRef.current) {
+        fileInputRef.current.click();
+        return;
       }
-      capturedDataUrl = canvas.toDataURL("image/jpeg", 0.7);
     }
 
     stopCamera();
@@ -421,6 +454,14 @@ function FaceVerificationCard({
   if (faceStep === "idle") {
     return (
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-4">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          capture="user"
+          className="hidden"
+          onChange={handleFileUpload}
+        />
         <div className="px-5 py-3.5 border-b border-gray-50 flex items-center gap-2">
           <Camera size={15} className="text-[#16A34A]" />
           <span className="text-[13px] font-semibold text-gray-800">
@@ -478,12 +519,20 @@ function FaceVerificationCard({
               Ambil foto wajah Anda untuk memverifikasi identitas sebelum absen
             </p>
           </div>
-          <button
-            onClick={() => onCapture("")}
-            className="w-full flex items-center justify-center gap-2 py-3 bg-[#16A34A] hover:bg-[#0d9240] text-white rounded-xl text-[13px] font-semibold transition-all shadow-sm shadow-green-200 active:scale-[0.98]"
-          >
-            <Camera size={15} /> Buka Kamera
-          </button>
+          <div className="w-full space-y-2">
+            <button
+              onClick={() => onCapture("")}
+              className="w-full flex items-center justify-center gap-2 py-3 bg-[#16A34A] hover:bg-[#0d9240] text-white rounded-xl text-[13px] font-semibold transition-all shadow-sm shadow-green-200 active:scale-[0.98]"
+            >
+              <Camera size={15} /> Buka Kamera Selfie
+            </button>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full flex items-center justify-center gap-2 py-2.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-700 rounded-xl text-[12px] font-medium transition-all"
+            >
+              <Upload size={14} className="text-gray-500" /> Upload / Pilih Foto Selfie
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -492,6 +541,14 @@ function FaceVerificationCard({
   if (faceStep === "scanning") {
     return (
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-4">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          capture="user"
+          className="hidden"
+          onChange={handleFileUpload}
+        />
         <div className="px-5 py-3.5 border-b border-gray-50 flex items-center gap-2">
           <Camera size={15} className="text-blue-500" />
           <span className="text-[13px] font-semibold text-gray-800">
@@ -506,13 +563,21 @@ function FaceVerificationCard({
           {cameraError ? (
             <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-center mb-4">
               <AlertCircle size={24} className="text-red-500 mx-auto mb-2" />
-              <p className="text-[12px] font-semibold text-red-700">{cameraError}</p>
-              <button
-                onClick={startCamera}
-                className="mt-3 px-4 py-1.5 bg-red-600 text-white rounded-xl text-[11px] font-bold"
-              >
-                Coba Lagi
-              </button>
+              <p className="text-[12px] font-semibold text-red-700 mb-3">{cameraError}</p>
+              <div className="flex gap-2 justify-center">
+                <button
+                  onClick={startCamera}
+                  className="px-4 py-2 bg-red-600 text-white rounded-xl text-[11px] font-bold"
+                >
+                  Coba Lagi
+                </button>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-xl text-[11px] font-bold flex items-center gap-1"
+                >
+                  <Upload size={12} /> Pilih/Ambil Foto File
+                </button>
+              </div>
             </div>
           ) : (
             <div
@@ -521,10 +586,11 @@ function FaceVerificationCard({
               title="Klik di mana saja untuk mengambil foto"
             >
               <video
-                ref={videoRef}
+                ref={setVideoRef}
                 autoPlay
                 playsInline
                 muted
+                onLoadedMetadata={() => videoRef.current?.play().catch(() => {})}
                 className="absolute inset-0 w-full h-full object-cover"
               />
 
@@ -565,6 +631,12 @@ function FaceVerificationCard({
               className="flex-1 flex items-center justify-center gap-2 py-2.5 border border-gray-200 rounded-xl text-[13px] font-medium text-gray-600 hover:bg-gray-50 transition-colors"
             >
               <X size={14} /> Tutup
+            </button>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="flex-1 flex items-center justify-center gap-1 py-2.5 border border-blue-200 text-blue-600 rounded-xl text-[12px] font-medium hover:bg-blue-50"
+            >
+              <Upload size={13} /> Upload Foto
             </button>
             <button
               onClick={handleCaptureClick}
@@ -1175,7 +1247,7 @@ export function AttendancePage() {
     const endHHmm = endTime.substring(0, 5);
     const startMins = parseMins(startHHmm);
     const endMins = parseMins(endHHmm);
-    const overnight = endMins < startMins;
+    const overnight = endMins <= startMins;
 
     const satEndTime = saturdayShift ? saturdayShift.end_time : "13:00:00";
     const satEndHHmm = satEndTime.substring(0, 5);
@@ -1330,7 +1402,7 @@ export function AttendancePage() {
     const [sh, sm] = startTimeStr.split(":").map(Number);
     const startMins = sh * 60 + sm;
     const endMins = hh * 60 + mm;
-    if (endMins < startMins) {
+    if (endMins <= startMins) {
       const nowMins = current.getHours() * 60 + current.getMinutes();
       if (nowMins >= startMins) {
         expected.setDate(expected.getDate() + 1);
@@ -1512,7 +1584,12 @@ export function AttendancePage() {
     if (!checkInTime || !checkOutTime) return "--";
     const [ih, im] = checkInTime.split(":").map(Number);
     const [oh, om] = checkOutTime.split(":").map(Number);
-    const diff = oh * 60 + om - (ih * 60 + im) - (isSaturday ? 0 : 60);
+    const inMins = ih * 60 + im;
+    let outMins = oh * 60 + om;
+    if (outMins <= inMins) {
+      outMins += 24 * 60;
+    }
+    const diff = outMins - inMins - (isSaturday ? 0 : 60);
     if (diff <= 0) return "0j 0m";
     return `${Math.floor(diff / 60)}j ${diff % 60}m`;
   };
@@ -2069,18 +2146,6 @@ export function AttendancePage() {
                   ? "Di Luar Area Geofence"
                   : "Verifikasi Wajah Diperlukan"}
             </button>
-          </div>
-        ) : checkedIn && !checkedOut ? (
-          <div className="w-full py-4 rounded-2xl flex flex-col items-center justify-center gap-1.5 border-2 cursor-not-allowed bg-orange-50 border-orange-300 text-orange-700">
-            <div className="flex items-center gap-2">
-              <AlertCircle size={18} />
-              <span className="text-[15px] font-semibold">
-                Batas Waktu Check-Out Sudah Lewat
-              </span>
-            </div>
-            <span className="text-[11px] text-orange-600">
-              Jam Masuk: {checkInTime} · Hubungi admin jika ada kendala
-            </span>
           </div>
         ) : (
           <div

@@ -185,12 +185,11 @@ class LeaveQuotaHelper
         $periodStart = self::currentPeriodStart($now);
 
         // PERHATIAN: Hanya menghitung pengajuan tipe 'cuti' (cuti tahunan).
-        // Tipe 'cuti_khusus' (cuti khusus) secara eksplisit TIDAK dihitung di sini
-        // karena cuti khusus memiliki kuota terpisah/tidak dibatasi kuota tahunan.
+        // Tipe 'cuti_khusus' (cuti khusus) secara eksplisit TIDAK dihitung di sini.
         $query = $employee->leaveRequests()
             ->where('type', 'cuti')
             ->whereIn('status', $statuses)
-            ->where('start_date', '>=', $periodStart->toDateString());
+            ->where('end_date', '>=', $periodStart->toDateString());
 
         if ($excludeId !== null) {
             $query->where('id', '!=', $excludeId);
@@ -200,7 +199,15 @@ class LeaveQuotaHelper
 
         $total = 0;
         foreach ($leaveRequests as $lr) {
-            $total += $lr->days;
+            $lrStart = Carbon::parse($lr->start_date);
+            if ($lrStart->gte($periodStart)) {
+                $total += $lr->days;
+            } else {
+                // Cuti yang dimulai sebelum periodStart tapi berakhir di dalam/setelah periodStart
+                $effectiveStart = $periodStart->copy();
+                $effectiveEnd   = Carbon::parse($lr->effective_end_date);
+                $total += self::countLeaveDays($effectiveStart, $effectiveEnd, $employee);
+            }
         }
 
         return $total;

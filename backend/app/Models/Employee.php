@@ -137,6 +137,10 @@ class Employee extends Model
      */
     public function shouldCountSundayInLeave(): bool
     {
-        return $this->department ? (bool) $this->department->count_sunday_in_leave : false;
+        $dept = $this->department;
+        if (!$dept && $this->department_id) {
+            $dept = Department::find($this->department_id);
+        }
+        return $dept ? (bool) $dept->count_sunday_in_leave : false;
     }
 }

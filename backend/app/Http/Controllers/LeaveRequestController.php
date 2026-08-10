@@ -366,7 +366,7 @@ class LeaveRequestController extends Controller
                 foreach ($sakitRequests as $sr) {
                     $srStart = \Carbon\Carbon::parse(max($sr->start_date->toDateString(), $monthStart->toDateString()));
                     $srEnd   = \Carbon\Carbon::parse(min($sr->end_date->toDateString(), $monthEnd->toDateString()));
-                    $existingDaysThisMonth += LeaveQuotaHelper::countLeaveDays($srStart, $srEnd);
+                    $existingDaysThisMonth += LeaveQuotaHelper::countLeaveDays($srStart, $srEnd, $employee);
                 }
 
                 $totalThisMonth = $existingDaysThisMonth + $newDaysThisMonth;
@@ -596,7 +596,7 @@ class LeaveRequestController extends Controller
             // Generate attendance records immediately
             $countSunday = $employee->shouldCountSundayInLeave();
             $start = \Carbon\Carbon::parse($lr->start_date);
-            $end = \Carbon\Carbon::parse($lr->end_date);
+            $end = \Carbon\Carbon::parse($lr->effective_end_date);
             for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
                 if (!$countSunday && $date->isSunday()) {
                     continue;
@@ -842,7 +842,7 @@ class LeaveRequestController extends Controller
                 $now           = \Carbon\Carbon::now();
                 $quota         = LeaveQuotaHelper::quotaDays($employee);
                 $alreadyUsed   = LeaveQuotaHelper::usedDays($employee, $now);
-                $daysThisReq   = \Carbon\Carbon::parse($lr->start_date)->diffInDays(\Carbon\Carbon::parse($lr->end_date)) + 1;
+                $daysThisReq   = LeaveQuotaHelper::countLeaveDays($lr->start_date, $lr->effective_end_date, $employee);
 
                 if (($alreadyUsed + $daysThisReq) > $quota) {
                     $remaining = max(0, $quota - $alreadyUsed);
@@ -870,7 +870,7 @@ class LeaveRequestController extends Controller
             if ($newStatus === 'approved') {
                 $countSunday = $lr->employee ? $lr->employee->shouldCountSundayInLeave() : false;
                 $start = \Carbon\Carbon::parse($lr->start_date);
-                $end = \Carbon\Carbon::parse($lr->end_date);
+                $end = \Carbon\Carbon::parse($lr->effective_end_date);
                 for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
                     if (!$countSunday && $date->isSunday()) {
                         continue;

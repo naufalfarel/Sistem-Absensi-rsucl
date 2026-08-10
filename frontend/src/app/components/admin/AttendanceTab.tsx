@@ -363,7 +363,7 @@ export function AttendanceTab() {
                   </td>
                 </tr>
               )}
-              {filtered.map((emp) => {
+              {filtered.map((emp, idx) => {
                 const sc = statusMap[emp.status] || {
                   label: emp.status,
                   color: "#6B7280",
@@ -373,7 +373,7 @@ export function AttendanceTab() {
                 };
                 return (
                   <tr
-                    key={emp.id}
+                    key={emp.id ?? `emp_${idx}_${emp.name}`}
                     className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors"
                   >
                     <td className="px-4 py-3.5">

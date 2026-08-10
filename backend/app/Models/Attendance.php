@@ -112,6 +112,9 @@ class Attendance extends Model
         if (!$checkInTime || !$this->check_out) return null;
         $in  = strtotime($checkInTime);
         $out = strtotime($this->check_out);
+        if ($out < $in) {
+            $out += 86400; // Shift malam/lintas hari
+        }
         return (int) round(($out - $in) / 60);
     }
 

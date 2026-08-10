@@ -89,7 +89,13 @@ class LeaveRequest extends Model
         $end   = \Carbon\Carbon::parse($this->effective_end_date);
         if ($start->gt($end)) return 0;
 
-        $countSunday = $this->employee ? $this->employee->shouldCountSundayInLeave() : false;
+        $countSunday = false;
+        if ($this->employee) {
+            $countSunday = $this->employee->shouldCountSundayInLeave();
+        } else if ($this->unit_kerja) {
+            $dept = \App\Models\Department::where('name', $this->unit_kerja)->first();
+            $countSunday = $dept ? (bool) $dept->count_sunday_in_leave : false;
+        }
 
         $days = 0;
         for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
