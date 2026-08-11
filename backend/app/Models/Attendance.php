@@ -222,7 +222,7 @@ class Attendance extends Model
                 } else {
                     // Prioritas 2: Fallback ke Jadwal Mingguan
                     $matchingShift = $emp->schedules->first(function($schedule) use ($dayOfWeekName) {
-                        return $schedule->pivot->day_of_week === $dayOfWeekName;
+                        return isset($schedule->pivot) && $schedule->pivot->day_of_week === $dayOfWeekName;
                     });
                     if ($matchingShift) {
                         $hasShift = true;
@@ -327,7 +327,9 @@ class Attendance extends Model
                     // Kasus B: Karyawan tidak absen. Periksa apakah sedang cuti/izin/sakit
                     $empLeaves = $leaveRequests->get($emp->id, collect());
                     $matchingLeave = $empLeaves->first(function($leave) use ($dateStr) {
-                        return $dateStr >= $leave->start_date->toDateString() && $dateStr <= $leave->effective_end_date->toDateString();
+                        $startDateStr = $leave->start_date instanceof \Carbon\Carbon ? $leave->start_date->toDateString() : (string) $leave->start_date;
+                        $endDateStr = $leave->effective_end_date instanceof \Carbon\Carbon ? $leave->effective_end_date->toDateString() : (string) $leave->effective_end_date;
+                        return $startDateStr && $endDateStr && $dateStr >= $startDateStr && $dateStr <= $endDateStr;
                     });
 
                     if ($matchingLeave) {

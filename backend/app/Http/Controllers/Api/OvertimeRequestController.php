@@ -28,7 +28,7 @@ class OvertimeRequestController extends Controller
             }
             $query->where('employee_id', $employee->id);
         } else {
-            if ($user->role === 'employee') {
+            if ($user && $user->role === 'employee') {
                 $employee = $user->employee;
                 if (!$employee) {
                     return response()->json(['success' => false, 'message' => 'Profil pegawai tidak ditemukan.'], 404);

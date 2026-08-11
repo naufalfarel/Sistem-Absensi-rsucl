@@ -303,7 +303,6 @@ function FaceVerificationCard({
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [cameraError, setCameraError] = useState<string | null>(null);
 
@@ -339,7 +338,7 @@ function FaceVerificationCard({
     } catch (err) {
       console.error("Camera access error:", err);
       setCameraError(
-        "Kamera tidak dapat diakses secara otomatis. Silakan gunakan tombol 'Upload Foto Selfie' di bawah untuk mengambil atau memilih foto.",
+        "Kamera tidak dapat diakses. Silakan periksa dan aktifkan izin akses kamera pada browser/HP Anda.",
       );
     }
   }, []);
@@ -359,20 +358,6 @@ function FaceVerificationCard({
     }
     return () => stopCamera();
   }, [faceStep, startCamera, stopCamera]);
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const dataUrl = event.target?.result as string;
-      if (dataUrl) {
-        stopCamera();
-        onCapture(dataUrl);
-      }
-    };
-    reader.readAsDataURL(file);
-  };
 
   const handleCaptureClick = async () => {
     let capturedDataUrl = "";
@@ -401,11 +386,8 @@ function FaceVerificationCard({
     }
 
     if (!capturedDataUrl || capturedDataUrl.length < 100) {
-      // Prompt user to pick/take a photo if canvas capture is blank/empty
-      if (fileInputRef.current) {
-        fileInputRef.current.click();
-        return;
-      }
+      alert("Gagal mengambil foto dari kamera. Pastikan kamera menyala dan coba lagi.");
+      return;
     }
 
     stopCamera();
@@ -454,14 +436,6 @@ function FaceVerificationCard({
   if (faceStep === "idle") {
     return (
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-4">
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          capture="user"
-          className="hidden"
-          onChange={handleFileUpload}
-        />
         <div className="px-5 py-3.5 border-b border-gray-50 flex items-center gap-2">
           <Camera size={15} className="text-[#16A34A]" />
           <span className="text-[13px] font-semibold text-gray-800">
@@ -513,24 +487,18 @@ function FaceVerificationCard({
           </div>
           <div className="text-center">
             <p className="text-[13px] font-semibold text-gray-700">
-              Selfie diperlukan
+              Foto Selfie Diperlukan
             </p>
             <p className="text-[11px] text-gray-400 mt-0.5">
-              Ambil foto wajah Anda untuk memverifikasi identitas sebelum absen
+              Ambil foto diri Anda secara langsung menggunakan kamera untuk memverifikasi kehadiran
             </p>
           </div>
-          <div className="w-full space-y-2">
+          <div className="w-full">
             <button
               onClick={() => onCapture("")}
               className="w-full flex items-center justify-center gap-2 py-3 bg-[#16A34A] hover:bg-[#0d9240] text-white rounded-xl text-[13px] font-semibold transition-all shadow-sm shadow-green-200 active:scale-[0.98]"
             >
               <Camera size={15} /> Buka Kamera Selfie
-            </button>
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="w-full flex items-center justify-center gap-2 py-2.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-700 rounded-xl text-[12px] font-medium transition-all"
-            >
-              <Upload size={14} className="text-gray-500" /> Upload / Pilih Foto Selfie
             </button>
           </div>
         </div>
@@ -541,14 +509,6 @@ function FaceVerificationCard({
   if (faceStep === "scanning") {
     return (
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-4">
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          capture="user"
-          className="hidden"
-          onChange={handleFileUpload}
-        />
         <div className="px-5 py-3.5 border-b border-gray-50 flex items-center gap-2">
           <Camera size={15} className="text-blue-500" />
           <span className="text-[13px] font-semibold text-gray-800">
@@ -569,13 +529,7 @@ function FaceVerificationCard({
                   onClick={startCamera}
                   className="px-4 py-2 bg-red-600 text-white rounded-xl text-[11px] font-bold"
                 >
-                  Coba Lagi
-                </button>
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-xl text-[11px] font-bold flex items-center gap-1"
-                >
-                  <Upload size={12} /> Pilih/Ambil Foto File
+                  Coba Lagi Kamera
                 </button>
               </div>
             </div>
@@ -631,12 +585,6 @@ function FaceVerificationCard({
               className="flex-1 flex items-center justify-center gap-2 py-2.5 border border-gray-200 rounded-xl text-[13px] font-medium text-gray-600 hover:bg-gray-50 transition-colors"
             >
               <X size={14} /> Tutup
-            </button>
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="flex-1 flex items-center justify-center gap-1 py-2.5 border border-blue-200 text-blue-600 rounded-xl text-[12px] font-medium hover:bg-blue-50"
-            >
-              <Upload size={13} /> Upload Foto
             </button>
             <button
               onClick={handleCaptureClick}

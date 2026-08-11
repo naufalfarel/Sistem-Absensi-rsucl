@@ -101,8 +101,9 @@ class ReportController extends Controller
         $overtimeTotalIncidents = $approvedOvertimeRequests->count();
         $overtimeTotalMinutes   = 0;
         foreach ($approvedOvertimeRequests as $req) {
+            $reqDateStr = $req->date instanceof \Carbon\Carbon ? $req->date->toDateString() : (string) $req->date;
             $att = Attendance::where('employee_id', $req->employee_id)
-                ->whereDate('date', $req->date->toDateString())
+                ->whereDate('date', $reqDateStr)
                 ->first();
             if ($att) {
                 $overtimeTotalMinutes += $att->overtime_minutes ?? 0;
@@ -250,9 +251,9 @@ class ReportController extends Controller
             $dailyDiligenceRanking[] = [
                 'rank' => $rankIdx++,
                 'employee_id' => $rec->employee_id,
-                'name' => $rec->employee->user?->name ?? 'Karyawan',
-                'department' => $rec->employee->department?->name ?? 'Umum',
-                'check_in' => substr($rec->check_in, 0, 5),
+                'name' => $rec->employee?->user?->name ?? 'Karyawan',
+                'department' => $rec->employee?->department?->name ?? 'Umum',
+                'check_in' => $rec->check_in ? substr($rec->check_in, 0, 5) : '--:--',
             ];
         }
 
@@ -519,7 +520,7 @@ class ReportController extends Controller
                     $dayMap = [0 => 'Minggu', 1 => 'Senin', 2 => 'Selasa', 3 => 'Rabu', 4 => 'Kamis', 5 => 'Jumat', 6 => 'Sabtu'];
                     $dateCarbon = \Carbon\Carbon::parse($dateStr);
                     $dayName = $dayMap[$dateCarbon->dayOfWeek];
-                    $sched = $emp->schedules->first(fn($s) => $s->pivot->day_of_week === $dayName);
+                    $sched = $emp->schedules->first(fn($s) => isset($s->pivot) && $s->pivot->day_of_week === $dayName);
                     if ($sched && $sched->start_time) {
                         $shiftStartStr = $sched->start_time;
                     }

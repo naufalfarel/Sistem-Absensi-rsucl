@@ -949,7 +949,7 @@ class AttendanceController extends Controller
             }
 
             $records = Attendance::getMonthlyReportData($month, $year, $employeeId);
-            if ($user->role === 'employee') {
+            if ($user && $user->role === 'employee') {
                 foreach ($records as &$record) {
                     unset(
                         $record['is_overtime'],

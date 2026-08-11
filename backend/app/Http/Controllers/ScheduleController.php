@@ -364,7 +364,7 @@ class ScheduleController extends Controller
         $user = $request->user();
         $query = \App\Models\Employee::with(['user', 'schedules'])->where('status', 'active');
 
-        if ($user->role === 'pj_bagian') {
+        if ($user && $user->role === 'pj_bagian') {
             $query->whereIn('department_id', $user->getPjDepartmentIds());
         }
 
@@ -652,7 +652,7 @@ class ScheduleController extends Controller
             } else {
                 $empQuery->whereIn('department_id', $deptIds);
             }
-        } elseif ($user->role === 'employee') {
+        } elseif ($user && $user->role === 'employee') {
             $deptId = $user->employee->department_id ?? null;
             if ($deptId) {
                 $empQuery->where('department_id', $deptId);

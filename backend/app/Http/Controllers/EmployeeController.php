@@ -31,7 +31,7 @@ class EmployeeController extends Controller
     {
         $user = $request->user();
         $query = Employee::with(['user', 'department', 'position', 'todayAttendance', 'disciplinarySanctions']);
-        if ($user->role === 'pj_bagian') {
+        if ($user && $user->role === 'pj_bagian') {
             $query->whereIn('department_id', $user->getPjDepartmentIds());
         }
 
