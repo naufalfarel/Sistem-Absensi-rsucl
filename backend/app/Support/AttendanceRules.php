@@ -151,20 +151,36 @@ class AttendanceRules
         $shifts = [];
 
         // ── Prioritas 1: Cek jadwal tanggal spesifik (work_date) ──────────────
-        $dateRows = \Illuminate\Support\Facades\DB::table('employee_schedule')
-            ->join('schedules', 'employee_schedule.schedule_id', '=', 'schedules.id')
-            ->where('employee_schedule.employee_id', $employee->id)
-            ->where('employee_schedule.work_date', $todayStr)
-            ->whereNotNull('employee_schedule.work_date')
-            ->select('schedules.id')
+        $rawDateRows = \Illuminate\Support\Facades\DB::table('employee_schedule')
+            ->where('employee_id', $employee->id)
+            ->where('work_date', $todayStr)
+            ->whereNotNull('work_date')
             ->get();
 
-        if ($dateRows->isNotEmpty()) {
-            foreach ($dateRows as $row) {
-                $sched = \App\Models\Schedule::find($row->id);
-                if ($sched) $shifts[] = $sched;
+        if ($rawDateRows->isNotEmpty()) {
+            foreach ($rawDateRows as $rRow) {
+                if ($rRow->schedule_id === null) {
+                    // Eksplisit Libur pada tanggal ini
+                    continue;
+                }
+                $sched = \App\Models\Schedule::find($rRow->schedule_id);
+                if ($sched) {
+                    if ($sched->parent_id === null && $sched->children()->exists()) {
+                        $children = $sched->children()->get();
+                        foreach ($children as $child) {
+                            $shifts[] = $child;
+                        }
+                    } else {
+                        $shifts[] = $sched;
+                    }
+                }
             }
-            return $shifts;
+            if ($rawDateRows->contains(fn($r) => $r->schedule_id === null) && empty($shifts)) {
+                return []; // Eksplisit set Libur
+            }
+            if (!empty($shifts)) {
+                return $shifts;
+            }
         }
 
         // ── Prioritas 2: Fallback ke jadwal mingguan (day_of_week) ──────────
@@ -173,7 +189,6 @@ class AttendanceRules
 
         if ($todaySchedules->isNotEmpty()) {
             foreach ($todaySchedules as $todaySchedule) {
-                $matchedShift = $todaySchedule;
                 if ($todaySchedule->parent_id === null && $todaySchedule->children()->exists()) {
                     $children = $todaySchedule->children()->get();
                     $sub = null;
@@ -183,41 +198,78 @@ class AttendanceRules
                         $sub = $children->first(fn($c) => !str_contains(strtolower($c->name), 'sabtu'));
                     }
                     if ($sub) {
-                        $matchedShift = $sub;
+                        $shifts[] = $sub;
+                    } else {
+                        foreach ($children as $child) {
+                            $shifts[] = $child;
+                        }
                     }
+                } else {
+                    $shifts[] = $todaySchedule;
                 }
-                $shifts[] = $matchedShift;
             }
             return $shifts;
         }
 
-        // ── Prioritas 3: Fallback ke jadwal kantor reguler (KHUSUS PJ BAGIAN) ─────────────────
-        $isPj = $employee->user && $employee->user->isPjBagian();
-        if ($isPj && $dayOfWeek !== 0) { // Hanya untuk PJ Bagian pada hari kerja (bukan Minggu)
-            $regulerParent = \App\Models\Schedule::whereNull('parent_id')
-                ->where(function($q) {
-                    $q->where('name', 'LIKE', 'Reguler Kantor%')
-                      ->orWhere('name', 'LIKE', 'Administrasi%')
-                      ->orWhere('name', 'LIKE', '%Office%');
-                })
-                ->first();
+        // ── Prioritas 3: Fallback ke Master Shift Unit/Departemen Karyawan ──────────
+        $deptId = $employee->department_id;
+        if ($deptId) {
+            $deptSchedules = \App\Models\Schedule::where('owner_department_id', $deptId)
+                ->where('status', 'approved')
+                ->whereNull('parent_id')
+                ->get();
 
-            $subShift = null;
-            if ($regulerParent) {
-                if ($dayOfWeek === 6) {
-                    $subShift = $regulerParent->children()->where('name', 'LIKE', '%Sabtu%')->first();
-                } else {
-                    $subShift = $regulerParent->children()->where(function($q) {
-                        $q->where('name', 'LIKE', '%Senin%')
-                          ->orWhere('name', 'LIKE', '%Normal%');
-                    })->first();
+            if ($deptSchedules->isEmpty()) {
+                $deptName = $employee->department?->name;
+                if ($deptName) {
+                    $deptSchedules = \App\Models\Schedule::where('name', 'LIKE', '%' . $deptName . '%')
+                        ->where('status', 'approved')
+                        ->whereNull('parent_id')
+                        ->get();
                 }
             }
 
-            if ($subShift) {
-                $shifts[] = $subShift;
-            } elseif ($regulerParent) {
-                $shifts[] = $regulerParent;
+            if ($deptSchedules->isNotEmpty()) {
+                foreach ($deptSchedules as $deptSched) {
+                    if ($deptSched->children()->exists()) {
+                        $children = $deptSched->children()->get();
+                        foreach ($children as $child) {
+                            $shifts[] = $child;
+                        }
+                    } else {
+                        $shifts[] = $deptSched;
+                    }
+                }
+                if (!empty($shifts)) {
+                    return $shifts;
+                }
+            }
+        }
+
+        // ── Prioritas 4: Fallback ke jadwal kantor reguler ─────────────────
+        if ($dayOfWeek !== 0) { // Bukan hari Minggu
+            $regulerParent = \App\Models\Schedule::whereNull('parent_id')
+                ->where(function($q) {
+                    $q->where('name', 'LIKE', '%office%')
+                      ->orWhere('name', 'LIKE', '%kantor%')
+                      ->orWhere('name', 'LIKE', 'Reguler%')
+                      ->orWhere('name', 'LIKE', 'Administrasi%');
+                })
+                ->first();
+
+            if ($regulerParent) {
+                if ($regulerParent->children()->exists()) {
+                    $children = $regulerParent->children()->get();
+                    $sub = null;
+                    if ($dayOfWeek === 6) {
+                        $sub = $children->first(fn($c) => str_contains(strtolower($c->name), 'sabtu'));
+                    } else {
+                        $sub = $children->first(fn($c) => !str_contains(strtolower($c->name), 'sabtu'));
+                    }
+                    $shifts[] = $sub ?? $children->first();
+                } else {
+                    $shifts[] = $regulerParent;
+                }
             }
         }
 

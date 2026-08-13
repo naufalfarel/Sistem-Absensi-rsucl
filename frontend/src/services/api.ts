@@ -1135,6 +1135,7 @@ export interface AppSettings {
   annual_leave_quota_days?: string; // Jumlah hari kuota per tahun
 
   // Toleransi Pulang Cepat & Lembur
+  enable_gps_validation?: "0" | "1";
   early_checkout_grace_minutes?: string;
   overtime_grace_minutes?: string;
   checkin_tolerance_minutes?: string;

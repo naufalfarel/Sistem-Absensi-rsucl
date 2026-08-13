@@ -366,7 +366,21 @@ function BulkAssignModal({ user, shifts, employees, year, month, daysInMonth, on
     try {
       let schedId: number | null = null;
       if (selectedShiftId === 'libur') {
-        schedId = null;
+        let foundShift = shifts.find(s => s.name.toLowerCase().includes('libur / off') || s.name.toLowerCase() === 'libur');
+        if (!foundShift) {
+          const createRes = await scheduleApi.create({
+            name: 'Libur / OFF',
+            start_time: '00:00',
+            end_time: '00:00',
+            color: '#94A3B8',
+            icon: 'moon',
+            shift_type: 'normal',
+          } as any);
+          if (createRes.success) {
+            foundShift = createRes.data;
+          }
+        }
+        schedId = foundShift ? foundShift.id : null;
       } else if (selectedShiftId === 'lj') {
         let foundShift = shifts.find(s => s.name.toLowerCase().includes('libur jaga') || s.name.toUpperCase() === 'LJ');
         if (!foundShift) {
@@ -975,9 +989,11 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
     const changeKey = `${empId}-${dateStr}`;
 
     if (scheduleId === null) {
+      let liburShift = shifts.find(s => s.name.toLowerCase().includes('libur / off') || s.name.toLowerCase() === 'libur');
+      const liburId = liburShift ? liburShift.id : null;
       setPendingChanges(prev => ({
         ...prev,
-        [changeKey]: { employee_id: empId, work_date: dateStr, schedule_id: null, schedule_ids: [] }
+        [changeKey]: { employee_id: empId, work_date: dateStr, schedule_id: liburId, schedule_ids: liburId ? [liburId] : [] }
       }));
 
       setMonthlyData(prev => prev.map(row => {

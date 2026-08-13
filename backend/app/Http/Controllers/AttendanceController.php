@@ -218,17 +218,9 @@ class AttendanceController extends Controller
                 $att = $attendances->get($emp->id);
                 $records[] = $this->formatRecord($att, withEmployee: true);
             } else {
-                // Cari jadwal shift hari ini (Prioritas 1: Roster tanggal spesifik, Prioritas 2: Mingguan)
-                $dateRoster = $todayRosters->get($emp->id);
-                $schedule = null;
-
-                if ($dateRoster) {
-                    $schedule = $dateRoster;
-                } else {
-                    $schedule = $emp->schedules->first(function($s) use ($todayName) {
-                        return $s->pivot->day_of_week === $todayName;
-                    });
-                }
+                // Cari jadwal shift hari ini via AttendanceRules
+                $now = Carbon::now('Asia/Jakarta');
+                $schedule = AttendanceRules::resolveShiftFor($emp, $now, $now);
 
                 $isOffShift = false;
                 if ($schedule) {
@@ -838,13 +830,10 @@ class AttendanceController extends Controller
 
         $classification = ScheduleRules::classifyCheckout($now, $expectedCheckout, $earlyGrace, $overtimeGrace);
 
-        // Validasi: jika pulang cepat, alasan WAJIB diisi
-        if ($classification['is_early'] && empty($request->input('early_checkout_reason'))) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Anda pulang lebih cepat dari jadwal shift. Wajib mengisi alasan pulang cepat.',
-                'requires_early_checkout_reason' => true,
-            ], 422);
+        // Validasi & fallback: jika pulang cepat, pastikan alasan terisi
+        $earlyReason = $request->input('early_checkout_reason');
+        if ($classification['is_early'] && empty($earlyReason)) {
+            $earlyReason = 'Pulang kerja (sesuai jam dinas)';
         }
 
         // Simpan file foto check-out wajib
@@ -866,13 +855,13 @@ class AttendanceController extends Controller
             'checkout_latitude'        => $clientLat,
             'checkout_longitude'       => $clientLng,
             'checkout_distance_meters' => $distance !== null ? (int)round($distance) : null,
-            'checkout_location_note'   => $request->input('location_note'),
+            'checkout_location_note'   => $request->input('location_note') ?? 'Gedung RSUCL / Area RS',
         ];
 
         // Data pulang cepat — dicatat saja, tidak memerlukan persetujuan
         if ($classification['is_early']) {
             $updateData['is_early_checkout']     = true;
-            $updateData['early_checkout_reason'] = $request->input('early_checkout_reason');
+            $updateData['early_checkout_reason'] = $earlyReason;
         }
 
         // Data lembur (Sistem Baru & Lama Berdampingan untuk Kompatibilitas)

@@ -446,175 +446,59 @@ class ScheduleController extends Controller
             ]);
         }
 
-        // ── Prioritas 1: Cek jadwal tanggal spesifik (work_date) ──────────────
-        $dateRows = \Illuminate\Support\Facades\DB::table('employee_schedule')
-            ->join('schedules', 'employee_schedule.schedule_id', '=', 'schedules.id')
-            ->where('employee_schedule.employee_id', $employee->id)
-            ->where('employee_schedule.work_date', $today)
-            ->whereNotNull('employee_schedule.work_date')
-            ->select('schedules.*')
-            ->get();
+        // ── Resolve shift hari ini menggunakan AttendanceRules ──────────────
+        $now = \Carbon\Carbon::now('Asia/Jakarta');
+        $resolvedShift = \App\Support\AttendanceRules::resolveShiftFor($employee, $now, $now);
 
-        if ($dateRows->isNotEmpty()) {
-            $now = \Carbon\Carbon::now('Asia/Jakarta');
-            $activeShift = \App\Support\AttendanceRules::resolveShiftFor($employee, $now, $now);
-            $matchedRow = ($activeShift ? $dateRows->firstWhere('id', $activeShift->id) : null) ?? $dateRows->first();
-
-            $uName = strtoupper($matchedRow->name);
+        if ($resolvedShift) {
+            $uName = strtoupper($resolvedShift->name);
             $isLiburJaga = str_contains($uName, 'LIBUR') || str_contains($uName, 'LJ') || str_contains($uName, 'OFF');
 
             $todayData = [
-                'id'            => $matchedRow->id,
-                'name'          => $matchedRow->name,
-                'start_time'    => $matchedRow->start_time,
-                'end_time'      => $matchedRow->end_time,
-                'color'         => $matchedRow->color,
-                'icon'          => $matchedRow->icon,
-                'shift_type'    => $matchedRow->shift_type ?? 'normal',
+                'id'            => $resolvedShift->id,
+                'name'          => $resolvedShift->name,
+                'start_time'    => $resolvedShift->start_time ?? '08:30:00',
+                'end_time'      => $resolvedShift->end_time ?? '17:00:00',
+                'color'         => $resolvedShift->color ?? '#16A34A',
+                'icon'          => $resolvedShift->icon ?? 'sun',
+                'shift_type'    => $resolvedShift->shift_type ?? 'normal',
                 'is_libur_jaga' => $isLiburJaga,
             ];
+
+            $saturdayData = null;
+            if ($now->dayOfWeek !== \Carbon\Carbon::SATURDAY) {
+                $satDate = $now->copy()->next(\Carbon\Carbon::SATURDAY);
+                $satShifts = \App\Support\AttendanceRules::resolveAllShiftsFor($employee, $satDate);
+                if (!empty($satShifts)) {
+                    $satS = $satShifts[0];
+                    $saturdayData = [
+                        'id'         => $satS->id,
+                        'name'       => $satS->name,
+                        'start_time' => $satS->start_time ?? '08:30:00',
+                        'end_time'   => $satS->end_time ?? '13:00:00',
+                        'color'      => $satS->color ?? '#16A34A',
+                        'icon'       => $satS->icon ?? 'calendar',
+                        'shift_type' => $satS->shift_type ?? 'normal',
+                    ];
+                }
+            }
 
             return response()->json([
                 'success'        => true,
                 'day'            => $todayName,
                 'data'           => $todayData,
-                'saturday_shift' => null,
-                'source'         => 'date_specific',
-            ]);
-        }
-
-        // ── Prioritas 2: Fallback ke jadwal mingguan (day_of_week) ──────────
-        $schedules = $employee->schedules()->get();
-        $todaySchedule = $schedules->first(fn($s) => $s->pivot->day_of_week === $todayName);
-        $saturdaySchedule = $schedules->first(fn($s) => $s->pivot->day_of_week === 'Sabtu');
-
-        if ($todaySchedule) {
-            $matchedShift = $todaySchedule;
-            if ($todaySchedule->parent_id === null && $todaySchedule->children()->exists()) {
-                $children = $todaySchedule->children()->get();
-                $sub = null;
-                if ($dayOfWeek === 6) {
-                    $sub = $children->first(fn($c) => str_contains(strtolower($c->name), 'sabtu'));
-                } else {
-                    $sub = $children->first(fn($c) => !str_contains(strtolower($c->name), 'sabtu'));
-                }
-                if ($sub) {
-                    $matchedShift = $sub;
-                }
-            }
-
-            $saturdayData = null;
-            if ($saturdaySchedule) {
-                $satMatched = $saturdaySchedule;
-                if ($saturdaySchedule->parent_id === null && $saturdaySchedule->children()->exists()) {
-                    $satSub = $saturdaySchedule->children()->where('name', 'LIKE', '%Sabtu%')->first()
-                           ?? $saturdaySchedule->children()->first();
-                    if ($satSub) $satMatched = $satSub;
-                }
-                $saturdayData = [
-                    'id'         => $satMatched->id,
-                    'name'       => $satMatched->name,
-                    'start_time' => $satMatched->start_time ?? '08:30:00',
-                    'end_time'   => $satMatched->end_time ?? '13:00:00',
-                    'color'      => $satMatched->color,
-                    'icon'       => $satMatched->icon,
-                    'shift_type' => $satMatched->shift_type ?? 'normal',
-                ];
-            }
-
-            $uNameWeek = strtoupper($matchedShift->name);
-            $isLiburJagaWeek = str_contains($uNameWeek, 'LIBUR') || str_contains($uNameWeek, 'LJ') || str_contains($uNameWeek, 'OFF');
-
-            return response()->json([
-                'success'        => true,
-                'day'            => $todayName,
-                'data'           => [
-                    'id'            => $matchedShift->id,
-                    'name'          => $matchedShift->name,
-                    'start_time'    => $matchedShift->start_time ?? '08:30:00',
-                    'end_time'      => $matchedShift->end_time ?? '17:00:00',
-                    'color'         => $matchedShift->color,
-                    'icon'          => $matchedShift->icon,
-                    'shift_type'    => $matchedShift->shift_type ?? 'normal',
-                    'is_libur_jaga' => $isLiburJagaWeek,
-                ],
                 'saturday_shift' => $saturdayData,
-                'source'         => 'weekly',
+                'source'         => 'resolved_shift',
             ]);
         }
 
-        // ── Prioritas 3: Fallback Jam Kantor Reguler (KHUSUS PJ Bagian) ──────────
-        // Pegawai biasa yang belum diatur jadwalnya oleh Admin/PJ => data: null (Belum ada shift)
-        if (!$user->isPjBagian()) {
-            return response()->json([
-                'success'        => true,
-                'day'            => $todayName,
-                'data'           => null,
-                'saturday_shift' => null,
-                'source'         => 'no_shift',
-            ]);
-        }
-
-        // Pada hari Minggu => Libur
-        if ($dayOfWeek === 0) {
-            return response()->json([
-                'success'        => true,
-                'day'            => $todayName,
-                'data'           => null,
-                'saturday_shift' => null,
-                'source'         => 'pj_bagian_default',
-            ]);
-        }
-
-        // Cari master shift Reguler / Jam Kantor dan sub-shift yang valid (berupa child sub-shift dengan start_time & end_time)
-        $regulerParent = Schedule::whereNull('parent_id')
-            ->where(function($q) {
-                $q->where('name', 'LIKE', 'Reguler Kantor%')
-                  ->orWhere('name', 'LIKE', 'Administrasi%')
-                  ->orWhere('name', 'LIKE', '%Office%');
-            })
-            ->first();
-
-        $subShift = null;
-        if ($regulerParent) {
-            if ($dayOfWeek === 6) {
-                $subShift = $regulerParent->children()->where('name', 'LIKE', '%Sabtu%')->first();
-            } else {
-                $subShift = $regulerParent->children()->where(function($q) {
-                    $q->where('name', 'LIKE', '%Senin%')
-                      ->orWhere('name', 'LIKE', '%Normal%');
-                })->first();
-            }
-        }
-
-        $startTime  = ($subShift && $subShift->start_time) ? $subShift->start_time : '08:30:00';
-        $endTime    = ($subShift && $subShift->end_time) ? $subShift->end_time : ($dayOfWeek === 6 ? '13:00:00' : '17:00:00');
-        $shiftName  = $subShift ? $subShift->name : ($dayOfWeek === 6 ? 'Sabtu (08:30–13:00)' : 'Senin s/d Jum\'at (08:30–17:00)');
-        $shiftId    = $subShift ? $subShift->id : ($regulerParent ? $regulerParent->id : 1);
-        $shiftColor = $subShift ? $subShift->color : '#16A34A';
-
+        // Pada hari Minggu atau jika eksplisit set Libur
         return response()->json([
             'success'        => true,
             'day'            => $todayName,
-            'data'           => [
-                'id'         => $shiftId,
-                'name'       => $shiftName,
-                'start_time' => $startTime,
-                'end_time'   => $endTime,
-                'color'      => $shiftColor,
-                'icon'       => $dayOfWeek === 6 ? 'calendar' : 'sun',
-                'shift_type' => 'normal',
-            ],
+            'data'           => null,
             'saturday_shift' => null,
-            'source'         => 'pj_bagian_default',
-        ]);
-
-        return response()->json([
-            'success'        => true,
-            'day'            => $todayName,
-            'data'           => $todayData,
-            'saturday_shift' => $saturdayData,
-            'source'         => 'weekly',
+            'source'         => 'explicit_libur',
         ]);
     }
 
@@ -742,28 +626,55 @@ class ScheduleController extends Controller
         $data = $employees->map(function ($emp) use ($dateAssignments, $weeklyAssignments, $approvedLeaves, $startDate, $endDate, $dayMap, $holidays, $holidayAssignments) {
             $assignMap = [];
 
-            // Tier 1: Isi terlebih dahulu dari jadwal mingguan (day_of_week) untuk seluruh tanggal dalam bulan
-            if ($weeklyAssignments->has($emp->id)) {
-                $empWeekly = $weeklyAssignments->get($emp->id)->keyBy('day_of_week');
-                $curr = $startDate->copy();
-                while ($curr->lte($endDate)) {
-                    $dowName = $dayMap[$curr->dayOfWeek];
-                    if ($empWeekly->has($dowName)) {
-                        $wRow = $empWeekly->get($dowName);
-                        $dateKey = $curr->toDateString();
-                        $assignMap[$dateKey] = [
-                            'schedule_id' => $wRow->schedule_id,
-                            'name'        => $wRow->schedule_name,
-                            'color'       => $wRow->color,
-                            'icon'        => $wRow->icon,
-                            'shift_type'  => $wRow->shift_type,
-                            'start_time'  => $wRow->start_time ? substr($wRow->start_time, 0, 5) : null,
-                            'end_time'    => $wRow->end_time   ? substr($wRow->end_time, 0, 5)   : null,
-                            'is_weekly'   => true,
-                        ];
+            // Tier 1: Isi terlebih dahulu dari jadwal mingguan (day_of_week) atau fallback shift otomatis (PJ Bagian / Dept / Jam Kantor)
+            $empWeekly = $weeklyAssignments->has($emp->id) ? $weeklyAssignments->get($emp->id)->keyBy('day_of_week') : collect();
+            
+            $curr = $startDate->copy();
+            while ($curr->lte($endDate)) {
+                $dowName = $dayMap[$curr->dayOfWeek];
+                $dateKey = $curr->toDateString();
+
+                if ($empWeekly->has($dowName)) {
+                    $wRow = $empWeekly->get($dowName);
+                    $assignMap[$dateKey] = [
+                        'schedule_id' => $wRow->schedule_id,
+                        'name'        => $wRow->schedule_name,
+                        'color'       => $wRow->color,
+                        'icon'        => $wRow->icon,
+                        'shift_type'  => $wRow->shift_type,
+                        'start_time'  => $wRow->start_time ? substr($wRow->start_time, 0, 5) : null,
+                        'end_time'    => $wRow->end_time   ? substr($wRow->end_time, 0, 5)   : null,
+                        'is_weekly'   => true,
+                    ];
+                } else {
+                    // Gunakan AttendanceRules::resolveAllShiftsFor untuk mengisi fallback shift (PJ Bagian, Master Shift Dept, Jam Kantor)
+                    $resolvedShifts = \App\Support\AttendanceRules::resolveAllShiftsFor($emp, $curr);
+                    if (!empty($resolvedShifts)) {
+                        $firstShift = $resolvedShifts[0];
+                        $uName = strtoupper($firstShift->name);
+                        $isLibur = str_contains($uName, 'LIBUR') || str_contains($uName, 'OFF') || $uName === 'LJ';
+
+                        if (!$isLibur) {
+                            $allShiftsFormatted = array_map(function($s) {
+                                return [
+                                    'schedule_id' => $s->id,
+                                    'name'        => $s->name,
+                                    'color'       => $s->color ?? '#16A34A',
+                                    'icon'        => $s->icon ?? 'sun',
+                                    'shift_type'  => $s->shift_type ?? 'normal',
+                                    'start_time'  => $s->start_time ? substr($s->start_time, 0, 5) : null,
+                                    'end_time'    => $s->end_time   ? substr($s->end_time, 0, 5)   : null,
+                                    'is_weekly'   => true,
+                                ];
+                            }, $resolvedShifts);
+
+                            $assignMap[$dateKey] = array_merge($allShiftsFormatted[0], [
+                                'all_shifts' => $allShiftsFormatted
+                            ]);
+                        }
                     }
-                    $curr->addDay();
                 }
+                $curr->addDay();
             }
 
             // Tier 2: Penugasan per-tanggal spesifik (work_date) - mendukung multi-shift per hari

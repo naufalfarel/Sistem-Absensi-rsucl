@@ -119,6 +119,7 @@ interface ShiftSettings {
   checkout_open: string; // '17:00'
   checkout_close: string; // '18:00'
   sat_checkout_open: string; // '13:00'
+  sat_checkout_close: string; // '14:00'
   hospital_lat: number;
   hospital_lng: number;
   gps_radius: number;
@@ -435,7 +436,7 @@ function FaceVerificationCard({
 
   if (faceStep === "idle") {
     return (
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-4">
+      <div id="face-verification-card" className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-4">
         <div className="px-5 py-3.5 border-b border-gray-50 flex items-center gap-2">
           <Camera size={15} className="text-[#16A34A]" />
           <span className="text-[13px] font-semibold text-gray-800">
@@ -1047,7 +1048,7 @@ export function AttendancePage() {
   const [checkedOut, setCheckedOut] = useState(false);
 
   // Keterangan detail lokasi presisi (mis. Lobby RS, Poli Anak...)
-  const [locationNote, setLocationNote] = useState("");
+  const [locationNote, setLocationNote] = useState("Gedung RSUCL / Area RS");
 
   // Status overtime (lembur)
   const [keteranganLembur, setKeteranganLembur] = useState("");
@@ -1403,8 +1404,20 @@ export function AttendancePage() {
 
   const handleAction = () => {
     setErrorMsg(null);
-    if ((canCheckIn || canCheckOut) && faceVerified && inGeofence)
-      setShowModal(true);
+    if (!faceVerified) {
+      setFaceStep("scanning");
+      const card = document.getElementById("face-verification-card");
+      if (card) {
+        card.scrollIntoView({ behavior: "smooth" });
+      }
+      return;
+    }
+    if (!inGeofence && !isGpsDisabledByAdmin && !isDinasLuar) {
+      refreshLocation();
+      setErrorMsg("Sistem sedang memperbarui lokasi GPS Anda. Silakan pastikan GPS HP aktif di area RSUCL dan coba lagi.");
+      return;
+    }
+    setShowModal(true);
   };
 
   const confirmAction = async (earlyReason?: any) => {
@@ -1416,7 +1429,9 @@ export function AttendancePage() {
       const accVal = userLocation?.accuracy ?? undefined;
 
       const earlyReasonStr =
-        typeof earlyReason === "string" ? earlyReason : undefined;
+        typeof earlyReason === "string" && earlyReason.trim()
+          ? earlyReason.trim()
+          : earlyCheckoutReason.trim() || "Pulang kerja (sesuai jam dinas)";
 
       // Helper to convert base64 dataurl to Blob for file upload
       const dataURLtoBlob = (dataurl: string) => {
@@ -1443,13 +1458,15 @@ export function AttendancePage() {
         return;
       }
 
+      const noteFinal = locationNote.trim() || "Gedung RSUCL / Area RS";
+
       if (canCheckIn) {
         const res = await attendanceApi.checkIn(
           latVal,
           lngVal,
           accVal,
           photoFile,
-          locationNote,
+          noteFinal,
         );
         if (res.success && res.data.check_in) {
           const t = res.data.check_in.substring(0, 5);
@@ -1462,8 +1479,7 @@ export function AttendancePage() {
           setSuccessAction("Check-In");
           setSuccessTime(t);
           setShowSuccess(true);
-          setLocationNote(""); // Kosongkan input setelah berhasil submit
-          // Reset foto selfie agar checkout meminta foto baru
+          // Reset foto selfie agar checkout meminta foto baru jika diperlukan
           setCapturedImage(null);
           setFaceStep("idle");
         }
@@ -1473,8 +1489,8 @@ export function AttendancePage() {
           lngVal,
           accVal,
           photoFile,
-          locationNote,
-          earlyReasonStr || undefined,
+          noteFinal,
+          earlyReasonStr,
           undefined,
           undefined,
         );
@@ -1486,7 +1502,6 @@ export function AttendancePage() {
           setSuccessAction("Check-Out");
           setSuccessTime(t);
           setShowSuccess(true);
-          setLocationNote("");
           setKeteranganLembur("");
         }
       }
@@ -2069,30 +2084,32 @@ export function AttendancePage() {
                 <AlertCircle size={14} className="text-amber-500 flex-shrink-0" />
                 <p className="text-[12px] text-amber-700">
                   {!faceVerified
-                    ? "Selesaikan verifikasi wajah untuk check-out"
-                    : "Anda harus berada di dalam area geofence RSUCL"}
+                    ? "Ambil foto selfie di atas terlebih dahulu untuk check-out"
+                    : "Sistem sedang memverifikasi lokasi GPS Anda (pastikan di area RSUCL)"}
                 </p>
               </div>
             )}
             <button
               onClick={handleAction}
-              disabled={!faceVerified || !inGeofence}
-              className={`w-full py-4 rounded-2xl font-semibold text-[16px] transition-all flex items-center justify-center gap-3 ${
+              disabled={submitting}
+              className={`w-full py-4 rounded-2xl font-semibold text-[16px] transition-all flex items-center justify-center gap-3 active:scale-[0.98] ${
                 faceVerified && inGeofence
-                  ? "bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-200/60 active:scale-[0.98]"
-                  : "bg-gray-100 text-gray-300 cursor-not-allowed border-2 border-dashed border-gray-200"
+                  ? "bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-200/60"
+                  : "bg-amber-500 hover:bg-amber-600 text-white shadow-lg shadow-amber-200/60"
               }`}
             >
               {faceVerified && inGeofence ? (
                 <Clock size={20} />
+              ) : !faceVerified ? (
+                <Camera size={20} />
               ) : (
-                <Lock size={18} />
+                <MapPin size={20} />
               )}
               {faceVerified && inGeofence
                 ? "CHECK OUT"
-                : !inGeofence
-                  ? "Di Luar Area Geofence"
-                  : "Verifikasi Wajah Diperlukan"}
+                : !faceVerified
+                  ? "AMBIL FOTO UNTUK CHECK OUT"
+                  : "UPDATE LOKASI & CHECK OUT"}
             </button>
           </div>
         ) : (
@@ -2500,31 +2517,26 @@ export function AttendancePage() {
                 Batal
               </button>
               <button
-                onClick={() => confirmAction(earlyCheckoutReason)}
-                disabled={
-                  submitting ||
-                  !locationNote.trim() ||
-                  (!canCheckIn && !canCheckOut) ||
-                  (canCheckOut &&
-                    checkIfEarlyCheckout() &&
-                    !earlyCheckoutReason.trim())
-                }
+                onClick={() => {
+                  const finalEarlyReason = earlyCheckoutReason.trim() || "Pulang kerja (sesuai jam dinas)";
+                  confirmAction(finalEarlyReason);
+                }}
+                disabled={submitting || (!canCheckIn && !canCheckOut)}
                 className={`flex-1 py-3 rounded-xl text-[14px] font-semibold text-white transition-all ${
                   canCheckIn
                     ? "bg-[#16A34A] hover:bg-[#0d9240]"
                     : "bg-red-500 hover:bg-red-600"
                 } ${
-                  submitting ||
-                  !locationNote.trim() ||
-                  (!canCheckIn && !canCheckOut) ||
-                  (canCheckOut &&
-                    checkIfEarlyCheckout() &&
-                    !earlyCheckoutReason.trim())
+                  submitting || (!canCheckIn && !canCheckOut)
                     ? "opacity-50 cursor-not-allowed"
-                    : ""
+                    : "shadow-md active:scale-[0.98]"
                 }`}
               >
-                {submitting ? "Memproses..." : "Ya, Konfirmasi"}
+                {submitting
+                  ? "Memproses..."
+                  : canCheckIn
+                    ? "Ya, Submit Check-In"
+                    : "Ya, Submit Check-Out"}
               </button>
             </div>
           </div>
