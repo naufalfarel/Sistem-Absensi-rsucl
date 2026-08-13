@@ -211,43 +211,10 @@ class AttendanceRules
             return $shifts;
         }
 
-        // ── Prioritas 3: Fallback ke Master Shift Unit/Departemen Karyawan ──────────
-        $deptId = $employee->department_id;
-        if ($deptId) {
-            $deptSchedules = \App\Models\Schedule::where('owner_department_id', $deptId)
-                ->where('status', 'approved')
-                ->whereNull('parent_id')
-                ->get();
-
-            if ($deptSchedules->isEmpty()) {
-                $deptName = $employee->department?->name;
-                if ($deptName) {
-                    $deptSchedules = \App\Models\Schedule::where('name', 'LIKE', '%' . $deptName . '%')
-                        ->where('status', 'approved')
-                        ->whereNull('parent_id')
-                        ->get();
-                }
-            }
-
-            if ($deptSchedules->isNotEmpty()) {
-                foreach ($deptSchedules as $deptSched) {
-                    if ($deptSched->children()->exists()) {
-                        $children = $deptSched->children()->get();
-                        foreach ($children as $child) {
-                            $shifts[] = $child;
-                        }
-                    } else {
-                        $shifts[] = $deptSched;
-                    }
-                }
-                if (!empty($shifts)) {
-                    return $shifts;
-                }
-            }
-        }
-
-        // ── Prioritas 4: Fallback ke jadwal kantor reguler ─────────────────
-        if ($dayOfWeek !== 0) { // Bukan hari Minggu
+        // ── Prioritas 3: Fallback ke jadwal kantor reguler khusus PJ Bagian / Staf Kantor ──
+        $isPjOrOffice = $employee->user && ($employee->user->role === 'pj_bagian' || $employee->user->isPjBagian());
+        
+        if ($isPjOrOffice && $dayOfWeek !== 0) { // PJ Bagian / Staf Kantor pada hari Senin - Sabtu
             $regulerParent = \App\Models\Schedule::whereNull('parent_id')
                 ->where(function($q) {
                     $q->where('name', 'LIKE', '%office%')
