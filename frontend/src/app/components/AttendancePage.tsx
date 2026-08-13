@@ -1741,12 +1741,12 @@ export function AttendancePage() {
 
       {/* Multi-Shift Selector Banner */}
       {todayShiftsList.length > 1 && (
-        <div className="mb-4 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl space-y-2 font-sans">
-          <div className="flex items-center justify-between">
-            <span className="text-[12px] font-bold text-blue-900 flex items-center gap-1.5">
+        <div className="mb-4 p-3.5 bg-gradient-to-r from-emerald-50 to-green-50/80 border border-emerald-200 rounded-2xl space-y-2.5 font-sans shadow-sm">
+          <div className="flex items-center justify-between flex-wrap gap-1">
+            <span className="text-[12px] font-bold text-emerald-950 flex items-center gap-1.5">
               <span>⚡</span> Multi-Shift Hari Ini ({todayShiftsList.length} Shift Terdaftar)
             </span>
-            <span className="text-[11px] text-blue-600 font-medium">Pilih shift untuk melakukan absensi</span>
+            <span className="text-[11px] text-emerald-700 font-semibold">Pilih shift untuk melakukan absensi</span>
           </div>
           <div className="flex gap-2 flex-wrap">
             {todayShiftsList.map((s, idx) => {
@@ -1772,10 +1772,10 @@ export function AttendancePage() {
                       setCheckedOut(false);
                     }
                   }}
-                  className={`px-3.5 py-2 rounded-xl text-[12px] font-bold flex items-center gap-2 transition-all cursor-pointer border ${
+                  className={`px-3.5 py-2.5 rounded-xl text-[12px] font-bold flex items-center gap-2 transition-all cursor-pointer border ${
                     isSel
-                      ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      ? 'bg-[#16A34A] text-white border-[#16A34A] shadow-md shadow-green-200/60 scale-[1.01]'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-emerald-50/50 hover:border-emerald-200'
                   }`}
                 >
                   <span>Shift {idx + 1}: {s.name} ({s.start_time.substring(0, 5)}–{s.end_time.substring(0, 5)})</span>

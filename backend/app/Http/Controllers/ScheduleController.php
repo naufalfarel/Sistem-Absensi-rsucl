@@ -646,8 +646,8 @@ class ScheduleController extends Controller
                         'end_time'    => $wRow->end_time   ? substr($wRow->end_time, 0, 5)   : null,
                         'is_weekly'   => true,
                     ];
-                } else {
-                    // Gunakan AttendanceRules::resolveAllShiftsFor untuk mengisi fallback shift (PJ Bagian, Master Shift Dept, Jam Kantor)
+                } else if ($emp->user && ($emp->user->role === 'pj_bagian' || $emp->user->isPjBagian())) {
+                    // Hanya isi fallback shift otomatis (Jam Kerja Reguler/Office) untuk PJ Bagian
                     $resolvedShifts = \App\Support\AttendanceRules::resolveAllShiftsFor($emp, $curr);
                     if (!empty($resolvedShifts)) {
                         $firstShift = $resolvedShifts[0];
@@ -655,22 +655,16 @@ class ScheduleController extends Controller
                         $isLibur = str_contains($uName, 'LIBUR') || str_contains($uName, 'OFF') || $uName === 'LJ';
 
                         if (!$isLibur) {
-                            $allShiftsFormatted = array_map(function($s) {
-                                return [
-                                    'schedule_id' => $s->id,
-                                    'name'        => $s->name,
-                                    'color'       => $s->color ?? '#16A34A',
-                                    'icon'        => $s->icon ?? 'sun',
-                                    'shift_type'  => $s->shift_type ?? 'normal',
-                                    'start_time'  => $s->start_time ? substr($s->start_time, 0, 5) : null,
-                                    'end_time'    => $s->end_time   ? substr($s->end_time, 0, 5)   : null,
-                                    'is_weekly'   => true,
-                                ];
-                            }, $resolvedShifts);
-
-                            $assignMap[$dateKey] = array_merge($allShiftsFormatted[0], [
-                                'all_shifts' => $allShiftsFormatted
-                            ]);
+                            $assignMap[$dateKey] = [
+                                'schedule_id' => $firstShift->id,
+                                'name'        => $firstShift->name,
+                                'color'       => $firstShift->color ?? '#16A34A',
+                                'icon'        => $firstShift->icon ?? 'sun',
+                                'shift_type'  => $firstShift->shift_type ?? 'normal',
+                                'start_time'  => $firstShift->start_time ? substr($firstShift->start_time, 0, 5) : null,
+                                'end_time'    => $firstShift->end_time   ? substr($firstShift->end_time, 0, 5)   : null,
+                                'is_weekly'   => true,
+                            ];
                         }
                     }
                 }
