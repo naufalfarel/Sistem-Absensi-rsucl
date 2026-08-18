@@ -196,8 +196,9 @@ class LeaveRequestController extends Controller
             'alamat_cuti'               => 'nullable|string|max:255',
         ];
 
-        // Lampiran opsional untuk Cuti Tahunan ('cuti'), wajib untuk izin, sakit, dan cuti khusus
-        if ($request->input('type') === 'cuti') {
+        // Lampiran opsional untuk Cuti Tahunan ('cuti') dan untuk Admin (yang bisa mencatat historis tanpa lampiran),
+        // wajib untuk izin, sakit, dan cuti khusus yang diajukan karyawan sendiri.
+        if ($request->input('type') === 'cuti' || $user->isAdmin()) {
             if ($request->hasFile('attachment')) {
                 $rules['attachment'] = 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048';
             } else {

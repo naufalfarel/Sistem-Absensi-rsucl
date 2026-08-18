@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { CheckCircle2, XCircle, Clock, FileText, Trash2, Paperclip, AlertCircle, Calendar, ChevronDown, Search, X, Printer, Edit3 } from 'lucide-react';
 import { leaveApi, LeaveRequest, departmentApi, DepartmentModel, employeeApi, Employee } from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
@@ -27,6 +27,145 @@ const filterTabs = ['Semua', 'Draf', 'Menunggu', 'Disetujui', 'Ditolak', 'Dibata
 
 interface LeaveTabProps {
   onUpdateCount?: () => void;
+}
+
+/**
+ * Component Combobox Cari & Pilih Karyawan (A-Z)
+ */
+function SearchableEmployeeSelect({
+  employees,
+  selectedId,
+  onSelect,
+  loading,
+}: {
+  employees: Employee[];
+  selectedId: string;
+  onSelect: (id: string) => void;
+  loading?: boolean;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const sortedEmployees = useMemo(() => {
+    return [...employees]
+      .filter(e => e.role !== 'admin' && e.role !== 'super_admin')
+      .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'id', { sensitivity: 'base' }));
+  }, [employees]);
+
+  const filteredEmployees = sortedEmployees.filter(e => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      (e.name && e.name.toLowerCase().includes(q)) ||
+      (e.nik_ktp && e.nik_ktp.includes(q)) ||
+      (e.department && e.department.toLowerCase().includes(q))
+    );
+  });
+
+  const selectedEmp = employees.find(e => String(e.id) === String(selectedId));
+
+  return (
+    <div className="relative" ref={wrapperRef}>
+      <label className="block text-[12px] font-semibold text-gray-700 mb-1.5">
+        Pilih Karyawan (Cari Nama A–Z)
+      </label>
+
+      {/* Input Combobox */}
+      <div className="relative">
+        <input
+          type="text"
+          placeholder={selectedEmp ? `${selectedEmp.name} (${selectedEmp.department || 'Umum'})` : 'Ketik nama / NIK pegawai...'}
+          value={isOpen ? search : (selectedEmp ? `${selectedEmp.name} (${selectedEmp.nik_ktp || '-'}) — ${selectedEmp.department || 'Umum'}` : '')}
+          onFocus={() => {
+            setIsOpen(true);
+            setSearch('');
+          }}
+          onChange={e => {
+            setSearch(e.target.value);
+            if (!isOpen) setIsOpen(true);
+          }}
+          className={`w-full pl-9 pr-9 py-2.5 border rounded-2xl text-[12px] font-semibold transition-all cursor-pointer ${
+            selectedEmp && !isOpen
+              ? 'bg-green-50/70 border-green-300 text-gray-900 font-bold'
+              : 'bg-white border-gray-200 text-gray-800 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15'
+          }`}
+        />
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+
+        {selectedId ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelect('');
+              setSearch('');
+              setIsOpen(true);
+            }}
+            className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-red-500 rounded-full hover:bg-gray-100 transition-colors"
+            title="Hapus Pilihan"
+          >
+            <X size={13} />
+          </button>
+        ) : (
+          <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        )}
+      </div>
+
+      {/* Popup Opsi Karyawan */}
+      {isOpen && (
+        <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-2xl shadow-xl z-50 max-h-56 overflow-y-auto divide-y divide-gray-50 animate-in fade-in slide-in-from-top-1 duration-150">
+          {loading ? (
+            <div className="p-3 text-center text-gray-400 text-[11px]">
+              Memuat daftar pegawai...
+            </div>
+          ) : filteredEmployees.length === 0 ? (
+            <div className="p-3 text-center text-gray-400 text-[11px]">
+              Tidak ada karyawan ditemukan.
+            </div>
+          ) : (
+            filteredEmployees.map(emp => {
+              const isSelected = String(emp.id) === String(selectedId);
+              return (
+                <button
+                  key={emp.id}
+                  type="button"
+                  onClick={() => {
+                    onSelect(String(emp.id));
+                    setIsOpen(false);
+                    setSearch('');
+                  }}
+                  className={`w-full text-left px-3.5 py-2.5 transition-colors flex items-center justify-between gap-2 hover:bg-green-50/80 cursor-pointer ${
+                    isSelected ? 'bg-green-50 font-bold text-[#16A34A]' : 'text-gray-700'
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="font-bold truncate text-gray-900 text-[12px]">
+                      {emp.name}
+                    </p>
+                    <p className="text-[10px] text-gray-400 truncate mt-0.5">
+                      {emp.nik_ktp ? `NIK: ${emp.nik_ktp}` : ''} {emp.department ? `• Unit: ${emp.department}` : ''}
+                    </p>
+                  </div>
+                  {isSelected && <CheckCircle2 size={14} className="text-[#16A34A] flex-shrink-0" />}
+                </button>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /**
@@ -108,7 +247,6 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
   const [showAddLeaveModal, setShowAddLeaveModal] = useState(false);
   const [employeesList, setEmployeesList] = useState<Employee[]>([]);
   const [loadingEmployees, setLoadingEmployees] = useState(false);
-  const [empFilter, setEmpFilter] = useState('');
   
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const [leaveType, setLeaveType] = useState<'cuti' | 'izin' | 'sakit' | 'cuti_khusus'>('cuti');
@@ -136,6 +274,7 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
     }
   };
 
+
   const handleAddLeaveSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedEmployeeId || !leaveStart || !leaveEnd || !leaveReason.trim()) {
@@ -157,6 +296,8 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
         setLeaveStart('');
         setLeaveEnd('');
         setLeaveReason('');
+        setEmpFilter('');
+        setAddLeaveError('');
         loadRequests();
         if (onUpdateCount) onUpdateCount();
       }
@@ -979,11 +1120,11 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
       {/* ─── ADD LEAVE ON BEHALF MODAL ─────────────────────────────────────────── */}
       {showAddLeaveModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowAddLeaveModal(false)} />
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => { setShowAddLeaveModal(false); setEmpFilter(''); setAddLeaveError(''); }} />
           <div className="relative bg-white rounded-2xl p-6 shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-3">
               <h3 className="text-[14px] font-bold text-gray-900">Catat Cuti Historis Pegawai</h3>
-              <button onClick={() => setShowAddLeaveModal(false)} className="text-gray-400 hover:text-gray-600">
+              <button onClick={() => { setShowAddLeaveModal(false); setEmpFilter(''); setAddLeaveError(''); }} className="text-gray-400 hover:text-gray-600">
                 <X size={16} />
               </button>
             </div>
@@ -995,52 +1136,12 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
             )}
             
             <form onSubmit={handleAddLeaveSubmit} className="space-y-4">
-              <div>
-                <label className="block text-[12px] font-medium text-gray-600 mb-1.5">Pilih Pegawai (Cari Nama / NIK / Departemen)</label>
-                <div className="space-y-2">
-                  <div className="relative">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input
-                      type="text"
-                      placeholder="Ketik nama atau NIK pegawai untuk memfilter..."
-                      value={empFilter}
-                      onChange={(e) => setEmpFilter(e.target.value)}
-                      className="w-full pl-9 pr-8 py-2 border border-gray-200 rounded-xl text-[12px] bg-white focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all"
-                    />
-                    {empFilter && (
-                      <button
-                        type="button"
-                        onClick={() => setEmpFilter('')}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                      >
-                        <X size={14} />
-                      </button>
-                    )}
-                  </div>
-                  {loadingEmployees ? (
-                    <div className="text-[12px] text-gray-400 py-2">Memuat daftar pegawai...</div>
-                  ) : (
-                    <select
-                      value={selectedEmployeeId}
-                      onChange={(e) => setSelectedEmployeeId(e.target.value)}
-                      className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all cursor-pointer font-semibold"
-                    >
-                      {employeesList
-                        .filter((emp) =>
-                          !empFilter.trim() ||
-                          emp.name.toLowerCase().includes(empFilter.toLowerCase()) ||
-                          (emp.nik_ktp && emp.nik_ktp.includes(empFilter)) ||
-                          (emp.department && emp.department.toLowerCase().includes(empFilter.toLowerCase()))
-                        )
-                        .map((emp) => (
-                          <option key={emp.id} value={emp.id}>
-                            {emp.name} ({emp.department || 'Umum'})
-                          </option>
-                        ))}
-                    </select>
-                  )}
-                </div>
-              </div>
+              <SearchableEmployeeSelect
+                employees={employeesList}
+                selectedId={selectedEmployeeId}
+                onSelect={setSelectedEmployeeId}
+                loading={loadingEmployees}
+              />
               
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -1093,7 +1194,7 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
               <div className="flex gap-2 pt-2 border-t border-gray-100">
                 <button
                   type="button"
-                  onClick={() => setShowAddLeaveModal(false)}
+                  onClick={() => { setShowAddLeaveModal(false); setEmpFilter(''); setAddLeaveError(''); }}
                   className="flex-1 py-2.5 border border-gray-200 rounded-xl text-[13px] font-medium text-gray-600 hover:bg-gray-50 transition-colors"
                 >
                   Batal
