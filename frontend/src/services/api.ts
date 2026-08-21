@@ -779,6 +779,7 @@ export interface LeaveRequest {
     nik_ktp: string;
     department: string;
     phone?: string | null;
+    quota_info?: LeaveQuota | null;
   };
   reviewer?: { name: string } | null;
 }

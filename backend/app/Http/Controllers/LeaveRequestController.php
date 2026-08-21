@@ -144,7 +144,13 @@ class LeaveRequestController extends Controller
     public function store(Request $request)
     {
         $user = $request->user();
-        if ($user->isAdmin() && $request->filled('employee_id')) {
+        if ($request->filled('employee_id')) {
+            if (!$user->isAdmin()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Hanya Admin dan Super Admin yang memiliki wewenang mencatat cuti atas nama pegawai lain.',
+                ], 403);
+            }
             $employee = \App\Models\Employee::findOrFail($request->input('employee_id'));
         } else {
             $employee = $user->employee;
@@ -183,9 +189,10 @@ class LeaveRequestController extends Controller
         }
 
         // Validasi input data pengajuan cuti
+        $isHistoricalOrAdmin = $user->isAdmin() || $request->filled('employee_id');
         $rules = [
             'type'                      => 'required|in:cuti,izin,sakit,cuti_khusus',
-            'start_date'                => 'required|date' . ($user->isAdmin() ? '' : '|after_or_equal:today'),
+            'start_date'                => 'required|date' . ($isHistoricalOrAdmin ? '' : '|after_or_equal:today'),
             'end_date'                  => 'required|date|after_or_equal:start_date',
             'reason'                    => 'required|string|max:500',
             'special_leave_category_id' => 'required_if:type,cuti_khusus|exists:special_leave_categories,id',
@@ -1329,6 +1336,7 @@ class LeaveRequestController extends Controller
                 'nik_ktp'    => $lr->employee?->nik_ktp,
                 'department' => $lr->employee?->department?->name,
                 'phone'      => $lr->employee?->phone,
+                'quota_info' => $lr->employee ? LeaveQuotaHelper::quotaInfo($lr->employee, \Carbon\Carbon::now()) : null,
             ],
             'reviewer'           => $lr->reviewer ? ['name' => $lr->reviewer->name] : null,
             'pj_reviewer'        => $lr->pjReviewer ? ['name' => $lr->pjReviewer->name] : null,

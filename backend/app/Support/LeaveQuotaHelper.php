@@ -52,7 +52,7 @@ class LeaveQuotaHelper
      */
     public static function currentPeriodStart(Carbon $now): Carbon
     {
-        $month = (int) Setting::get('leave_reset_month', '4');
+        $month = (int) Setting::get('leave_reset_month', '1');
         $day   = (int) Setting::get('leave_reset_day', '1');
 
         // Normalisasi: pastikan hari valid untuk bulan tersebut
@@ -184,12 +184,15 @@ class LeaveQuotaHelper
     {
         $periodStart = self::currentPeriodStart($now);
 
-        // PERHATIAN: Hanya menghitung pengajuan tipe 'cuti' (cuti tahunan).
-        // Tipe 'cuti_khusus' (cuti khusus) secara eksplisit TIDAK dihitung di sini.
+        // PERHATIAN: Menghitung pengajuan tipe 'cuti' dan 'izin' dalam periode berjalan.
         $query = $employee->leaveRequests()
-            ->where('type', 'cuti')
+            ->with(['employee', 'employee.department'])
+            ->whereIn('type', ['cuti', 'izin'])
             ->whereIn('status', $statuses)
-            ->where('end_date', '>=', $periodStart->toDateString());
+            ->where(function($q) use ($periodStart) {
+                $q->where('end_date', '>=', $periodStart->toDateString())
+                  ->orWhere('actual_end_date', '>=', $periodStart->toDateString());
+            });
 
         if ($excludeId !== null) {
             $query->where('id', '!=', $excludeId);

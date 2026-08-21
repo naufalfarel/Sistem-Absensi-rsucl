@@ -93,12 +93,17 @@ type AttendanceWindow =
   | "ended"
   | "no_shift";
 
+function safeSubstr(str: any, start = 0, length = 5, fallback = ""): string {
+  if (typeof str !== "string" || !str) return fallback;
+  return str.substring(start, start + length);
+}
 function toMins(h: number, m: number) {
   return h * 60 + m;
 }
-function parseMins(t: string) {
+function parseMins(t: string | undefined | null) {
+  if (!t || typeof t !== "string") return 0;
   const [h, m] = t.split(":").map(Number);
-  return toMins(h, m);
+  return toMins(h || 0, m || 0);
 }
 function addMins(hhmm: string, mins: number): string {
   const total = parseMins(hhmm) + mins;
@@ -1189,17 +1194,17 @@ export function AttendancePage() {
 
   // Dynamically update shiftSettings whenever todayShift or saturdayShift changes
   useEffect(() => {
-    const startTime = todayShift ? todayShift.start_time : "08:30:00";
-    const endTime = todayShift ? todayShift.end_time : "17:00:00";
+    const startTime = todayShift?.start_time || "08:30:00";
+    const endTime = todayShift?.end_time || "17:00:00";
 
-    const startHHmm = startTime.substring(0, 5);
-    const endHHmm = endTime.substring(0, 5);
+    const startHHmm = safeSubstr(startTime, 0, 5, "08:30");
+    const endHHmm = safeSubstr(endTime, 0, 5, "17:00");
     const startMins = parseMins(startHHmm);
     const endMins = parseMins(endHHmm);
     const overnight = endMins <= startMins;
 
-    const satEndTime = saturdayShift ? saturdayShift.end_time : "13:00:00";
-    const satEndHHmm = satEndTime.substring(0, 5);
+    const satEndTime = saturdayShift?.end_time || "13:00:00";
+    const satEndHHmm = safeSubstr(satEndTime, 0, 5, "13:00");
 
     const openHHmm = subMins(startHHmm, 150); // 2.5 jam sebelum shift
     const lateHHmm = addMins(startHHmm, 10);  // Toleransi 10 menit
@@ -1232,11 +1237,11 @@ export function AttendancePage() {
           }
           if (res.data) {
             if (res.data.check_in) {
-              setCheckInTime(res.data.check_in.substring(0, 5));
+              setCheckInTime(safeSubstr(res.data.check_in, 0, 5, ""));
               setCheckedIn(true);
             }
             if (res.data.check_out) {
-              setCheckOutTime(res.data.check_out.substring(0, 5));
+              setCheckOutTime(safeSubstr(res.data.check_out, 0, 5, ""));
               setCheckedOut(true);
             }
             if (res.data.checkin_punctuality) {
@@ -1343,14 +1348,14 @@ export function AttendancePage() {
 
   const getExpectedCheckoutTime = () => {
     const expected = new Date(current);
-    const endTimeStr = todayShift ? todayShift.end_time : "17:00:00";
-    const [hh, mm] = endTimeStr.split(":").map(Number);
-    expected.setHours(hh, mm, 0, 0);
+    const endTimeStr = todayShift?.end_time || "17:00:00";
+    const [hh, mm] = safeSubstr(endTimeStr, 0, 5, "17:00").split(":").map(Number);
+    expected.setHours(hh || 17, mm || 0, 0, 0);
 
-    const startTimeStr = todayShift ? todayShift.start_time : "08:00:00";
-    const [sh, sm] = startTimeStr.split(":").map(Number);
-    const startMins = sh * 60 + sm;
-    const endMins = hh * 60 + mm;
+    const startTimeStr = todayShift?.start_time || "08:00:00";
+    const [sh, sm] = safeSubstr(startTimeStr, 0, 5, "08:00").split(":").map(Number);
+    const startMins = (sh || 8) * 60 + (sm || 0);
+    const endMins = (hh || 17) * 60 + (mm || 0);
     if (endMins <= startMins) {
       const nowMins = current.getHours() * 60 + current.getMinutes();
       if (nowMins >= startMins) {
@@ -1433,18 +1438,26 @@ export function AttendancePage() {
           ? earlyReason.trim()
           : earlyCheckoutReason.trim() || "Pulang kerja (sesuai jam dinas)";
 
-      // Helper to convert base64 dataurl to Blob for file upload
+      // Helper to convert base64 dataurl to Blob for file upload safely
       const dataURLtoBlob = (dataurl: string) => {
-        const arr = dataurl.split(",");
-        const mimeMatch = arr[0].match(/:(.*?);/);
-        const mime = mimeMatch ? mimeMatch[1] : "image/jpeg";
-        const bstr = atob(arr[1]);
-        let n = bstr.length;
-        const u8arr = new Uint8Array(n);
-        while (n--) {
-          u8arr[n] = bstr.charCodeAt(n);
+        try {
+          if (!dataurl || typeof dataurl !== "string" || !dataurl.includes(",")) {
+            return undefined;
+          }
+          const arr = dataurl.split(",");
+          const mimeMatch = arr[0].match(/:(.*?);/);
+          const mime = mimeMatch ? mimeMatch[1] : "image/jpeg";
+          const bstr = atob(arr[1]);
+          let n = bstr.length;
+          const u8arr = new Uint8Array(n);
+          while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+          }
+          return new Blob([u8arr], { type: mime });
+        } catch (e) {
+          console.error("Error converting base64 image to Blob:", e);
+          return undefined;
         }
-        return new Blob([u8arr], { type: mime });
       };
 
       const photoFile = capturedImage
@@ -1468,10 +1481,11 @@ export function AttendancePage() {
           photoFile,
           noteFinal,
         );
-        if (res.success && res.data.check_in) {
-          const t = res.data.check_in.substring(0, 5);
+        if (res.success) {
+          const rawCheckIn = res.data?.check_in || current.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+          const t = safeSubstr(rawCheckIn, 0, 5, "08:00");
           setCheckInTime(t);
-          if (res.data.checkin_punctuality) {
+          if (res.data?.checkin_punctuality) {
             setCheckinPunctuality(res.data.checkin_punctuality);
           }
           setCheckedIn(true);
@@ -1494,8 +1508,9 @@ export function AttendancePage() {
           undefined,
           undefined,
         );
-        if (res.success && res.data.check_out) {
-          const t = res.data.check_out.substring(0, 5);
+        if (res.success) {
+          const rawCheckOut = res.data?.check_out || current.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+          const t = safeSubstr(rawCheckOut, 0, 5, "17:00");
           setCheckOutTime(t);
           setCheckedOut(true);
           setShowModal(false);
@@ -1503,6 +1518,8 @@ export function AttendancePage() {
           setSuccessTime(t);
           setShowSuccess(true);
           setKeteranganLembur("");
+          setCapturedImage(null);
+          setFaceStep("idle");
         }
       }
     } catch (err: any) {
@@ -1571,8 +1588,8 @@ export function AttendancePage() {
 
     // Fallback hitung manual jika status kosong dari database
     const mins = parseMins(checkInTime);
-    const startHHmm = todayShift
-      ? todayShift.start_time.substring(0, 5)
+    const startHHmm = todayShift?.start_time
+      ? safeSubstr(todayShift.start_time, 0, 5, "08:30")
       : "08:30";
     const startMins = parseMins(startHHmm);
     const toleranceMins = startMins + 10; // Toleransi 10 menit
@@ -1778,7 +1795,7 @@ export function AttendancePage() {
                       : 'bg-white text-slate-700 border-slate-200 hover:bg-emerald-50/50 hover:border-emerald-200'
                   }`}
                 >
-                  <span>Shift {idx + 1}: {s.name} ({s.start_time.substring(0, 5)}–{s.end_time.substring(0, 5)})</span>
+                  <span>Shift {idx + 1}: {s.name} ({safeSubstr(s.start_time, 0, 5, "--:--")}–{safeSubstr(s.end_time, 0, 5, "--:--")})</span>
                   <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
                     isSel ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
                   }`}>
@@ -1832,8 +1849,8 @@ export function AttendancePage() {
                 <>
                   <span className="font-semibold">Shift {todayShift.name}</span>
                   <span className="text-green-600 ml-2">
-                    {todayShift.start_time.substring(0, 5)} –{" "}
-                    {todayShift.end_time.substring(0, 5)} WIB
+                    {safeSubstr(todayShift.start_time, 0, 5, "--:--")} –{" "}
+                    {safeSubstr(todayShift.end_time, 0, 5, "--:--")} WIB
                   </span>
                 </>
               ) : (
@@ -2314,7 +2331,7 @@ export function AttendancePage() {
               {todayShift
                 ? (() => {
                     const nameHasTime = todayShift.name.includes(":") || todayShift.name.includes("00");
-                    const timeRange = `${todayShift.start_time.substring(0, 5)} – ${todayShift.end_time.substring(0, 5)} WIB`;
+                    const timeRange = `${safeSubstr(todayShift.start_time, 0, 5, "--:--")} – ${safeSubstr(todayShift.end_time, 0, 5, "--:--")} WIB`;
                     return nameHasTime ? `${todayShift.name}` : `${todayShift.name} (${timeRange})`;
                   })()
                 : "Libur / Tidak Ada Shift"}

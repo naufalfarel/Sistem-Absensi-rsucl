@@ -363,7 +363,7 @@ export function PJBagianDashboard({ pendingLeaveCount, pendingOvertimeCount, pen
                       <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-100 rounded-xl">
                         <span className="text-sm">✅</span>
                         <p className="text-[11.5px] text-green-700">
-                          Check-out tercatat pukul <strong>{rItem.check_out.substring(0, 5)} WIB</strong>.
+                          Check-out tercatat pukul <strong>{fmtTime(rItem.check_out)} WIB</strong>.
                         </p>
                       </div>
                     )}

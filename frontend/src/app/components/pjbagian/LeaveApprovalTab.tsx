@@ -230,6 +230,13 @@ export function LeaveApprovalTab({ user, onUpdateCount }: LeaveApprovalTabProps)
                     <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ color: sc.color, background: sc.bg }}>{sc.label}</span>
                   </div>
                   <p className="text-[11px] text-gray-500 mb-1.5">{req.employee?.department || 'Karyawan'}</p>
+                  {req.employee?.quota_info && (
+                    <div className="flex items-center gap-2 mb-1.5 px-2.5 py-1 bg-emerald-50/90 border border-emerald-200 rounded-xl text-[10px] font-semibold w-fit shadow-2xs">
+                      <span className="text-emerald-800">📊 Akumulasi Cuti Disetujui: <strong>{req.employee.quota_info.used}</strong> / {req.employee.quota_info.quota} hari</span>
+                      <span className="text-emerald-300">•</span>
+                      <span className="text-emerald-700">Sisa Kuota: <strong>{req.employee.quota_info.remaining}</strong> hari</span>
+                    </div>
+                  )}
                   
                   <div className="text-[11px] text-gray-700 space-y-1">
                     <div className="flex items-center gap-1">

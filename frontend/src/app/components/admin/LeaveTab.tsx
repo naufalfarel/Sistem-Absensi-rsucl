@@ -296,7 +296,6 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
         setLeaveStart('');
         setLeaveEnd('');
         setLeaveReason('');
-        setEmpFilter('');
         setAddLeaveError('');
         loadRequests();
         if (onUpdateCount) onUpdateCount();
@@ -787,6 +786,13 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
                         )}
                       </div>
                       <p className="text-[12px] text-gray-500 mb-1">{req.employee?.department || 'Karyawan'}</p>
+                      {req.employee?.quota_info && (
+                        <div className="flex items-center gap-2 my-1.5 px-2.5 py-1 bg-emerald-50/90 border border-emerald-200 rounded-xl text-[11px] font-semibold w-fit shadow-2xs">
+                          <span className="text-emerald-800">📊 Akumulasi Cuti Disetujui: <strong>{req.employee.quota_info.used}</strong> / {req.employee.quota_info.quota} hari</span>
+                          <span className="text-emerald-300">•</span>
+                          <span className="text-emerald-700">Sisa Kuota: <strong>{req.employee.quota_info.remaining}</strong> hari</span>
+                        </div>
+                      )}
                       <div className="flex items-center gap-4 flex-wrap">
                         <div className="flex items-center gap-1.5">
                           <Clock size={12} className="text-gray-400" />
@@ -1120,11 +1126,11 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
       {/* ─── ADD LEAVE ON BEHALF MODAL ─────────────────────────────────────────── */}
       {showAddLeaveModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => { setShowAddLeaveModal(false); setEmpFilter(''); setAddLeaveError(''); }} />
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => { setShowAddLeaveModal(false); setAddLeaveError(''); }} />
           <div className="relative bg-white rounded-2xl p-6 shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-3">
               <h3 className="text-[14px] font-bold text-gray-900">Catat Cuti Historis Pegawai</h3>
-              <button onClick={() => { setShowAddLeaveModal(false); setEmpFilter(''); setAddLeaveError(''); }} className="text-gray-400 hover:text-gray-600">
+              <button onClick={() => { setShowAddLeaveModal(false); setAddLeaveError(''); }} className="text-gray-400 hover:text-gray-600">
                 <X size={16} />
               </button>
             </div>
@@ -1194,7 +1200,7 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
               <div className="flex gap-2 pt-2 border-t border-gray-100">
                 <button
                   type="button"
-                  onClick={() => { setShowAddLeaveModal(false); setEmpFilter(''); setAddLeaveError(''); }}
+                  onClick={() => { setShowAddLeaveModal(false); setAddLeaveError(''); }}
                   className="flex-1 py-2.5 border border-gray-200 rounded-xl text-[13px] font-medium text-gray-600 hover:bg-gray-50 transition-colors"
                 >
                   Batal

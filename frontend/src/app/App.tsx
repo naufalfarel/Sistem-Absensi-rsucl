@@ -10,6 +10,7 @@ import { LoginPage } from './components/LoginPage';
 import { EmployeeApp } from './components/EmployeeApp';
 import { AdminApp } from './components/AdminApp';
 import { PJBagianApp } from './components/PJBagianApp';
+import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import logoImg from '../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
 
 export default function App() {
@@ -39,35 +40,35 @@ export default function App() {
 
   // 2. Alur Routing setelah berhasil masuk (Logged In)
   if (user) {
+    let content;
     // Pengguna adalah administrator atau Super Admin (Direktur RSUCL)
     if (user.role === 'admin' || user.role === 'super_admin') {
-      return <AdminApp onLogout={logout} />;
-    }
-    
-    // Pengguna adalah PJ Bagian (Penanggung Jawab Bagian)
-    if (user.role === 'pj_bagian') {
-      return <PJBagianApp onLogout={logout} user={user} />;
+      content = <AdminApp onLogout={logout} />;
+    } else if (user.role === 'pj_bagian') {
+      // Pengguna adalah PJ Bagian (Penanggung Jawab Bagian)
+      content = <PJBagianApp onLogout={logout} user={user} />;
+    } else {
+      // Pengguna adalah karyawan (Employee)
+      const empProps = {
+        id: user.employee_id || 0,
+        name: user.name,
+        nik_ktp: user.nik_ktp,
+        username: user.username,
+        dept: typeof user.department === 'object' && user.department !== null ? (user.department as any).name : (user.department || 'Umum'),
+        pos: user.position || 'Staf',
+        email: user.email,
+        phone: user.phone || '',
+        gender: user.gender || 'Laki-laki',
+        joinDate: user.join_date || '',
+        status: 'Hadir',
+        checkIn: '',
+        shift: 'Reguler',
+        statusType: 'hadir',
+      };
+      content = <EmployeeApp onLogout={logout} employee={empProps} />;
     }
 
-    // Pengguna adalah karyawan (Employee)
-    // Menyesuaikan objek data profil agar kompatibel dengan properti EmployeeApp
-    const empProps = {
-      id: user.employee_id || 0,
-      name: user.name,
-      nik_ktp: user.nik_ktp,
-      username: user.username,
-      dept: user.department || 'Umum',
-      pos: user.position || 'Staf',
-      email: user.email,
-      phone: user.phone || '',
-      gender: user.gender || 'Laki-laki',
-      joinDate: user.join_date || '',
-      status: 'Hadir', // Status default, akan di-fetch ulang di dalam EmployeeApp
-      checkIn: '',
-      shift: 'Reguler',
-      statusType: 'hadir',
-    };
-    return <EmployeeApp onLogout={logout} employee={empProps} />;
+    return <ErrorBoundary>{content}</ErrorBoundary>;
   }
 
   // 3. Alur jika belum masuk (Unauthenticated) - Menampilkan halaman login
@@ -77,9 +78,9 @@ export default function App() {
   };
 
   return (
-    <LoginPage
-      onLogin={handleLogin}
-    />
+    <ErrorBoundary>
+      <LoginPage onLogin={handleLogin} />
+    </ErrorBoundary>
   );
 }
 

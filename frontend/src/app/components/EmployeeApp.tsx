@@ -258,7 +258,7 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[12px] font-semibold text-gray-900 truncate">{user?.name || 'Karyawan'}</p>
-              <p className="text-[10px] text-gray-400 truncate">{user?.position || 'Staf'} · {user?.department || 'RSUCL'}</p>
+              <p className="text-[10px] text-gray-400 truncate">{user?.position || 'Staf'} · {typeof user?.department === 'object' && user?.department !== null ? (user.department as any).name : (user?.department || 'RSUCL')}</p>
             </div>
           </button>
           <button onClick={onLogout} className="text-gray-400 hover:text-red-500 transition-colors flex-shrink-0 p-1" title="Keluar">
