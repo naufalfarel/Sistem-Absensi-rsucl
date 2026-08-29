@@ -6,12 +6,13 @@ import { MonthYearDeptFilter } from '../ui/MonthYearDeptFilter';
 import { LeaveFormPrintModal } from '../ui/LeaveFormPrintModal';
 import logoImg from '../../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
 
-type LeaveType = 'cuti' | 'sakit' | 'cuti_khusus';
+type LeaveType = 'cuti' | 'izin' | 'sakit' | 'cuti_khusus';
 type LeaveStatus = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'draft';
 
 const typeConfig: Record<LeaveType, { label: string; color: string; bg: string; border: string }> = {
   cuti:        { label: 'Cuti Tahunan', color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE' },
-  sakit:       { label: 'Sakit',        color: '#92400E', bg: '#FEF3C7', border: '#D97706' },
+  izin:        { label: 'Izin',         color: '#0284C7', bg: '#F0F9FF', border: '#BAE6FD' },
+  sakit:       { label: 'Izin Sakit',   color: '#D97706', bg: '#FEF3C7', border: '#FDE68A' },
   cuti_khusus: { label: 'Cuti Khusus / Diluar Tanggungan', color: '#EA580C', bg: '#FFF7ED', border: '#FFEDD5' },
 };
 
@@ -378,7 +379,7 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
       (filter === 'Dibatalkan' && r.status === 'cancelled');
 
     // 2. Type Filter
-    const typeKey = (r.type === 'izin' ? 'cuti' : r.type);
+    const typeKey = r.type as LeaveType;
     const matchType = typeFilter === 'all' || typeKey === typeFilter;
 
     // 3. Department Filter
@@ -595,7 +596,7 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
           </p>
           <div className="grid gap-3">
             {possibleReturns.map(({ leave_request, detected_dates }) => {
-              const typeKey = (leave_request.type === 'izin' ? 'cuti' : leave_request.type) as LeaveType;
+              const typeKey = leave_request.type as LeaveType;
               const tc = typeConfig[typeKey] || typeConfig.cuti;
               return (
                 <div key={leave_request.id} className="bg-white/80 backdrop-blur-sm border border-amber-100 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 shadow-xs">
@@ -697,7 +698,8 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
             >
               <option value="all">Semua Tipe Cuti</option>
               <option value="cuti">Cuti Tahunan</option>
-              <option value="sakit">Sakit</option>
+              <option value="sakit">Izin Sakit</option>
+              <option value="izin">Izin</option>
               <option value="cuti_khusus">Cuti Khusus</option>
             </select>
             <ChevronDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
@@ -747,7 +749,7 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
           </div>
         )}
         {filtered.map(req => {
-          const typeKey = (req.type === 'izin' ? 'cuti' : req.type) as LeaveType;
+          const typeKey = req.type as LeaveType;
           const tc = typeConfig[typeKey] || typeConfig.cuti;
           const isDraft = req.pj_status === 'pending' && req.status === 'pending';
           const sc = (isDraft 

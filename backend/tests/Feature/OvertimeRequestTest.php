@@ -164,4 +164,41 @@ class OvertimeRequestTest extends TestCase
             'admin_note'  => 'tidak bisa',
         ]);
     }
+
+    public function test_pj_bagian_can_approve_overtime_request()
+    {
+        $department = \App\Models\Department::create(['name' => 'Department Test', 'code' => 'DT']);
+        $this->employee->update(['department_id' => $department->id]);
+
+        $pjUser = User::factory()->create([
+            'role' => 'pj_bagian',
+            'pj_bagian_department_id' => $department->id,
+        ]);
+
+        $req = OvertimeRequest::create([
+            'employee_id'   => $this->employee->id,
+            'date'          => '2026-07-15',
+            'reason'        => 'Lembur proyek',
+            'photo_url'     => '/some/path.jpg',
+            'location_note' => 'Ruang B',
+            'status'        => 'pending',
+            'pj_status'     => 'pending',
+        ]);
+
+        Sanctum::actingAs($pjUser);
+
+        $response = $this->putJson("/api/overtime-requests/{$req->id}/approve", [
+            'admin_note' => 'Disetujui PJ Bagian',
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('success', true);
+        $this->assertDatabaseHas('overtime_requests', [
+            'id'             => $req->id,
+            'status'         => 'pending',
+            'pj_status'      => 'approved',
+            'pj_reviewed_by' => $pjUser->id,
+            'pj_note'        => 'Disetujui PJ Bagian',
+        ]);
+    }
 }

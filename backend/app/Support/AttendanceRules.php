@@ -145,8 +145,13 @@ class AttendanceRules
             0 => 'Minggu', 1 => 'Senin', 2 => 'Selasa',
             3 => 'Rabu',   4 => 'Kamis', 5 => 'Jumat', 6 => 'Sabtu',
         ];
+        $dayMapEn = [
+            0 => 'Sunday', 1 => 'Monday', 2 => 'Tuesday',
+            3 => 'Wednesday', 4 => 'Thursday', 5 => 'Friday', 6 => 'Saturday',
+        ];
         $dayOfWeek = $date->dayOfWeek;
         $dayName   = $dayMap[$dayOfWeek];
+        $dayNameEn = $dayMapEn[$dayOfWeek];
 
         $shifts = [];
 
@@ -167,9 +172,13 @@ class AttendanceRules
                 if ($sched) {
                     if ($sched->parent_id === null && $sched->children()->exists()) {
                         $children = $sched->children()->get();
-                        foreach ($children as $child) {
-                            $shifts[] = $child;
+                        $sub = null;
+                        if ($dayOfWeek === 6) {
+                            $sub = $children->first(fn($c) => str_contains(strtolower($c->name), 'sabtu'));
+                        } else {
+                            $sub = $children->first(fn($c) => !str_contains(strtolower($c->name), 'sabtu'));
                         }
+                        $shifts[] = $sub ?? $children->first();
                     } else {
                         $shifts[] = $sched;
                     }
@@ -185,7 +194,10 @@ class AttendanceRules
 
         // ── Prioritas 2: Fallback ke jadwal mingguan (day_of_week) ──────────
         $schedules = $employee->schedules()->get();
-        $todaySchedules = $schedules->filter(fn($s) => $s->pivot->day_of_week === $dayName);
+        $todaySchedules = $schedules->filter(function($s) use ($dayName, $dayNameEn) {
+            $dow = $s->pivot->day_of_week ?? null;
+            return $dow === $dayName || strcasecmp((string)$dow, $dayNameEn) === 0;
+        });
 
         if ($todaySchedules->isNotEmpty()) {
             foreach ($todaySchedules as $todaySchedule) {
@@ -211,16 +223,44 @@ class AttendanceRules
             return $shifts;
         }
 
-        // ── Prioritas 3: Fallback ke jadwal kantor reguler khusus PJ Bagian / Staf Kantor ──
-        $isPjOrOffice = $employee->user && ($employee->user->role === 'pj_bagian' || $employee->user->isPjBagian());
-        
-        if ($isPjOrOffice && $dayOfWeek !== 0) { // PJ Bagian / Staf Kantor pada hari Senin - Sabtu
+        // ── Prioritas 3: Fallback ke jadwal departemen / kantor reguler untuk seluruh pegawai ──
+        if ($dayOfWeek !== 0) { // Selain hari Minggu
+            // A. Cari shift khusus yang dibuat untuk departemen pegawai ini
+            if ($employee->department_id) {
+                $deptSchedule = \App\Models\Schedule::whereNull('parent_id')
+                    ->where('owner_department_id', $employee->department_id)
+                    ->where(function($q) {
+                        $q->where('status', 'approved')->orWhereNull('status');
+                    })
+                    ->first();
+
+                if ($deptSchedule) {
+                    if ($deptSchedule->children()->exists()) {
+                        $children = $deptSchedule->children()->get();
+                        $sub = null;
+                        if ($dayOfWeek === 6) {
+                            $sub = $children->first(fn($c) => str_contains(strtolower($c->name), 'sabtu'));
+                        } else {
+                            $sub = $children->first(fn($c) => !str_contains(strtolower($c->name), 'sabtu'));
+                        }
+                        $shifts[] = $sub ?? $children->first();
+                    } else {
+                        $shifts[] = $deptSchedule;
+                    }
+                    return $shifts;
+                }
+            }
+
+            // B. Fallback ke shift kantor / reguler umum
             $regulerParent = \App\Models\Schedule::whereNull('parent_id')
                 ->where(function($q) {
                     $q->where('name', 'LIKE', '%office%')
                       ->orWhere('name', 'LIKE', '%kantor%')
                       ->orWhere('name', 'LIKE', 'Reguler%')
                       ->orWhere('name', 'LIKE', 'Administrasi%');
+                })
+                ->where(function($q) {
+                    $q->where('status', 'approved')->orWhereNull('status');
                 })
                 ->first();
 

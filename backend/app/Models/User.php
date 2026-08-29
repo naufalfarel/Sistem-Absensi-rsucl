@@ -101,7 +101,7 @@ class User extends Authenticatable
      */
     public function isPjBagian(): bool
     {
-        return $this->role === 'pj_bagian';
+        return strtolower(trim($this->role ?? '')) === 'pj_bagian';
     }
 
     /**
@@ -112,7 +112,8 @@ class User extends Authenticatable
      */
     public function isPjOrAdmin(): bool
     {
-        return $this->role === 'admin' || $this->role === 'super_admin' || $this->role === 'pj_bagian';
+        $role = strtolower(trim($this->role ?? ''));
+        return $role === 'admin' || $role === 'super_admin' || $role === 'pj_bagian';
     }
 
     /**
@@ -124,13 +125,13 @@ class User extends Authenticatable
     {
         if ($this->isPjBagian()) {
             $ids = $this->pjDepartments()->pluck('departments.id')->toArray();
-            if (empty($ids) && $this->pj_bagian_department_id) {
+            if ($this->pj_bagian_department_id) {
                 $ids[] = (int) $this->pj_bagian_department_id;
             }
             if ($this->employee && $this->employee->department_id) {
                 $ids[] = (int) $this->employee->department_id;
             }
-            return array_values(array_unique($ids));
+            return array_values(array_unique(array_filter($ids)));
         }
         return [];
     }

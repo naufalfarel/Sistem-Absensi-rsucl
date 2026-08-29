@@ -108,4 +108,33 @@ class LeaveSundayQuotaTest extends TestCase
         $this->assertEquals(3, $used);
         $this->assertEquals(12, $remaining); // 15 - 3 = 12
     }
+
+    public function testSundayIncludedByUnitKerjaWhenDepartmentIsNull()
+    {
+        $deptShift = Department::create([
+            'name' => 'Transit',
+            'count_sunday_in_leave' => true,
+        ]);
+
+        $user = User::factory()->create();
+        $employee = Employee::create([
+            'user_id' => $user->id,
+            'department_id' => null,
+            'nik_ktp' => '111222336',
+            'status' => 'active',
+        ]);
+
+        // Sep 10 (Thu) to Sep 13 (Sun) = 4 calendar days
+        $lr = LeaveRequest::create([
+            'employee_id' => $employee->id,
+            'type' => 'cuti',
+            'start_date' => '2026-09-10',
+            'end_date' => '2026-09-13',
+            'reason' => 'Cuti Transit',
+            'status' => 'pending',
+            'unit_kerja' => 'Transit',
+        ]);
+
+        $this->assertEquals(4, $lr->days);
+    }
 }

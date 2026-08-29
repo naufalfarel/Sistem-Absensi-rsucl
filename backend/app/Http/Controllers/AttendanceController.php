@@ -47,55 +47,44 @@ class AttendanceController extends Controller
                              ->whereDate('date', $todayStr)
                              ->get();
 
-        $activeShift = AttendanceRules::resolveShiftFor($employee, $now, $now);
-        $allShifts   = AttendanceRules::resolveAllShiftsFor($employee, $now);
+        // Prioritaskan cek apakah karyawan memiliki record check-in aktif yang BELUM check-out (open attendance record)
+        $openUnclosed = Attendance::where('employee_id', $employee->id)
+                                  ->whereNotNull('check_in')
+                                  ->whereNull('check_out')
+                                  ->orderBy('date', 'desc')
+                                  ->orderBy('id', 'desc')
+                                  ->first();
 
-        // Pilih record yang matching dengan activeShift atau record paling akhir
         $record = null;
-        if ($activeShift) {
-            $record = $allRecords->firstWhere('schedule_id', $activeShift->id);
-        }
-        if (!$record) {
-            $record = $allRecords->last();
-        }
+        $activeShift = null;
+        $allShifts = [];
 
-        // Fallback Shift Malam / Lintas Hari (Overnight Shift):
-        // Jika tidak ada record hari ini (atau record hari ini belum check-in),
-        // cek apakah ada record kemarin yang sudah check-in tapi BELUM check-out pada shift lintas hari.
-        if (!$record || !$record->check_in) {
-            $yesterdayStr = $now->copy()->subDay()->toDateString();
-            $yesterdayRecord = Attendance::where('employee_id', $employee->id)
-                                         ->whereDate('date', $yesterdayStr)
-                                         ->whereNotNull('check_in')
-                                         ->whereNull('check_out')
-                                         ->first();
+        if ($openUnclosed) {
+            // Pegawai sedang berdinas & menunggu check-out. Kunci record & shift ke transaksi ini!
+            $record = $openUnclosed;
+            if ($openUnclosed->schedule_id) {
+                $activeShift = \App\Models\Schedule::find($openUnclosed->schedule_id);
+            }
+            if (!$activeShift) {
+                $activeShift = AttendanceRules::resolveShiftFor($employee, Carbon::parse($openUnclosed->date));
+            }
+            $allShifts = AttendanceRules::resolveAllShiftsFor($employee, Carbon::parse($openUnclosed->date));
+            if ($activeShift && !collect($allShifts)->contains('id', $activeShift->id)) {
+                array_unshift($allShifts, $activeShift);
+            }
+            if (!$allRecords->contains('id', $openUnclosed->id)) {
+                $allRecords->prepend($openUnclosed);
+            }
+        } else {
+            // Belum ada check-in aktif / sudah check-out. Resolusi shift aktif untuk hari ini.
+            $activeShift = AttendanceRules::resolveShiftFor($employee, $now, $now);
+            $allShifts   = AttendanceRules::resolveAllShiftsFor($employee, $now);
 
-            if ($yesterdayRecord) {
-                $yesterdayShift = null;
-                if ($yesterdayRecord->schedule_id) {
-                    $yesterdayShift = \App\Models\Schedule::find($yesterdayRecord->schedule_id);
-                }
-                if (!$yesterdayShift) {
-                    $yesterdayShift = AttendanceRules::resolveShiftFor($employee, Carbon::today('Asia/Jakarta')->subDay());
-                }
-
-                if ($yesterdayShift) {
-                    $startMins = (int)substr($yesterdayShift->start_time, 0, 2) * 60 + (int)substr($yesterdayShift->start_time, 3, 2);
-                    $endMins   = (int)substr($yesterdayShift->end_time, 0, 2) * 60 + (int)substr($yesterdayShift->end_time, 3, 2);
-
-                    if ($endMins <= $startMins) {
-                        // Record kemarin adalah shift malam/lintas hari yang sedang menunggu checkout!
-                        $record = $yesterdayRecord;
-                        $activeShift = $yesterdayShift;
-
-                        if (!$allRecords->contains('id', $yesterdayRecord->id)) {
-                            $allRecords->prepend($yesterdayRecord);
-                        }
-                        if (!collect($allShifts)->contains('id', $yesterdayShift->id)) {
-                            array_unshift($allShifts, $yesterdayShift);
-                        }
-                    }
-                }
+            if ($activeShift) {
+                $record = $allRecords->firstWhere('schedule_id', $activeShift->id);
+            }
+            if (!$record) {
+                $record = $allRecords->last();
             }
         }
 
@@ -680,29 +669,15 @@ class AttendanceController extends Controller
                                 ->first();
         }
 
-        // 2. Fallback untuk shift lintas malam (Overnight / Night shift):
-        // Jika check-in hari ini yang belum di-checkout tidak ada, cek apakah ada check-in kemarin yang belum di-checkout
+        // 2. Fallback untuk record check-in yang belum di-checkout (lembur / lintas hari / shift malam):
         if (!$record) {
-            $yesterdayRecord = Attendance::where('employee_id', $employee->id)
-                                         ->whereDate('date', $yesterdayStr)
+            $unclosedRecord = Attendance::where('employee_id', $employee->id)
                                          ->whereNotNull('check_in')
                                          ->whereNull('check_out')
+                                         ->orderBy('date', 'desc')
                                          ->first();
-            if ($yesterdayRecord) {
-                $yesterdayShift = null;
-                if ($yesterdayRecord->schedule_id) {
-                    $yesterdayShift = \App\Models\Schedule::find($yesterdayRecord->schedule_id);
-                }
-                if (!$yesterdayShift) {
-                    $yesterdayShift = $this->getEmployeeTodayShift($employee, $now->copy()->subDay());
-                }
-                if ($yesterdayShift) {
-                    $shiftStart = $this->timeToMins(substr($yesterdayShift->start_time, 0, 5));
-                    $shiftEnd   = $this->timeToMins(substr($yesterdayShift->end_time, 0, 5));
-                    if ($shiftEnd <= $shiftStart) {
-                        $record = $yesterdayRecord; // Gunakan record kemarin sebagai target update checkout
-                    }
-                }
+            if ($unclosedRecord) {
+                $record = $unclosedRecord;
             }
         }
 

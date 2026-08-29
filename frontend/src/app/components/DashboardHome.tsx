@@ -93,15 +93,20 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
         if (attendRes.value.holiday) {
           setTodayHoliday(attendRes.value.holiday);
         }
+        if (attendRes.value.active_shift) {
+          setTodayShift(attendRes.value.active_shift as any);
+        }
       }
       if (notifRes.status === 'fulfilled' && notifRes.value.success) {
         setNotifications(notifRes.value.data.notifications.slice(0, 3));
         setUnreadNotifsCount(notifRes.value.data.unread_count);
       }
       if (shiftRes.status === 'fulfilled' && shiftRes.value.success) {
-        setTodayShift(shiftRes.value.data); // null jika tidak ada jadwal hari ini
+        if (attendRes.status !== 'fulfilled' || !attendRes.value.active_shift) {
+          setTodayShift(shiftRes.value.data); // null jika tidak ada jadwal hari ini
+        }
         setShiftDay(shiftRes.value.day ?? '');
-      } else {
+      } else if (!todayShift) {
         setTodayShift(null);
       }
     } catch (err) {

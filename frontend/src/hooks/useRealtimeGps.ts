@@ -14,47 +14,69 @@ export function useRealtimeGps() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const watchIdRef = useRef<number | null>(null);
+  const bestLocationRef = useRef<LocationCoords | null>(null);
 
   const updatePosition = useCallback((pos: GeolocationPosition) => {
-    setLocation({
+    const newCoords: LocationCoords = {
       lat: pos.coords.latitude,
       lng: pos.coords.longitude,
       accuracy: Math.round(pos.coords.accuracy),
-      timestamp: pos.timestamp,
-    });
-    setGpsActive(true);
-    setLoading(false);
-    setErrorMsg(null);
+      timestamp: pos.timestamp || Date.now(),
+    };
+
+    const currentBest = bestLocationRef.current;
+    const now = Date.now();
+
+    // Logika pemilihan posisi paling presisi (Smart Accuracy Filter khusus iOS Safari & Android):
+    // 1. Jika belum ada posisi -> terima posisi pertama
+    // 2. Jika bacaan baru lebih presisi (akurasi dalam meter lebih kecil) -> terima
+    // 3. Jika bacaan baru sangat presisi (akurasi <= 30m) -> terima
+    // 4. Jika posisi tersimpan sudah usang (> 10 detik) -> terima untuk perbaruan data
+    const isMoreAccurate = !currentBest || newCoords.accuracy <= currentBest.accuracy;
+    const isHighlyAccurate = newCoords.accuracy <= 30;
+    const isStale = currentBest ? (now - currentBest.timestamp > 10000) : false;
+
+    if (isMoreAccurate || isHighlyAccurate || isStale) {
+      bestLocationRef.current = newCoords;
+      setLocation(newCoords);
+      setGpsActive(true);
+      setLoading(false);
+      setErrorMsg(null);
+    }
   }, []);
 
   const handleError = useCallback((err: GeolocationPositionError) => {
     console.warn("GPS Warning/Error:", err.code, err.message);
-    // Jika timeout (code 3) atau posisi sementara tidak tersedia (code 2), lakukan fallback cepat ke low accuracy
+    // Jika timeout (code 3) atau posisi sementara tidak tersedia (code 2), lakukan fallback cepat
     if (err.code === 3 || err.code === 2) {
       if (typeof navigator !== 'undefined' && navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           updatePosition,
           (fallbackErr) => {
             console.warn("Fallback GPS error:", fallbackErr);
-            setGpsActive(false);
-            setLoading(false);
-            if (fallbackErr.code === 1) {
-              setErrorMsg("Izin akses lokasi (GPS) ditolak. Mohon izinkan lokasi di Pengaturan browser/HP Anda.");
-            } else {
-              setErrorMsg("Lokasi GPS tidak terbaca. Pastikan GPS HP aktif.");
+            if (!bestLocationRef.current) {
+              setGpsActive(false);
+              setLoading(false);
+              if (fallbackErr.code === 1) {
+                setErrorMsg("Izin akses lokasi (GPS) ditolak. Mohon izinkan lokasi di Pengaturan browser/HP Anda.");
+              } else {
+                setErrorMsg("Lokasi GPS tidak terbaca. Pastikan GPS HP aktif.");
+              }
             }
           },
-          { enableHighAccuracy: false, timeout: 15000, maximumAge: 10000 }
+          { enableHighAccuracy: false, timeout: 15000, maximumAge: 0 }
         );
         return;
       }
     }
-    setGpsActive(false);
-    setLoading(false);
-    if (err.code === 1) {
-      setErrorMsg("Izin akses lokasi (GPS) ditolak. Mohon izinkan lokasi di Pengaturan browser/HP Anda.");
-    } else {
-      setErrorMsg("Gagal membaca koordinat GPS.");
+    if (!bestLocationRef.current) {
+      setGpsActive(false);
+      setLoading(false);
+      if (err.code === 1) {
+        setErrorMsg("Izin akses lokasi (GPS) ditolak. Mohon izinkan lokasi di Pengaturan browser/HP Anda.");
+      } else {
+        setErrorMsg("Gagal membaca koordinat GPS. Pastikan fitur lokasi HP Anda aktif.");
+      }
     }
   }, [updatePosition]);
 
@@ -67,11 +89,23 @@ export function useRealtimeGps() {
     }
 
     setLoading(true);
+    // Paksa pembacaan GPS hardware segar (maximumAge: 0) ramah iPhone (iOS Safari) & Android
     navigator.geolocation.getCurrentPosition(
       updatePosition,
       handleError,
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 3000 }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
+
+    // Follow-up 1.2 detik untuk menangkap sinyal GPS hardware setelah pembukaan browser di iPhone
+    setTimeout(() => {
+      if (typeof navigator !== 'undefined' && navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          updatePosition,
+          () => {},
+          { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+        );
+      }
+    }, 1200);
   }, [updatePosition, handleError]);
 
   useEffect(() => {
@@ -85,28 +119,28 @@ export function useRealtimeGps() {
     // 1. Ambil lokasi langsung saat mounting
     refreshLocation();
 
-    // 2. watchPosition dengan opsi yang stabil untuk iOS Safari & Android
+    // 2. watchPosition dengan opsi maximumAge: 0 untuk merespons pergerakan realtime presisi
     const options: PositionOptions = {
       enableHighAccuracy: true,
       timeout: 15000,
-      maximumAge: 3000, // Memungkinkan iOS menggunakan bacaan presisi terbaru tanpa mengalami timeout
+      maximumAge: 0,
     };
 
     const watchId = navigator.geolocation.watchPosition(updatePosition, handleError, options);
     watchIdRef.current = watchId;
 
-    // 3. Polling interval cadangan setiap 5 detik (mencegah watchPosition mengalami freeze di iOS Safari saat diam)
+    // 3. Polling interval cadangan setiap 4 detik (mencegah watchPosition mengalami freeze di iOS Safari saat diam)
     const intervalId = setInterval(() => {
       if (typeof navigator !== 'undefined' && navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           updatePosition,
           () => {}, // abaikan error silent
-          { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
       }
-    }, 5000);
+    }, 4000);
 
-    // 4. Update otomatis saat tab/app menjadi aktif kembali (misal setelah berpindah app di iPhone)
+    // 4. Update otomatis saat tab/app menjadi aktif kembali (misal setelah berpindah app / unlock di iPhone)
     const handleVisibilityOrFocus = () => {
       if (document.visibilityState === 'visible') {
         refreshLocation();

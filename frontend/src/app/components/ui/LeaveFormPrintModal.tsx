@@ -283,7 +283,9 @@ export function LeaveFormPrintModal({
                   }`
                 : request.type === "sakit"
                   ? "FORMULIR PERMOHONAN IZIN SAKIT"
-                  : "FORMULIR PERMOHONAN CUTI TAHUNAN"}
+                  : request.type === "izin"
+                    ? "FORMULIR PERMOHONAN IZIN"
+                    : "FORMULIR PERMOHONAN CUTI TAHUNAN"}
             </h2>
             <p className="text-[10px] text-gray-500 font-mono mt-0.5">
               No. Dokumen: {docNumber}
@@ -356,10 +358,12 @@ export function LeaveFormPrintModal({
               <span>:</span>
               <span className="font-semibold text-gray-900">
                 {request.type === "sakit"
-                  ? "Sakit"
-                  : request.type === "cuti_khusus"
-                    ? `Cuti Khusus (${request.special_leave_category?.name || ''}${request.special_leave_category_other ? ` - ${request.special_leave_category_other}` : ''})`
-                    : "Cuti Tahunan"}{" "}
+                  ? "Izin Sakit"
+                  : request.type === "izin"
+                    ? "Izin"
+                    : request.type === "cuti_khusus"
+                      ? `Cuti Khusus (${request.special_leave_category?.name || ''}${request.special_leave_category_other ? ` - ${request.special_leave_category_other}` : ''})`
+                      : "Cuti Tahunan"}{" "}
                 {request.reason ? `(${request.reason})` : ""}
               </span>
             </div>

@@ -197,9 +197,18 @@ class OvertimeRequestController extends Controller
         // Cari PJ Bagian yang bertanggung jawab atas departemen karyawan ini
         $pjBagian = null;
         if ($employee->department_id) {
-            $pjBagian = \App\Models\User::where('role', 'pj_bagian')
-                ->whereHas('pjDepartments', function ($q) use ($employee) {
-                    $q->where('departments.id', $employee->department_id);
+            $pjBagian = \App\Models\User::where(function ($q) {
+                    $q->where('role', 'pj_bagian')
+                      ->orWhere('role', 'PJ Bagian');
+                })
+                ->where(function ($q) use ($employee) {
+                    $q->where('pj_bagian_department_id', $employee->department_id)
+                      ->orWhereHas('pjDepartments', function ($dq) use ($employee) {
+                          $dq->where('departments.id', $employee->department_id);
+                      })
+                      ->orWhereHas('employee', function ($eq) use ($employee) {
+                          $eq->where('department_id', $employee->department_id);
+                      });
                 })
                 ->first();
         }
@@ -276,7 +285,8 @@ class OvertimeRequestController extends Controller
                 return response()->json(['success' => false, 'message' => 'Anda tidak dapat memproses pengajuan lembur milik sendiri.'], 403);
             }
             $deptIds = $user->getPjDepartmentIds();
-            if (!in_array($overtimeRequest->employee?->department_id, $deptIds)) {
+            $empDeptId = $overtimeRequest->employee?->department_id;
+            if ($empDeptId && !in_array((int) $empDeptId, array_map('intval', $deptIds))) {
                 return response()->json(['success' => false, 'message' => 'Anda hanya dapat memproses pengajuan dari departemen yang Anda awasi.'], 403);
             }
         }
@@ -365,7 +375,8 @@ class OvertimeRequestController extends Controller
                 return response()->json(['success' => false, 'message' => 'Anda tidak dapat memproses pengajuan lembur milik sendiri.'], 403);
             }
             $deptIds = $user->getPjDepartmentIds();
-            if (!in_array($overtimeRequest->employee?->department_id, $deptIds)) {
+            $empDeptId = $overtimeRequest->employee?->department_id;
+            if ($empDeptId && !in_array((int) $empDeptId, array_map('intval', $deptIds))) {
                 return response()->json(['success' => false, 'message' => 'Anda hanya dapat memproses pengajuan dari departemen yang Anda awasi.'], 403);
             }
         }

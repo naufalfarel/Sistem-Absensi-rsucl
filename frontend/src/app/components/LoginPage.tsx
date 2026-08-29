@@ -202,14 +202,14 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
               </div>
             )}
 
-            {/* Username */}
+            {/* Username / NIK KTP / Email */}
             <div className="mb-4">
-              <label className="block text-[13px] font-medium text-gray-700 mb-1.5">Username</label>
+              <label className="block text-[13px] font-medium text-gray-700 mb-1.5">Username / NIK KTP / Email</label>
               <div className="relative">
                 <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="Masukkan username"
+                  placeholder="Ketik Username, NIK KTP, atau Email"
                   value={username}
                   onChange={e => { setUsername(e.target.value); setError(''); }}
                   onKeyDown={handleKey}

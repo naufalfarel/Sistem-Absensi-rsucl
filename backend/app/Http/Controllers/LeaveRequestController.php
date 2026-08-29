@@ -602,7 +602,13 @@ class LeaveRequestController extends Controller
 
         if ($user->isAdmin()) {
             // Generate attendance records immediately
-            $countSunday = $employee->shouldCountSundayInLeave();
+            $countSunday = $employee ? $employee->shouldCountSundayInLeave() : false;
+            if (!$countSunday && $lr->unit_kerja) {
+                $dept = \App\Models\Department::where('name', $lr->unit_kerja)->first();
+                if ($dept && $dept->count_sunday_in_leave) {
+                    $countSunday = true;
+                }
+            }
             $start = \Carbon\Carbon::parse($lr->start_date);
             $end = \Carbon\Carbon::parse($lr->effective_end_date);
             for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
@@ -877,6 +883,12 @@ class LeaveRequestController extends Controller
             // Jika disetujui, buat/perbarui record absensi harian karyawan tersebut
             if ($newStatus === 'approved') {
                 $countSunday = $lr->employee ? $lr->employee->shouldCountSundayInLeave() : false;
+                if (!$countSunday && $lr->unit_kerja) {
+                    $dept = \App\Models\Department::where('name', $lr->unit_kerja)->first();
+                    if ($dept && $dept->count_sunday_in_leave) {
+                        $countSunday = true;
+                    }
+                }
                 $start = \Carbon\Carbon::parse($lr->start_date);
                 $end = \Carbon\Carbon::parse($lr->effective_end_date);
                 for ($date = $start->copy(); $date->lte($end); $date->addDay()) {

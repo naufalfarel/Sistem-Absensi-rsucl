@@ -491,9 +491,10 @@ export function ReportsTab() {
     try {
       const token = getToken();
       const getApiUrl = () => {
-        const envVal = import.meta.env.VITE_API_URL;
+        let envVal = import.meta.env.VITE_API_URL;
         if (envVal === "") return "";
-        return envVal ?? "http://localhost:8000";
+        if (!envVal) envVal = "http://localhost:8000";
+        return envVal.replace(/\/api\/?$/, "");
       };
       const apiUrl = getApiUrl();
       const response = await fetch(`${apiUrl}/api/reports/vehicles/export`, {
@@ -530,9 +531,10 @@ export function ReportsTab() {
     try {
       const token = getToken();
       const getApiUrl = () => {
-        const envVal = import.meta.env.VITE_API_URL;
+        let envVal = import.meta.env.VITE_API_URL;
         if (envVal === "") return "";
-        return envVal ?? "http://localhost:8000";
+        if (!envVal) envVal = "http://localhost:8000";
+        return envVal.replace(/\/api\/?$/, "");
       };
       const apiUrl = getApiUrl();
       const response = await fetch(`${apiUrl}/api/reports/social-media/export`, {
@@ -1455,8 +1457,38 @@ export function ReportsTab() {
         return r.status === "approved" && deptOk;
       });
       let rows = ""; let no = 1;
+      let totalMinutesAll = 0;
+
       data.forEach(r => {
         const emp = r.employee;
+        let durMin = 0;
+        if (r.system_checkout_data?.overtime_minutes && r.system_checkout_data.overtime_minutes > 0) {
+          durMin = r.system_checkout_data.overtime_minutes;
+        } else if (r.start_time && r.end_time) {
+          const [sh, sm] = r.start_time.split(":").map(Number);
+          const [eh, em] = r.end_time.split(":").map(Number);
+          if (!isNaN(sh) && !isNaN(sm) && !isNaN(eh) && !isNaN(em)) {
+            let sMins = sh * 60 + sm;
+            let eMins = eh * 60 + em;
+            if (eMins < sMins) eMins += 24 * 60;
+            durMin = Math.max(0, eMins - sMins);
+          }
+        }
+        totalMinutesAll += durMin;
+
+        const durHours = Math.floor(durMin / 60);
+        const durMinsRem = durMin % 60;
+        let durFormatted = "";
+        if (durMin === 0) {
+          durFormatted = "0 Menit";
+        } else if (durHours > 0 && durMinsRem > 0) {
+          durFormatted = `${durHours} Jam ${durMinsRem} Menit`;
+        } else if (durHours > 0) {
+          durFormatted = `${durHours} Jam`;
+        } else {
+          durFormatted = `${durMinsRem} Menit`;
+        }
+
         rows += `<tr>
           <td class="center">${no++}</td>
           <td class="center" x:str>${emp?.nik_ktp ?? "--"}</td>
@@ -1465,16 +1497,34 @@ export function ReportsTab() {
           <td class="center">${r.date ?? "--"}</td>
           <td class="center">${r.start_time ?? "--"}</td>
           <td class="center">${r.end_time ?? "--"}</td>
+          <td class="center bold" style="background-color:#FEF3C7;color:#92400E;">${durFormatted}</td>
           <td>${r.reason ?? "--"}</td>
           <td>${r.tasks ?? "--"}</td>
           ${statusBadge(r.status)}
           <td>${r.admin_note ?? "--"}</td>
         </tr>`;
       });
+
+      const grandTotalHours = Math.floor(totalMinutesAll / 60);
+      const grandTotalMinsRem = totalMinutesAll % 60;
+      const grandTotalFormatted = grandTotalHours > 0 
+        ? `${grandTotalHours} Jam ${grandTotalMinsRem > 0 ? `${grandTotalMinsRem} Menit` : ''}`.trim() + ` (${totalMinutesAll} Menit)`
+        : `${grandTotalMinsRem} Menit`;
+
+      const summaryFooterRow = `
+        <tr style="background-color:#F3F4F6;font-weight:bold;">
+          <td colspan="7" style="text-align:right;padding:8px;">TOTAL AKUMULASI WAKTU LEMBUR:</td>
+          <td class="center bold" style="background-color:#FDE68A;color:#78350F;padding:8px;">${grandTotalFormatted}</td>
+          <td colspan="4" style="padding:8px;">Total Data: ${data.length} Pengajuan</td>
+        </tr>
+      `;
+
       const body = buildHrHtmlHeader(logo, "REKAP PENGAJUAN LEMBUR", period) +
         `<table><thead><tr>
-          <th style="width:35px">No</th><th>NIK KTP</th><th>Nama</th><th>Unit Kerja</th><th>Tanggal</th><th>Jam Mulai</th><th>Jam Selesai</th><th>Alasan/Tujuan</th><th>Tugas</th><th>Status</th><th>Catatan Admin</th>
-        </tr></thead><tbody>${rows || '<tr><td colspan="11" style="text-align:center;padding:20px;color:#9CA3AF;">Tidak ada data lembur pada periode ini.</td></tr>'}</tbody></table>`;
+          <th style="width:35px">No</th><th>NIK KTP</th><th>Nama</th><th>Unit Kerja</th><th>Tanggal</th><th>Jam Mulai</th><th>Jam Selesai</th><th style="background-color:#D97706;color:#FFFFFF;">Total Waktu</th><th>Alasan/Tujuan</th><th>Tugas</th><th>Status</th><th>Catatan Admin</th>
+        </tr></thead><tbody>${rows || '<tr><td colspan="12" style="text-align:center;padding:20px;color:#9CA3AF;">Tidak ada data lembur pada periode ini.</td></tr>'}</tbody>
+        <tfoot>${summaryFooterRow}</tfoot>
+        </table>`;
       triggerHrDownload(excelWrapperHr("Rekap Lembur", body), `Rekap_Lembur_RSUCL_${selectedYear}_${String(selectedMonth).padStart(2,"0")}.xls`);
     } catch(e) { alert("Gagal ekspor data lembur."); } finally { setHrExporting(null); }
   };
@@ -1496,10 +1546,41 @@ export function ReportsTab() {
         return r.status === "approved" && deptOk;
       });
       let rows = ""; let no = 1;
+      let totalMinutesAll = 0;
+
       data.forEach(r => {
         const emp = r.employee;
         const statusColor = r.status === "approved" ? "#D1FAE5" : r.status === "pending" ? "#FEF9C3" : "#FEE2E2";
         const statusText = r.status === "approved" ? "#065F46" : r.status === "pending" ? "#92400E" : "#991B1B";
+
+        let durMin = 0;
+        if (r.system_checkout_data?.overtime_minutes && r.system_checkout_data.overtime_minutes > 0) {
+          durMin = r.system_checkout_data.overtime_minutes;
+        } else if (r.start_time && r.end_time) {
+          const [sh, sm] = r.start_time.split(":").map(Number);
+          const [eh, em] = r.end_time.split(":").map(Number);
+          if (!isNaN(sh) && !isNaN(sm) && !isNaN(eh) && !isNaN(em)) {
+            let sMins = sh * 60 + sm;
+            let eMins = eh * 60 + em;
+            if (eMins < sMins) eMins += 24 * 60;
+            durMin = Math.max(0, eMins - sMins);
+          }
+        }
+        totalMinutesAll += durMin;
+
+        const durHours = Math.floor(durMin / 60);
+        const durMinsRem = durMin % 60;
+        let durFormatted = "";
+        if (durMin === 0) {
+          durFormatted = "0 Menit";
+        } else if (durHours > 0 && durMinsRem > 0) {
+          durFormatted = `${durHours} Jam ${durMinsRem} Menit`;
+        } else if (durHours > 0) {
+          durFormatted = `${durHours} Jam`;
+        } else {
+          durFormatted = `${durMinsRem} Menit`;
+        }
+
         rows += `<tr style="border-bottom:1px solid #E5E7EB;font-size:10px;">
           <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${no++}</td>
           <td style="padding:6px;border-right:1px solid #E5E7EB;">${emp?.nik_ktp ?? "--"}</td>
@@ -1508,12 +1589,29 @@ export function ReportsTab() {
           <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${r.date ?? "--"}</td>
           <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${r.start_time ?? "--"}</td>
           <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${r.end_time ?? "--"}</td>
+          <td style="padding:6px;text-align:center;font-weight:bold;background-color:#FEF3C7;color:#92400E;border-right:1px solid #E5E7EB;">${durFormatted}</td>
           <td style="padding:6px;border-right:1px solid #E5E7EB;">${r.reason ?? "--"}</td>
+          <td style="padding:6px;border-right:1px solid #E5E7EB;">${r.tasks ?? "--"}</td>
           <td style="padding:6px;text-align:center;font-weight:bold;background-color:${statusColor};color:${statusText};border-right:1px solid #E5E7EB;">${r.status.toUpperCase()}</td>
           <td style="padding:6px;">${r.admin_note ?? "--"}</td>
         </tr>`;
       });
-      pw.document.write(`<html><head><title>Rekap Lembur</title><style>body{font-family:Arial,sans-serif;padding:20px;} table{width:100%;border-collapse:collapse;border:1px solid #E5E7EB;} th{background:#16A34A;color:#fff;font-size:10px;padding:8px;text-align:left;} @media print{@page{margin:1cm;}}</style></head><body>${buildHrPdfHeader(logo,"REKAP PENGAJUAN LEMBUR",`Periode: ${period}`)}<table><thead><tr><th style="width:30px;">No</th><th>NIK KTP</th><th>Nama</th><th>Unit Kerja</th><th>Tanggal</th><th>Jam Mulai</th><th>Jam Selesai</th><th>Alasan</th><th>Status</th><th>Catatan Admin</th></tr></thead><tbody>${rows || '<tr><td colspan="10" style="text-align:center;padding:20px;">Tidak ada data.</td></tr>'}</tbody></table><script>window.onload=function(){window.print();setTimeout(function(){window.close();},500);}<\/script></body></html>`);
+
+      const grandTotalHours = Math.floor(totalMinutesAll / 60);
+      const grandTotalMinsRem = totalMinutesAll % 60;
+      const grandTotalFormatted = grandTotalHours > 0 
+        ? `${grandTotalHours} Jam ${grandTotalMinsRem > 0 ? `${grandTotalMinsRem} Menit` : ''}`.trim() + ` (${totalMinutesAll} Menit)`
+        : `${grandTotalMinsRem} Menit`;
+
+      const summaryFooterRow = `
+        <tr style="background-color:#F3F4F6;font-size:10px;font-weight:bold;border-top:2px solid #16A34A;">
+          <td colspan="7" style="padding:8px;text-align:right;">TOTAL AKUMULASI WAKTU LEMBUR:</td>
+          <td style="padding:8px;text-align:center;background-color:#FDE68A;color:#78350F;font-weight:bold;">${grandTotalFormatted}</td>
+          <td colspan="4" style="padding:8px;">Total Data: ${data.length} Pengajuan</td>
+        </tr>
+      `;
+
+      pw.document.write(`<html><head><title>Rekap Lembur</title><style>body{font-family:Arial,sans-serif;padding:20px;} table{width:100%;border-collapse:collapse;border:1px solid #E5E7EB;} th{background:#16A34A;color:#fff;font-size:10px;padding:8px;text-align:left;} @media print{@page{margin:1cm;}}</style></head><body>${buildHrPdfHeader(logo,"REKAP PENGAJUAN LEMBUR",`Periode: ${period}`)}<table><thead><tr><th style="width:30px;">No</th><th>NIK KTP</th><th>Nama</th><th>Unit Kerja</th><th>Tanggal</th><th>Jam Mulai</th><th>Jam Selesai</th><th style="background-color:#D97706;color:#FFF;">Total Waktu</th><th>Alasan</th><th>Tugas</th><th>Status</th><th>Catatan Admin</th></tr></thead><tbody>${rows || '<tr><td colspan="12" style="text-align:center;padding:20px;">Tidak ada data.</td></tr>'}</tbody><tfoot>${summaryFooterRow}</tfoot></table><script>window.onload=function(){window.print();setTimeout(function(){window.close();},500);}<\/script></body></html>`);
       pw.document.close();
     } catch(e) { pw.close(); } finally { setHrExporting(null); }
   };

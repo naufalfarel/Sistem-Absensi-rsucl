@@ -646,8 +646,8 @@ class ScheduleController extends Controller
                         'end_time'    => $wRow->end_time   ? substr($wRow->end_time, 0, 5)   : null,
                         'is_weekly'   => true,
                     ];
-                } else if ($emp->user && ($emp->user->role === 'pj_bagian' || $emp->user->isPjBagian())) {
-                    // Hanya isi fallback shift otomatis (Jam Kerja Reguler/Office) untuk PJ Bagian
+                } else {
+                    // Isi fallback shift otomatis untuk seluruh pegawai (PJ Bagian & Staf Reguler) agar jadwal buatan departemen/sistem selalu muncul konsisten
                     $resolvedShifts = \App\Support\AttendanceRules::resolveAllShiftsFor($emp, $curr);
                     if (!empty($resolvedShifts)) {
                         $firstShift = $resolvedShifts[0];

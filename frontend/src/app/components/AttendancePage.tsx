@@ -406,7 +406,9 @@ function FaceVerificationCard({
         ? "Cuti Tahunan"
         : activeLeave.type === "izin"
           ? "Izin"
-          : "Sakit";
+          : activeLeave.type === "cuti_khusus"
+            ? "Cuti Khusus"
+            : "Izin Sakit";
     return (
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-4">
         <div className="px-5 py-3.5 border-b border-gray-50 flex items-center gap-2">
@@ -1248,6 +1250,9 @@ export function AttendancePage() {
               setCheckinPunctuality(res.data.checkin_punctuality);
             }
           }
+          if (res.active_shift) {
+            setTodayShift(res.active_shift);
+          }
           if (res.active_leave) {
             setActiveLeave(res.active_leave);
           }
@@ -1320,7 +1325,17 @@ export function AttendancePage() {
 
   const attendanceWindow =
     (todayShift === null || isLiburShift) ? "no_shift" : getWindow(current, shiftSettings);
-  const wc = (!checkedIn && (attendanceWindow === "working" || attendanceWindow === "checkout" || attendanceWindow === "late_locked" || attendanceWindow === "break"))
+  const wc = (checkedIn && !checkedOut)
+    ? {
+        icon: Sunset,
+        iconColor: "#EA580C",
+        bg: "#FFF7ED",
+        border: "#FED7AA",
+        title: "Waktu Check-Out Presensi",
+        desc: "Anda terdaftar telah Check-In. Silakan lakukan Check-Out untuk menyelesaikan absensi dinas Anda (Shift Malam / 24 Jam / Terlambat Pulang).",
+        sub: "Pastikan foto selfie verifikasi wajah telah diambil.",
+      }
+    : (!checkedIn && (attendanceWindow === "working" || attendanceWindow === "checkout" || attendanceWindow === "late_locked" || attendanceWindow === "break"))
     ? {
         icon: AlertCircle,
         iconColor: "#D97706",

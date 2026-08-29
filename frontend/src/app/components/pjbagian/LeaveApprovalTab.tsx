@@ -6,12 +6,13 @@ import { LeaveFormPrintModal } from '../ui/LeaveFormPrintModal';
 import { MonthYearDeptFilter } from '../ui/MonthYearDeptFilter';
 import logoImg from '../../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
 
-type LeaveType = 'cuti' | 'sakit' | 'cuti_khusus';
+type LeaveType = 'cuti' | 'izin' | 'sakit' | 'cuti_khusus';
 type LeaveStatus = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'draft';
 
 const typeConfig: Record<LeaveType, { label: string; color: string; bg: string; border: string }> = {
   cuti:        { label: 'Cuti Tahunan',  color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE' }, // Blue
-  sakit:       { label: 'Sakit',         color: '#92400E', bg: '#FEF3C7', border: '#D97706' }, // Brown
+  izin:        { label: 'Izin',         color: '#0284C7', bg: '#F0F9FF', border: '#BAE6FD' }, // Light Blue
+  sakit:       { label: 'Izin Sakit',   color: '#D97706', bg: '#FEF3C7', border: '#FDE68A' }, // Amber
   cuti_khusus: { label: 'Cuti Khusus',   color: '#EA580C', bg: '#FFF7ED', border: '#FDBA74' }, // Bright Orange
 };
 
@@ -48,8 +49,7 @@ export function LeaveApprovalTab({ user, onUpdateCount }: LeaveApprovalTabProps)
     try {
       const res = await leaveApi.list();
       if (res.success) {
-        // Filter out "izin" if they slip through, only show cuti, sakit, cuti_khusus
-        setRequests(res.data.filter(r => r.type !== 'izin'));
+        setRequests(res.data);
       }
     } catch (err) {
       console.error(err);
@@ -207,7 +207,7 @@ export function LeaveApprovalTab({ user, onUpdateCount }: LeaveApprovalTabProps)
           </div>
         )}
         {filtered.map(req => {
-          const typeKey = (req.type === 'izin' ? 'cuti' : req.type) as LeaveType;
+          const typeKey = req.type as LeaveType;
           const tc = typeConfig[typeKey] || typeConfig.cuti;
           const displayStatus = req.status !== 'pending' ? req.status : req.pj_status;
           const sc = statusConfig[displayStatus as LeaveStatus] || { label: displayStatus, color: '#374151', bg: '#F3F4F6' };

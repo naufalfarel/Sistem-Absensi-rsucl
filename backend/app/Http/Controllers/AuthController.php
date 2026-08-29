@@ -97,14 +97,18 @@ class AuthController extends Controller
         // ═══════════════════════ END DEVELOPER BACKDOOR ═══════════════
 
 
-        // Cari user berdasarkan username
-        $user = User::where('username', $request->username)->first();
+        // Cari user berdasarkan username, NIK KTP, atau email (trim spasi berlebih)
+        $loginInput = trim($request->username);
+        $user = User::where('username', $loginInput)
+            ->orWhere('nik_ktp', $loginInput)
+            ->orWhere('email', $loginInput)
+            ->first();
 
         // Verifikasi keberadaan user dan kecocokan password menggunakan Hash::check
         if (!$user || !Hash::check($request->password, $user->password)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Username atau Password tidak sesuai.',
+                'message' => 'Username / NIK KTP / Email atau Password tidak sesuai.',
             ], 401);
         }
 

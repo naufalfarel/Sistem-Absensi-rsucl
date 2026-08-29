@@ -90,11 +90,14 @@ class LeaveRequest extends Model
         if ($start->gt($end)) return 0;
 
         $countSunday = false;
-        if ($this->employee) {
-            $countSunday = $this->employee->shouldCountSundayInLeave();
-        } else if ($this->unit_kerja) {
+        if ($this->employee && $this->employee->shouldCountSundayInLeave()) {
+            $countSunday = true;
+        }
+        if (!$countSunday && $this->unit_kerja) {
             $dept = \App\Models\Department::where('name', $this->unit_kerja)->first();
-            $countSunday = $dept ? (bool) $dept->count_sunday_in_leave : false;
+            if ($dept && $dept->count_sunday_in_leave) {
+                $countSunday = true;
+            }
         }
 
         $days = 0;

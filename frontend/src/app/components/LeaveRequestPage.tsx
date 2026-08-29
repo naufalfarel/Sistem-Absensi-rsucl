@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import logoImg from '../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
-import { leaveApi, LeaveRequest as ApiLeave, LeaveQuota, specialLeaveApi } from '../../services/api';
+import { leaveApi, LeaveRequest as ApiLeave, LeaveQuota, specialLeaveApi, departmentApi, DepartmentModel } from '../../services/api';
 import { MonthYearDeptFilter } from './ui/MonthYearDeptFilter';
 import { LeaveFormPrintModal } from './ui/LeaveFormPrintModal';
 
@@ -133,11 +133,30 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
     }
   }, [user]);
 
+  const [departments, setDepartments] = useState<DepartmentModel[]>([]);
+
+  const loadDepartments = async () => {
+    try {
+      const res = await departmentApi.list();
+      if (res.success) setDepartments(res.data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const isCountSundayActive = (): boolean => {
+    if (user?.count_sunday_in_leave) return true;
+    const targetDeptName = (unitKerja || user?.department || '').trim().toLowerCase();
+    if (!targetDeptName) return false;
+    const found = departments.find(d => (d.name || '').trim().toLowerCase() === targetDeptName);
+    return found ? !!found.count_sunday_in_leave : false;
+  };
+
   // Helper to add N work days (respecting unit count_sunday_in_leave rule)
   const addWorkDays = (startStr: string, targetWorkDays: number): string => {
     if (!startStr) return '';
     const cur = new Date(startStr);
-    const countSunday = !!user?.count_sunday_in_leave;
+    const countSunday = isCountSundayActive();
     let workDays = (countSunday || cur.getDay() !== 0) ? 1 : 0;
     while (workDays < targetWorkDays) {
       cur.setDate(cur.getDate() + 1);
@@ -253,6 +272,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
   useEffect(() => {
     loadAll();
     loadCategories();
+    loadDepartments();
   }, []);
 
   const [attachmentError, setAttachmentError] = useState('');
@@ -300,7 +320,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
     const end   = new Date(endStr);
     if (start > end) return 0;
 
-    const countSunday = !!user?.count_sunday_in_leave;
+    const countSunday = isCountSundayActive();
 
     let count = 0;
     const cur = new Date(start);
@@ -332,7 +352,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
     const overlapEnd   = rEnd < mEnd   ? rEnd   : mEnd;
     if (overlapStart > overlapEnd) return 0;
 
-    const countSunday = !!user?.count_sunday_in_leave;
+    const countSunday = isCountSundayActive();
 
     let count = 0;
     const cur = new Date(overlapStart);
@@ -348,7 +368,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
    * Tidak menghitung request sementara (hanya dari data server yang sudah ada).
    */
   const existingCutiDaysInMonth = (year: number, month: number): number => {
-    const countSunday = !!user?.count_sunday_in_leave;
+    const countSunday = isCountSundayActive();
     return requests
       .filter(r => r.type === 'cuti' && (r.status === 'approved' || r.status === 'pending'))
       .reduce((total, r) => {
@@ -1007,9 +1027,9 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
                       )}
                     </p>
                   </div>
-                  {user?.count_sunday_in_leave ? (
+                  {isCountSundayActive() ? (
                     <p className="text-[10.5px] text-amber-800 font-medium">
-                      ℹ️ Hari Minggu <strong>tetap dihitung hari cuti</strong> karena Unit Kerja <strong>{user?.department || 'Anda'}</strong> beroperasi 24 jam / shift.
+                      ℹ️ Hari Minggu <strong>tetap dihitung hari cuti</strong> karena Unit Kerja <strong>{unitKerja || user?.department || 'Anda'}</strong> beroperasi 24 jam / shift.
                     </p>
                   ) : (
                     <p className="text-[10.5px] text-gray-500 font-medium">

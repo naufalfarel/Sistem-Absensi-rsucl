@@ -209,7 +209,7 @@ class LeaveQuotaHelper
                 // Cuti yang dimulai sebelum periodStart tapi berakhir di dalam/setelah periodStart
                 $effectiveStart = $periodStart->copy();
                 $effectiveEnd   = Carbon::parse($lr->effective_end_date);
-                $total += self::countLeaveDays($effectiveStart, $effectiveEnd, $employee);
+                $total += self::countLeaveDays($effectiveStart, $effectiveEnd, $employee, $lr->unit_kerja);
             }
         }
 
@@ -223,16 +223,26 @@ class LeaveQuotaHelper
      * @param Carbon|string $startDate
      * @param Carbon|string $endDate
      * @param Employee|null $employee
+     * @param string|null   $unitKerja
      * @return int
      */
-    public static function countLeaveDays($startDate, $endDate, ?Employee $employee = null): int
+    public static function countLeaveDays($startDate, $endDate, ?Employee $employee = null, ?string $unitKerja = null): int
     {
         if (!$startDate || !$endDate) return 0;
         $start = Carbon::parse($startDate);
         $end   = Carbon::parse($endDate);
         if ($start->gt($end)) return 0;
 
-        $countSunday = $employee ? $employee->shouldCountSundayInLeave() : false;
+        $countSunday = false;
+        if ($employee && $employee->shouldCountSundayInLeave()) {
+            $countSunday = true;
+        }
+        if (!$countSunday && $unitKerja) {
+            $dept = \App\Models\Department::where('name', $unitKerja)->first();
+            if ($dept && $dept->count_sunday_in_leave) {
+                $countSunday = true;
+            }
+        }
 
         $days = 0;
         for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
@@ -280,7 +290,7 @@ class LeaveQuotaHelper
             // Hitung overlap antara rentang leave request dengan bulan ini
             $lrStart     = Carbon::parse(max($lr->start_date->toDateString(), $monthStart));
             $lrEnd       = Carbon::parse(min($lr->end_date->toDateString(),   $monthEnd));
-            $daysInMonth = self::countLeaveDays($lrStart, $lrEnd, $employee);
+            $daysInMonth = self::countLeaveDays($lrStart, $lrEnd, $employee, $lr->unit_kerja);
             $total += max(0, $daysInMonth);
         }
 
