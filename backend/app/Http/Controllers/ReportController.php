@@ -361,6 +361,13 @@ class ReportController extends Controller
         $records = Attendance::getMonthlyReportData($month, $year);
         $recordsByEmployee = collect($records)->groupBy('employee_id');
 
+        // Pre-fetch overtime requests sekaligus (menghindari N+1 query)
+        $approvedReqsByEmp = \App\Models\OvertimeRequest::whereMonth('date', $month)
+            ->whereYear('date', $year)
+            ->where('status', 'approved')
+            ->get()
+            ->groupBy('employee_id');
+
         $rekap = [];
         foreach ($employees as $emp) {
             $empRecords = $recordsByEmployee->get($emp->id, collect());
@@ -385,12 +392,7 @@ class ReportController extends Controller
             }
 
             // Hitung overtime minutes dari OvertimeRequest approved
-            $approvedReqs = \App\Models\OvertimeRequest::where('employee_id', $emp->id)
-                ->whereMonth('date', $month)
-                ->whereYear('date', $year)
-                ->where('status', 'approved')
-                ->get();
-                
+            $approvedReqs = $approvedReqsByEmp->get($emp->id, collect());
             $overtimeMinutes = 0;
             foreach ($approvedReqs as $req) {
                 $attRecord = $empRecords->first(function($r) use ($req) {
@@ -455,6 +457,7 @@ class ReportController extends Controller
      * 
      * Menghasilkan laporan keterlambatan dan kalkulasi potongan Rupiah per pegawai.
      * Tarif potongan per menit dibaca secara dinamis dari tabel settings (key: late_fee_per_minute).
+     * Optimized: Langsung query absensi terlambat di bulan tersebut tanpa looping synthetic berat.
      * 
      * @param Request $request
      * @return \Illuminate\Http\JsonResponse
@@ -467,7 +470,7 @@ class ReportController extends Controller
 
         $ratePerMinute = (int) \App\Models\Setting::get('late_fee_per_minute', '500');
 
-        $employeesQuery = Employee::with(['user', 'department', 'position', 'schedules'])
+        $employeesQuery = Employee::with(['user', 'department', 'position'])
             ->where('status', 'active');
 
         if ($departmentFilter && $departmentFilter !== 'all') {
@@ -479,37 +482,44 @@ class ReportController extends Controller
         $employees = $employeesQuery->get()
             ->sortBy(fn($emp) => ($emp->department?->name ?? 'Umum') . '_' . ($emp->user?->name ?? 'Karyawan'));
 
-        $records = Attendance::getMonthlyReportData($month, $year);
-        $recordsByEmployee = collect($records)->groupBy('employee_id');
+        // Query HANYA data absensi yang terlambat pada bulan & tahun tersebut (Langsung & Sangat Cepat)
+        $lateAttendances = Attendance::with(['schedule'])
+            ->whereYear('date', $year)
+            ->whereMonth('date', $month)
+            ->where(function ($q) {
+                $q->where('status', 'telat')
+                  ->orWhere('checkin_punctuality', 'terlambat');
+            })
+            ->get()
+            ->groupBy('employee_id');
 
         $result = [];
         $grandTotalLateMinutes = 0;
         $grandTotalDeduction = 0;
 
+        $dayMap = [0 => 'Minggu', 1 => 'Senin', 2 => 'Selasa', 3 => 'Rabu', 4 => 'Kamis', 5 => 'Jumat', 6 => 'Sabtu'];
+
         foreach ($employees as $emp) {
-            $empRecords = $recordsByEmployee->get($emp->id, collect());
-            
-            // Filter hanya record yang berstatus terlambat (telat) atau checkin_punctuality === 'terlambat'
-            $lateRecords = $empRecords->filter(function ($r) {
-                return $r['status'] === 'telat' || ($r['checkin_punctuality'] ?? '') === 'terlambat';
-            });
+            $empLateRecords = $lateAttendances->get($emp->id, collect());
 
             $details = [];
             $employeeLateMinutes = 0;
 
-            foreach ($lateRecords as $r) {
-                $checkIn = $r['check_in'];
-                $dateStr = $r['date'];
-                
-                $shiftName = $r['shift_name'] ?? 'Reguler';
-                $shiftStartStr = '08:30:00';
-                
-                if (isset($emp->schedules)) {
-                    $dayMap = [0 => 'Minggu', 1 => 'Senin', 2 => 'Selasa', 3 => 'Rabu', 4 => 'Kamis', 5 => 'Jumat', 6 => 'Sabtu'];
+            foreach ($empLateRecords as $r) {
+                $checkIn = $r->check_in;
+                $dateStr = $r->date ? $r->date->toDateString() : null;
+                if (!$dateStr) continue;
+
+                $shiftName = $r->schedule?->name ?? 'Reguler';
+                $shiftStartStr = $r->schedule?->start_time ?? '08:30:00';
+
+                // Fallback jika schedule pada record absensi null
+                if (!$r->schedule && isset($emp->schedules)) {
                     $dateCarbon = \Carbon\Carbon::parse($dateStr);
                     $dayName = $dayMap[$dateCarbon->dayOfWeek];
                     $sched = $emp->schedules->first(fn($s) => isset($s->pivot) && $s->pivot->day_of_week === $dayName);
                     if ($sched && $sched->start_time) {
+                        $shiftName = $sched->name;
                         $shiftStartStr = $sched->start_time;
                     }
                 }
@@ -531,7 +541,7 @@ class ReportController extends Controller
                 $employeeLateMinutes += $lateMins;
 
                 $details[] = [
-                    'attendance_id'  => $r['id'] ?? null,
+                    'attendance_id'  => $r->id,
                     'date'           => $dateStr,
                     'shift_name'     => $shiftName,
                     'shift_start'    => substr($shiftStartStr, 0, 5),
