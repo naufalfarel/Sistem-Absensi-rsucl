@@ -193,13 +193,20 @@ class AttendanceController extends Controller
         }
 
         // Pre-fetch roster tanggal spesifik (work_date) hari ini
-        $todayRosters = \Illuminate\Support\Facades\DB::table('employee_schedule')
-            ->join('schedules', 'employee_schedule.schedule_id', '=', 'schedules.id')
-            ->where('employee_schedule.work_date', $todayStr)
-            ->whereNotNull('employee_schedule.work_date')
-            ->select('employee_schedule.employee_id', 'schedules.*')
-            ->get()
-            ->keyBy('employee_id');
+        $todayRosters = collect();
+        try {
+            if (\Illuminate\Support\Facades\Schema::hasColumn('employee_schedule', 'work_date')) {
+                $todayRosters = \Illuminate\Support\Facades\DB::table('employee_schedule')
+                    ->join('schedules', 'employee_schedule.schedule_id', '=', 'schedules.id')
+                    ->where('employee_schedule.work_date', $todayStr)
+                    ->whereNotNull('employee_schedule.work_date')
+                    ->select('employee_schedule.employee_id', 'schedules.*')
+                    ->get()
+                    ->keyBy('employee_id');
+            }
+        } catch (\Throwable $e) {
+            $todayRosters = collect();
+        }
 
         $records = [];
         foreach ($employees as $emp) {

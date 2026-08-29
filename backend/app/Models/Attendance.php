@@ -185,14 +185,22 @@ class Attendance extends Model
             : $today; // Jika tidak ada data sama sekali, gunakan hari ini sebagai default
 
         // Pre-fetch semua roster tanggal spesifik (work_date) untuk bulan ini
-        $dateRosters = \Illuminate\Support\Facades\DB::table('employee_schedule')
-            ->join('schedules', 'employee_schedule.schedule_id', '=', 'schedules.id')
-            ->whereYear('employee_schedule.work_date', $year)
-            ->whereMonth('employee_schedule.work_date', $month)
-            ->whereNotNull('employee_schedule.work_date')
-            ->select('employee_schedule.employee_id', 'employee_schedule.work_date', 'schedules.name', 'schedules.shift_type', 'schedules.id as schedule_id')
-            ->get()
-            ->groupBy(fn($r) => $r->employee_id . '_' . $r->work_date);
+        $dateRosters = collect();
+        try {
+            if (\Illuminate\Support\Facades\Schema::hasColumn('employee_schedule', 'work_date')) {
+                $dateRosters = \Illuminate\Support\Facades\DB::table('employee_schedule')
+                    ->join('schedules', 'employee_schedule.schedule_id', '=', 'schedules.id')
+                    ->whereYear('employee_schedule.work_date', $year)
+                    ->whereMonth('employee_schedule.work_date', $month)
+                    ->whereNotNull('employee_schedule.work_date')
+                    ->select('employee_schedule.employee_id', 'employee_schedule.work_date', 'schedules.name', 'schedules.shift_type', 'schedules.id as schedule_id')
+                    ->get()
+                    ->groupBy(fn($r) => $r->employee_id . '_' . $r->work_date);
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('dateRosters fetch notice: ' . $e->getMessage());
+            $dateRosters = collect();
+        }
 
         $reportRecords = [];
 
