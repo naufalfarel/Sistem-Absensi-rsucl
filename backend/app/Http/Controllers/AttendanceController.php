@@ -332,30 +332,55 @@ class AttendanceController extends Controller
             return response()->json(['success' => false, 'message' => 'Data karyawan tidak ditemukan.'], 404);
         }
 
-        // 2. Validasi apakah karyawan masih memiliki absensi shift malam/lintas hari kemarin yang belum di-checkout
+        // 2. Validasi apakah karyawan masih memiliki absensi shift yang belum di-checkout
         $now = Carbon::now('Asia/Jakarta');
         $todayStr = $now->toDateString();
-        $yesterdayStr = $now->copy()->subDay()->toDateString();
 
-        $unclosedYesterday = Attendance::where('employee_id', $employee->id)
-                                      ->whereDate('date', $yesterdayStr)
-                                      ->whereNotNull('check_in')
-                                      ->whereNull('check_out')
-                                      ->first();
-        if ($unclosedYesterday) {
-            $yShift = $unclosedYesterday->schedule_id ? \App\Models\Schedule::find($unclosedYesterday->schedule_id) : null;
-            if (!$yShift) {
-                $yShift = AttendanceRules::resolveShiftFor($employee, $now->copy()->subDay());
-            }
-            if ($yShift) {
-                $sMins = (int)substr($yShift->start_time, 0, 2) * 60 + (int)substr($yShift->start_time, 3, 2);
-                $eMins = (int)substr($yShift->end_time, 0, 2) * 60 + (int)substr($yShift->end_time, 3, 2);
-                if ($eMins <= $sMins) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Check-in ditolak: Anda belum melakukan check-out untuk ' . $yShift->name . ' kemarin. Silakan lakukan check-out terlebih dahulu.',
-                    ], 422);
+        // Cari semua record yang belum di-checkout (tidak hanya kemarin, tapi juga hari-hari sebelumnya)
+        $unclosedRecords = Attendance::where('employee_id', $employee->id)
+                                     ->whereDate('date', '<', $todayStr)
+                                     ->whereNotNull('check_in')
+                                     ->whereNull('check_out')
+                                     ->orderBy('date', 'desc')
+                                     ->get();
+
+        foreach ($unclosedRecords as $unclosedRecord) {
+            // Cek apakah record ini masih dalam window checkout yang valid
+            if (AttendanceRules::isOpenAttendanceValidForCheckout($unclosedRecord, $now)) {
+                // Window checkout masih buka → blokir check-in, minta user checkout dulu
+                $yShift = $unclosedRecord->schedule_id ? \App\Models\Schedule::find($unclosedRecord->schedule_id) : null;
+                if (!$yShift) {
+                    $yShift = AttendanceRules::resolveShiftFor($employee, Carbon::parse($unclosedRecord->date));
                 }
+                $shiftLabel = $yShift ? $yShift->name : 'shift sebelumnya';
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Check-in ditolak: Anda belum melakukan check-out untuk ' . $shiftLabel . ' (' . Carbon::parse($unclosedRecord->date)->format('d/m/Y') . '). Silakan lakukan check-out terlebih dahulu.',
+                ], 422);
+            } else {
+                // Window checkout sudah expired → auto-close record lama agar tidak memblokir
+                $yShift = $unclosedRecord->schedule_id ? \App\Models\Schedule::find($unclosedRecord->schedule_id) : null;
+                if (!$yShift) {
+                    $yShift = AttendanceRules::resolveShiftFor($employee, Carbon::parse($unclosedRecord->date));
+                }
+
+                // Tentukan waktu checkout otomatis = jam selesai shift
+                $endTimeStr = $yShift ? $yShift->end_time : '17:00:00';
+                $attDate = Carbon::parse($unclosedRecord->date);
+                $startTimeStr = $yShift ? $yShift->start_time : '08:30:00';
+                $startMins = (int)substr($startTimeStr, 0, 2) * 60 + (int)substr($startTimeStr, 3, 2);
+                $endMins   = (int)substr($endTimeStr, 0, 2) * 60 + (int)substr($endTimeStr, 3, 2);
+                $isOvernight = $endMins <= $startMins;
+
+                // Untuk shift malam, checkout otomatis = jam pulang di hari berikutnya
+                $autoCheckoutTime = $endTimeStr;
+
+                $unclosedRecord->update([
+                    'check_out' => substr($autoCheckoutTime, 0, 5) . ':00',
+                    'note'      => ($unclosedRecord->note ? $unclosedRecord->note . ' | ' : '') . 'Auto-closed: tidak melakukan check-out tepat waktu',
+                ]);
+
+                \Illuminate\Support\Facades\Log::info("Auto-closed stale attendance #{$unclosedRecord->id} for employee #{$employee->id} (date: {$unclosedRecord->date})");
             }
         }
 
