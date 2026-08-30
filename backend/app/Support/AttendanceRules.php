@@ -135,6 +135,56 @@ class AttendanceRules
      * @return \App\Models\Schedule|null
      */
     /**
+     * Memeriksa apakah record absensi yang belum check-out masih berada dalam batas waktu checkout yang valid.
+     * Mengembalikan false jika batas waktu checkout untuk shift tersebut sudah kedaluwarsa (expired).
+     */
+    public static function isOpenAttendanceValidForCheckout(\App\Models\Attendance $attendance, ?Carbon $now = null): bool
+    {
+        if ($attendance->check_in === null || $attendance->check_out !== null) {
+            return false;
+        }
+
+        $now = $now ?? Carbon::now('Asia/Jakarta');
+        $attDate = Carbon::parse($attendance->date);
+
+        $sched = $attendance->schedule_id ? \App\Models\Schedule::find($attendance->schedule_id) : null;
+        if (!$sched) {
+            $employee = $attendance->employee;
+            if ($employee) {
+                $sched = self::resolveShiftFor($employee, $attDate);
+            }
+        }
+
+        $startTimeStr = $sched ? ($sched->start_time ?? '08:30:00') : '08:30:00';
+        $endTimeStr   = $sched ? ($sched->end_time   ?? '17:00:00') : '17:00:00';
+
+        $startMins = (int)substr($startTimeStr, 0, 2) * 60 + (int)substr($startTimeStr, 3, 2);
+        $endMins   = (int)substr($endTimeStr, 0, 2) * 60 + (int)substr($endTimeStr, 3, 2);
+
+        $isOvernight = $endMins <= $startMins;
+
+        if ($isOvernight) {
+            // Shift Malam (lintas hari): misal 20:00 -> 08:00 (berakhir jam 08:00 hari berikutnya)
+            // Batas akhir checkout toleransi 3 jam setelah jam pulang (11:00 AM hari berikutnya)
+            $shiftEnd = Carbon::parse($attDate->toDateString() . ' ' . $endTimeStr)->addDay();
+            $checkoutCutoff = $shiftEnd->copy()->addHours(3);
+
+            return $now->lte($checkoutCutoff);
+        } else {
+            // Shift Siang / Pagi (hari yang sama): misal 08:00 -> 14:00 atau 14:00 -> 20:00
+            // Jika tanggal absensi sudah hari kemarin dan jam sekarang sudah melewati cutoff jam pulang (+ 4 jam)
+            $shiftEnd = Carbon::parse($attDate->toDateString() . ' ' . $endTimeStr);
+            $checkoutCutoff = $shiftEnd->copy()->addHours(4);
+
+            if ($now->toDateString() > $attDate->toDateString() && $now->gt($checkoutCutoff)) {
+                return false;
+            }
+
+            return $now->lte($checkoutCutoff);
+        }
+    }
+
+    /**
      * Mengambil seluruh daftar shift yang ditugaskan kepada karyawan pada tanggal tertentu.
      * Mendukung multi-shift dalam 1 hari (cth: Shift Pagi & Shift Malam/Dadakan).
      */
@@ -155,6 +205,21 @@ class AttendanceRules
 
         $shifts = [];
 
+        $expandSchedule = function($sched) use ($dayOfWeek) {
+            if (!$sched) return [];
+            if ($sched->parent_id === null && $sched->children()->exists()) {
+                $children = $sched->children()->get();
+                if ($dayOfWeek === 6) {
+                    $satChildren = $children->filter(fn($c) => str_contains(strtolower($c->name), 'sabtu'));
+                    if ($satChildren->isNotEmpty()) return $satChildren->values()->all();
+                }
+                $nonSatChildren = $children->filter(fn($c) => !str_contains(strtolower($c->name), 'sabtu'));
+                if ($nonSatChildren->isNotEmpty()) return $nonSatChildren->values()->all();
+                return $children->values()->all();
+            }
+            return [$sched];
+        };
+
         // ── Prioritas 1: Cek jadwal tanggal spesifik (work_date) ──────────────
         $rawDateRows = \Illuminate\Support\Facades\DB::table('employee_schedule')
             ->where('employee_id', $employee->id)
@@ -170,17 +235,8 @@ class AttendanceRules
                 }
                 $sched = \App\Models\Schedule::find($rRow->schedule_id);
                 if ($sched) {
-                    if ($sched->parent_id === null && $sched->children()->exists()) {
-                        $children = $sched->children()->get();
-                        $sub = null;
-                        if ($dayOfWeek === 6) {
-                            $sub = $children->first(fn($c) => str_contains(strtolower($c->name), 'sabtu'));
-                        } else {
-                            $sub = $children->first(fn($c) => !str_contains(strtolower($c->name), 'sabtu'));
-                        }
-                        $shifts[] = $sub ?? $children->first();
-                    } else {
-                        $shifts[] = $sched;
+                    foreach ($expandSchedule($sched) as $s) {
+                        $shifts[] = $s;
                     }
                 }
             }
@@ -188,7 +244,7 @@ class AttendanceRules
                 return []; // Eksplisit set Libur
             }
             if (!empty($shifts)) {
-                return $shifts;
+                return collect($shifts)->unique('id')->values()->all();
             }
         }
 
@@ -201,58 +257,38 @@ class AttendanceRules
 
         if ($todaySchedules->isNotEmpty()) {
             foreach ($todaySchedules as $todaySchedule) {
-                if ($todaySchedule->parent_id === null && $todaySchedule->children()->exists()) {
-                    $children = $todaySchedule->children()->get();
-                    $sub = null;
-                    if ($dayOfWeek === 6) {
-                        $sub = $children->first(fn($c) => str_contains(strtolower($c->name), 'sabtu'));
-                    } else {
-                        $sub = $children->first(fn($c) => !str_contains(strtolower($c->name), 'sabtu'));
-                    }
-                    if ($sub) {
-                        $shifts[] = $sub;
-                    } else {
-                        foreach ($children as $child) {
-                            $shifts[] = $child;
-                        }
-                    }
-                } else {
-                    $shifts[] = $todaySchedule;
+                foreach ($expandSchedule($todaySchedule) as $s) {
+                    $shifts[] = $s;
                 }
             }
-            return $shifts;
+            return collect($shifts)->unique('id')->values()->all();
         }
 
         // ── Prioritas 3: Fallback ke jadwal departemen / kantor reguler untuk seluruh pegawai ──
         if ($dayOfWeek !== 0) { // Selain hari Minggu
             // A. Cari shift khusus yang dibuat untuk departemen pegawai ini
             if ($employee->department_id) {
-                $deptSchedule = \App\Models\Schedule::whereNull('parent_id')
+                $deptSchedules = \App\Models\Schedule::whereNull('parent_id')
                     ->where('owner_department_id', $employee->department_id)
                     ->where(function($q) {
                         $q->where('status', 'approved')->orWhereNull('status');
                     })
-                    ->first();
+                    ->get();
 
-                if ($deptSchedule) {
-                    if ($deptSchedule->children()->exists()) {
-                        $children = $deptSchedule->children()->get();
-                        $sub = null;
-                        if ($dayOfWeek === 6) {
-                            $sub = $children->first(fn($c) => str_contains(strtolower($c->name), 'sabtu'));
-                        } else {
-                            $sub = $children->first(fn($c) => !str_contains(strtolower($c->name), 'sabtu'));
+                if ($deptSchedules->isNotEmpty()) {
+                    foreach ($deptSchedules as $deptSchedule) {
+                        foreach ($expandSchedule($deptSchedule) as $s) {
+                            $shifts[] = $s;
                         }
-                        $shifts[] = $sub ?? $children->first();
-                    } else {
-                        $shifts[] = $deptSchedule;
                     }
-                    return $shifts;
+                    if (!empty($shifts)) {
+                        return collect($shifts)->unique('id')->values()->all();
+                    }
                 }
             }
 
             // B. Fallback ke shift kantor / reguler umum
-            $regulerParent = \App\Models\Schedule::whereNull('parent_id')
+            $regulerParents = \App\Models\Schedule::whereNull('parent_id')
                 ->where(function($q) {
                     $q->where('name', 'LIKE', '%office%')
                       ->orWhere('name', 'LIKE', '%kantor%')
@@ -262,25 +298,21 @@ class AttendanceRules
                 ->where(function($q) {
                     $q->where('status', 'approved')->orWhereNull('status');
                 })
-                ->first();
+                ->get();
 
-            if ($regulerParent) {
-                if ($regulerParent->children()->exists()) {
-                    $children = $regulerParent->children()->get();
-                    $sub = null;
-                    if ($dayOfWeek === 6) {
-                        $sub = $children->first(fn($c) => str_contains(strtolower($c->name), 'sabtu'));
-                    } else {
-                        $sub = $children->first(fn($c) => !str_contains(strtolower($c->name), 'sabtu'));
+            if ($regulerParents->isNotEmpty()) {
+                foreach ($regulerParents as $regulerParent) {
+                    foreach ($expandSchedule($regulerParent) as $s) {
+                        $shifts[] = $s;
                     }
-                    $shifts[] = $sub ?? $children->first();
-                } else {
-                    $shifts[] = $regulerParent;
+                }
+                if (!empty($shifts)) {
+                    return collect($shifts)->unique('id')->values()->all();
                 }
             }
         }
 
-        return $shifts;
+        return collect($shifts)->unique('id')->values()->all();
     }
 
     /**
@@ -292,32 +324,65 @@ class AttendanceRules
         if (empty($allShifts)) return null;
         if (count($allShifts) === 1) return $allShifts[0];
 
-        $now = $now ?? Carbon::now();
+        $now = $now ?? Carbon::now('Asia/Jakarta');
         $dateStr = $date->toDateString();
 
-        $bestMatch = null;
-        $minDiff = 999999;
-
+        // 1. Jika pegawai sudah check-in dan belum check-out untuk salah satu shift, pilih shift tersebut
         foreach ($allShifts as $sched) {
-            // Cek apakah sudah ada record attendance yang belum check_out untuk shift ini
             $existing = \App\Models\Attendance::where('employee_id', $employee->id)
                 ->where('date', $dateStr)
                 ->where('schedule_id', $sched->id)
                 ->first();
 
-            // Jika karyawan sudah check-in dan belum check-out untuk shift ini, pilih shift ini
             if ($existing && $existing->check_in && !$existing->check_out) {
                 return $sched;
             }
+        }
 
-            // Hitung selisih waktu dari start_time
-            $shiftStart = Carbon::parse($dateStr . ' ' . ($sched->start_time ?? '08:00:00'));
-            $windowStart = $shiftStart->copy()->subMinutes(150); // Window Buka 2 jam 30 menit sebelum shift
+        // 2. Evaluasi shift mana yang paling cocok dengan $now
+        $bestMatch = null;
+        $minDiff = 99999999;
 
-            // Jika waktu saat ini berada di dalam atau mendekati window shift ini
-            $diff = abs($now->timestamp - $shiftStart->timestamp);
-            if ($now->gte($windowStart) && $diff < $minDiff) {
-                if (!$existing || !$existing->check_out) {
+        foreach ($allShifts as $sched) {
+            $startTimeStr = $sched->start_time ?? '08:00:00';
+            $endTimeStr   = $sched->end_time   ?? '17:00:00';
+
+            $shiftStart = Carbon::parse($dateStr . ' ' . $startTimeStr);
+            $shiftEnd   = Carbon::parse($dateStr . ' ' . $endTimeStr);
+
+            $startMins = (int)substr($startTimeStr, 0, 2) * 60 + (int)substr($startTimeStr, 3, 2);
+            $endMins   = (int)substr($endTimeStr, 0, 2) * 60 + (int)substr($endTimeStr, 3, 2);
+
+            if ($endMins <= $startMins) {
+                $shiftEnd->addDay();
+            }
+
+            // Window check-in dibuka 2.5 jam sebelum shiftStart
+            $windowStart = $shiftStart->copy()->subMinutes(150);
+
+            // Cek apakah $now berada di dalam rentang [windowStart, shiftEnd]
+            if ($now->gte($windowStart) && $now->lte($shiftEnd)) {
+                $diff = abs($now->timestamp - $shiftStart->timestamp);
+                if ($diff < $minDiff) {
+                    $existing = \App\Models\Attendance::where('employee_id', $employee->id)
+                        ->where('date', $dateStr)
+                        ->where('schedule_id', $sched->id)
+                        ->first();
+                    if (!$existing || !$existing->check_out) {
+                        $minDiff = $diff;
+                        $bestMatch = $sched;
+                    }
+                }
+            }
+        }
+
+        // 3. Fallback: Jika tidak ada shift yang window-nya sedang aktif (misal sebelum windowStart pertama), pilih shift dengan start_time paling dekat
+        if (!$bestMatch) {
+            foreach ($allShifts as $sched) {
+                $startTimeStr = $sched->start_time ?? '08:00:00';
+                $shiftStart = Carbon::parse($dateStr . ' ' . $startTimeStr);
+                $diff = abs($now->timestamp - $shiftStart->timestamp);
+                if ($diff < $minDiff) {
                     $minDiff = $diff;
                     $bestMatch = $sched;
                 }

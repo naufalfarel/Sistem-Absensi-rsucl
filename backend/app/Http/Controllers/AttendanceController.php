@@ -47,13 +47,21 @@ class AttendanceController extends Controller
                              ->whereDate('date', $todayStr)
                              ->get();
 
-        // Prioritaskan cek apakah karyawan memiliki record check-in aktif yang BELUM check-out (open attendance record)
-        $openUnclosed = Attendance::where('employee_id', $employee->id)
+        // Prioritaskan cek apakah karyawan memiliki record check-in aktif yang BELUM check-out dan masih valid
+        $openUnclosedCandidates = Attendance::where('employee_id', $employee->id)
                                   ->whereNotNull('check_in')
                                   ->whereNull('check_out')
                                   ->orderBy('date', 'desc')
                                   ->orderBy('id', 'desc')
-                                  ->first();
+                                  ->get();
+
+        $openUnclosed = null;
+        foreach ($openUnclosedCandidates as $cand) {
+            if (AttendanceRules::isOpenAttendanceValidForCheckout($cand, $now)) {
+                $openUnclosed = $cand;
+                break;
+            }
+        }
 
         $record = null;
         $activeShift = null;
@@ -676,15 +684,18 @@ class AttendanceController extends Controller
                                 ->first();
         }
 
-        // 2. Fallback untuk record check-in yang belum di-checkout (lembur / lintas hari / shift malam):
+        // 2. Fallback untuk record check-in yang belum di-checkout (lembur / lintas hari / shift malam yang masih valid):
         if (!$record) {
-            $unclosedRecord = Attendance::where('employee_id', $employee->id)
+            $unclosedCandidates = Attendance::where('employee_id', $employee->id)
                                          ->whereNotNull('check_in')
                                          ->whereNull('check_out')
                                          ->orderBy('date', 'desc')
-                                         ->first();
-            if ($unclosedRecord) {
-                $record = $unclosedRecord;
+                                         ->get();
+            foreach ($unclosedCandidates as $cand) {
+                if (AttendanceRules::isOpenAttendanceValidForCheckout($cand, $now)) {
+                    $record = $cand;
+                    break;
+                }
             }
         }
 
