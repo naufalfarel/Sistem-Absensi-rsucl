@@ -156,10 +156,11 @@ const DEFAULT_SHIFT: ShiftSettings = {
 function getWindow(
   now: Date,
   s: ShiftSettings = DEFAULT_SHIFT,
+  hasAssignedShift: boolean = false,
 ): AttendanceWindow {
   const day = now.getDay();
   const mins = toMins(now.getHours(), now.getMinutes());
-  if (day === 0 && !s.isOvernight) return "sunday";
+  if (day === 0 && !s.isOvernight && !hasAssignedShift) return "sunday";
 
   const openMins = parseMins(s.checkin_open);
   const closeMins = parseMins(s.close_checkin);
@@ -1324,7 +1325,7 @@ export function AttendancePage() {
     : false;
 
   const attendanceWindow =
-    (todayShift === null || isLiburShift) ? "no_shift" : getWindow(current, shiftSettings);
+    (todayShift === null || isLiburShift) ? "no_shift" : getWindow(current, shiftSettings, !!todayShift);
   const wc = (checkedIn && !checkedOut)
     ? {
         icon: Sunset,
