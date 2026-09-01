@@ -606,6 +606,29 @@ interface ShiftPopoverProps {
 }
 
 function ShiftPopover({ shifts, currentScheduleIds, onToggleSelect, onSelectSpecial, onClose, style }: ShiftPopoverProps) {
+  // Deteksi apakah saat ini sudah ter-assign sebagai Libur / OFF
+  const isCurrentlyLibur = (() => {
+    if (currentScheduleIds.length === 0) return true;
+    // Cek apakah semua schedule ID yang terpilih adalah shift "Libur / OFF"
+    // (bukan Libur Jaga / LJ)
+    const allAreLibur = currentScheduleIds.every(id => {
+      for (const s of shifts) {
+        if (s.id === id) {
+          const n = s.name.toUpperCase();
+          return (n.includes('LIBUR') || n.includes('OFF')) && !n.includes('JAGA') && n !== 'LJ';
+        }
+        for (const c of (s.children ?? [])) {
+          if (c.id === id) {
+            const cn = c.name.toUpperCase();
+            return (cn.includes('LIBUR') || cn.includes('OFF')) && !cn.includes('JAGA') && cn !== 'LJ';
+          }
+        }
+      }
+      return false;
+    });
+    return allAreLibur;
+  })();
+
   return (
     <div className="fixed inset-0 z-[9999]" onClick={onClose}>
       <div
@@ -642,7 +665,7 @@ function ShiftPopover({ shifts, currentScheduleIds, onToggleSelect, onSelectSpec
             –
           </span>
           <span>Libur / OFF</span>
-          {currentScheduleIds.length === 0 && <Check size={13} className="ml-auto text-[#16A34A]" />}
+          {isCurrentlyLibur && <Check size={13} className="ml-auto text-[#16A34A]" />}
         </button>
 
         {/* Libur Jaga (LJ) */}

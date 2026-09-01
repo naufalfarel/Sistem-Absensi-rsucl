@@ -11,6 +11,58 @@ use Illuminate\Http\Request;
 class ScheduleController extends Controller
 {
     /**
+     * Mencari atau membuat jadwal master "Libur / OFF" agar setiap kali
+     * karyawan diatur libur pada tanggal tertentu, ada record schedule
+     * eksplisit yang di-insert (bukan hanya menghapus record lama).
+     * Ini mencegah fallback ke shift default departemen.
+     *
+     * @param int|null $ownerDeptId  ID departemen pemilik (opsional)
+     * @param int|null $createdBy   ID user pembuat (opsional)
+     * @return \App\Models\Schedule
+     */
+    private function findOrCreateLiburOffSchedule(?int $ownerDeptId = null, ?int $createdBy = null): Schedule
+    {
+        // Cari shift "Libur / OFF" yang sudah ada (prioritaskan milik departemen jika ada)
+        $query = Schedule::whereNull('parent_id')
+            ->where(function ($q) {
+                $q->where('name', 'LIKE', '%Libur / OFF%')
+                  ->orWhere('name', 'LIKE', '%Libur/OFF%')
+                  ->orWhere(function ($q2) {
+                      $q2->where('name', 'Libur')
+                         ->where('start_time', '00:00:00');
+                  });
+            });
+
+        if ($ownerDeptId) {
+            // Coba cari milik departemen dulu
+            $deptShift = (clone $query)->where('owner_department_id', $ownerDeptId)->first();
+            if ($deptShift) return $deptShift;
+        }
+
+        // Cari yang umum (tanpa owner department)
+        $globalShift = (clone $query)->whereNull('owner_department_id')->first();
+        if ($globalShift) return $globalShift;
+
+        // Cari apapun yang match nama
+        $anyShift = $query->first();
+        if ($anyShift) return $anyShift;
+
+        // Tidak ditemukan → buat baru
+        $libur = Schedule::create([
+            'name'                => 'Libur / OFF',
+            'start_time'          => '00:00:00',
+            'end_time'            => '00:00:00',
+            'color'               => '#94A3B8',
+            'icon'                => 'moon',
+            'shift_type'          => 'normal',
+            'owner_department_id' => $ownerDeptId,
+            'created_by'          => $createdBy,
+            'status'              => 'approved',
+        ]);
+
+        return $libur;
+    }
+    /**
      * GET /api/schedules
      * 
      * Mengambil daftar seluruh master jadwal shift kerja,
@@ -845,21 +897,31 @@ class ScheduleController extends Controller
             $idsToInsert = [$data['schedule_id']];
         }
 
+        // Jika tidak ada shift yang di-assign (Libur), cari/buat shift "Libur / OFF"
+        // dan insert sebagai record tanggal-spesifik agar tidak fallback ke shift default departemen
+        if (empty($idsToInsert)) {
+            $liburSchedule = $this->findOrCreateLiburOffSchedule(
+                $emp->department_id,
+                $request->user()->id
+            );
+            $idsToInsert = [$liburSchedule->id];
+        }
+
         $scheduleName = 'Libur';
-        if (count($idsToInsert) > 0) {
-            $names = [];
-            foreach ($idsToInsert as $sId) {
-                \Illuminate\Support\Facades\DB::table('employee_schedule')->insert([
-                    'employee_id' => $emp->id,
-                    'schedule_id' => $sId,
-                    'work_date'   => $data['work_date'],
-                    'day_of_week' => null,
-                    'created_at'  => now(),
-                    'updated_at'  => now(),
-                ]);
-                $schedObj = \App\Models\Schedule::find($sId);
-                if ($schedObj) $names[] = $schedObj->name;
-            }
+        $names = [];
+        foreach ($idsToInsert as $sId) {
+            \Illuminate\Support\Facades\DB::table('employee_schedule')->insert([
+                'employee_id' => $emp->id,
+                'schedule_id' => $sId,
+                'work_date'   => $data['work_date'],
+                'day_of_week' => null,
+                'created_at'  => now(),
+                'updated_at'  => now(),
+            ]);
+            $schedObj = \App\Models\Schedule::find($sId);
+            if ($schedObj) $names[] = $schedObj->name;
+        }
+        if (!empty($names)) {
             $scheduleName = implode(' + ', $names);
         }
 
@@ -939,6 +1001,16 @@ class ScheduleController extends Controller
                 $idsToInsert = array_values(array_unique(array_filter($assignment['schedule_ids'])));
             } elseif (!empty($assignment['schedule_id'])) {
                 $idsToInsert = [$assignment['schedule_id']];
+            }
+
+            // Jika tidak ada shift yang di-assign (Libur), cari/buat shift "Libur / OFF"
+            // dan insert sebagai record tanggal-spesifik agar tidak fallback ke shift default departemen
+            if (empty($idsToInsert)) {
+                $liburSchedule = $this->findOrCreateLiburOffSchedule(
+                    $emp->department_id,
+                    $authUser->id
+                );
+                $idsToInsert = [$liburSchedule->id];
             }
 
             foreach ($idsToInsert as $schedId) {
