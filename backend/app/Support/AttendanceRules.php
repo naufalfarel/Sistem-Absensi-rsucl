@@ -235,17 +235,26 @@ class AttendanceRules
                 }
                 $sched = \App\Models\Schedule::find($rRow->schedule_id);
                 if ($sched) {
+                    // Jika shift ini adalah "Libur / OFF" (bukan Libur Jaga/LJ),
+                    // perlakukan sama seperti eksplisit libur
+                    $uName = strtoupper($sched->name);
+                    $isLiburOff = (str_contains($uName, 'LIBUR') || str_contains($uName, 'OFF'))
+                                  && !str_contains($uName, 'JAGA')
+                                  && $uName !== 'LJ';
+                    if ($isLiburOff) {
+                        continue; // Skip, treat as libur
+                    }
+
                     foreach ($expandSchedule($sched) as $s) {
                         $shifts[] = $s;
                     }
                 }
             }
-            if ($rawDateRows->contains(fn($r) => $r->schedule_id === null) && empty($shifts)) {
+            // Jika semua record adalah libur (schedule_id null atau shift "Libur / OFF"), return kosong
+            if (empty($shifts)) {
                 return []; // Eksplisit set Libur
             }
-            if (!empty($shifts)) {
-                return collect($shifts)->unique('id')->values()->all();
-            }
+            return collect($shifts)->unique('id')->values()->all();
         }
 
         // ── Prioritas 2: Fallback ke jadwal mingguan (day_of_week) ──────────
@@ -287,8 +296,14 @@ class AttendanceRules
                 }
             }
 
-            // B. Fallback ke shift kantor / reguler umum
+            // B. Fallback ke shift kantor / reguler umum (hanya yang global atau milik departemen pegawai)
             $regulerParents = \App\Models\Schedule::whereNull('parent_id')
+                ->where(function($q) use ($employee) {
+                    $q->whereNull('owner_department_id');
+                    if ($employee->department_id) {
+                        $q->orWhere('owner_department_id', $employee->department_id);
+                    }
+                })
                 ->where(function($q) {
                     $q->where('name', 'LIKE', '%office%')
                       ->orWhere('name', 'LIKE', '%kantor%')

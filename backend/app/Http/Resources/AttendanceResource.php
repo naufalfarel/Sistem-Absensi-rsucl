@@ -18,28 +18,22 @@ class AttendanceResource extends JsonResource
         $shiftName = 'Tidak Ada Shift';
         $shiftType = 'normal';
 
-        if ($this->employee && $this->date) {
-            $dayMap = [
-                0 => 'Minggu', 1 => 'Senin', 2 => 'Selasa',
-                3 => 'Rabu',   4 => 'Kamis', 5 => 'Jumat', 6 => 'Sabtu',
-            ];
+        if ($this->schedule_id) {
+            $sched = $this->relationLoaded('schedule') && $this->schedule
+                ? $this->schedule
+                : \App\Models\Schedule::find($this->schedule_id);
+            if ($sched) {
+                $shiftName = $sched->name;
+                $shiftType = $sched->shift_type ?? 'normal';
+            }
+        }
+
+        if (($shiftName === 'Tidak Ada Shift' || empty($shiftName)) && $this->employee && $this->date) {
             $carbonDate = Carbon::parse($this->date);
-            $dayName = $dayMap[$carbonDate->dayOfWeek];
-            
-            if ($this->employee->relationLoaded('schedules')) {
-                $sched = $this->employee->schedules->first(function ($s) use ($dayName) {
-                    return $s->pivot->day_of_week === $dayName;
-                });
-                if ($sched) {
-                    $shiftName = $sched->name;
-                    $shiftType = $sched->shift_type ?? 'normal';
-                }
-            } else {
-                $sched = $this->employee->schedules()->wherePivot('day_of_week', $dayName)->first();
-                if ($sched) {
-                    $shiftName = $sched->name;
-                    $shiftType = $sched->shift_type ?? 'normal';
-                }
+            $resolved = \App\Support\AttendanceRules::resolveShiftFor($this->employee, $carbonDate);
+            if ($resolved) {
+                $shiftName = $resolved->name;
+                $shiftType = $resolved->shift_type ?? 'normal';
             }
         }
 

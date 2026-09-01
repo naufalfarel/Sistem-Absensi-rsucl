@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { CheckCircle2, XCircle, Clock, FileText, Trash2, Paperclip, AlertCircle, Calendar, ChevronDown, Search, X, Printer, Edit3 } from 'lucide-react';
-import { leaveApi, LeaveRequest, departmentApi, DepartmentModel, employeeApi, Employee } from '../../../services/api';
+import { leaveApi, LeaveRequest, departmentApi, DepartmentModel, employeeApi, Employee, specialLeaveApi, SpecialLeaveCategory } from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
 import { MonthYearDeptFilter } from '../ui/MonthYearDeptFilter';
 import { LeaveFormPrintModal } from '../ui/LeaveFormPrintModal';
@@ -37,132 +37,89 @@ function SearchableEmployeeSelect({
   employees,
   selectedId,
   onSelect,
-  loading,
+  loading
 }: {
   employees: Employee[];
   selectedId: string;
   onSelect: (id: string) => void;
-  loading?: boolean;
+  loading: boolean;
 }) {
-  const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const selectedEmployee = employees.find(e => e.id.toString() === selectedId);
+
+  const filteredEmployees = useMemo(() => {
+    if (!search.trim()) return employees;
+    const q = search.toLowerCase();
+    return employees.filter(e =>
+      e.name.toLowerCase().includes(q) ||
+      (e.nik_ktp && e.nik_ktp.includes(q)) ||
+      (e.department && e.department.toLowerCase().includes(q))
+    );
+  }, [employees, search]);
 
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setIsOpen(false);
       }
-    }
+    };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const sortedEmployees = useMemo(() => {
-    return [...employees]
-      .filter(e => e.role !== 'admin' && e.role !== 'super_admin')
-      .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'id', { sensitivity: 'base' }));
-  }, [employees]);
-
-  const filteredEmployees = sortedEmployees.filter(e => {
-    if (!search.trim()) return true;
-    const q = search.toLowerCase();
-    return (
-      (e.name && e.name.toLowerCase().includes(q)) ||
-      (e.nik_ktp && e.nik_ktp.includes(q)) ||
-      (e.department && e.department.toLowerCase().includes(q))
-    );
-  });
-
-  const selectedEmp = employees.find(e => String(e.id) === String(selectedId));
-
   return (
-    <div className="relative" ref={wrapperRef}>
+    <div className="relative font-sans" ref={dropdownRef}>
       <label className="block text-[12px] font-semibold text-gray-700 mb-1.5">
         Pilih Karyawan (Cari Nama A–Z)
       </label>
-
-      {/* Input Combobox */}
-      <div className="relative">
-        <input
-          type="text"
-          placeholder={selectedEmp ? `${selectedEmp.name} (${selectedEmp.department || 'Umum'})` : 'Ketik nama / NIK pegawai...'}
-          value={isOpen ? search : (selectedEmp ? `${selectedEmp.name} (${selectedEmp.nik_ktp || '-'}) — ${selectedEmp.department || 'Umum'}` : '')}
-          onFocus={() => {
-            setIsOpen(true);
-            setSearch('');
-          }}
-          onChange={e => {
-            setSearch(e.target.value);
-            if (!isOpen) setIsOpen(true);
-          }}
-          className={`w-full pl-9 pr-9 py-2.5 border rounded-2xl text-[12px] font-semibold transition-all cursor-pointer ${
-            selectedEmp && !isOpen
-              ? 'bg-green-50/70 border-green-300 text-gray-900 font-bold'
-              : 'bg-white border-gray-200 text-gray-800 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15'
-          }`}
-        />
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-
-        {selectedId ? (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onSelect('');
-              setSearch('');
-              setIsOpen(true);
-            }}
-            className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-red-500 rounded-full hover:bg-gray-100 transition-colors"
-            title="Hapus Pilihan"
-          >
-            <X size={13} />
-          </button>
-        ) : (
-          <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-        )}
+      <div
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-semibold text-gray-800 flex items-center justify-between cursor-pointer hover:border-[#16A34A] transition-all"
+      >
+        <span className="truncate">
+          {loading ? 'Memuat daftar karyawan...' : selectedEmployee ? `${selectedEmployee.name} (${selectedEmployee.nik_ktp || '-'}) — ${selectedEmployee.department || 'Staff'}` : '-- Pilih Karyawan --'}
+        </span>
+        <ChevronDown size={15} className="text-gray-400 flex-shrink-0" />
       </div>
 
-      {/* Popup Opsi Karyawan */}
       {isOpen && (
-        <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-2xl shadow-xl z-50 max-h-56 overflow-y-auto divide-y divide-gray-50 animate-in fade-in slide-in-from-top-1 duration-150">
-          {loading ? (
-            <div className="p-3 text-center text-gray-400 text-[11px]">
-              Memuat daftar pegawai...
-            </div>
-          ) : filteredEmployees.length === 0 ? (
-            <div className="p-3 text-center text-gray-400 text-[11px]">
-              Tidak ada karyawan ditemukan.
-            </div>
-          ) : (
-            filteredEmployees.map(emp => {
-              const isSelected = String(emp.id) === String(selectedId);
-              return (
-                <button
+        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-50 p-2 space-y-1.5 animate-fade-in max-h-[220px] flex flex-col">
+          <div className="relative">
+            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              autoFocus
+              placeholder="Ketik nama / NIK..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-[12px] focus:outline-none focus:border-[#16A34A]"
+            />
+          </div>
+          <div className="overflow-y-auto flex-1 space-y-0.5">
+            {filteredEmployees.length === 0 ? (
+              <p className="text-[11px] text-gray-400 p-2 text-center">Karyawan tidak ditemukan</p>
+            ) : (
+              filteredEmployees.map(emp => (
+                <div
                   key={emp.id}
-                  type="button"
                   onClick={() => {
-                    onSelect(String(emp.id));
+                    onSelect(emp.id.toString());
                     setIsOpen(false);
                     setSearch('');
                   }}
-                  className={`w-full text-left px-3.5 py-2.5 transition-colors flex items-center justify-between gap-2 hover:bg-green-50/80 cursor-pointer ${
-                    isSelected ? 'bg-green-50 font-bold text-[#16A34A]' : 'text-gray-700'
+                  className={`px-2.5 py-1.5 rounded-lg text-[12px] cursor-pointer flex items-center justify-between transition-colors ${
+                    selectedId === emp.id.toString() ? 'bg-green-50 text-[#16A34A] font-bold' : 'hover:bg-gray-50 text-gray-700'
                   }`}
                 >
-                  <div className="min-w-0 flex-1">
-                    <p className="font-bold truncate text-gray-900 text-[12px]">
-                      {emp.name}
-                    </p>
-                    <p className="text-[10px] text-gray-400 truncate mt-0.5">
-                      {emp.nik_ktp ? `NIK: ${emp.nik_ktp}` : ''} {emp.department ? `• Unit: ${emp.department}` : ''}
-                    </p>
-                  </div>
-                  {isSelected && <CheckCircle2 size={14} className="text-[#16A34A] flex-shrink-0" />}
-                </button>
-              );
-            })
-          )}
+                  <span className="truncate">{emp.name}</span>
+                  <span className="text-[10px] text-gray-400 font-mono ml-2 flex-shrink-0">{emp.department || 'Staff'}</span>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -177,29 +134,22 @@ function SearchableEmployeeSelect({
  * membatalkan pengajuan yang sudah disetujui, serta mendeteksi pegawai yang kembali masuk lebih awal.
  */
 export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
-  const getLocalDateString = () => {
-    const tzoffset = (new Date()).getTimezoneOffset() * 60000;
-    return (new Date(Date.now() - tzoffset)).toISOString().slice(0, 10);
-  };
-  const todayStr = getLocalDateString();
+  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
 
   const getMonthBoundaries = () => {
-    const date = new Date();
-    const y = date.getFullYear();
-    const m = date.getMonth();
-    const firstDay = new Date(y, m, 1);
-    const lastDay = new Date(y, m + 1, 0);
-    
-    const tzoffset = date.getTimezoneOffset() * 60000;
-    const firstStr = new Date(firstDay.getTime() - tzoffset).toISOString().slice(0, 10);
-    const lastStr = new Date(lastDay.getTime() - tzoffset).toISOString().slice(0, 10);
-    
-    return { firstStr, lastStr };
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return {
+      firstStr: `${firstDay.getFullYear()}-${pad(firstDay.getMonth() + 1)}-01`,
+      lastStr: `${lastDay.getFullYear()}-${pad(lastDay.getMonth() + 1)}-${pad(lastDay.getDate())}`
+    };
   };
 
   const { firstStr, lastStr } = getMonthBoundaries();
 
-  // Filters State (default dateFrom/dateTo to empty so future leave requests are not hidden)
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [departmentId, setDepartmentId] = useState('');
@@ -210,41 +160,29 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
   const [filterMonth, setFilterMonth] = useState<number>(0);
   const [filterYear, setFilterYear]   = useState<number>(new Date().getFullYear());
 
-  // Daftar lengkap seluruh pengajuan cuti masuk
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   
-  // Filter status aktif (default 'Semua' agar admin melihat seluruh data yang baru diisi)
   const [filter, setFilter] = useState('Semua');
-  
-  // Filter kategori tipe cuti ('all', 'cuti', 'izin', 'sakit')
   const [typeFilter, setTypeFilter] = useState('all');
   
-  // Menyimpan data dialog konfirmasi permohonan
   const [confirmModal, setConfirmModal] = useState<{ id: number; action: 'approve' | 'reject'; name: string } | null>(null);
   
-  // Modals untuk pembatalan dan edit/penyesuaian masa cuti oleh admin
   const [cancelModal, setCancelModal] = useState<{ id: number; name: string } | null>(null);
   const [editModal, setEditModal] = useState<{ id: number; name: string; startDate: string; endDate: string; adminNote: string } | null>(null);
 
-  // Form states untuk input di modal cancel/edit
   const [cancellationReason, setCancellationReason] = useState('');
   const [editStartDate, setEditStartDate] = useState('');
   const [editEndDate, setEditEndDate] = useState('');
   const [editAdminNote, setEditAdminNote] = useState('');
 
-  // Deteksi kemungkinan kembali lebih awal
   const [possibleReturns, setPossibleReturns] = useState<Array<{ leave_request: LeaveRequest; detected_dates: string[] }>>([]);
 
   const [selectedLeaveForPrint, setSelectedLeaveForPrint] = useState<LeaveRequest | null>(null);
   const { logoUrl } = useAuth();
 
-  // Catatan persetujuan/penolakan dari administrator
   const [adminNote, setAdminNote] = useState('');
-  
-  // Indikator loading request
   const [loading, setLoading] = useState(false);
 
-  // States & handlers untuk Tambah Cuti (On Behalf) oleh Admin
   const [showAddLeaveModal, setShowAddLeaveModal] = useState(false);
   const [employeesList, setEmployeesList] = useState<Employee[]>([]);
   const [loadingEmployees, setLoadingEmployees] = useState(false);
@@ -256,6 +194,26 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
   const [leaveReason, setLeaveReason] = useState('');
   const [addLeaveError, setAddLeaveError] = useState('');
   const [submittingAddLeave, setSubmittingAddLeave] = useState(false);
+
+  const [specialCategories, setSpecialCategories] = useState<SpecialLeaveCategory[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [customCategoryOther, setCustomCategoryOther] = useState<string>('');
+
+  const loadSpecialCategories = async () => {
+    try {
+      const res = await specialLeaveApi.listActive();
+      if (res.success) {
+        const sorted = [...(res.data || [])].sort((a, b) => {
+          if ((a.name || '').toLowerCase() === 'lainnya') return 1;
+          if ((b.name || '').toLowerCase() === 'lainnya') return -1;
+          return (a.name || '').localeCompare(b.name || '', 'id');
+        });
+        setSpecialCategories(sorted);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const loadEmployees = async () => {
     setLoadingEmployees(true);
@@ -275,28 +233,56 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
     }
   };
 
-
   const handleAddLeaveSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedEmployeeId || !leaveStart || !leaveEnd || !leaveReason.trim()) {
       setAddLeaveError('Semua field wajib diisi.');
       return;
     }
+
+    if (leaveType === 'cuti_khusus') {
+      if (!selectedCategory) {
+        setAddLeaveError('Kategori Cuti Khusus wajib dipilih.');
+        return;
+      }
+      const cat = specialCategories.find(c => String(c.id) === selectedCategory);
+      const catName = (cat?.name || '').toLowerCase();
+      const needsOther = catName === 'lainnya' || catName.includes('sakit');
+      if (needsOther && !customCategoryOther.trim()) {
+        setAddLeaveError('Keterangan rincian kategori khusus wajib diisi.');
+        return;
+      }
+    }
+
     setAddLeaveError('');
     setSubmittingAddLeave(true);
     try {
-      const res = await leaveApi.create({
+      const payload: any = {
         employee_id: Number(selectedEmployeeId),
         type: leaveType,
         start_date: leaveStart,
         end_date: leaveEnd,
-        reason: leaveReason,
-      } as any);
+        reason: leaveReason.trim(),
+      };
+
+      if (leaveType === 'cuti_khusus') {
+        payload.special_leave_category_id = Number(selectedCategory);
+        const cat = specialCategories.find(c => String(c.id) === selectedCategory);
+        const catName = (cat?.name || '').toLowerCase();
+        const needsOther = catName === 'lainnya' || catName.includes('sakit');
+        if (needsOther && customCategoryOther.trim()) {
+          payload.special_leave_category_other = customCategoryOther.trim();
+        }
+      }
+
+      const res = await leaveApi.create(payload);
       if (res.success) {
         setShowAddLeaveModal(false);
         setLeaveStart('');
         setLeaveEnd('');
         setLeaveReason('');
+        setSelectedCategory('');
+        setCustomCategoryOther('');
         setAddLeaveError('');
         loadRequests();
         if (onUpdateCount) onUpdateCount();
@@ -519,6 +505,7 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
             onClick={() => {
               setShowAddLeaveModal(true);
               loadEmployees();
+              loadSpecialCategories();
             }}
             className="flex items-center gap-1.5 px-4 py-2.5 bg-[#16A34A] text-white rounded-xl text-[12px] font-semibold hover:bg-[#0d9240] transition-all shadow-sm shadow-green-200"
           >
@@ -1156,7 +1143,14 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
                   <label className="block text-[12px] font-medium text-gray-600 mb-1.5">Jenis Cuti</label>
                   <select
                     value={leaveType}
-                    onChange={(e) => setLeaveType(e.target.value as any)}
+                    onChange={(e) => {
+                      const val = e.target.value as any;
+                      setLeaveType(val);
+                      if (val !== 'cuti_khusus') {
+                        setSelectedCategory('');
+                        setCustomCategoryOther('');
+                      }
+                    }}
                     className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all cursor-pointer font-semibold"
                   >
                     <option value="cuti">Cuti Tahunan</option>
@@ -1171,11 +1165,59 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
                     type="text"
                     value={leaveReason}
                     onChange={(e) => setLeaveReason(e.target.value)}
-                    placeholder="Sakit, Cuti mudik, dll."
+                    placeholder="Sakit, NIKAH, Cuti mudik, dll."
                     className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all"
                   />
                 </div>
               </div>
+
+              {/* Input Kategori Cuti Khusus */}
+              {leaveType === 'cuti_khusus' && (
+                <div className="space-y-3 p-3.5 bg-orange-50/80 border border-orange-200 rounded-xl">
+                  <div>
+                    <label className="block text-[12px] font-bold text-orange-900 mb-1">
+                      Kategori Cuti Khusus <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={selectedCategory}
+                      onChange={(e) => setSelectedCategory(e.target.value)}
+                      className="w-full px-3 py-2.5 border border-orange-200 rounded-xl text-[13px] bg-white focus:outline-none focus:border-orange-500 font-semibold text-gray-800 cursor-pointer"
+                    >
+                      <option value="">-- Pilih Kategori Cuti Khusus --</option>
+                      {specialCategories.map((cat) => (
+                        <option key={cat.id} value={cat.id}>
+                          {cat.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {selectedCategory && (() => {
+                    const cat = specialCategories.find(c => String(c.id) === selectedCategory);
+                    const catName = (cat?.name || '').toLowerCase();
+                    const needsOther = catName === 'lainnya' || catName.includes('sakit');
+                    if (!needsOther) return null;
+                    return (
+                      <div>
+                        <label className="block text-[12px] font-bold text-orange-900 mb-1">
+                          Detail / Keterangan Lainnya <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={customCategoryOther}
+                          onChange={(e) => setCustomCategoryOther(e.target.value)}
+                          placeholder="Masukkan rincian keterangan cuti khusus..."
+                          className="w-full px-3 py-2 border border-orange-200 rounded-xl text-[12px] bg-white focus:outline-none focus:border-orange-500"
+                        />
+                      </div>
+                    );
+                  })()}
+
+                  <p className="text-[11px] text-orange-800 font-semibold">
+                    💡 <strong>Info:</strong> Cuti Khusus <u>TIDAK memotong</u> kuota cuti tahunan pegawai.
+                  </p>
+                </div>
+              )}
               
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -1212,7 +1254,9 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
                   disabled={submittingAddLeave}
                   className="flex-1 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#16A34A] hover:bg-[#0d9240] transition-all disabled:opacity-50"
                 >
-                  {submittingAddLeave ? 'Menyimpan...' : 'Catat & Kurangi Kuota'}
+                  {submittingAddLeave 
+                    ? 'Menyimpan...' 
+                    : (leaveType === 'cuti' ? 'Catat & Kurangi Kuota' : 'Catat (Tanpa Potong Kuota)')}
                 </button>
               </div>
             </form>

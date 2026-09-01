@@ -646,7 +646,7 @@ class ScheduleController extends Controller
 
         // Ambil semua assignment tanggal-spesifik bulan ini sekaligus
         $dateAssignments = \Illuminate\Support\Facades\DB::table('employee_schedule')
-            ->join('schedules', 'employee_schedule.schedule_id', '=', 'schedules.id')
+            ->leftJoin('schedules', 'employee_schedule.schedule_id', '=', 'schedules.id')
             ->whereIn('employee_schedule.employee_id', $empIds)
             ->whereNotNull('employee_schedule.work_date')
             ->whereBetween('employee_schedule.work_date', [$startDate->toDateString(), $endDate->toDateString()])
@@ -727,6 +727,19 @@ class ScheduleController extends Controller
             if ($dateAssignments->has($emp->id)) {
                 foreach ($dateAssignments->get($emp->id) as $row) {
                     $dateKey = $row->work_date; // YYYY-MM-DD
+
+                    // Jika shift ini adalah "Libur / OFF" atau schedule_id === null,
+                    // hapus jadwal dari assignMap agar sel tampil kosong/putih (= Libur)
+                    $uSchedName = strtoupper($row->schedule_name ?? '');
+                    $isLiburOff = $row->schedule_id === null ||
+                                  ((str_contains($uSchedName, 'LIBUR') || str_contains($uSchedName, 'OFF'))
+                                   && !str_contains($uSchedName, 'JAGA')
+                                   && $uSchedName !== 'LJ');
+                    if ($isLiburOff) {
+                        unset($assignMap[$dateKey]); // Kosongkan sel = Libur
+                        continue;
+                    }
+
                     $shiftItem = [
                         'schedule_id' => $row->schedule_id,
                         'name'        => $row->schedule_name,

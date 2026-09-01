@@ -607,32 +607,27 @@ interface ShiftPopoverProps {
 
 function ShiftPopover({ shifts, currentScheduleIds, onToggleSelect, onSelectSpecial, onClose, style }: ShiftPopoverProps) {
   // Deteksi apakah saat ini sudah ter-assign sebagai Libur / OFF
-  const isCurrentlyLibur = (() => {
-    if (currentScheduleIds.length === 0) return true;
-    // Cek apakah semua schedule ID yang terpilih adalah shift "Libur / OFF"
-    // (bukan Libur Jaga / LJ)
-    const allAreLibur = currentScheduleIds.every(id => {
-      for (const s of shifts) {
-        if (s.id === id) {
-          const n = s.name.toUpperCase();
-          return (n.includes('LIBUR') || n.includes('OFF')) && !n.includes('JAGA') && n !== 'LJ';
-        }
-        for (const c of (s.children ?? [])) {
-          if (c.id === id) {
-            const cn = c.name.toUpperCase();
-            return (cn.includes('LIBUR') || cn.includes('OFF')) && !cn.includes('JAGA') && cn !== 'LJ';
-          }
+  const isCurrentlyLibur = currentScheduleIds.length === 0 || currentScheduleIds.every(id => {
+    for (const s of shifts) {
+      if (s.id === id) {
+        const n = s.name.toUpperCase();
+        return (n.includes('LIBUR') || n.includes('OFF')) && !n.includes('JAGA') && n !== 'LJ';
+      }
+      for (const c of (s.children ?? [])) {
+        if (c.id === id) {
+          const cn = c.name.toUpperCase();
+          return (cn.includes('LIBUR') || cn.includes('OFF')) && !cn.includes('JAGA') && cn !== 'LJ';
         }
       }
-      return false;
-    });
-    return allAreLibur;
-  })();
+    }
+    return false;
+  });
 
   return (
-    <div className="fixed inset-0 z-[9999]" onClick={onClose}>
+    <div className="fixed inset-0 z-[9999] notranslate" translate="no" onClick={onClose}>
       <div
-        className="fixed bg-white rounded-2xl border border-gray-200 shadow-2xl py-2 w-64 max-h-[380px] overflow-y-auto z-[10000] animate-fade-in text-left font-sans"
+        className="fixed bg-white rounded-2xl border border-gray-200 shadow-2xl py-2 w-64 max-h-[380px] overflow-y-auto z-[10000] animate-fade-in text-left font-sans notranslate"
+        translate="no"
         style={style}
         onClick={e => e.stopPropagation()}
       >
@@ -641,7 +636,7 @@ function ShiftPopover({ shifts, currentScheduleIds, onToggleSelect, onSelectSpec
             <p className="text-[10px] font-bold text-gray-700 uppercase tracking-wider">Atur Shift Staf</p>
             <p className="text-[9px] text-gray-400">Centang 1 atau 2 shift (Double Shift)</p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 cursor-pointer">
+          <button onClick={onClose} type="button" className="text-gray-400 hover:text-gray-600 cursor-pointer">
             <X size={14} />
           </button>
         </div>
@@ -649,15 +644,16 @@ function ShiftPopover({ shifts, currentScheduleIds, onToggleSelect, onSelectSpec
         {/* Section 1: Libur & Status Staf (Hanya Libur dan Libur Jaga) */}
         <div className="px-3 pt-2 pb-1 flex items-center justify-between">
           <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Status Libur Staf</span>
-          {currentScheduleIds.length > 1 && (
+          {currentScheduleIds.length > 1 ? (
             <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
               {currentScheduleIds.length} Shift Terpilih
             </span>
-          )}
+          ) : null}
         </div>
         
         {/* Libur */}
         <button
+          type="button"
           onClick={() => onToggleSelect(null)}
           className="w-full text-left px-3 py-1.5 text-[11.5px] font-semibold text-gray-600 hover:bg-gray-50 flex items-center gap-2 transition-colors cursor-pointer"
         >
@@ -665,11 +661,14 @@ function ShiftPopover({ shifts, currentScheduleIds, onToggleSelect, onSelectSpec
             –
           </span>
           <span>Libur / OFF</span>
-          {isCurrentlyLibur && <Check size={13} className="ml-auto text-[#16A34A]" />}
+          <span className="ml-auto flex items-center">
+            {isCurrentlyLibur ? <Check size={13} className="text-[#16A34A]" /> : null}
+          </span>
         </button>
 
         {/* Libur Jaga (LJ) */}
         <button
+          type="button"
           onClick={() => onSelectSpecial('lj')}
           className="w-full text-left px-3 py-1.5 text-[11.5px] font-semibold text-slate-700 hover:bg-slate-100 flex items-center gap-2 transition-colors cursor-pointer"
         >
@@ -684,58 +683,64 @@ function ShiftPopover({ shifts, currentScheduleIds, onToggleSelect, onSelectSpec
         {/* Section 2: Master Shift Kerja */}
         <p className="text-[9px] font-bold text-gray-400 px-3 py-1 uppercase tracking-wider">Shift Jam Kerja (Bisa Centang &gt;1 Shift)</p>
 
-        {shifts.map(parent => (
-          <div key={parent.id} className="mt-1 font-sans">
-            {parent.children && parent.children.length > 0 ? (
-              <div>
-                <p className="text-[9px] font-bold text-[#16A34A] px-3 pt-2 pb-1 uppercase tracking-wider bg-slate-50/50">
-                  {parent.name} {parent.owner_department_name ? `(${parent.owner_department_name})` : '(Office)'}
-                </p>
-                {parent.children.map(child => {
-                  const isChecked = currentScheduleIds.includes(child.id);
-                  return (
-                    <button key={child.id} onClick={() => onToggleSelect(child.id)}
-                      className={`w-full text-left px-3 py-1.5 text-[11px] hover:bg-gray-50 flex items-center gap-2 transition-colors cursor-pointer ${
-                        isChecked ? 'bg-green-50/70 font-semibold' : ''
-                      }`}>
-                      <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center text-[9px] font-bold ${
-                        isChecked ? 'bg-[#16A34A] border-[#16A34A] text-white' : 'border-gray-300 bg-white'
-                      }`}>
-                        {isChecked ? '✓' : ''}
-                      </span>
-                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: child.color || '#16A34A' }} />
-                      <span className="font-medium text-gray-700 truncate">{child.name}</span>
-                      <span className="ml-auto text-[10px] text-gray-400 font-mono flex-shrink-0">
-                        {child.start_time?.substring(0, 5)}–{child.end_time?.substring(0, 5)}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-              (() => {
-                const isChecked = currentScheduleIds.includes(parent.id);
-                return (
-                  <button key={parent.id} onClick={() => onToggleSelect(parent.id)}
-                    className={`w-full text-left px-3 py-1.5 text-[11px] hover:bg-gray-50 flex items-center gap-2 transition-colors cursor-pointer ${
-                      isChecked ? 'bg-green-50/70 font-semibold' : ''
-                    }`}>
-                    <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center text-[9px] font-bold ${
-                      isChecked ? 'bg-[#16A34A] border-[#16A34A] text-white' : 'border-gray-300 bg-white'
-                    }`}>
-                      {isChecked ? '✓' : ''}
-                    </span>
-                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: parent.color }} />
-                    <span className="font-medium text-gray-700 truncate">{parent.name}</span>
-                    <span className="ml-auto text-[10px] text-gray-400 font-mono flex-shrink-0">
-                      {parent.start_time?.substring(0, 5)}–{parent.end_time?.substring(0, 5)}
-                    </span>
-                  </button>
-                );
-              })()
-            )}
-          </div>
-        ))}
+        {shifts.map(parent => {
+          const hasChildren = parent.children && parent.children.length > 0;
+          return (
+            <div key={`parent-${parent.id}`} className="mt-1 font-sans">
+              {hasChildren ? (
+                <div>
+                  <p className="text-[9px] font-bold text-[#16A34A] px-3 pt-2 pb-1 uppercase tracking-wider bg-slate-50/50">
+                    {parent.name} {parent.owner_department_name ? `(${parent.owner_department_name})` : '(Office)'}
+                  </p>
+                  {parent.children?.map(child => {
+                    const isChecked = currentScheduleIds.includes(child.id);
+                    return (
+                      <button
+                        key={`child-${child.id}`}
+                        type="button"
+                        onClick={() => onToggleSelect(child.id)}
+                        className={`w-full text-left px-3 py-1.5 text-[11px] hover:bg-gray-50 flex items-center gap-2 transition-colors cursor-pointer ${
+                          isChecked ? 'bg-green-50/70 font-semibold' : ''
+                        }`}
+                      >
+                        <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center text-[9px] font-bold ${
+                          isChecked ? 'bg-[#16A34A] border-[#16A34A] text-white' : 'border-gray-300 bg-white'
+                        }`}>
+                          {isChecked ? '✓' : null}
+                        </span>
+                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: child.color || '#16A34A' }} />
+                        <span className="font-medium text-gray-700 truncate">{child.name}</span>
+                        <span className="ml-auto text-[10px] text-gray-400 font-mono flex-shrink-0">
+                          {child.start_time?.substring(0, 5)}–{child.end_time?.substring(0, 5)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <button
+                  key={`single-${parent.id}`}
+                  type="button"
+                  onClick={() => onToggleSelect(parent.id)}
+                  className={`w-full text-left px-3 py-1.5 text-[11px] hover:bg-gray-50 flex items-center gap-2 transition-colors cursor-pointer ${
+                    currentScheduleIds.includes(parent.id) ? 'bg-green-50/70 font-semibold' : ''
+                  }`}
+                >
+                  <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center text-[9px] font-bold ${
+                    currentScheduleIds.includes(parent.id) ? 'bg-[#16A34A] border-[#16A34A] text-white' : 'border-gray-300 bg-white'
+                  }`}>
+                    {currentScheduleIds.includes(parent.id) ? '✓' : null}
+                  </span>
+                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: parent.color }} />
+                  <span className="font-medium text-gray-700 truncate">{parent.name}</span>
+                  <span className="ml-auto text-[10px] text-gray-400 font-mono flex-shrink-0">
+                    {parent.start_time?.substring(0, 5)}–{parent.end_time?.substring(0, 5)}
+                  </span>
+                </button>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

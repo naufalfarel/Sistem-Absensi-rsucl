@@ -1249,27 +1249,18 @@ class AttendanceController extends Controller
     private function formatRecord(Attendance $r, bool $withEmployee = false): array
     {
         $shiftName = 'Tidak Ada Shift';
-        if ($r->employee && $r->date) {
-            $dayMap = [
-                0 => 'Minggu', 1 => 'Senin', 2 => 'Selasa',
-                3 => 'Rabu',   4 => 'Kamis', 5 => 'Jumat', 6 => 'Sabtu',
-            ];
+        if ($r->schedule_id) {
+            $sched = \App\Models\Schedule::find($r->schedule_id);
+            if ($sched) {
+                $shiftName = $sched->name;
+            }
+        }
+
+        if (($shiftName === 'Tidak Ada Shift' || empty($shiftName)) && $r->employee && $r->date) {
             $carbonDate = \Carbon\Carbon::parse($r->date);
-            $dayName = $dayMap[$carbonDate->dayOfWeek];
-            
-            // Periksa apakah relasi schedules sudah di-load untuk efisiensi kueri database (Eager Loading)
-            if ($r->employee->relationLoaded('schedules')) {
-                $sched = $r->employee->schedules->first(function ($s) use ($dayName) {
-                    return $s->pivot->day_of_week === $dayName;
-                });
-                if ($sched) {
-                    $shiftName = $sched->name;
-                }
-            } else {
-                $sched = $r->employee->schedules()->wherePivot('day_of_week', $dayName)->first();
-                if ($sched) {
-                    $shiftName = $sched->name;
-                }
+            $resolved = \App\Support\AttendanceRules::resolveShiftFor($r->employee, $carbonDate);
+            if ($resolved) {
+                $shiftName = $resolved->name;
             }
         }
 
