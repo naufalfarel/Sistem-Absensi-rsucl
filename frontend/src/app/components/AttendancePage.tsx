@@ -1252,7 +1252,7 @@ export function AttendancePage() {
             }
           }
           if (res.active_shift) {
-            setTodayShift(res.active_shift);
+            setTodayShift(res.active_shift as any);
           }
           if (res.active_leave) {
             setActiveLeave(res.active_leave);

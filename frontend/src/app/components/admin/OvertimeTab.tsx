@@ -38,13 +38,13 @@ export function OvertimeTab({ onUpdateCount }: OvertimeTabProps) {
 
   // Filters State
   const [statusFilter, setStatusFilter] = useState<'pending' | 'approved' | 'rejected' | 'all' | 'draft'>('pending');
-  const [dateFrom, setDateFrom] = useState(firstStr);
-  const [dateTo, setDateTo] = useState(lastStr);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [departmentId, setDepartmentId] = useState('');
   const [searchVal, setSearchVal] = useState('');
   const [search, setSearch] = useState('');
 
-  const [filterMonth, setFilterMonth] = useState<number>(new Date().getMonth() + 1);
+  const [filterMonth, setFilterMonth] = useState<number>(0);
   const [filterYear, setFilterYear]   = useState<number>(new Date().getFullYear());
 
   // Data State

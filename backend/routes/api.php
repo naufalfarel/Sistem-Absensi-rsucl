@@ -92,6 +92,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/assignment-letters', [\App\Http\Controllers\Api\AssignmentLetterController::class, 'index']);
     Route::post('/assignment-letters', [\App\Http\Controllers\Api\AssignmentLetterController::class, 'store']);
     Route::get('/assignment-letters/{id}', [\App\Http\Controllers\Api\AssignmentLetterController::class, 'show']);
+    // Upload laporan kegiatan oleh pegawai (Step 3 alur 1 & 2)
+    Route::post('/assignment-letters/{id}/upload-report', [\App\Http\Controllers\Api\AssignmentLetterController::class, 'uploadReport']);
+    // Batalkan pengajuan surat tugas oleh pegawai (hanya jika masih pending)
+    Route::delete('/assignment-letters/{id}/cancel', [\App\Http\Controllers\Api\AssignmentLetterController::class, 'cancel']);
     // ── Fitur Pengajuan Surat Pengunduran Diri (Resignation)
     Route::get('/resignation-requests', [\App\Http\Controllers\Api\ResignationRequestController::class, 'index']);
     Route::post('/resignation-requests', [\App\Http\Controllers\Api\ResignationRequestController::class, 'store']);

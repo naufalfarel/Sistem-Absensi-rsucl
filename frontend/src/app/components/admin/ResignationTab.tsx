@@ -14,8 +14,12 @@ import {
   AlertTriangle,
   Building2,
   ShieldAlert,
-  Trash2
+  Trash2,
+  Printer,
+  X
 } from 'lucide-react';
+import qrCodeImg from '../../../imports/qr_code_cempaka_lima.png';
+import qrHrdImg from '../../../imports/qr_hrd_rsucl.png';
 import { resignationApi, ResignationRequest } from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
 
@@ -26,6 +30,7 @@ export const ResignationTab: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedResignDoc, setSelectedResignDoc] = useState<ResignationRequest | null>(null);
 
   // Modal Review (Approve/Reject)
   const [selectedReq, setSelectedReq] = useState<ResignationRequest | null>(null);
@@ -291,6 +296,17 @@ export const ResignationTab: React.FC = () => {
                         </div>
                       )}
 
+                      {/* ACTION BUTTON LIHAT SURAT UNTUK APPROVED */}
+                      {item.status === 'approved' && (
+                        <button
+                          onClick={() => setSelectedResignDoc(item)}
+                          title="Lihat Surat Pengunduran Diri"
+                          className="px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 font-bold text-[12px] rounded-xl transition-all shadow-xs flex items-center gap-1 cursor-pointer"
+                        >
+                          <Printer size={14} /> Lihat Surat
+                        </button>
+                      )}
+
                       {/* ACTION BUTTON HAPUS UNTUK ADMIN / SUPER ADMIN */}
                       {isAdminOrSuperAdmin && (
                         <button
@@ -425,6 +441,147 @@ export const ResignationTab: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* ── MODAL SURAT PENGUNDURAN DIRI (ADMIN VIEW) ────────────────── */}
+      {selectedResignDoc && (() => {
+        const empName = selectedResignDoc.employee?.user?.name || 'Karyawan';
+        const empNik = selectedResignDoc.employee?.nik_ktp || '-';
+        const unitKerja = selectedResignDoc.unit_kerja || selectedResignDoc.employee?.department?.name || 'RSU Cempaka Lima';
+        const empPosition = typeof selectedResignDoc.employee?.position === 'object' && selectedResignDoc.employee?.position !== null
+          ? selectedResignDoc.employee?.position.name
+          : (selectedResignDoc.employee?.position || selectedResignDoc.posisi || '-');
+
+        const reqDateStr = selectedResignDoc.request_date
+          ? selectedResignDoc.request_date.substring(0, 10).replace(/-/g, '')
+          : '';
+        const docNumber = `SPD-${selectedResignDoc.id}-${reqDateStr}`;
+
+        const formatLong = (dateStr: string) => {
+          if (!dateStr) return '-';
+          const d = new Date(dateStr);
+          const months = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+          const days = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+          return `${days[d.getDay()]}, ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+        };
+
+        const reqFormatted = formatLong(selectedResignDoc.request_date);
+        const effFormatted = formatLong(selectedResignDoc.effective_date);
+
+        const qrContent = `SURAT PENGUNDURAN DIRI RESMI\nRSU CEMPAKA LIMA\n------------------------------\nNo. Dokumen: ${docNumber}\nNama Pegawai: ${empName}\nNIK KTP: ${empNik}\nUnit Kerja: ${unitKerja}\nJabatan: ${empPosition}\nTanggal Pengajuan: ${reqFormatted}\nTanggal Efektif Berhenti: ${effFormatted}\nNotice Period: ${selectedResignDoc.notice_days} Hari\nStatus Dokumen: SAH / DISETUJUI\nOtorisasi Final: Direktur PT Cempaka Lima (Amir Hidayat, ST., MKM)`;
+
+        return (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-xs" onClick={() => setSelectedResignDoc(null)} />
+            <div className="relative bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl p-6 md:p-8 max-h-[90vh] overflow-y-auto z-10">
+
+              {/* Modal controls */}
+              <div className="flex justify-end gap-2 mb-4 border-b border-slate-100 pb-3 no-print">
+                <button
+                  onClick={() => window.print()}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-[#16A34A] hover:bg-[#15803D] text-white rounded-xl text-[12px] font-extrabold shadow-sm transition-all cursor-pointer hover:shadow active:scale-95"
+                >
+                  <Printer size={13} /> Cetak Dokumen
+                </button>
+                <button
+                  onClick={() => setSelectedResignDoc(null)}
+                  className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors cursor-pointer"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+
+              {/* Printable Document Container */}
+              <div className="border-[3px] border-double border-slate-800 p-6 md:p-8 bg-slate-50/20 font-serif text-slate-900 leading-normal text-left shadow-inner rounded-xl">
+
+                {/* Header */}
+                <div className="text-center border-b-[2px] border-slate-800 pb-3 mb-5">
+                  <h2 className="text-[20px] font-bold tracking-wide uppercase">Surat Pengunduran Diri</h2>
+                  <p className="text-[12px] font-bold text-slate-700 tracking-wider mt-0.5">RSU CEMPAKA LIMA</p>
+                  <p className="text-[11px] text-slate-500 font-mono mt-1">No. Dokumen: {docNumber}</p>
+                </div>
+
+                {/* Identity */}
+                <div className="text-[12px] mb-5 border-b border-slate-200 pb-4 space-y-2">
+                  <div className="grid grid-cols-[160px_1fr] gap-1">
+                    <span className="font-bold text-slate-600">Nama Pegawai</span>
+                    <span className="font-semibold text-slate-900">: {empName}</span>
+                  </div>
+                  <div className="grid grid-cols-[160px_1fr] gap-1">
+                    <span className="font-bold text-slate-600">NIK KTP</span>
+                    <span className="font-semibold text-slate-900">: {empNik}</span>
+                  </div>
+                  <div className="grid grid-cols-[160px_1fr] gap-1">
+                    <span className="font-bold text-slate-600">Unit Kerja / Bagian</span>
+                    <span className="font-semibold text-slate-900">: {unitKerja}</span>
+                  </div>
+                  <div className="grid grid-cols-[160px_1fr] gap-1">
+                    <span className="font-bold text-slate-600">Jabatan</span>
+                    <span className="font-semibold text-slate-900">: {empPosition}</span>
+                  </div>
+                  <div className="grid grid-cols-[160px_1fr] gap-1">
+                    <span className="font-bold text-slate-600">Tanggal Pengajuan</span>
+                    <span className="font-semibold text-slate-900">: {reqFormatted}</span>
+                  </div>
+                </div>
+
+                {/* Table */}
+                <div className="overflow-x-auto mb-6">
+                  <table className="w-full border-collapse border border-slate-800 text-[11.5px]">
+                    <thead>
+                      <tr className="bg-slate-100 border-b border-slate-800 text-center font-bold">
+                        <th className="border border-slate-800 p-2">Nama Karyawan</th>
+                        <th className="border border-slate-800 p-2">Unit Kerja</th>
+                        <th className="border border-slate-800 p-2">Tgl. Pengajuan</th>
+                        <th className="border border-slate-800 p-2">Tgl. Efektif Berhenti</th>
+                        <th className="border border-slate-800 p-2">Notice Period</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="text-center font-semibold text-slate-800">
+                        <td className="border border-slate-800 p-2 text-left">{empName}</td>
+                        <td className="border border-slate-800 p-2">{unitKerja}</td>
+                        <td className="border border-slate-800 p-2">{new Date(selectedResignDoc.request_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</td>
+                        <td className="border border-slate-800 p-2 font-bold text-rose-700">{new Date(selectedResignDoc.effective_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</td>
+                        <td className="border border-slate-800 p-2">{selectedResignDoc.notice_days} Hari</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Alasan */}
+                <div className="mb-6 text-[12px]">
+                  <p className="font-bold text-slate-700 mb-1">Alasan Pengunduran Diri:</p>
+                  <p className="text-slate-800 font-medium leading-relaxed whitespace-pre-line pl-2 border-l-2 border-slate-300">{selectedResignDoc.reason}</p>
+                </div>
+
+                {/* Footer Signatures */}
+                <div className="grid grid-cols-2 gap-12 pt-6 items-start">
+
+                  {/* Disetujui Oleh */}
+                  <div className="text-center flex flex-col items-center">
+                    <p className="text-[12px] font-bold text-slate-800">Disetujui Oleh,</p>
+                    <div className="my-2 p-1 border border-slate-200 rounded-lg bg-white shadow-xs">
+                      <img src={qrHrdImg} alt="QR HRD RSUCL" className="w-20 h-20 object-contain" />
+                    </div>
+                    <p className="text-[12px] font-bold text-slate-800 underline">Tim Administrator RSUCL</p>
+                  </div>
+
+                  {/* Diketahui Oleh */}
+                  <div className="text-center flex flex-col items-center">
+                    <p className="text-[12px] font-bold text-slate-800">Diketahui Oleh,</p>
+                    <div className="my-2 p-1 border border-slate-200 rounded-lg bg-white shadow-xs">
+                      <img src={qrCodeImg} alt="QR Direktur RSUCL" className="w-20 h-20 object-contain" />
+                    </div>
+                    <p className="text-[12px] font-bold text-slate-800 underline">Amir Hidayat, ST., MKM</p>
+                    <p className="text-[10px] text-slate-600 font-semibold">Direktur PT Cempaka Lima</p>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

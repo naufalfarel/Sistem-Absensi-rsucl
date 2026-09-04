@@ -449,11 +449,23 @@ class AttendanceController extends Controller
             $isWithinGeofence = ($distance <= $maxRadius);
         }
 
-        if (!$enableGpsValidation) {
+        // ── PENGECEKAN DINAS LUAR (Surat Tugas) — Harus dilakukan SEBELUM validasi GPS ──
+        // Jika pegawai punya Surat Tugas aktif hari ini, GPS validation dilewati.
+        // Foto + koordinat tetap dikirim dan disimpan sebagai log.
+        $activeDinasLuarLetter = $employee->approvedAssignmentLetterOn(Carbon::today('Asia/Jakarta'));
+        $isDinasLuar = ($activeDinasLuarLetter !== null);
+
+        if (!$enableGpsValidation || $isDinasLuar) {
+            // Bypass radius: GPS dimatikan global ATAU pegawai sedang dinas luar
             $isWithinGeofence = true;
+            if ($isDinasLuar) {
+                \Illuminate\Support\Facades\Log::info(
+                    "Dinas luar bypass GPS for employee #{$employee->id}: {$activeDinasLuarLetter->title} (ID: {$activeDinasLuarLetter->id})"
+                );
+            }
         }
 
-        if ($enableGpsValidation && !AttendanceRules::isExemptFromGps($employee, $now)) {
+        if ($enableGpsValidation && !$isDinasLuar && !AttendanceRules::isExemptFromGps($employee, $now)) {
             if ($clientLat === null || $clientLng === null) {
                 return response()->json([
                     'success' => false,
@@ -505,7 +517,8 @@ class AttendanceController extends Controller
         try {
             $record = \Illuminate\Support\Facades\DB::transaction(function () use (
                 $employee, $today, $todayShift, $now, $status, $punctuality, $effectiveCheckinTime,
-                $clientLat, $clientLng, $clientAcc, $isWithinGeofence, $distance, $photoUrl, $request
+                $clientLat, $clientLng, $clientAcc, $isWithinGeofence, $distance, $photoUrl, $request,
+                $isDinasLuar, $activeDinasLuarLetter
             ) {
                 $lockedExisting = Attendance::where('employee_id', $employee->id)
                     ->where('date', $today)
@@ -551,6 +564,9 @@ class AttendanceController extends Controller
                     'checkin_longitude'       => $clientLng,
                     'checkin_distance_meters' => $distance !== null ? (int)round($distance) : null,
                     'checkin_location_note'   => $request->input('location_note'),
+                    // Dinas Luar (Surat Tugas bypass GPS)
+                    'is_dinas_luar'           => $isDinasLuar,
+                    'assignment_letter_id'    => $isDinasLuar && $activeDinasLuarLetter ? $activeDinasLuarLetter->id : null,
                 ];
 
                 if ($lockedExisting) {

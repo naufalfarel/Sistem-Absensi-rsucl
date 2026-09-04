@@ -9,6 +9,7 @@ import { NotificationsPage } from './NotificationsPage';
 import { ProfilePage } from './ProfilePage';
 import { LeaveRequestPage } from './LeaveRequestPage';
 import { ResignationRequestPage } from './ResignationRequestPage';
+import AssignmentLetterPage from './AssignmentLetterPage';
 import { GuidePage } from './GuidePage';
 import { LeaveApprovalTab } from './pjbagian/LeaveApprovalTab';
 import { OvertimeApprovalTab } from './pjbagian/OvertimeApprovalTab';
@@ -19,7 +20,7 @@ import { PJBagianDashboard } from './pjbagian/PJBagianDashboard';
 import { DisciplinaryPage } from './DisciplinaryPage';
 import { notificationApi, leaveApi, overtimeApi, resignationApi } from '../../services/api';
 
-type Tab = 'dashboard' | 'attendance' | 'history' | 'overtime_personal' | 'approvals' | 'shift_proposals' | 'staff_attendance' | 'notifications' | 'profile' | 'leave' | 'resignation' | 'guide' | 'disciplinary';
+type Tab = 'dashboard' | 'attendance' | 'history' | 'overtime_personal' | 'approvals' | 'shift_proposals' | 'staff_attendance' | 'notifications' | 'profile' | 'leave' | 'assignment' | 'resignation' | 'guide' | 'disciplinary';
 
 interface PJBagianAppProps {
   onLogout: () => void;
@@ -137,6 +138,8 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
         );
       case 'leave':
         return <LeaveRequestPage onBack={() => setActiveTab('dashboard')} />;
+      case 'assignment':
+        return <AssignmentLetterPage />;
       case 'resignation':
         return <ResignationRequestPage user={{ id: user.id, name: user.name, username: user.username, nik_ktp: user.nik_ktp, department: user.pj_bagian_department, role: 'pj_bagian' }} onBack={() => setActiveTab('dashboard')} />;
       case 'guide':
@@ -159,6 +162,7 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
   const personalProposalItems: { id: Tab; icon: any; label: string; badge?: number }[] = [
     { id: 'leave', icon: FileText, label: 'Pengajuan Cuti & Sakit' },
     { id: 'overtime_personal', icon: Clock, label: 'Pengajuan Lembur' },
+    { id: 'assignment', icon: FileText, label: 'Pengajuan Surat Tugas' },
     { id: 'resignation', icon: ShieldAlert, label: 'Pengajuan Resign' },
   ];
 

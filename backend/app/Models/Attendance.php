@@ -44,6 +44,8 @@ class Attendance extends Model
         'checkin_distance_meters', 'checkout_distance_meters',
         // Holiday Work
         'is_holiday_work', 'holiday_id',
+        // Dinas Luar (Surat Tugas)
+        'is_dinas_luar', 'assignment_letter_id',
     ];
 
     // Konversi tipe data otomatis oleh Eloquent
@@ -64,6 +66,7 @@ class Attendance extends Model
         'checkin_distance_meters'  => 'integer',
         'checkout_distance_meters' => 'integer',
         'is_holiday_work'     => 'boolean',
+        'is_dinas_luar'       => 'boolean',
         'overtime_reviewed_at' => 'datetime',
     ];
 
@@ -90,6 +93,14 @@ class Attendance extends Model
     public function holiday()
     {
         return $this->belongsTo(Holiday::class);
+    }
+
+    /**
+     * Relasi ke model AssignmentLetter (Surat Tugas yang aktif saat absensi ini dilakukan).
+     */
+    public function assignmentLetter()
+    {
+        return $this->belongsTo(AssignmentLetter::class);
     }
 
     /**

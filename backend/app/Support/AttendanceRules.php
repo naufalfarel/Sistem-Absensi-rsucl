@@ -103,6 +103,18 @@ class AttendanceRules
     }
 
     /**
+     * Mengembalikan nama hari dalam Bahasa Indonesia untuk Carbon date tertentu.
+     */
+    public static function dayNameFor(Carbon $date): string
+    {
+        $dayMap = [
+            0 => 'Minggu', 1 => 'Senin', 2 => 'Selasa',
+            3 => 'Rabu',   4 => 'Kamis', 5 => 'Jumat', 6 => 'Sabtu',
+        ];
+        return $dayMap[$date->dayOfWeek];
+    }
+
+    /**
      * Mencari data hari libur untuk tanggal tertentu.
      * 
      * @param Carbon $date

@@ -279,6 +279,9 @@ export interface ResignationRequest {
     department?: {
       name: string;
     };
+    position?: {
+      name: string;
+    } | string;
   };
   reviewer?: {
     name: string;
@@ -490,6 +493,13 @@ export const attendanceApi = {
     api.get<{
       success: boolean;
       data: AttendanceRecord | null;
+      active_shift?: {
+        id: number;
+        name: string;
+        start_time: string;
+        end_time: string;
+        color?: string;
+      } | null;
       active_leave?: { type: "cuti" | "izin" | "sakit"; reason: string } | null;
       holiday?: { name: string; is_assigned: boolean } | null;
       is_exempt_from_gps?: boolean;
@@ -1223,7 +1233,7 @@ export interface MyShiftSchedule {
   end_time: string;
   checkin_window_end_time?: string | null;
   color: string;
-  icon: string;
+  icon?: string;
   shift_type?: "normal" | "dinas_luar";
 }
 
@@ -1792,6 +1802,7 @@ export interface AssignmentLetter {
     name: string;
     nik_ktp: string;
     department?: string;
+    position?: string;
     profile_picture?: string | null;
   } | null;
 }
@@ -1888,7 +1899,7 @@ export const assignmentLetterApi = {
       success: boolean;
       message: string;
       data: AssignmentLetter;
-    }>(`/assignment-letters/${id}/report`, formData);
+    }>(`/assignment-letters/${id}/upload-report`, formData);
   },
 
   cancel: (id: number) => {

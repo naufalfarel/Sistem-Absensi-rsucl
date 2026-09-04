@@ -37,6 +37,7 @@ class AssignmentLetterResource extends JsonResource
                 'name'       => $this->employee->user?->name,
                 'nik_ktp'    => $this->employee->nik_ktp,
                 'department' => $this->employee->department?->name,
+                'position'   => $this->employee->position?->name,
                 'profile_picture' => $this->employee->user?->profile_picture ? url($this->employee->user->profile_picture) : null,
             ] : null,
         ];
