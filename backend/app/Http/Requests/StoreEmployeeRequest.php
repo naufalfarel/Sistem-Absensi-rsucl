@@ -41,6 +41,8 @@ class StoreEmployeeRequest extends FormRequest
             'facebook'           => 'nullable|string|max:100',
             'tiktok'             => 'nullable|string|max:100',
             'custom_leave_quota' => 'nullable|integer|min:0|max:365',
+            'faskes_tk'          => 'nullable|string|max:50',
+            'faskes_location'    => 'nullable|string|max:255',
         ];
     }
 }

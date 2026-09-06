@@ -251,6 +251,8 @@ export function ProfilePage({
   const [editInstagram, setEditInstagram] = useState("");
   const [editFacebook, setEditFacebook] = useState("");
   const [editTiktok, setEditTiktok] = useState("");
+  const [editFaskesTk, setEditFaskesTk] = useState("");
+  const [editFaskesLocation, setEditFaskesLocation] = useState("");
   const [editProfileError, setEditProfileError] = useState("");
   const [editProfileSuccess, setEditProfileSuccess] = useState("");
   const [editProfileLoading, setEditProfileLoading] = useState(false);
@@ -399,6 +401,8 @@ export function ProfilePage({
         instagram: editInstagram.trim() || null,
         facebook: editFacebook.trim() || null,
         tiktok: editTiktok.trim() || null,
+        faskes_tk: editFaskesTk.trim() || null,
+        faskes_location: editFaskesLocation.trim() || null,
       });
       if (res.success) {
         setEditProfileSuccess("Profil berhasil diperbarui.");
@@ -893,6 +897,8 @@ export function ProfilePage({
       label: "TikTok",
       value: user?.social_media?.tiktok ? `@${user.social_media.tiktok}` : "--",
     },
+    { icon: Building2, label: "Faskes Tingkat", value: user?.faskes_tk ?? "--" },
+    { icon: MapPin, label: "Lokasi Faskes", value: user?.faskes_location ?? "--" },
   ];
 
   const infoKerja = [
@@ -1056,6 +1062,8 @@ export function ProfilePage({
                   setEditInstagram(user?.social_media?.instagram ?? "");
                   setEditFacebook(user?.social_media?.facebook ?? "");
                   setEditTiktok(user?.social_media?.tiktok ?? "");
+                  setEditFaskesTk(user?.faskes_tk ?? "");
+                  setEditFaskesLocation(user?.faskes_location ?? "");
                   setEditProfileError("");
                   setEditProfileSuccess("");
                   setShowEditProfileModal(true);
@@ -2335,6 +2343,39 @@ export function ProfilePage({
                     className="w-full pl-8 pr-4 py-2 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all"
                   />
                 </div>
+              </div>
+              <div>
+                <label className="block text-[12px] font-medium text-gray-600 mb-1">
+                  Faskes Tingkat 1/2/3
+                </label>
+                <div className="relative">
+                  <select
+                    value={editFaskesTk}
+                    onChange={(e) => setEditFaskesTk(e.target.value)}
+                    className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all appearance-none cursor-pointer"
+                  >
+                    <option value="">-- Pilih --</option>
+                    <option value="Tingkat 1">Tingkat 1</option>
+                    <option value="Tingkat 2">Tingkat 2</option>
+                    <option value="Tingkat 3">Tingkat 3</option>
+                  </select>
+                  <ChevronDown
+                    size={14}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[12px] font-medium text-gray-600 mb-1">
+                  Lokasi Faskes
+                </label>
+                <input
+                  type="text"
+                  value={editFaskesLocation}
+                  onChange={(e) => setEditFaskesLocation(e.target.value)}
+                  placeholder="Nama / Lokasi Klinik atau RS Faskes"
+                  className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all"
+                />
               </div>
             </div>
             <div className="flex gap-2">

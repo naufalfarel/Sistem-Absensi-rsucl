@@ -466,6 +466,17 @@ export function EmployeeRegistrationTab() {
                                   <span className="font-mono bg-white border border-gray-200 rounded px-2 py-0.5 text-gray-700">{reg.car_plate_2 || '—'}</span>
                                 </div>
                               </div>
+                              {/* Faskes */}
+                              <div className="flex flex-wrap gap-x-8 gap-y-2 pt-1 border-t border-gray-100/50">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-semibold text-gray-400 uppercase text-[9px] tracking-wider">Faskes Tingkat:</span>
+                                  <span className="text-gray-700 font-medium">{reg.faskes_tk || '—'}</span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-semibold text-gray-400 uppercase text-[9px] tracking-wider">Lokasi Faskes:</span>
+                                  <span className="text-gray-700 font-medium">{reg.faskes_location || '—'}</span>
+                                </div>
+                              </div>
                               {/* Sosial Media */}
                               <div className="flex flex-wrap gap-x-8 gap-y-2 pt-1 border-t border-gray-100/50">
                                 <div className="flex items-center gap-1.5">

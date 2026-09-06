@@ -94,8 +94,13 @@ export function ReportsTab() {
 
   // Menampung daftar departemen untuk dropdown filter
   const [departments, setDepartments] = useState<
-    { id: number; name: string }[]
+    { id: number; name: string; count_sunday_in_leave?: boolean }[]
   >([]);
+
+  // State khusus rentang tanggal lembur
+  const [overtimeDateFrom, setOvertimeDateFrom] = useState<string>("");
+  const [overtimeDateTo, setOvertimeDateTo] = useState<string>("");
+
 
   // State Laporan Keterlambatan & Potongan
   const [latenessData, setLatenessData] = useState<any>(null);
@@ -1441,81 +1446,145 @@ export function ReportsTab() {
     return dateStr;
   };
 
+  const getShiftType = (startTime: string) => {
+    if (!startTime) return "pagi";
+    const hr = parseInt(startTime.split(":")[0] || "0", 10);
+    if (hr >= 19 || hr < 6) return "malam";
+    return "pagi";
+  };
+
+
   // ── 1. EKSPOR LEMBUR ────────────────────────────────────────────
   const handleExportOvertimeExcel = async () => {
     setHrExporting("lembur");
     try {
       const logo = await loadLogoBase64();
-      const period = getMonthsLabel(selectedMonth, selectedYear);
-      const startDate = `${selectedYear}-${String(selectedMonth).padStart(2,"0")}-01`;
-      const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
-      const endDate = `${selectedYear}-${String(selectedMonth).padStart(2,"0")}-${String(lastDay).padStart(2,"0")}`;
+      let period = getMonthsLabel(selectedMonth, selectedYear);
+      let startDate = `${selectedYear}-${String(selectedMonth).padStart(2,"0")}-01`;
+      let endDate = `${selectedYear}-${String(selectedMonth).padStart(2,"0")}-${String(new Date(selectedYear, selectedMonth, 0).getDate()).padStart(2,"0")}`;
+
+      if (overtimeDateFrom && overtimeDateTo) {
+        startDate = overtimeDateFrom;
+        endDate = overtimeDateTo;
+        period = `${overtimeDateFrom} s.d ${overtimeDateTo}`;
+      }
+
       const res = await overtimeApi.list({ date_from: startDate, date_to: endDate, per_page: 9999 });
       if (!res.success) { alert("Gagal memuat data lembur."); return; }
       const data = res.data.filter(r => {
         const deptOk = selectedDepartment === "all" || r.employee?.department === selectedDepartment;
         return r.status === "approved" && deptOk;
       });
-      let rows = ""; let no = 1;
-      let totalMinutesAll = 0;
 
-      data.forEach(r => {
-        const emp = r.employee;
-        let durMin = 0;
-        if (r.system_checkout_data?.overtime_minutes && r.system_checkout_data.overtime_minutes > 0) {
-          durMin = r.system_checkout_data.overtime_minutes;
-        } else if (r.start_time && r.end_time) {
-          const [sh, sm] = r.start_time.split(":").map(Number);
-          const [eh, em] = r.end_time.split(":").map(Number);
-          if (!isNaN(sh) && !isNaN(sm) && !isNaN(eh) && !isNaN(em)) {
-            let sMins = sh * 60 + sm;
-            let eMins = eh * 60 + em;
-            if (eMins < sMins) eMins += 24 * 60;
-            durMin = Math.max(0, eMins - sMins);
-          }
-        }
-        totalMinutesAll += durMin;
-
-        const durHours = Math.floor(durMin / 60);
-        const durMinsRem = durMin % 60;
-        let durFormatted = "";
-        if (durMin === 0) {
-          durFormatted = "0 Menit";
-        } else if (durHours > 0 && durMinsRem > 0) {
-          durFormatted = `${durHours} Jam ${durMinsRem} Menit`;
-        } else if (durHours > 0) {
-          durFormatted = `${durHours} Jam`;
-        } else {
-          durFormatted = `${durMinsRem} Menit`;
-        }
-
-        rows += `<tr>
-          <td class="center">${no++}</td>
-          <td class="center" x:str>${emp?.nik_ktp ?? "--"}</td>
-          <td class="bold">${emp?.name ?? "--"}</td>
-          <td>${emp?.department ?? "--"}</td>
-          <td class="center">${r.date ?? "--"}</td>
-          <td class="center">${r.start_time ?? "--"}</td>
-          <td class="center">${r.end_time ?? "--"}</td>
-          <td class="center bold" style="background-color:#FEF3C7;color:#92400E;">${durFormatted}</td>
-          <td>${r.reason ?? "--"}</td>
-          <td>${r.tasks ?? "--"}</td>
-          ${statusBadge(r.status)}
-          <td>${r.admin_note ?? "--"}</td>
-        </tr>`;
+      // Group by Employee
+      data.sort((a, b) => {
+        const deptA = a.employee?.department || "";
+        const deptB = b.employee?.department || "";
+        if (deptA !== deptB) return deptA.localeCompare(deptB);
+        const nameA = a.employee?.name || "";
+        const nameB = b.employee?.name || "";
+        return nameA.localeCompare(nameB);
       });
 
-      const grandTotalHours = Math.floor(totalMinutesAll / 60);
-      const grandTotalMinsRem = totalMinutesAll % 60;
+      let rows = ""; let no = 1;
+      let grandTotalMinutesAll = 0;
+      let grandTotalPayAll = 0;
+      
+      const groupedData: Record<number, typeof data> = {};
+      data.forEach(r => {
+        if (!r.employee_id) return;
+        if (!groupedData[r.employee_id]) groupedData[r.employee_id] = [];
+        groupedData[r.employee_id].push(r);
+      });
+
+      for (const empId of Object.keys(groupedData)) {
+        const empData = groupedData[parseInt(empId, 10)];
+        const emp = empData[0].employee;
+        const deptInfo = departments.find(d => d.name === emp?.department);
+        const isShift24h = deptInfo?.count_sunday_in_leave === true;
+
+        let empRegMins = 0;
+        let empPagiMins = 0;
+        let empMalamMins = 0;
+        
+        empData.forEach(r => {
+          let durMin = 0;
+          if (r.system_checkout_data?.overtime_minutes && r.system_checkout_data.overtime_minutes > 0) {
+            durMin = r.system_checkout_data.overtime_minutes;
+          } else if (r.start_time && r.end_time) {
+            const [sh, sm] = r.start_time.split(":").map(Number);
+            const [eh, em] = r.end_time.split(":").map(Number);
+            if (!isNaN(sh) && !isNaN(sm) && !isNaN(eh) && !isNaN(em)) {
+              let sMins = sh * 60 + sm;
+              let eMins = eh * 60 + em;
+              if (eMins < sMins) eMins += 24 * 60;
+              durMin = Math.max(0, eMins - sMins);
+            }
+          }
+          
+          if (isShift24h) {
+            const shiftType = getShiftType(r.start_time || "");
+            if (shiftType === "malam") empMalamMins += durMin;
+            else empPagiMins += durMin;
+          } else {
+            empRegMins += durMin;
+          }
+
+          const durHours = Math.floor(durMin / 60);
+          const durMinsRem = durMin % 60;
+          let durFormatted = durMin === 0 ? "0 Menit" : (durHours > 0 && durMinsRem > 0 ? `${durHours} Jam ${durMinsRem} Menit` : (durHours > 0 ? `${durHours} Jam` : `${durMinsRem} Menit`));
+
+          rows += `<tr>
+            <td class="center">${no++}</td>
+            <td class="center" x:str>${emp?.nik_ktp ?? "--"}</td>
+            <td class="bold">${emp?.name ?? "--"}</td>
+            <td>${emp?.department ?? "--"}</td>
+            <td class="center">${r.date ?? "--"}</td>
+            <td class="center">${r.start_time ?? "--"}</td>
+            <td class="center">${r.end_time ?? "--"}</td>
+            <td class="center bold" style="background-color:#FEF3C7;color:#92400E;">${durFormatted}</td>
+            <td>${r.reason ?? "--"}</td>
+            <td>${r.tasks ?? "--"}</td>
+            ${statusBadge(r.status)}
+            <td>${r.admin_note ?? "--"}</td>
+          </tr>`;
+        });
+
+        const empTotalMins = empRegMins + empPagiMins + empMalamMins;
+        grandTotalMinutesAll += empTotalMins;
+        
+        const payReg = Math.floor(empRegMins / 60) * 10000;
+        const payPagi = Math.floor(empPagiMins / 60) * 50000;
+        const payMalam = Math.floor(empMalamMins / 60) * 60000;
+        const empTotalPay = payReg + payPagi + payMalam;
+        grandTotalPayAll += empTotalPay;
+
+        const empHours = Math.floor(empTotalMins / 60);
+        const empMinsRem = empTotalMins % 60;
+        const empFormatted = empHours > 0 
+          ? `${empHours} Jam ${empMinsRem > 0 ? `${empMinsRem} Menit` : ''}`.trim() + ` (${empTotalMins} Menit)`
+          : `${empMinsRem} Menit`;
+
+        rows += `
+          <tr style="background-color:#F9FAFB;font-weight:bold;">
+            <td colspan="7" style="text-align:right;padding:6px;">TOTAL LEMBUR & NOMINAL ${emp?.name.toUpperCase()} :</td>
+            <td class="center bold" style="background-color:#FDE68A;color:#78350F;">${empFormatted}</td>
+            <td colspan="4" style="color:#065F46;text-align:center;">Nominal: Rp ${empTotalPay.toLocaleString('id-ID')}</td>
+          </tr>
+        `;
+      }
+
+      const grandTotalHours = Math.floor(grandTotalMinutesAll / 60);
+      const grandTotalMinsRem = grandTotalMinutesAll % 60;
       const grandTotalFormatted = grandTotalHours > 0 
-        ? `${grandTotalHours} Jam ${grandTotalMinsRem > 0 ? `${grandTotalMinsRem} Menit` : ''}`.trim() + ` (${totalMinutesAll} Menit)`
+        ? `${grandTotalHours} Jam ${grandTotalMinsRem > 0 ? `${grandTotalMinsRem} Menit` : ''}`.trim() + ` (${grandTotalMinutesAll} Menit)`
         : `${grandTotalMinsRem} Menit`;
 
       const summaryFooterRow = `
         <tr style="background-color:#F3F4F6;font-weight:bold;">
-          <td colspan="7" style="text-align:right;padding:8px;">TOTAL AKUMULASI WAKTU LEMBUR:</td>
+          <td colspan="7" style="text-align:right;padding:8px;">TOTAL AKUMULASI KESELURUHAN WAKTU LEMBUR:</td>
           <td class="center bold" style="background-color:#FDE68A;color:#78350F;padding:8px;">${grandTotalFormatted}</td>
-          <td colspan="4" style="padding:8px;">Total Data: ${data.length} Pengajuan</td>
+          <td colspan="4" style="padding:8px;text-align:center;color:#065F46;">TOTAL NOMINAL: Rp ${grandTotalPayAll.toLocaleString('id-ID')}</td>
         </tr>
       `;
 
@@ -1535,79 +1604,135 @@ export function ReportsTab() {
     if (!pw) { alert("Izinkan popup untuk mencetak."); setHrExporting(null); return; }
     try {
       const logo = await loadLogoBase64();
-      const period = getMonthsLabel(selectedMonth, selectedYear);
-      const startDate = `${selectedYear}-${String(selectedMonth).padStart(2,"0")}-01`;
-      const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
-      const endDate = `${selectedYear}-${String(selectedMonth).padStart(2,"0")}-${String(lastDay).padStart(2,"0")}`;
+      let period = getMonthsLabel(selectedMonth, selectedYear);
+      let startDate = `${selectedYear}-${String(selectedMonth).padStart(2,"0")}-01`;
+      let endDate = `${selectedYear}-${String(selectedMonth).padStart(2,"0")}-${String(new Date(selectedYear, selectedMonth, 0).getDate()).padStart(2,"0")}`;
+
+      if (overtimeDateFrom && overtimeDateTo) {
+        startDate = overtimeDateFrom;
+        endDate = overtimeDateTo;
+        period = `${overtimeDateFrom} s.d ${overtimeDateTo}`;
+      }
+
       const res = await overtimeApi.list({ date_from: startDate, date_to: endDate, per_page: 9999 });
       if (!res.success) { pw.close(); return; }
       const data = res.data.filter(r => {
         const deptOk = selectedDepartment === "all" || r.employee?.department === selectedDepartment;
         return r.status === "approved" && deptOk;
       });
-      let rows = ""; let no = 1;
-      let totalMinutesAll = 0;
 
-      data.forEach(r => {
-        const emp = r.employee;
-        const statusColor = r.status === "approved" ? "#D1FAE5" : r.status === "pending" ? "#FEF9C3" : "#FEE2E2";
-        const statusText = r.status === "approved" ? "#065F46" : r.status === "pending" ? "#92400E" : "#991B1B";
-
-        let durMin = 0;
-        if (r.system_checkout_data?.overtime_minutes && r.system_checkout_data.overtime_minutes > 0) {
-          durMin = r.system_checkout_data.overtime_minutes;
-        } else if (r.start_time && r.end_time) {
-          const [sh, sm] = r.start_time.split(":").map(Number);
-          const [eh, em] = r.end_time.split(":").map(Number);
-          if (!isNaN(sh) && !isNaN(sm) && !isNaN(eh) && !isNaN(em)) {
-            let sMins = sh * 60 + sm;
-            let eMins = eh * 60 + em;
-            if (eMins < sMins) eMins += 24 * 60;
-            durMin = Math.max(0, eMins - sMins);
-          }
-        }
-        totalMinutesAll += durMin;
-
-        const durHours = Math.floor(durMin / 60);
-        const durMinsRem = durMin % 60;
-        let durFormatted = "";
-        if (durMin === 0) {
-          durFormatted = "0 Menit";
-        } else if (durHours > 0 && durMinsRem > 0) {
-          durFormatted = `${durHours} Jam ${durMinsRem} Menit`;
-        } else if (durHours > 0) {
-          durFormatted = `${durHours} Jam`;
-        } else {
-          durFormatted = `${durMinsRem} Menit`;
-        }
-
-        rows += `<tr style="border-bottom:1px solid #E5E7EB;font-size:10px;">
-          <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${no++}</td>
-          <td style="padding:6px;border-right:1px solid #E5E7EB;">${emp?.nik_ktp ?? "--"}</td>
-          <td style="padding:6px;font-weight:bold;border-right:1px solid #E5E7EB;">${emp?.name ?? "--"}</td>
-          <td style="padding:6px;border-right:1px solid #E5E7EB;">${emp?.department ?? "--"}</td>
-          <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${r.date ?? "--"}</td>
-          <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${r.start_time ?? "--"}</td>
-          <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${r.end_time ?? "--"}</td>
-          <td style="padding:6px;text-align:center;font-weight:bold;background-color:#FEF3C7;color:#92400E;border-right:1px solid #E5E7EB;">${durFormatted}</td>
-          <td style="padding:6px;border-right:1px solid #E5E7EB;">${r.reason ?? "--"}</td>
-          <td style="padding:6px;border-right:1px solid #E5E7EB;">${r.tasks ?? "--"}</td>
-          <td style="padding:6px;text-align:center;font-weight:bold;background-color:${statusColor};color:${statusText};border-right:1px solid #E5E7EB;">${r.status.toUpperCase()}</td>
-          <td style="padding:6px;">${r.admin_note ?? "--"}</td>
-        </tr>`;
+      // Group by Employee
+      data.sort((a, b) => {
+        const deptA = a.employee?.department || "";
+        const deptB = b.employee?.department || "";
+        if (deptA !== deptB) return deptA.localeCompare(deptB);
+        const nameA = a.employee?.name || "";
+        const nameB = b.employee?.name || "";
+        return nameA.localeCompare(nameB);
       });
 
-      const grandTotalHours = Math.floor(totalMinutesAll / 60);
-      const grandTotalMinsRem = totalMinutesAll % 60;
+      let rows = ""; let no = 1;
+      let grandTotalMinutesAll = 0;
+      let grandTotalPayAll = 0;
+
+      const groupedData: Record<number, typeof data> = {};
+      data.forEach(r => {
+        if (!r.employee_id) return;
+        if (!groupedData[r.employee_id]) groupedData[r.employee_id] = [];
+        groupedData[r.employee_id].push(r);
+      });
+
+      for (const empId of Object.keys(groupedData)) {
+        const empData = groupedData[parseInt(empId, 10)];
+        const emp = empData[0].employee;
+        const deptInfo = departments.find(d => d.name === emp?.department);
+        const isShift24h = deptInfo?.count_sunday_in_leave === true;
+
+        let empRegMins = 0;
+        let empPagiMins = 0;
+        let empMalamMins = 0;
+
+        empData.forEach(r => {
+          const statusColor = r.status === "approved" ? "#D1FAE5" : r.status === "pending" ? "#FEF9C3" : "#FEE2E2";
+          const statusText = r.status === "approved" ? "#065F46" : r.status === "pending" ? "#92400E" : "#991B1B";
+
+          let durMin = 0;
+          if (r.system_checkout_data?.overtime_minutes && r.system_checkout_data.overtime_minutes > 0) {
+            durMin = r.system_checkout_data.overtime_minutes;
+          } else if (r.start_time && r.end_time) {
+            const [sh, sm] = r.start_time.split(":").map(Number);
+            const [eh, em] = r.end_time.split(":").map(Number);
+            if (!isNaN(sh) && !isNaN(sm) && !isNaN(eh) && !isNaN(em)) {
+              let sMins = sh * 60 + sm;
+              let eMins = eh * 60 + em;
+              if (eMins < sMins) eMins += 24 * 60;
+              durMin = Math.max(0, eMins - sMins);
+            }
+          }
+          
+          if (isShift24h) {
+            const shiftType = getShiftType(r.start_time || "");
+            if (shiftType === "malam") empMalamMins += durMin;
+            else empPagiMins += durMin;
+          } else {
+            empRegMins += durMin;
+          }
+
+          const durHours = Math.floor(durMin / 60);
+          const durMinsRem = durMin % 60;
+          let durFormatted = durMin === 0 ? "0 Menit" : (durHours > 0 && durMinsRem > 0 ? `${durHours} Jam ${durMinsRem} Menit` : (durHours > 0 ? `${durHours} Jam` : `${durMinsRem} Menit`));
+
+          rows += `<tr style="border-bottom:1px solid #E5E7EB;font-size:10px;">
+            <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${no++}</td>
+            <td style="padding:6px;border-right:1px solid #E5E7EB;">${emp?.nik_ktp ?? "--"}</td>
+            <td style="padding:6px;font-weight:bold;border-right:1px solid #E5E7EB;">${emp?.name ?? "--"}</td>
+            <td style="padding:6px;border-right:1px solid #E5E7EB;">${emp?.department ?? "--"}</td>
+            <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${r.date ?? "--"}</td>
+            <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${r.start_time ?? "--"}</td>
+            <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${r.end_time ?? "--"}</td>
+            <td style="padding:6px;text-align:center;font-weight:bold;background-color:#FEF3C7;color:#92400E;border-right:1px solid #E5E7EB;">${durFormatted}</td>
+            <td style="padding:6px;border-right:1px solid #E5E7EB;">${r.reason ?? "--"}</td>
+            <td style="padding:6px;border-right:1px solid #E5E7EB;">${r.tasks ?? "--"}</td>
+            <td style="padding:6px;text-align:center;font-weight:bold;background-color:${statusColor};color:${statusText};border-right:1px solid #E5E7EB;">${r.status.toUpperCase()}</td>
+            <td style="padding:6px;">${r.admin_note ?? "--"}</td>
+          </tr>`;
+        });
+
+        const empTotalMins = empRegMins + empPagiMins + empMalamMins;
+        grandTotalMinutesAll += empTotalMins;
+
+        const payReg = Math.floor(empRegMins / 60) * 10000;
+        const payPagi = Math.floor(empPagiMins / 60) * 50000;
+        const payMalam = Math.floor(empMalamMins / 60) * 60000;
+        const empTotalPay = payReg + payPagi + payMalam;
+        grandTotalPayAll += empTotalPay;
+
+        const empHours = Math.floor(empTotalMins / 60);
+        const empMinsRem = empTotalMins % 60;
+        const empFormatted = empHours > 0 
+          ? `${empHours} Jam ${empMinsRem > 0 ? `${empMinsRem} Menit` : ''}`.trim() + ` (${empTotalMins} Menit)`
+          : `${empMinsRem} Menit`;
+
+        rows += `
+          <tr style="background-color:#F9FAFB;font-weight:bold;font-size:10px;">
+            <td colspan="7" style="text-align:right;padding:6px;">TOTAL LEMBUR & NOMINAL ${emp?.name.toUpperCase()} :</td>
+            <td class="center bold" style="background-color:#FDE68A;color:#78350F;">${empFormatted}</td>
+            <td colspan="4" style="color:#065F46;text-align:center;padding:6px;">Nominal: Rp ${empTotalPay.toLocaleString('id-ID')}</td>
+          </tr>
+        `;
+      }
+
+      const grandTotalHours = Math.floor(grandTotalMinutesAll / 60);
+      const grandTotalMinsRem = grandTotalMinutesAll % 60;
       const grandTotalFormatted = grandTotalHours > 0 
-        ? `${grandTotalHours} Jam ${grandTotalMinsRem > 0 ? `${grandTotalMinsRem} Menit` : ''}`.trim() + ` (${totalMinutesAll} Menit)`
+        ? `${grandTotalHours} Jam ${grandTotalMinsRem > 0 ? `${grandTotalMinsRem} Menit` : ''}`.trim() + ` (${grandTotalMinutesAll} Menit)`
         : `${grandTotalMinsRem} Menit`;
 
       const summaryFooterRow = `
         <tr style="background-color:#F3F4F6;font-size:10px;font-weight:bold;border-top:2px solid #16A34A;">
-          <td colspan="7" style="padding:8px;text-align:right;">TOTAL AKUMULASI WAKTU LEMBUR:</td>
+          <td colspan="7" style="padding:8px;text-align:right;">TOTAL AKUMULASI KESELURUHAN WAKTU LEMBUR:</td>
           <td style="padding:8px;text-align:center;background-color:#FDE68A;color:#78350F;font-weight:bold;">${grandTotalFormatted}</td>
-          <td colspan="4" style="padding:8px;">Total Data: ${data.length} Pengajuan</td>
+          <td colspan="4" style="padding:8px;text-align:center;color:#065F46;">TOTAL NOMINAL: Rp ${grandTotalPayAll.toLocaleString('id-ID')}</td>
         </tr>
       `;
 
@@ -1615,6 +1740,7 @@ export function ReportsTab() {
       pw.document.close();
     } catch(e) { pw.close(); } finally { setHrExporting(null); }
   };
+
 
   // ── 2. EKSPOR CUTI / SAKIT ───────────────────────────────────────
   const handleExportLeaveExcel = async () => {
@@ -2163,7 +2289,23 @@ export function ReportsTab() {
               </div>
               <div>
                 <p className="text-[12px] font-bold text-gray-800">Rekap Lembur</p>
-                <p className="text-[10px] text-gray-400">Data pengajuan lembur karyawan</p>
+                <p className="text-[10px] text-gray-400 mb-2">Data pengajuan lembur karyawan</p>
+                {/* Opsi rentang tanggal lembur khusus */}
+                <div className="flex gap-2">
+                  <input
+                    type="date"
+                    value={overtimeDateFrom}
+                    onChange={(e) => setOvertimeDateFrom(e.target.value)}
+                    className="w-full text-[10px] p-1 border rounded"
+                  />
+                  <span className="text-[10px] text-gray-500 self-center">s.d</span>
+                  <input
+                    type="date"
+                    value={overtimeDateTo}
+                    onChange={(e) => setOvertimeDateTo(e.target.value)}
+                    className="w-full text-[10px] p-1 border rounded"
+                  />
+                </div>
               </div>
             </div>
             <div className="flex gap-2 mt-auto">

@@ -172,6 +172,8 @@ class AuthController extends Controller
                     'facebook'  => $emp->facebook,
                     'tiktok'    => $emp->tiktok,
                 ];
+                $userData['faskes_tk']       = $emp->faskes_tk;
+                $userData['faskes_location'] = $emp->faskes_location;
             }
         }
 
@@ -240,6 +242,8 @@ class AuthController extends Controller
                     'facebook'  => $emp->facebook,
                     'tiktok'    => $emp->tiktok,
                 ];
+                $data['faskes_tk']       = $emp->faskes_tk;
+                $data['faskes_location'] = $emp->faskes_location;
             }
         }
 
@@ -287,6 +291,8 @@ class AuthController extends Controller
             'instagram'       => 'sometimes|nullable|string|max:100',
             'facebook'        => 'sometimes|nullable|string|max:100',
             'tiktok'          => 'sometimes|nullable|string|max:100',
+            'faskes_tk'       => 'sometimes|nullable|string|max:50',
+            'faskes_location' => 'sometimes|nullable|string|max:255',
         ]);
 
         // Perbarui atribut umum User jika dilampirkan
@@ -358,6 +364,12 @@ class AuthController extends Controller
                 if ($request->has('tiktok')) {
                     $emp->tiktok = $request->tiktok;
                 }
+                if ($request->has('faskes_tk')) {
+                    $emp->faskes_tk = $request->faskes_tk;
+                }
+                if ($request->has('faskes_location')) {
+                    $emp->faskes_location = $request->faskes_location;
+                }
                 $emp->save();
             }
         }
@@ -403,6 +415,8 @@ class AuthController extends Controller
                     'facebook'  => $emp->facebook,
                     'tiktok'    => $emp->tiktok,
                 ];
+                $data['faskes_tk']       = $emp->faskes_tk;
+                $data['faskes_location'] = $emp->faskes_location;
             }
         }
 

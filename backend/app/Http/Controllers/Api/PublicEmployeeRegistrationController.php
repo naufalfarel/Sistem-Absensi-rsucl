@@ -58,6 +58,8 @@ class PublicEmployeeRegistrationController extends Controller
             'instagram'     => 'nullable|string|max:100',
             'facebook'      => 'nullable|string|max:100',
             'tiktok'        => 'nullable|string|max:100',
+            'faskes_tk'       => 'nullable|string|max:50',
+            'faskes_location' => 'nullable|string|max:255',
             'profile_picture' => 'required|string',
         ]);
 
@@ -159,6 +161,8 @@ class PublicEmployeeRegistrationController extends Controller
             'instagram'           => $request->instagram ? trim($request->instagram) : null,
             'facebook'            => $request->facebook ? trim($request->facebook) : null,
             'tiktok'              => $request->tiktok ? trim($request->tiktok) : null,
+            'faskes_tk'           => $request->faskes_tk ? trim($request->faskes_tk) : null,
+            'faskes_location'     => $request->faskes_location ? trim($request->faskes_location) : null,
         ]);
 
         return response()->json([
@@ -227,6 +231,8 @@ class PublicEmployeeRegistrationController extends Controller
             'instagram'           => $reg->instagram,
             'facebook'            => $reg->facebook,
             'tiktok'              => $reg->tiktok,
+            'faskes_tk'           => $reg->faskes_tk,
+            'faskes_location'     => $reg->faskes_location,
             'profile_picture'     => $reg->profile_picture,
             'status'              => $reg->status,
             'admin_note'          => $reg->admin_note,
@@ -331,6 +337,8 @@ class PublicEmployeeRegistrationController extends Controller
             'instagram'     => 'nullable|string|max:100',
             'facebook'      => 'nullable|string|max:100',
             'tiktok'        => 'nullable|string|max:100',
+            'faskes_tk'       => 'nullable|string|max:50',
+            'faskes_location' => 'nullable|string|max:255',
             'profile_picture' => 'nullable|string',
         ]);
 
@@ -412,6 +420,8 @@ class PublicEmployeeRegistrationController extends Controller
             'instagram'       => $request->instagram ? trim($request->instagram) : null,
             'facebook'        => $request->facebook ? trim($request->facebook) : null,
             'tiktok'          => $request->tiktok ? trim($request->tiktok) : null,
+            'faskes_tk'       => $request->faskes_tk ? trim($request->faskes_tk) : null,
+            'faskes_location' => $request->faskes_location ? trim($request->faskes_location) : null,
         ]);
 
         return response()->json([

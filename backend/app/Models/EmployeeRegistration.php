@@ -31,6 +31,8 @@ class EmployeeRegistration extends Model
         'instagram',
         'facebook',
         'tiktok',
+        'faskes_tk',
+        'faskes_location',
     ];
 
     public function department()

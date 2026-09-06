@@ -38,6 +38,8 @@ export function EmployeeRegistrationPage({ onBack, onGoToCheckStatus, initialDat
     instagram: initialData?.instagram || '',
     facebook: initialData?.facebook || '',
     tiktok: initialData?.tiktok || '',
+    faskes_tk: initialData?.faskes_tk || '',
+    faskes_location: initialData?.faskes_location || '',
   });
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -136,6 +138,8 @@ export function EmployeeRegistrationPage({ onBack, onGoToCheckStatus, initialDat
         instagram: form.instagram.trim() || null,
         facebook: form.facebook.trim() || null,
         tiktok: form.tiktok.trim() || null,
+        faskes_tk: form.faskes_tk || null,
+        faskes_location: form.faskes_location.trim() || null,
         profile_picture: form.profile_picture || null,
       };
 
@@ -487,6 +491,46 @@ export function EmployeeRegistrationPage({ onBack, onGoToCheckStatus, initialDat
                       value={form.tiktok}
                       onChange={(e) => setForm({ ...form, tiktok: e.target.value })}
                       className="w-full pl-8 pr-4 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:bg-white focus:ring-2 focus:ring-[#16A34A]/15 text-gray-800 font-medium transition-all"
+                    />
+                  </div>
+                </div>
+
+
+                {/* Faskes Section */}
+                <div className="md:col-span-2 pt-3 border-t border-gray-100">
+                  <p className="text-[12.5px] font-bold text-gray-700 uppercase tracking-wider border-l-2 border-[#16A34A] pl-2 mb-3">Fasilitas Kesehatan</p>
+                </div>
+
+                {/* Faskes Tingkat */}
+                <div className="space-y-1.5">
+                  <label className="block text-[11.5px] font-bold text-gray-700 uppercase tracking-wider">
+                    Faskes Tingkat 1/2/3
+                  </label>
+                  <select
+                    value={form.faskes_tk}
+                    onChange={(e) => setForm({ ...form, faskes_tk: e.target.value })}
+                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:bg-white focus:ring-2 focus:ring-[#16A34A]/15 text-gray-800 font-bold transition-all cursor-pointer"
+                  >
+                    <option value="">-- Pilih --</option>
+                    <option value="Tingkat 1">Tingkat 1</option>
+                    <option value="Tingkat 2">Tingkat 2</option>
+                    <option value="Tingkat 3">Tingkat 3</option>
+                  </select>
+                </div>
+
+                {/* Lokasi Faskes */}
+                <div className="space-y-1.5">
+                  <label className="block text-[11.5px] font-bold text-gray-700 uppercase tracking-wider">
+                    Lokasi Faskes
+                  </label>
+                  <div className="relative">
+                    <Building2 size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Nama / Lokasi Klinik atau RS Faskes"
+                      value={form.faskes_location}
+                      onChange={(e) => setForm({ ...form, faskes_location: e.target.value })}
+                      className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:bg-white focus:ring-2 focus:ring-[#16A34A]/15 text-gray-800 font-medium transition-all"
                     />
                   </div>
                 </div>

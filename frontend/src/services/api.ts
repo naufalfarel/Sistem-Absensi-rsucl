@@ -187,6 +187,8 @@ export interface AuthUser {
     facebook?: string | null;
     tiktok?: string | null;
   };
+  faskes_tk?: string | null;
+  faskes_location?: string | null;
 }
 
 /**
@@ -227,6 +229,8 @@ export const profileApi = {
     instagram?: string | null;
     facebook?: string | null;
     tiktok?: string | null;
+    faskes_tk?: string | null;
+    faskes_location?: string | null;
     password?: string;
     old_password?: string;
     profile_picture?: string | null;
@@ -335,6 +339,8 @@ export interface Employee {
   motor_plate_2?: string | null;
   car_plate_1?: string | null;
   car_plate_2?: string | null;
+  faskes_tk?: string | null;
+  faskes_location?: string | null;
   profile_picture?: string | null;
   disciplinary_sanctions?: Array<{
     id: number;
@@ -1941,6 +1947,8 @@ export interface EmployeeRegistration {
   instagram?: string | null;
   facebook?: string | null;
   tiktok?: string | null;
+  faskes_tk?: string | null;
+  faskes_location?: string | null;
   created_at: string;
   updated_at: string;
   department?: { id: number; name: string };

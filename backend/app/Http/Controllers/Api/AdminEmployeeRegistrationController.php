@@ -127,6 +127,8 @@ class AdminEmployeeRegistrationController extends Controller
                 'instagram'     => $registration->instagram,
                 'facebook'      => $registration->facebook,
                 'tiktok'        => $registration->tiktok,
+                'faskes_tk'       => $registration->faskes_tk,
+                'faskes_location' => $registration->faskes_location,
             ]);
 
             // 6. Update Status Registration

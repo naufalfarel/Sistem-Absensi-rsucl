@@ -74,6 +74,8 @@ class EmployeeController extends Controller
             'facebook'      => $data['facebook'] ?? null,
             'tiktok'        => $data['tiktok'] ?? null,
             'custom_leave_quota' => $data['custom_leave_quota'] ?? null,
+            'faskes_tk'     => $data['faskes_tk'] ?? null,
+            'faskes_location' => $data['faskes_location'] ?? null,
         ]);
 
         $employee->load(['user', 'department', 'position']);
@@ -123,6 +125,8 @@ class EmployeeController extends Controller
             'facebook'      => array_key_exists('facebook', $data) ? $data['facebook'] : $employee->facebook,
             'tiktok'        => array_key_exists('tiktok', $data) ? $data['tiktok'] : $employee->tiktok,
             'custom_leave_quota' => array_key_exists('custom_leave_quota', $data) ? $data['custom_leave_quota'] : $employee->custom_leave_quota,
+            'faskes_tk'     => array_key_exists('faskes_tk', $data) ? $data['faskes_tk'] : $employee->faskes_tk,
+            'faskes_location' => array_key_exists('faskes_location', $data) ? $data['faskes_location'] : $employee->faskes_location,
         ]);
         $employee->update($empFields);
 
@@ -438,6 +442,8 @@ class EmployeeController extends Controller
                 'facebook'  => $e->facebook,
                 'tiktok'    => $e->tiktok,
             ],
+            'faskes_tk'       => $e->faskes_tk,
+            'faskes_location' => $e->faskes_location,
             'disciplinary_sanctions' => $e->relationLoaded('disciplinarySanctions') 
                 ? $e->disciplinarySanctions->map(fn($s) => [
                     'id'             => $s->id,

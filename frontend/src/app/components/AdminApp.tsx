@@ -145,6 +145,8 @@ const emptyForm = {
   instagram: "",
   facebook: "",
   tiktok: "",
+  faskes_tk: "",
+  faskes_location: "",
   custom_leave_quota: "",
 };
 
@@ -407,6 +409,8 @@ export function AdminApp({ onLogout }: AdminAppProps) {
       instagram: emp.social_media?.instagram || "",
       facebook: emp.social_media?.facebook || "",
       tiktok: emp.social_media?.tiktok || "",
+      faskes_tk: emp.faskes_tk || "",
+      faskes_location: emp.faskes_location || "",
       custom_leave_quota: emp.custom_leave_quota !== null && emp.custom_leave_quota !== undefined ? emp.custom_leave_quota.toString() : "",
     });
     setFormError("");
@@ -625,6 +629,8 @@ export function AdminApp({ onLogout }: AdminAppProps) {
           instagram: form.instagram || undefined,
           facebook: form.facebook || undefined,
           tiktok: form.tiktok || undefined,
+          faskes_tk: form.faskes_tk || undefined,
+          faskes_location: form.faskes_location || undefined,
           custom_leave_quota: form.custom_leave_quota !== "" ? Number(form.custom_leave_quota) : null,
         } as any);
         if (res.success) {
@@ -646,6 +652,8 @@ export function AdminApp({ onLogout }: AdminAppProps) {
           instagram: form.instagram || null,
           facebook: form.facebook || null,
           tiktok: form.tiktok || null,
+          faskes_tk: form.faskes_tk || null,
+          faskes_location: form.faskes_location || null,
           custom_leave_quota: form.custom_leave_quota !== "" ? Number(form.custom_leave_quota) : null,
         };
         if (form.password.trim()) {
@@ -2110,6 +2118,44 @@ export function AdminApp({ onLogout }: AdminAppProps) {
                     className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all"
                   />
                 </div>
+                {/* Faskes */}
+                <div>
+                  <label className="block text-[12px] font-medium text-gray-600 mb-1.5">
+                    Faskes Tingkat 1/2/3
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={form.faskes_tk}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, faskes_tk: e.target.value }))
+                      }
+                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all appearance-none cursor-pointer"
+                    >
+                      <option value="">-- Pilih --</option>
+                      <option value="Tingkat 1">Tingkat 1</option>
+                      <option value="Tingkat 2">Tingkat 2</option>
+                      <option value="Tingkat 3">Tingkat 3</option>
+                    </select>
+                    <ChevronDown
+                      size={14}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[12px] font-medium text-gray-600 mb-1.5">
+                    Lokasi Faskes
+                  </label>
+                  <input
+                    type="text"
+                    value={form.faskes_location}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, faskes_location: e.target.value }))
+                    }
+                    placeholder="Nama Klinik / RS"
+                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all"
+                  />
+                </div>
               </div>
 
               {/* Data Kendaraan Section */}
@@ -2247,6 +2293,8 @@ export function AdminApp({ onLogout }: AdminAppProps) {
                   </div>
                 </div>
               </div>
+
+
             </div>
 
             {/* Footer */}
@@ -2381,6 +2429,18 @@ export function AdminApp({ onLogout }: AdminAppProps) {
                     {detailModalEmp.status === 'active' ? 'Aktif' : 'Non-Aktif'}
                   </span>
                 </div>
+                {detailModalEmp.faskes_tk && (
+                  <div>
+                    <span className="text-[10px] text-gray-400 font-bold uppercase block">Faskes Tingkat</span>
+                    <span className="text-gray-800 font-medium">{detailModalEmp.faskes_tk}</span>
+                  </div>
+                )}
+                {detailModalEmp.faskes_location && (
+                  <div>
+                    <span className="text-[10px] text-gray-400 font-bold uppercase block">Lokasi Faskes</span>
+                    <span className="text-gray-800 font-medium">{detailModalEmp.faskes_location}</span>
+                  </div>
+                )}
               </div>
 
               {/* Data Kendaraan */}
@@ -2407,6 +2467,8 @@ export function AdminApp({ onLogout }: AdminAppProps) {
                   </div>
                 </div>
               </div>
+
+
 
               {/* Media Sosial */}
               {(detailModalEmp.social_media?.instagram || detailModalEmp.social_media?.facebook || detailModalEmp.social_media?.tiktok) && (
