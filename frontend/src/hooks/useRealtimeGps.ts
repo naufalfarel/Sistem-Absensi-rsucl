@@ -27,16 +27,31 @@ export function useRealtimeGps() {
     const currentBest = bestLocationRef.current;
     const now = Date.now();
 
-    // Logika pemilihan posisi paling presisi (Smart Accuracy Filter khusus iOS Safari & Android):
-    // 1. Jika belum ada posisi -> terima posisi pertama
-    // 2. Jika bacaan baru lebih presisi (akurasi dalam meter lebih kecil) -> terima
-    // 3. Jika bacaan baru sangat presisi (akurasi <= 30m) -> terima
-    // 4. Jika posisi tersimpan sudah usang (> 10 detik) -> terima untuk perbaruan data
-    const isMoreAccurate = !currentBest || newCoords.accuracy <= currentBest.accuracy;
-    const isHighlyAccurate = newCoords.accuracy <= 30;
-    const isStale = currentBest ? (now - currentBest.timestamp > 10000) : false;
+    let acceptLocation = false;
 
-    if (isMoreAccurate || isHighlyAccurate || isStale) {
+    if (!currentBest) {
+      // 1. Jika belum ada posisi, terima
+      acceptLocation = true;
+    } else if (newCoords.accuracy <= currentBest.accuracy) {
+      // 2. Jika bacaan baru lebih presisi, selalu terima
+      acceptLocation = true;
+    } else if (newCoords.accuracy <= 30) {
+      // 3. Jika bacaan baru sangat presisi (<= 30m), terima meskipun sedikit lebih buruk dari currentBest
+      acceptLocation = true;
+    } else {
+      // 4. Jika bacaan baru lebih buruk, cek apakah bacaan lama sudah sangat usang
+      const isVeryStale = (now - currentBest.timestamp) > 30000;
+      
+      // Jika data lama usang (> 30s), kita terima jika lonjakan akurasinya masih masuk akal (<= 150m)
+      if (isVeryStale && newCoords.accuracy <= 150) {
+        acceptLocation = true;
+      } else if ((now - currentBest.timestamp) > 60000) {
+        // Jika sudah lebih dari 1 menit tidak ada lokasi, terpaksa terima yang ada agar tidak nyangkut
+        acceptLocation = true;
+      }
+    }
+
+    if (acceptLocation) {
       bestLocationRef.current = newCoords;
       setLocation(newCoords);
       setGpsActive(true);
@@ -64,7 +79,7 @@ export function useRealtimeGps() {
               }
             }
           },
-          { enableHighAccuracy: false, timeout: 15000, maximumAge: 0 }
+          { enableHighAccuracy: false, timeout: 15000, maximumAge: 5000 }
         );
         return;
       }
@@ -93,7 +108,7 @@ export function useRealtimeGps() {
     navigator.geolocation.getCurrentPosition(
       updatePosition,
       handleError,
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
     );
 
     // Follow-up 1.2 detik untuk menangkap sinyal GPS hardware setelah pembukaan browser di iPhone
@@ -102,7 +117,7 @@ export function useRealtimeGps() {
         navigator.geolocation.getCurrentPosition(
           updatePosition,
           () => {},
-          { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+          { enableHighAccuracy: true, timeout: 12000, maximumAge: 5000 }
         );
       }
     }, 1200);
@@ -119,26 +134,17 @@ export function useRealtimeGps() {
     // 1. Ambil lokasi langsung saat mounting
     refreshLocation();
 
-    // 2. watchPosition dengan opsi maximumAge: 0 untuk merespons pergerakan realtime presisi
+    // 2. watchPosition dengan opsi maximumAge: 5000 untuk merespons pergerakan tanpa memaksa restart sensor
     const options: PositionOptions = {
       enableHighAccuracy: true,
       timeout: 15000,
-      maximumAge: 0,
+      maximumAge: 5000,
     };
 
     const watchId = navigator.geolocation.watchPosition(updatePosition, handleError, options);
     watchIdRef.current = watchId;
 
-    // 3. Polling interval cadangan setiap 4 detik (mencegah watchPosition mengalami freeze di iOS Safari saat diam)
-    const intervalId = setInterval(() => {
-      if (typeof navigator !== 'undefined' && navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          updatePosition,
-          () => {}, // abaikan error silent
-          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-        );
-      }
-    }, 4000);
+    // Polling interval agresif dihapus untuk mencegah tabrakan/freeze pada hardware GPS iPhone
 
     // 4. Update otomatis saat tab/app menjadi aktif kembali (misal setelah berpindah app / unlock di iPhone)
     const handleVisibilityOrFocus = () => {
@@ -154,7 +160,6 @@ export function useRealtimeGps() {
       if (watchIdRef.current !== null) {
         navigator.geolocation.clearWatch(watchIdRef.current);
       }
-      clearInterval(intervalId);
       window.removeEventListener('visibilitychange', handleVisibilityOrFocus);
       window.removeEventListener('focus', handleVisibilityOrFocus);
     };
