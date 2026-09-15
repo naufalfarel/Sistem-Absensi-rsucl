@@ -502,7 +502,9 @@ export function LeaveFormPrintModal({
                 <span className="font-semibold">{returnDateStr}</span>
                 <span>Hak Cuti Dimiliki</span>
                 <span>:</span>
-                <span className="font-semibold">12 Hari</span>
+                <span className="font-semibold">
+                  {request.employee?.quota_info?.quota ?? 12} Hari
+                </span>
                 <span>Hak Cuti Diambil</span>
                 <span>:</span>
                 <span className="font-bold text-red-700">
@@ -511,7 +513,7 @@ export function LeaveFormPrintModal({
                 <span>Sisa Cuti</span>
                 <span>:</span>
                 <span className="font-bold text-[#16A34A]">
-                  {Math.max(0, 12 - request.days)} Hari
+                  {request.employee?.quota_info?.remaining ?? Math.max(0, 12 - request.days)} Hari
                 </span>
                 <span>CATATAN</span>
                 <span>:</span>
