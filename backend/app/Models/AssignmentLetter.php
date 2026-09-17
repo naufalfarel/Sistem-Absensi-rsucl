@@ -14,10 +14,18 @@ class AssignmentLetter extends Model
     protected $fillable = [
         'employee_id',
         'source',
+        'director_type',
         'letter_number',
+        'letter_number_seq',
+        'letter_date',
         'title',
         'issuing_institution',
         'purpose',
+        'travel_purpose',
+        'travel_date',
+        'travel_time',
+        'travel_place',
+        'assigned_employees',
         'start_date',
         'end_date',
         'document_url',
@@ -30,9 +38,11 @@ class AssignmentLetter extends Model
     ];
 
     protected $casts = [
-        'start_date'  => 'date:Y-m-d',
-        'end_date'    => 'date:Y-m-d',
-        'reviewed_at' => 'datetime',
+        'start_date'         => 'date:Y-m-d',
+        'end_date'           => 'date:Y-m-d',
+        'letter_date'        => 'date:Y-m-d',
+        'reviewed_at'        => 'datetime',
+        'assigned_employees' => 'array',
     ];
 
     /**

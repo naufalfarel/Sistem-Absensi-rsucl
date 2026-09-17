@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   FileText,
   Search,
@@ -16,12 +16,33 @@ import {
   ShieldAlert,
   Trash2,
   Printer,
-  X
+  X,
+  PlusCircle,
+  BadgeCheck,
+  ChevronDown,
+  User2
 } from 'lucide-react';
 import qrCodeImg from '../../../imports/qr_code_cempaka_lima.png';
 import qrHrdImg from '../../../imports/qr_hrd_rsucl.png';
-import { resignationApi, ResignationRequest } from '../../../services/api';
+import qrDirRsImg from '../../../imports/qr_direktur_rs_cempaka_lima.png';
+import { resignationApi, employeeApi, ResignationRequest, Employee } from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
+
+// ── Konfigurasi Direktur Penandatangan ─────────────────────────────────────────
+const DIRECTORS = {
+  pt_director: {
+    label: 'Direktur PT Cempaka Lima',
+    name: 'Amir Hidayat, ST, MKM',
+    img: qrCodeImg,
+  },
+  rs_director: {
+    label: 'Direktur Rumah Sakit Cempaka Lima',
+    name: 'dr. Meri Lidiawati, MM, MKM, CHLQM',
+    img: qrDirRsImg,
+  },
+} as const;
+
+type DirectorType = keyof typeof DIRECTORS;
 
 export const ResignationTab: React.FC = () => {
   const { user } = useAuth();
@@ -38,6 +59,23 @@ export const ResignationTab: React.FC = () => {
   const [adminNote, setAdminNote] = useState<string>('');
   const [reviewing, setReviewing] = useState<boolean>(false);
   const [showReviewModal, setShowReviewModal] = useState<boolean>(false);
+
+  // ── STATE MODAL CATAT ADMIN ─────────────────────────────────────────────────
+  const [showAdminRecordModal, setShowAdminRecordModal] = useState<boolean>(false);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [loadingEmployees, setLoadingEmployees] = useState<boolean>(false);
+  const [submittingRecord, setSubmittingRecord] = useState<boolean>(false);
+
+  // Form fields pencatatan admin
+  const [recEmployeeId, setRecEmployeeId] = useState<string>('');
+  const [recEffectiveDate, setRecEffectiveDate] = useState<string>('');
+  const [recReason, setRecReason] = useState<string>('');
+  const [recDirectorType, setRecDirectorType] = useState<DirectorType>('pt_director');
+  const [recAttachment, setRecAttachment] = useState<File | null>(null);
+  const [recEmployeeSearch, setRecEmployeeSearch] = useState<string>('');
+  const [showEmpDropdown, setShowEmpDropdown] = useState<boolean>(false);
+  const empDropdownRef = useRef<HTMLDivElement>(null);
+  // ────────────────────────────────────────────────────────────────────────────
 
   const fetchAllRequests = async () => {
     setLoading(true);
@@ -59,6 +97,28 @@ export const ResignationTab: React.FC = () => {
   useEffect(() => {
     fetchAllRequests();
   }, [filterStatus]);
+
+  // Muat daftar karyawan saat modal catat admin dibuka
+  useEffect(() => {
+    if (showAdminRecordModal && employees.length === 0) {
+      setLoadingEmployees(true);
+      employeeApi.list()
+        .then(res => { if (res.success) setEmployees(res.data); })
+        .catch(err => console.error('Gagal memuat daftar karyawan:', err))
+        .finally(() => setLoadingEmployees(false));
+    }
+  }, [showAdminRecordModal]);
+
+  // Tutup dropdown jika klik di luar
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (empDropdownRef.current && !empDropdownRef.current.contains(e.target as Node)) {
+        setShowEmpDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -109,6 +169,48 @@ export const ResignationTab: React.FC = () => {
     }
   };
 
+  // ── HANDLER SUBMIT CATAT ADMIN ──────────────────────────────────────────────
+  const resetAdminRecordForm = () => {
+    setRecEmployeeId('');
+    setRecEffectiveDate('');
+    setRecReason('');
+    setRecDirectorType('pt_director');
+    setRecAttachment(null);
+    setRecEmployeeSearch('');
+    setShowEmpDropdown(false);
+  };
+
+  const handleAdminRecordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!recEmployeeId) { alert('Pilih karyawan terlebih dahulu.'); return; }
+    if (!recEffectiveDate) { alert('Tanggal efektif berhenti wajib diisi.'); return; }
+    if (!recReason || recReason.trim().length < 10) { alert('Alasan pengunduran diri minimal 10 karakter.'); return; }
+
+    const formData = new FormData();
+    formData.append('employee_id', recEmployeeId);
+    formData.append('effective_date', recEffectiveDate);
+    formData.append('reason', recReason);
+    formData.append('director_type', recDirectorType);
+    if (recAttachment) formData.append('attachment', recAttachment);
+
+    setSubmittingRecord(true);
+    try {
+      const res = await resignationApi.adminRecord(formData);
+      if (res.success) {
+        alert('Pengunduran diri karyawan berhasil dicatat. Karyawan telah mendapat notifikasi.');
+        setShowAdminRecordModal(false);
+        resetAdminRecordForm();
+        fetchAllRequests();
+      }
+    } catch (err: any) {
+      const msg = err?.data?.message || err?.response?.data?.message || err?.message || 'Gagal mencatat pengunduran diri.';
+      alert(msg);
+    } finally {
+      setSubmittingRecord(false);
+    }
+  };
+  // ────────────────────────────────────────────────────────────────────────────
+
   const filteredItems = requests.filter(r => {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
@@ -117,6 +219,21 @@ export const ResignationTab: React.FC = () => {
     const dept = r.unit_kerja?.toLowerCase() || '';
     return empName.includes(q) || nik.includes(q) || dept.includes(q);
   });
+
+  // Helper: daftar karyawan terfilter untuk dropdown
+  const filteredEmployees = employees.filter(emp => {
+    if (!recEmployeeSearch) return true;
+    const q = recEmployeeSearch.toLowerCase();
+    return emp.name?.toLowerCase().includes(q) || emp.nik_ktp?.toLowerCase().includes(q) || emp.department?.toLowerCase().includes(q);
+  });
+
+  const selectedEmployee = employees.find(e => String(e.user_id) === recEmployeeId || String(e.id) === recEmployeeId);
+
+  // Helper: label direktur dari director_type
+  const getDirectorInfo = (directorType: string | null | undefined) => {
+    if (directorType === 'rs_director') return DIRECTORS.rs_director;
+    return DIRECTORS.pt_director; // default
+  };
 
   return (
     <div className="space-y-6 font-sans pb-12">
@@ -130,14 +247,24 @@ export const ResignationTab: React.FC = () => {
             </span>
             <h2 className="text-xl md:text-2xl font-bold mt-2">Peninjauan Surat Pengunduran Diri (Resignation)</h2>
             <p className="text-[12.5px] text-slate-300 mt-1">
-              Verifikasi pengajuan pengunduran diri karyawan &amp; PJ Bagian dengan aturan ketat One Month Notice (Min 30 Hari).
+              Verifikasi pengajuan pengunduran diri karyawan &amp; PJ Bagian. Admin juga dapat mencatat pengunduran diri secara langsung.
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <div className="px-4 py-2.5 bg-white/10 backdrop-blur-md rounded-2xl border border-white/10 text-center">
               <span className="text-[10px] font-bold text-slate-300 uppercase block tracking-wider">Total Masuk</span>
               <span className="text-lg font-extrabold text-white">{requests.length}</span>
             </div>
+            {/* ── TOMBOL CATAT ADMIN ── */}
+            {isAdminOrSuperAdmin && (
+              <button
+                onClick={() => { setShowAdminRecordModal(true); }}
+                className="flex items-center gap-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-bold text-[12.5px] rounded-2xl transition-all shadow-lg border border-rose-400/30 cursor-pointer"
+              >
+                <PlusCircle size={16} />
+                Catat Pengunduran Diri
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -222,6 +349,8 @@ export const ResignationTab: React.FC = () => {
               effDate.setHours(0, 0, 0, 0);
               const remainingDays = Math.max(0, Math.ceil((effDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)));
 
+              const isAdminRecorded = !!item.recorded_by;
+
               return (
                 <div key={item.id} className="p-6 hover:bg-slate-50/50 transition-colors space-y-4">
                   <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -238,10 +367,21 @@ export const ResignationTab: React.FC = () => {
                           <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
                             Unit: {unitKerja}
                           </span>
+                          {/* ── BADGE "DICATAT ADMIN" ── */}
+                          {isAdminRecorded && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-violet-100 text-violet-700 border border-violet-200">
+                              <BadgeCheck size={11} /> Dicatat Admin
+                            </span>
+                          )}
                         </div>
 
                         <p className="text-[12px] text-slate-500">
-                          Diajukan pada: <strong className="text-slate-700">{reqDateFormatted}</strong> · Notice Period: <strong className="text-rose-600">{item.notice_days} Hari</strong>
+                          Dicatat pada: <strong className="text-slate-700">{reqDateFormatted}</strong> · Notice Period: <strong className="text-rose-600">{item.notice_days} Hari</strong>
+                          {isAdminRecorded && item.director_type && (
+                            <span className="ml-2 text-violet-600 font-semibold">
+                              · {getDirectorInfo(item.director_type).label}
+                            </span>
+                          )}
                         </p>
                       </div>
                     </div>
@@ -442,6 +582,214 @@ export const ResignationTab: React.FC = () => {
         </div>
       )}
 
+      {/* ── MODAL CATAT PENGUNDURAN DIRI OLEH ADMIN ────────────────────── */}
+      {showAdminRecordModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/75 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-100 font-sans overflow-hidden max-h-[90vh] flex flex-col">
+            {/* Header Modal */}
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-gradient-to-r from-violet-50 to-rose-50 flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-violet-100 text-violet-600 flex items-center justify-center">
+                  <PlusCircle size={16} />
+                </div>
+                <div>
+                  <h3 className="text-[15px] font-bold text-slate-900">Catat Pengunduran Diri</h3>
+                  <p className="text-[11px] text-slate-500">Dicatat langsung oleh Administrator</p>
+                </div>
+              </div>
+              <button
+                onClick={() => { setShowAdminRecordModal(false); resetAdminRecordForm(); }}
+                className="w-7 h-7 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center cursor-pointer transition-colors"
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            {/* Info Banner */}
+            <div className="px-6 pt-4 flex-shrink-0">
+              <div className="flex items-start gap-2.5 p-3 bg-violet-50 rounded-xl border border-violet-200/60 text-[11.5px] text-violet-800">
+                <BadgeCheck size={16} className="text-violet-600 flex-shrink-0 mt-0.5" />
+                <p className="font-medium leading-relaxed">
+                  Pengunduran diri yang dicatat admin akan <strong>langsung disetujui</strong> (bypass alur PJ Bagian) dan karyawan akan mendapat notifikasi.
+                </p>
+              </div>
+            </div>
+
+            {/* Form Scrollable */}
+            <div className="overflow-y-auto flex-1 px-6 py-4">
+              <form id="admin-record-form" onSubmit={handleAdminRecordSubmit} className="space-y-5">
+
+                {/* Pilih Karyawan */}
+                <div ref={empDropdownRef} className="relative">
+                  <label className="block text-[12px] font-bold text-slate-800 mb-1.5">
+                    Karyawan <span className="text-rose-500">*</span>
+                  </label>
+                  <div
+                    onClick={() => setShowEmpDropdown(v => !v)}
+                    className="w-full px-3.5 py-2.5 border border-slate-200 rounded-2xl text-[12.5px] text-slate-800 bg-slate-50/50 focus:outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/10 font-medium cursor-pointer flex items-center justify-between gap-2 hover:border-violet-400 transition-all"
+                  >
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <User2 size={14} className="text-slate-400 flex-shrink-0" />
+                      {selectedEmployee ? (
+                        <span className="text-slate-900 font-semibold truncate">{selectedEmployee.name} <span className="text-slate-400 font-normal">— {selectedEmployee.department}</span></span>
+                      ) : (
+                        <span className="text-slate-400">Pilih karyawan...</span>
+                      )}
+                    </div>
+                    <ChevronDown size={14} className={`text-slate-400 flex-shrink-0 transition-transform ${showEmpDropdown ? 'rotate-180' : ''}`} />
+                  </div>
+
+                  {showEmpDropdown && (
+                    <div className="absolute z-[70] top-full left-0 right-0 mt-1.5 bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden">
+                      <div className="p-2 border-b border-slate-100">
+                        <input
+                          type="text"
+                          value={recEmployeeSearch}
+                          onChange={e => setRecEmployeeSearch(e.target.value)}
+                          placeholder="Cari nama / NIK / bagian..."
+                          autoFocus
+                          className="w-full px-3 py-2 text-[12px] border border-slate-200 rounded-xl focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-400/10"
+                        />
+                      </div>
+                      <div className="overflow-y-auto max-h-48">
+                        {loadingEmployees ? (
+                          <div className="p-4 text-center text-slate-400 text-[12px] flex items-center justify-center gap-2">
+                            <Loader2 size={14} className="animate-spin" /> Memuat...
+                          </div>
+                        ) : filteredEmployees.length === 0 ? (
+                          <div className="p-4 text-center text-slate-400 text-[12px]">Tidak ada karyawan ditemukan</div>
+                        ) : (
+                          filteredEmployees.map(emp => (
+                            <button
+                              key={emp.id}
+                              type="button"
+                              onClick={() => {
+                                setRecEmployeeId(String(emp.user_id));
+                                setShowEmpDropdown(false);
+                                setRecEmployeeSearch('');
+                              }}
+                              className={`w-full text-left px-3.5 py-2.5 hover:bg-violet-50 transition-colors text-[12px] flex items-center gap-3 cursor-pointer ${String(emp.user_id) === recEmployeeId ? 'bg-violet-50' : ''}`}
+                            >
+                              <div className="w-7 h-7 rounded-lg bg-rose-100 text-rose-700 font-extrabold text-[11px] flex items-center justify-center flex-shrink-0">
+                                {emp.name.charAt(0).toUpperCase()}
+                              </div>
+                              <div>
+                                <p className="font-semibold text-slate-900">{emp.name}</p>
+                                <p className="text-slate-400 text-[10.5px]">{emp.nik_ktp} · {emp.department}</p>
+                              </div>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Tanggal Efektif Berhenti */}
+                <div>
+                  <label className="block text-[12px] font-bold text-slate-800 mb-1.5">
+                    Tanggal Efektif Berhenti <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={recEffectiveDate}
+                    onChange={e => setRecEffectiveDate(e.target.value)}
+                    required
+                    className="w-full px-3.5 py-2.5 border border-slate-200 rounded-2xl text-[12.5px] text-slate-800 bg-slate-50/50 focus:outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/10 font-medium transition-all"
+                  />
+                  <p className="text-[10.5px] text-slate-400 mt-1">Untuk pencatatan oleh admin, aturan minimal 30 hari dapat disesuaikan.</p>
+                </div>
+
+                {/* Alasan */}
+                <div>
+                  <label className="block text-[12px] font-bold text-slate-800 mb-1.5">
+                    Alasan Pengunduran Diri <span className="text-rose-500">*</span>
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={recReason}
+                    onChange={e => setRecReason(e.target.value)}
+                    placeholder="Tuliskan alasan pengunduran diri secara lengkap dan jelas (minimal 10 karakter)..."
+                    required
+                    minLength={10}
+                    className="w-full px-3.5 py-2.5 border border-slate-200 rounded-2xl text-[12.5px] text-slate-800 bg-slate-50/50 focus:outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/10 font-medium resize-none transition-all"
+                  />
+                </div>
+
+                {/* Pilih Direktur Penandatangan */}
+                <div>
+                  <label className="block text-[12px] font-bold text-slate-800 mb-2">
+                    Direktur Penandatangan Surat <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="space-y-2">
+                    {(Object.entries(DIRECTORS) as [DirectorType, typeof DIRECTORS[DirectorType]][]).map(([key, dir]) => (
+                      <label
+                        key={key}
+                        className={`flex items-start gap-3 p-3.5 rounded-2xl border-2 cursor-pointer transition-all ${recDirectorType === key
+                          ? 'border-violet-500 bg-violet-50'
+                          : 'border-slate-200 hover:border-violet-300 hover:bg-slate-50/50'}`}
+                      >
+                        <input
+                          type="radio"
+                          name="director_type"
+                          value={key}
+                          checked={recDirectorType === key}
+                          onChange={() => setRecDirectorType(key)}
+                          className="mt-0.5 accent-violet-600"
+                        />
+                        <div>
+                          <p className={`text-[12.5px] font-bold ${recDirectorType === key ? 'text-violet-900' : 'text-slate-800'}`}>
+                            {dir.name}
+                          </p>
+                          <p className={`text-[11px] font-medium ${recDirectorType === key ? 'text-violet-600' : 'text-slate-500'}`}>
+                            {dir.label}
+                          </p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Upload Surat Fisik (Opsional) */}
+                <div>
+                  <label className="block text-[12px] font-bold text-slate-800 mb-1.5">
+                    Upload Surat Fisik (Opsional)
+                  </label>
+                  <input
+                    type="file"
+                    accept=".pdf"
+                    onChange={e => setRecAttachment(e.target.files?.[0] ?? null)}
+                    className="w-full text-[12px] text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:font-bold file:text-[11.5px] file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100 file:cursor-pointer cursor-pointer"
+                  />
+                  <p className="text-[10.5px] text-slate-400 mt-1">Format: PDF, maks. 5 MB</p>
+                </div>
+
+              </form>
+            </div>
+
+            {/* Footer Aksi */}
+            <div className="flex items-center gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => { setShowAdminRecordModal(false); resetAdminRecordForm(); }}
+                className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[12.5px] rounded-xl transition-all cursor-pointer text-center"
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                form="admin-record-form"
+                disabled={submittingRecord}
+                className="flex-1 py-2.5 px-4 bg-violet-600 hover:bg-violet-700 text-white font-bold text-[12.5px] rounded-xl transition-all shadow-md cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {submittingRecord ? <Loader2 size={15} className="animate-spin" /> : <BadgeCheck size={15} />}
+                {submittingRecord ? 'Menyimpan...' : 'Catat & Simpan'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── MODAL SURAT PENGUNDURAN DIRI (ADMIN VIEW) ────────────────── */}
       {selectedResignDoc && (() => {
         const empName = selectedResignDoc.employee?.user?.name || 'Karyawan';
@@ -467,7 +815,10 @@ export const ResignationTab: React.FC = () => {
         const reqFormatted = formatLong(selectedResignDoc.request_date);
         const effFormatted = formatLong(selectedResignDoc.effective_date);
 
-        const qrContent = `SURAT PENGUNDURAN DIRI RESMI\nRSU CEMPAKA LIMA\n------------------------------\nNo. Dokumen: ${docNumber}\nNama Pegawai: ${empName}\nNIK KTP: ${empNik}\nUnit Kerja: ${unitKerja}\nJabatan: ${empPosition}\nTanggal Pengajuan: ${reqFormatted}\nTanggal Efektif Berhenti: ${effFormatted}\nNotice Period: ${selectedResignDoc.notice_days} Hari\nStatus Dokumen: SAH / DISETUJUI\nOtorisasi Final: Direktur PT Cempaka Lima (Amir Hidayat, ST., MKM)`;
+        // Tentukan direktur berdasarkan director_type
+        const directorInfo = getDirectorInfo(selectedResignDoc.director_type);
+
+        const qrContent = `SURAT PENGUNDURAN DIRI RESMI\nRSU CEMPAKA LIMA\n------------------------------\nNo. Dokumen: ${docNumber}\nNama Pegawai: ${empName}\nNIK KTP: ${empNik}\nUnit Kerja: ${unitKerja}\nJabatan: ${empPosition}\nTanggal Pengajuan: ${reqFormatted}\nTanggal Efektif Berhenti: ${effFormatted}\nNotice Period: ${selectedResignDoc.notice_days} Hari\nStatus Dokumen: SAH / DISETUJUI\nOtorisasi Final: ${directorInfo.label} (${directorInfo.name})`;
 
         return (
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
@@ -489,6 +840,14 @@ export const ResignationTab: React.FC = () => {
                   <X size={14} />
                 </button>
               </div>
+
+              {/* Info direktur yang dipilih (no-print) */}
+              {selectedResignDoc.recorded_by && selectedResignDoc.director_type && (
+                <div className="no-print mb-4 flex items-center gap-2 p-3 bg-violet-50 rounded-xl border border-violet-200 text-[11.5px] text-violet-800">
+                  <BadgeCheck size={15} className="text-violet-600 flex-shrink-0" />
+                  <span>Surat ini dicatat oleh Admin · Penandatangan: <strong>{directorInfo.name}</strong> ({directorInfo.label})</span>
+                </div>
+              )}
 
               {/* Printable Document Container */}
               <div className="border-[3px] border-double border-slate-800 p-6 md:p-8 bg-slate-50/20 font-serif text-slate-900 leading-normal text-left shadow-inner rounded-xl">
@@ -554,7 +913,7 @@ export const ResignationTab: React.FC = () => {
                   <p className="text-slate-800 font-medium leading-relaxed whitespace-pre-line pl-2 border-l-2 border-slate-300">{selectedResignDoc.reason}</p>
                 </div>
 
-                {/* Footer Signatures */}
+                {/* Footer Signatures — dinamis berdasarkan director_type */}
                 <div className="grid grid-cols-2 gap-12 pt-6 items-start">
 
                   {/* Disetujui Oleh */}
@@ -566,14 +925,14 @@ export const ResignationTab: React.FC = () => {
                     <p className="text-[12px] font-bold text-slate-800 underline">Tim Administrator RSUCL</p>
                   </div>
 
-                  {/* Diketahui Oleh */}
+                  {/* Diketahui Oleh — dinamis sesuai director_type */}
                   <div className="text-center flex flex-col items-center">
                     <p className="text-[12px] font-bold text-slate-800">Diketahui Oleh,</p>
                     <div className="my-2 p-1 border border-slate-200 rounded-lg bg-white shadow-xs">
-                      <img src={qrCodeImg} alt="QR Direktur RSUCL" className="w-20 h-20 object-contain" />
+                      <img src={directorInfo.img} alt={`QR ${directorInfo.label}`} className="w-20 h-20 object-contain" />
                     </div>
-                    <p className="text-[12px] font-bold text-slate-800 underline">Amir Hidayat, ST., MKM</p>
-                    <p className="text-[10px] text-slate-600 font-semibold">Direktur PT Cempaka Lima</p>
+                    <p className="text-[12px] font-bold text-slate-800 underline">{directorInfo.name}</p>
+                    <p className="text-[10px] text-slate-600 font-semibold">{directorInfo.label}</p>
                   </div>
 
                 </div>

@@ -272,6 +272,10 @@ export interface ResignationRequest {
   pj_note: string | null;
   created_at: string;
   updated_at: string;
+  /** null = diajukan sendiri oleh karyawan; isi = dicatat langsung oleh admin */
+  recorded_by: number | null;
+  /** Direktur penandatangan surat: 'pt_director' = Amir Hidayat | 'rs_director' = dr. Meri Lidiawati */
+  director_type: 'pt_director' | 'rs_director' | null;
   employee?: {
     id: number;
     nik_ktp: string;
@@ -1785,14 +1789,29 @@ export const pjBagianApi = {
 // ─────────────────────────────────────────────────────────────────────
 // Pengajuan Surat Tugas (Assignment Letters)
 // ─────────────────────────────────────────────────────────────────────
+export interface AssignedEmployee {
+  employee_id?: number | null;
+  name: string;
+  unit_kerja?: string | null;
+  jabatan?: string | null;
+}
+
 export interface AssignmentLetter {
   id: number;
   employee_id: number;
   source?: "employee_request" | "admin_assignment";
+  director_type?: "rs_director" | "pt_director" | null;
   letter_number?: string | null;
+  letter_number_seq?: number | null;
+  letter_date?: string | null;
   title: string;
   issuing_institution: string;
   purpose: string;
+  travel_purpose?: string | null;
+  travel_date?: string | null;
+  travel_time?: string | null;
+  travel_place?: string | null;
+  assigned_employees?: AssignedEmployee[];
   start_date: string;
   end_date: string;
   document_url: string | null;
@@ -1853,12 +1872,28 @@ export const assignmentLetterApi = {
     }>("/assignment-letters", formData);
   },
 
-  createByAdmin: (formData: FormData) => {
+  createByAdmin: (payload: {
+    employee_id: number;
+    director_type: "rs_director" | "pt_director";
+    letter_number_seq: number;
+    letter_date: string;
+    title: string;
+    issuing_institution?: string;
+    purpose?: string;
+    travel_purpose: string;
+    travel_date: string;
+    travel_time: string;
+    travel_place: string;
+    assigned_employees: AssignedEmployee[];
+    start_date?: string;
+    end_date?: string;
+    admin_note?: string;
+  }) => {
     return api.post<{
       success: boolean;
       message: string;
       data: AssignmentLetter;
-    }>("/assignment-letters/admin-create", formData);
+    }>("/assignment-letters/admin-create", payload);
   },
 
   show: (id: number) => {
@@ -2180,6 +2215,18 @@ export const resignationApi = {
       success: boolean;
       message: string;
     }>(`/resignation-requests/${id}`);
+  },
+
+  /**
+   * Admin/Super Admin mencatat pengunduran diri karyawan secara langsung.
+   * Record langsung berstatus approved dan karyawan mendapat notifikasi.
+   */
+  adminRecord: (formData: FormData) => {
+    return api.post<{
+      success: boolean;
+      message: string;
+      data: ResignationRequest;
+    }>('/resignation-requests/admin-record', formData);
   },
 };
 

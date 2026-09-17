@@ -202,6 +202,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/overtime-requests/{id}', [\App\Http\Controllers\Api\OvertimeRequestController::class, 'destroy']);
         // Menghapus data pengajuan pengunduran diri (admin / super_admin)
         Route::delete('/resignation-requests/{id}', [\App\Http\Controllers\Api\ResignationRequestController::class, 'destroy']);
+        // Mencatat pengunduran diri karyawan secara langsung oleh admin / super_admin
+        Route::post('/resignation-requests/admin-record', [\App\Http\Controllers\Api\ResignationRequestController::class, 'adminRecord']);
 
         // ── CRUD Karyawan & Onboarding Draf Registrasi (Admin)
         Route::get('/employee-registrations', [AdminEmployeeRegistrationController::class, 'index']);

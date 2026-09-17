@@ -184,48 +184,86 @@ class AssignmentLetterController extends Controller
         }
 
         $validated = $request->validate([
-            'employee_id'         => 'required|exists:employees,id',
-            'title'               => 'required|string|max:200',
-            'issuing_institution' => 'required|string|max:200',
-            'purpose'             => 'required|string|max:1000',
-            'start_date'          => 'required|date',
-            'end_date'            => 'required|date|after_or_equal:start_date',
-            'document'            => 'required|file|mimes:pdf,jpg,jpeg,png|max:2048',
-            'admin_note'          => 'nullable|string|max:255',
+            'employee_id'           => 'required|exists:employees,id',
+            'director_type'         => 'required|in:rs_director,pt_director',
+            'letter_number_seq'     => 'required|integer|min:1|max:999',
+            'letter_date'           => 'required|date',
+            'title'                 => 'required|string|max:200',
+            'issuing_institution'   => 'nullable|string|max:200',
+            'purpose'               => 'nullable|string|max:1000',
+            'travel_purpose'        => 'required|string|max:500',
+            'travel_date'           => 'required|string|max:100',
+            'travel_time'           => 'required|string|max:100',
+            'travel_place'          => 'required|string|max:500',
+            'assigned_employees'    => 'required|array|min:1',
+            'assigned_employees.*.name'       => 'required|string|max:200',
+            'assigned_employees.*.unit_kerja' => 'nullable|string|max:200',
+            'assigned_employees.*.jabatan'    => 'nullable|string|max:200',
+            'assigned_employees.*.employee_id'=> 'nullable|integer',
+            'start_date'            => 'nullable|date',
+            'end_date'              => 'nullable|date|after_or_equal:start_date',
+            'admin_note'            => 'nullable|string|max:255',
         ]);
 
         $employee = Employee::with('user')->findOrFail($validated['employee_id']);
 
-        // Unggah File Surat Tugas Resmi
-        $file = $request->file('document');
-        $fileName = 'assignment_official_' . $employee->id . '_' . time() . '.' . $file->getClientOriginalExtension();
-        $path = $file->storeAs('assignment-letters', $fileName, 'public');
-        $documentUrl = '/storage/' . $path;
+        // Auto-generate nomor surat
+        $seq       = str_pad($validated['letter_number_seq'], 3, '0', STR_PAD_LEFT);
+        $letterDt  = \Carbon\Carbon::parse($validated['letter_date']);
+        $bulanRomawi = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'][$letterDt->month - 1];
+        $tahun       = $letterDt->year;
+        $dirCode     = $validated['director_type'] === 'rs_director' ? 'RSUCL' : 'PTCLU';
+        $letterNumber = "{$seq}/STU/DIR/{$dirCode}/{$bulanRomawi}/{$tahun}";
 
         $letter = AssignmentLetter::create([
-            'employee_id'         => $employee->id,
-            'source'              => 'admin_assignment',
-            'title'               => $validated['title'],
-            'issuing_institution' => $validated['issuing_institution'],
-            'purpose'             => $validated['purpose'],
-            'start_date'          => $validated['start_date'],
-            'end_date'            => $validated['end_date'],
-            'document_url'        => $documentUrl,
-            'status'              => 'approved',
-            'admin_note'          => $validated['admin_note'] ?? 'Diterbitkan langsung oleh Admin.',
-            'reviewed_by'         => $request->user()->id,
-            'reviewed_at'         => now(),
+            'employee_id'           => $employee->id,
+            'source'                => 'admin_assignment',
+            'director_type'         => $validated['director_type'],
+            'letter_number'         => $letterNumber,
+            'letter_number_seq'     => $validated['letter_number_seq'],
+            'letter_date'           => $validated['letter_date'],
+            'title'                 => $validated['title'],
+            'issuing_institution'   => $validated['issuing_institution'] ?? 'Rumah Sakit Umum Cempaka Lima',
+            'purpose'               => $validated['purpose'] ?? $validated['travel_purpose'],
+            'travel_purpose'        => $validated['travel_purpose'],
+            'travel_date'           => $validated['travel_date'],
+            'travel_time'           => $validated['travel_time'],
+            'travel_place'          => $validated['travel_place'],
+            'assigned_employees'    => $validated['assigned_employees'],
+            'start_date'            => $validated['start_date'] ?? $letterDt->toDateString(),
+            'end_date'              => $validated['end_date'] ?? $letterDt->toDateString(),
+            'document_url'          => null,
+            'status'                => 'approved',
+            'admin_note'            => $validated['admin_note'] ?? 'Diterbitkan langsung oleh Admin.',
+            'reviewed_by'           => $request->user()->id,
+            'reviewed_at'           => now(),
         ]);
 
-        // Kirim Notifikasi ke Pegawai
+        // Kirim notifikasi ke pegawai utama (employee_id)
         if ($employee->user) {
             Notification::create([
                 'user_id' => $employee->user->id,
                 'title'   => 'Surat Tugas Resmi Diterbitkan',
-                'body'    => "Admin telah menerbitkan surat tugas resmi untuk kegiatan '{$letter->title}'. Silakan unduh dokumen surat tugas.",
+                'body'    => "Admin telah menerbitkan surat tugas resmi untuk kegiatan '{$letter->title}'. Silakan cek di menu Surat Tugas.",
                 'type'    => 'assignment_letter',
                 'data'    => ['assignment_letter_id' => $letter->id],
             ]);
+        }
+
+        // Kirim notifikasi ke seluruh pegawai yang ditugaskan (jika ada employee_id di assigned_employees)
+        foreach ($validated['assigned_employees'] as $ae) {
+            if (!empty($ae['employee_id']) && $ae['employee_id'] != $employee->id) {
+                $otherEmp = Employee::with('user')->find($ae['employee_id']);
+                if ($otherEmp && $otherEmp->user) {
+                    Notification::create([
+                        'user_id' => $otherEmp->user->id,
+                        'title'   => 'Surat Tugas Resmi Diterbitkan',
+                        'body'    => "Admin telah menerbitkan surat tugas resmi untuk kegiatan '{$letter->title}'. Silakan cek di menu Surat Tugas.",
+                        'type'    => 'assignment_letter',
+                        'data'    => ['assignment_letter_id' => $letter->id],
+                    ]);
+                }
+            }
         }
 
         return response()->json([
@@ -234,6 +272,7 @@ class AssignmentLetterController extends Controller
             'data'    => new AssignmentLetterResource($letter),
         ], 201);
     }
+
 
     /**
      * Menampilkan detail surat tugas.

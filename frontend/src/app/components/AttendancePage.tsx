@@ -323,6 +323,15 @@ function FaceVerificationCard({
 
   const startCamera = useCallback(async () => {
     setCameraError(null);
+    
+    // SAFETY CHECK: Many older mobile WebViews or non-HTTPS connections don't support mediaDevices
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setCameraError(
+        "Kamera tidak didukung. Pastikan Anda menggunakan Chrome/Safari versi terbaru dan mengakses situs lewat koneksi aman (HTTPS)."
+      );
+      return;
+    }
+
     try {
       let stream: MediaStream;
       try {
@@ -345,7 +354,7 @@ function FaceVerificationCard({
     } catch (err) {
       console.error("Camera access error:", err);
       setCameraError(
-        "Kamera tidak dapat diakses. Silakan periksa dan aktifkan izin akses kamera pada browser/HP Anda.",
+        "Kamera tidak dapat diakses. Silakan periksa izin akses kamera di pengaturan browser/HP Anda."
       );
     }
   }, []);

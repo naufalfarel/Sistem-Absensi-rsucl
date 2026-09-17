@@ -30,6 +30,8 @@ class ResignationRequest extends Model
         'pj_reviewed_by',
         'pj_reviewed_at',
         'pj_note',
+        'recorded_by',
+        'director_type',
     ];
 
     protected $casts = [
@@ -61,6 +63,14 @@ class ResignationRequest extends Model
     public function pjReviewer()
     {
         return $this->belongsTo(User::class, 'pj_reviewed_by');
+    }
+
+    /**
+     * Relasi ke model User (Admin/Super Admin yang mencatat resign secara langsung).
+     */
+    public function recordedBy()
+    {
+        return $this->belongsTo(User::class, 'recorded_by');
     }
 
     /**

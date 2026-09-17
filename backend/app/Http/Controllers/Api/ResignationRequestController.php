@@ -419,8 +419,103 @@ class ResignationRequestController extends Controller
     }
 
     /**
+     * Mencatat pengunduran diri karyawan secara langsung oleh Admin / Super Admin.
+     * Record langsung berstatus 'approved' tanpa perlu melalui alur pengajuan pegawai / PJ Bagian.
+     */
+    public function adminRecord(Request $request)
+    {
+        $admin = $request->user();
+        if (!$admin->isAdmin()) {
+            return response()->json(['success' => false, 'message' => 'Akses ditolak. Fitur ini khusus Administrator/HRD/Super Admin.'], 403);
+        }
+
+        $validated = $request->validate([
+            'employee_id'    => 'required|exists:employees,id',
+            'effective_date' => 'required|date',
+            'reason'         => 'required|string|min:10|max:2000',
+            'director_type'  => 'required|in:pt_director,rs_director',
+            'attachment'     => 'nullable|file|mimes:pdf|max:5120',
+        ]);
+
+        $employee = Employee::with(['user', 'department', 'position'])->find($validated['employee_id']);
+        if (!$employee) {
+            return response()->json(['success' => false, 'message' => 'Data karyawan tidak ditemukan.'], 404);
+        }
+
+        // Cek apakah karyawan sudah memiliki pengajuan aktif
+        $activePending = ResignationRequest::where('employee_id', $employee->id)
+            ->whereIn('status', ['pending', 'approved'])
+            ->first();
+
+        if ($activePending) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Karyawan ini sudah memiliki pengajuan pengunduran diri yang sedang aktif atau sudah disetujui.',
+            ], 422);
+        }
+
+        $requestDate   = Carbon::today();
+        $effectiveDate = Carbon::parse($validated['effective_date'])->startOfDay();
+        $noticeDays    = max(0, (int) $requestDate->diffInDays($effectiveDate, false));
+
+        // Unggah dokumen pendukung jika ada
+        $attachmentUrl = null;
+        if ($request->hasFile('attachment')) {
+            $file = $request->file('attachment');
+            $fileName = 'resignation_admin_' . $employee->id . '_' . time() . '.' . $file->getClientOriginalExtension();
+            $path = $file->storeAs('resignation-documents', $fileName, 'public');
+            $attachmentUrl = '/storage/' . $path;
+        }
+
+        $resignation = ResignationRequest::create([
+            'employee_id'    => $employee->id,
+            'request_date'   => $requestDate->format('Y-m-d'),
+            'effective_date' => $effectiveDate->format('Y-m-d'),
+            'notice_days'    => $noticeDays,
+            'reason'         => $validated['reason'],
+            'attachment_url' => $attachmentUrl,
+            'posisi'         => $employee->position?->name ?? 'Staf',
+            'unit_kerja'     => $employee->department?->name ?? 'RSU Cempaka Lima',
+            // Langsung approved — dicatat langsung oleh admin
+            'status'         => 'approved',
+            'reviewed_by'    => $admin->id,
+            'reviewed_at'    => now(),
+            'admin_note'     => 'Dicatat langsung oleh Administrator (' . $admin->name . ')',
+            'pj_status'      => 'approved',
+            'pj_reviewed_by' => $admin->id,
+            'pj_reviewed_at' => now(),
+            'pj_note'        => 'Dicatat langsung oleh Administrator — bypass alur PJ Bagian',
+            // Kolom baru
+            'recorded_by'    => $admin->id,
+            'director_type'  => $validated['director_type'],
+        ]);
+
+        // Notifikasi ke karyawan yang bersangkutan
+        if ($employee->user) {
+            $directorLabel = $validated['director_type'] === 'rs_director'
+                ? 'Direktur RS Cempaka Lima (dr. Meri Lidiawati, MM, MKM, CHLQM)'
+                : 'Direktur PT Cempaka Lima (Amir Hidayat, ST, MKM)';
+
+            Notification::create([
+                'user_id' => $employee->user->id,
+                'title'   => 'Pengunduran Diri Anda Telah Dicatat',
+                'body'    => "Pengunduran diri Anda (efektif per " . $effectiveDate->format('d/m/Y') . ") telah dicatat oleh Administrator. Surat ditandatangani oleh {$directorLabel}.",
+                'type'    => 'resignation',
+                'data'    => ['resignation_id' => $resignation->id],
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Pengunduran diri karyawan berhasil dicatat.',
+            'data'    => $resignation->load(['employee.user', 'employee.department', 'reviewer', 'pjReviewer', 'recordedBy']),
+        ], 201);
+    }
+
+    /**
      * Menghapus pengajuan pengunduran diri oleh Admin / Super Admin.
      */
+
     public function destroy(Request $request, $id)
     {
         $user = $request->user();
