@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import { X, Printer } from 'lucide-react';
 import { AssignmentLetter } from '../../../services/api';
-import logoRSUCL from '../../../imports/logo_rsucl_2019.png';
+import logoRSUCL from '../../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
 import logoKars from '../../../imports/logo_kars.png';
 import qrDirRsImg from '../../../imports/qr_direktur_rs_cempaka_lima.png';
 import qrDirPtImg from '../../../imports/qr_code_cempaka_lima.png';
@@ -135,124 +135,80 @@ export default function SuratTugasModal({ letter, onClose }: SuratTugasModalProp
         <div className="overflow-y-auto max-h-[80vh] bg-gray-100 p-4">
           <div
             ref={printRef}
-            className="bg-white mx-auto shadow-sm"
-            style={{
-              width: '210mm',
-              minHeight: '297mm',
-              padding: '20mm 25mm 20mm 30mm',
-              fontFamily: '"Times New Roman", Times, serif',
-              fontSize: '12pt',
-              color: '#000',
-              boxSizing: 'border-box',
-            }}
-          >
-            {/* ════════ KOP SURAT ════════ */}
-            {/* ════════ KOP SURAT ════════ */}
-            {dir.showPtHeader ? (
+            className="bg-white mx-a            {dir.showPtHeader ? (
               // --- KOP SURAT PT CEMPAKA LIMA UTAMA ---
               <>
-                <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '0' }}>
-                  <tbody>
-                    <tr>
-                      {/* Logo Kiri (Besar) */}
-                      <td style={{ width: '18%', verticalAlign: 'middle', textAlign: 'left' }}>
-                        <img src={logoRSUCL} alt="Logo RSUCL" style={{ width: '110px', height: 'auto' }} />
-                      </td>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '4px', textAlign: 'center' }}>
+                  {/* Logo Left */}
+                  <div style={{ width: '96px', height: '96px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'white', padding: '4px' }}>
+                    <img src={logoRSUCL} alt="Logo RSUCL" style={{ maxHeight: '80px', width: 'auto', objectFit: 'contain' }} />
+                  </div>
 
-                      {/* Teks Tengah */}
-                      <td style={{ width: '64%', verticalAlign: 'middle', textAlign: 'center' }}>
-                        <div style={{ fontSize: '13pt', color: '#388e3c', fontWeight: 'bold', letterSpacing: '0.5px', marginBottom: '4px' }}>
-                          PT.CEMPAKA LIMA UTAMA
-                        </div>
-                        <div style={{ fontSize: '17pt', fontWeight: 'bold', color: '#e53935', lineHeight: '1.1', fontFamily: '"Times New Roman", Times, serif', marginBottom: '6px' }}>
-                          RUMAH SAKIT UMUM CEMPAKA LIMA
-                        </div>
-                        <div style={{ fontSize: '9pt', color: '#555', marginBottom: '2px', fontFamily: '"Times New Roman", Times, serif' }}>
-                          Jln. Politeknik No.23 Dusun Meunasah Dayah Lr.B, Gp. Beurawe,
-                        </div>
-                        <div style={{ fontSize: '9pt', color: '#555', marginBottom: '2px', fontFamily: '"Times New Roman", Times, serif' }}>
-                          Kecamatan Kuta Alam, Kode Pos 23124, Telp.(0651)3619999,
-                        </div>
-                        <div style={{ fontSize: '9pt', color: '#555', marginBottom: '4px', fontFamily: '"Times New Roman", Times, serif' }}>
-                          Fax. (0651)3619999, Email: rsucempaka5@gmail.com
-                        </div>
-                        <div style={{ fontSize: '10pt', fontWeight: 'bold', color: '#388e3c' }}>
-                          BANDA ACEH
-                        </div>
-                      </td>
+                  {/* Header Text Middle */}
+                  <div style={{ flex: 1, minWidth: 0, fontFamily: 'sans-serif', padding: '0 4px' }}>
+                    <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#16A34A', letterSpacing: '0.025em', textTransform: 'uppercase' }}>
+                      PT.CEMPAKA LIMA UTAMA
+                    </div>
+                    <div style={{ fontSize: '17px', fontWeight: '800', color: '#DC2626', letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: '2px' }}>
+                      RUMAH SAKIT UMUM CEMPAKA LIMA
+                    </div>
+                    <div style={{ fontSize: '9.5px', color: '#1f2937', lineHeight: '1.375', fontWeight: '500', marginTop: '2px' }}>
+                      Jln.Politeknik No.23 Dusun Meunasah Dayah Lr.B, Gp.Beurawe,<br />
+                      Kecamatan Kuta Alam, Kode Pos 23124,Telp.(0651)3619999,<br />
+                      Fax. (0651)3619999, Email: rsu@cempakalima.co.id
+                    </div>
+                    <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#111827', letterSpacing: '0.1em', marginTop: '2px', textTransform: 'uppercase' }}>
+                      BANDA ACEH
+                    </div>
+                  </div>
 
-                      {/* Logo Kanan (KARS) */}
-                      <td style={{ width: '18%', verticalAlign: 'middle', textAlign: 'right' }}>
-                        <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center' }}>
-                          <img src={logoKars} alt="Logo KARS" style={{ width: '90px', height: 'auto', marginBottom: '4px' }} />
-                          <div style={{ fontSize: '7pt', textAlign: 'center', color: '#7b1fa2', fontWeight: 'bold', fontFamily: '"Times New Roman", Times, serif' }}>
-                            TERAKREDITASI
-                          </div>
-                          <div style={{ fontSize: '7pt', textAlign: 'center', color: '#7b1fa2', fontWeight: 'bold', fontFamily: '"Times New Roman", Times, serif' }}>
-                            PARIPURNA
-                          </div>
-                          <div style={{ fontSize: '7pt', textAlign: 'center', color: '#7b1fa2', fontWeight: 'bold', fontFamily: '"Times New Roman", Times, serif' }}>
-                            KARS
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-                {/* Garis Ganda Hijau (Sama Tebal) */}
-                <div style={{ borderTop: '2px solid #388e3c', marginTop: '8px' }} />
-                <div style={{ borderTop: '2px solid #388e3c', marginTop: '2px', marginBottom: '15px' }} />
+                  {/* KARS Logo Right */}
+                  <div style={{ width: '96px', height: '96px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'white', padding: '4px' }}>
+                    <img src={logoKars} alt="Logo KARS" style={{ maxHeight: '80px', width: 'auto', objectFit: 'contain' }} />
+                  </div>
+                </div>
+
+                {/* Double Separator Line */}
+                <div style={{ borderTop: '3px solid #16A34A', marginTop: '4px', marginBottom: '2px' }} />
+                <div style={{ borderTop: '1px solid black', marginBottom: '16px' }} />
               </>
             ) : (
               // --- KOP SURAT PEMERINTAH PROVINSI ACEH (RS) ---
               <>
-                <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '0' }}>
-                  <tbody>
-                    <tr>
-                      {/* Logo Kiri */}
-                      <td style={{ width: '18%', verticalAlign: 'middle', textAlign: 'left' }}>
-                        <img src={logoRSUCL} alt="Logo RSUCL" style={{ width: '120px', height: 'auto' }} />
-                      </td>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '4px', textAlign: 'center' }}>
+                  {/* Logo Left */}
+                  <div style={{ width: '96px', height: '96px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'white', padding: '4px' }}>
+                    <img src={logoRSUCL} alt="Logo RSUCL" style={{ maxHeight: '80px', width: 'auto', objectFit: 'contain' }} />
+                  </div>
 
-                      {/* Teks Tengah */}
-                      <td style={{ width: '64%', verticalAlign: 'middle', textAlign: 'center' }}>
-                        <div style={{ fontSize: '11pt', color: '#1a5c1a', fontWeight: 'bold', fontFamily: '"Times New Roman", Times, serif', marginBottom: '6px' }}>
-                          PEMERINTAH PROVINSI ACEH
-                        </div>
-                        <div style={{ fontSize: '20pt', fontWeight: 'bold', color: '#1a5c1a', lineHeight: '1.1', fontFamily: '"Times New Roman", Times, serif', marginBottom: '6px' }}>
-                          RUMAH SAKIT UMUM<br/>CEMPAKA LIMA
-                        </div>
-                        <div style={{ fontSize: '9pt', color: '#333', marginBottom: '2px', fontFamily: '"Times New Roman", Times, serif' }}>
-                          Jln. Politeknik No.23 Dusun Meunasah Dayah Lr.II, Gp. Jeulingke,
-                        </div>
-                        <div style={{ fontSize: '9pt', color: '#333', marginBottom: '2px', fontFamily: '"Times New Roman", Times, serif' }}>
-                          Kecamatan Kuta Alam, Kode Pos 23124, Telp.(0651)3619999,
-                        </div>
-                        <div style={{ fontSize: '9pt', color: '#333', marginBottom: '6px', fontFamily: '"Times New Roman", Times, serif' }}>
-                          Fax. (0651)3619999, Email: rsucempaka5@gmail.com
-                        </div>
-                        <div style={{ fontSize: '11pt', fontWeight: 'bold', color: '#1a5c1a', fontFamily: '"Times New Roman", Times, serif' }}>
-                          BANDA ACEH
-                        </div>
-                      </td>
+                  {/* Header Text Middle */}
+                  <div style={{ flex: 1, minWidth: 0, fontFamily: 'sans-serif', padding: '0 4px' }}>
+                    <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#16A34A', letterSpacing: '0.025em', textTransform: 'uppercase' }}>
+                      PEMERINTAH PROVINSI ACEH
+                    </div>
+                    <div style={{ fontSize: '17px', fontWeight: '800', color: '#16A34A', letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: '2px' }}>
+                      RUMAH SAKIT UMUM CEMPAKA LIMA
+                    </div>
+                    <div style={{ fontSize: '9.5px', color: '#1f2937', lineHeight: '1.375', fontWeight: '500', marginTop: '2px' }}>
+                      Jln. Politeknik No.23 Dusun Meunasah Dayah Lr.II, Gp. Jeulingke,<br />
+                      Kecamatan Kuta Alam, Kode Pos 23124, Telp.(0651)3619999,<br />
+                      Fax. (0651)3619999, Email: rsu@cempakalima.co.id
+                    </div>
+                    <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#111827', letterSpacing: '0.1em', marginTop: '2px', textTransform: 'uppercase' }}>
+                      BANDA ACEH
+                    </div>
+                  </div>
 
-                      {/* Logo Kanan (KARS) */}
-                      <td style={{ width: '18%', verticalAlign: 'middle', textAlign: 'right' }}>
-                        <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center' }}>
-                          <img src={logoKars} alt="Logo KARS" style={{ width: '90px', height: 'auto', marginBottom: '4px' }} />
-                          <div style={{ fontSize: '7pt', color: '#d32f2f', fontFamily: '"Times New Roman", Times, serif', lineHeight: '1.2' }}>TERAKREDITASI</div>
-                          <div style={{ fontSize: '7pt', color: '#d32f2f', fontFamily: '"Times New Roman", Times, serif', lineHeight: '1.2' }}>PARIPURNA</div>
-                          <div style={{ fontSize: '7pt', color: '#d32f2f', fontFamily: '"Times New Roman", Times, serif', lineHeight: '1.2' }}>KARS</div>
-                        </div>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-                {/* Garis Tebal Tipis */}
-                <div style={{ borderTop: '4px solid #1a5c1a', marginTop: '10px' }} />
-                <div style={{ borderTop: '1px solid #1a5c1a', marginTop: '2px', marginBottom: '20px' }} />
+                  {/* KARS Logo Right */}
+                  <div style={{ width: '96px', height: '96px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'white', padding: '4px' }}>
+                    <img src={logoKars} alt="Logo KARS" style={{ maxHeight: '80px', width: 'auto', objectFit: 'contain' }} />
+                  </div>
+                </div>
+
+                {/* Double Separator Line */}
+                <div style={{ borderTop: '3px solid #16A34A', marginTop: '4px', marginBottom: '2px' }} />
+                <div style={{ borderTop: '1px solid black', marginBottom: '16px' }} />
               </>
-
             )}
 
             {/* ════════ JUDUL SURAT ════════ */}

@@ -160,8 +160,8 @@ class LeaveRequestController extends Controller
             return response()->json(['success' => false, 'message' => 'Data karyawan tidak ditemukan.'], 404);
         }
 
-        // Cek syarat minimal bekerja untuk mengajukan cuti, izin, sakit, cuti_khusus
-        if (!$user->isAdmin()) {
+        // Cek syarat minimal bekerja untuk mengajukan cuti, izin, cuti_khusus (sakit dikecualikan)
+        if (!$user->isAdmin() && $request->input('type') !== 'sakit') {
             if (!$employee->join_date) {
                 return response()->json([
                     'success' => false,
@@ -180,7 +180,7 @@ class LeaveRequestController extends Controller
                 $daysRemaining = 365 - max(0, $daysWorked);
                 return response()->json([
                     'success' => false,
-                    'message' => "Anda baru bekerja selama " . max(0, $daysWorked) . " hari. Pengajuan cuti/izin/sakit/cuti khusus hanya dapat dilakukan setelah bekerja minimal 1 tahun (365 hari). Kurang {$daysRemaining} hari lagi.",
+                    'message' => "Anda baru bekerja selama " . max(0, $daysWorked) . " hari. Pengajuan cuti/izin/cuti khusus hanya dapat dilakukan setelah bekerja minimal 1 tahun (365 hari). Kurang {$daysRemaining} hari lagi.",
                     'errors'  => [
                         'join_date' => ["Syarat pengajuan minimal bekerja 1 tahun (365 hari)."],
                     ],
