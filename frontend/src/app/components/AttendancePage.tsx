@@ -1903,16 +1903,13 @@ export function AttendancePage() {
           </div>
           <div className="flex-1">
             <span className="font-bold block text-amber-900">
-              Status: Sedang Dinas
+              Status: GPS Bebas
             </span>
             <span className="text-amber-750 text-[11px]">
               {dinasReasonToday ||
                 "Dinas Luar (Validasi radius GPS dinonaktifkan untuk hari ini)"}
             </span>
           </div>
-          <span className="text-[10px] font-extrabold px-2.5 py-0.5 bg-amber-200 text-amber-850 rounded-full border border-amber-300">
-            GPS Bebas
-          </span>
         </div>
       )}
 
