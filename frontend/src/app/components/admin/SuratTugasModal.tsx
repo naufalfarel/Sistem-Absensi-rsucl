@@ -135,7 +135,9 @@ export default function SuratTugasModal({ letter, onClose }: SuratTugasModalProp
         <div className="overflow-y-auto max-h-[80vh] bg-gray-100 p-4">
           <div
             ref={printRef}
-            className="bg-white mx-a            {dir.showPtHeader ? (
+            className="bg-white mx-auto page"
+          >
+            {dir.showPtHeader ? (
               // --- KOP SURAT PT CEMPAKA LIMA UTAMA ---
               <>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '4px', textAlign: 'center' }}>
