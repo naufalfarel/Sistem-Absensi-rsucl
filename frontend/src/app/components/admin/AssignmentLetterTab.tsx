@@ -100,6 +100,7 @@ export default function AssignmentLetterTab() {
   const [assignedEmployees, setAssignedEmployees] = useState<AssignedEmployee[]>([
     { name: '', unit_kerja: '', jabatan: '', employee_id: null },
   ]);
+  const [activeEmployeeSearchRow, setActiveEmployeeSearchRow] = useState<number | null>(null);
 
   // ── Load data ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -158,7 +159,8 @@ export default function AssignmentLetterTab() {
 
   // Called when user types in datalist input — match by name to auto-fill
   const handleEmpNameChange = (idx: number, val: string) => {
-    const found = allEmployees.find(ae => ae.name.toLowerCase() === val.toLowerCase());
+    const normalizedName = val.trim().toLocaleLowerCase('id-ID');
+    const found = allEmployees.find(ae => ae.name?.trim().toLocaleLowerCase('id-ID') === normalizedName);
     setAssignedEmployees(prev => {
       const n = [...prev];
       if (found) {
@@ -173,6 +175,29 @@ export default function AssignmentLetterTab() {
       }
       return n;
     });
+  };
+
+  // Pencarian hanya mencocokkan nama pegawai; unit dan jabatan adalah informasi pendukung.
+  const selectEmployee = (idx: number, employee: Employee) => {
+    setAssignedEmployees(prev => {
+      const next = [...prev];
+      next[idx] = {
+        employee_id: employee.id,
+        name: employee.name,
+        unit_kerja: employee.department ?? '',
+        jabatan: employee.position ?? '',
+      };
+      return next;
+    });
+    setActiveEmployeeSearchRow(null);
+  };
+
+  const getEmployeeSuggestions = (query: string) => {
+    const normalizedQuery = query.trim().toLocaleLowerCase('id-ID');
+    return allEmployees
+      .filter(employee => employee.name && employee.name.toLocaleLowerCase('id-ID').includes(normalizedQuery))
+      .sort((a, b) => a.name.localeCompare(b.name, 'id-ID'))
+      .slice(0, 10);
   };
 
   // ── Reset form ────────────────────────────────────────────────────
@@ -683,10 +708,15 @@ export default function AssignmentLetterTab() {
                             <td className="py-2 px-2 align-middle">
                               <input
                                 type="text"
-                                list={`emp-list-${idx}`}
                                 value={emp.name}
-                                placeholder="Ketik nama lalu pilih..."
-                                onChange={e => handleEmpNameChange(idx, e.target.value)}
+                                placeholder="Ketik nama pegawai..."
+                                onFocus={() => setActiveEmployeeSearchRow(idx)}
+                                onChange={e => {
+                                  handleEmpNameChange(idx, e.target.value);
+                                  setActiveEmployeeSearchRow(idx);
+                                }}
+                                onBlur={() => setActiveEmployeeSearchRow(current => current === idx ? null : current)}
+                                autoComplete="off"
                                 className={`w-full px-2.5 py-2 border rounded-lg text-[12px] focus:outline-none transition-all text-gray-800 min-w-[150px] ${
                                   emp.employee_id
                                     ? 'border-green-400 bg-green-50'
@@ -694,6 +724,28 @@ export default function AssignmentLetterTab() {
                                 }`}
                                 required
                               />
+                              {activeEmployeeSearchRow === idx && (
+                                <div className="relative">
+                                  <div className="z-30 mt-1 w-full min-w-[230px] max-h-52 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                                    {getEmployeeSuggestions(emp.name).length > 0 ? (
+                                      getEmployeeSuggestions(emp.name).map(employee => (
+                                        <button
+                                          key={employee.id}
+                                          type="button"
+                                          onMouseDown={e => e.preventDefault()}
+                                          onClick={() => selectEmployee(idx, employee)}
+                                          className="block w-full px-3 py-2 text-left hover:bg-green-50 focus:bg-green-50 cursor-pointer"
+                                        >
+                                          <span className="block text-[12px] font-bold text-gray-800">{employee.name}</span>
+                                          <span className="block text-[10px] text-gray-500">{employee.department || 'Unit belum diatur'} · {employee.position || 'Jabatan belum diatur'}</span>
+                                        </button>
+                                      ))
+                                    ) : (
+                                      <p className="px-3 py-2 text-[11px] text-gray-400">Nama pegawai tidak ditemukan.</p>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
                               <datalist id={`emp-list-${idx}`}>
                                 {allEmployees.map(e => (
                                   <option key={e.id} value={e.name}>
