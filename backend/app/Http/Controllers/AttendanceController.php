@@ -2,20 +2,32 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Attendance;
-use App\Models\Employee;
-use App\Models\Setting;
-use App\Support\ScheduleRules;
-use App\Support\AttendanceRules;
 use App\Http\Requests\CheckInRequest;
 use App\Http\Requests\CheckOutRequest;
 use App\Http\Resources\AttendanceResource;
+use App\Models\Attendance;
+use App\Models\Employee;
+use App\Models\LeaveRequest;
+use App\Models\Notification;
+use App\Models\Schedule;
+use App\Models\Setting;
+use App\Models\User;
+use App\Services\AttendanceService;
+use App\Support\AttendanceRules;
+use App\Support\ScheduleRules;
 use Carbon\Carbon;
+use Illuminate\Database\QueryException;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Class AttendanceController
- * 
+ *
  * Mengelola alur absen masuk (check-in) dan absen pulang (check-out) karyawan.
  * Mendukung validasi lokasi geofence (Haversine formula), batasan jam shift dinamis,
  * penyimpanan foto selfie (Base64), penanganan shift lintas hari (overnight),
@@ -24,18 +36,60 @@ use Illuminate\Http\Request;
 class AttendanceController extends Controller
 {
     /**
+     * Respons seragam untuk pembacaan GPS yang belum layak dipakai.
+     * `retryable` memberi sinyal ke klien agar mengambil sampel baru, bukan
+     * menyimpan koordinat lama atau menganggapnya sebagai kesalahan permanen.
+     *
+     * @param  array<string, mixed>  $gpsResult
+     */
+    private function gpsQualityErrorResponse(array $gpsResult): JsonResponse
+    {
+        return response()->json([
+            'success' => false,
+            'message' => $gpsResult['message'],
+            'code' => $gpsResult['code'],
+            'retryable' => (bool) ($gpsResult['retryable'] ?? true),
+            'gps' => array_filter([
+                'accuracy_meters' => $gpsResult['accuracy'] ?? null,
+                'max_accuracy_meters' => $gpsResult['max_accuracy_meters'] ?? null,
+                'age_seconds' => $gpsResult['age_seconds'] ?? null,
+                'max_age_seconds' => $gpsResult['max_age_seconds'] ?? null,
+            ], static fn ($value) => $value !== null),
+        ], 422);
+    }
+
+    /** @param array<string, mixed> $assessment */
+    private function geofenceErrorResponse(array $assessment): JsonResponse
+    {
+        $isUncertain = $assessment['status'] === 'uncertain';
+
+        return response()->json([
+            'success' => false,
+            'message' => $isUncertain
+                ? 'Posisi GPS masih belum pasti di batas area absensi. Tunggu hingga akurasi membaik, lalu coba kembali.'
+                : 'Anda berada di luar radius lokasi absensi yang diizinkan.',
+            'code' => $isUncertain ? 'GPS_GEOFENCE_UNCERTAIN' : 'GPS_OUTSIDE_GEOFENCE',
+            'retryable' => true,
+            'gps' => [
+                'distance_meters' => (int) round($assessment['distance_meters']),
+                'accuracy_meters' => (int) round($assessment['accuracy_meters']),
+                'radius_meters' => (int) round($assessment['radius_meters']),
+            ],
+        ], 422);
+    }
+
+    /**
      * GET /api/attendance/today
-     * 
+     *
      * Mengambil status absensi hari ini milik karyawan yang sedang login.
      * Juga mendeteksi apakah hari ini karyawan sedang dalam masa cuti/izin/sakit aktif.
-     * 
-     * @param Request $request
-     * @return \Illuminate\Http\JsonResponse
+     *
+     * @return JsonResponse
      */
     public function today(Request $request)
     {
         $employee = $request->user()->employee;
-        if (!$employee) {
+        if (! $employee) {
             return response()->json(['success' => false, 'message' => 'Data karyawan tidak ditemukan.'], 404);
         }
 
@@ -44,16 +98,16 @@ class AttendanceController extends Controller
 
         // Ambil seluruh data absensi hari ini jika ada
         $allRecords = Attendance::where('employee_id', $employee->id)
-                             ->whereDate('date', $todayStr)
-                             ->get();
+            ->whereDate('date', $todayStr)
+            ->get();
 
         // Prioritaskan cek apakah karyawan memiliki record check-in aktif yang BELUM check-out dan masih valid
         $openUnclosedCandidates = Attendance::where('employee_id', $employee->id)
-                                  ->whereNotNull('check_in')
-                                  ->whereNull('check_out')
-                                  ->orderBy('date', 'desc')
-                                  ->orderBy('id', 'desc')
-                                  ->get();
+            ->whereNotNull('check_in')
+            ->whereNull('check_out')
+            ->orderBy('date', 'desc')
+            ->orderBy('id', 'desc')
+            ->get();
 
         $openUnclosed = null;
         foreach ($openUnclosedCandidates as $cand) {
@@ -71,42 +125,42 @@ class AttendanceController extends Controller
             // Pegawai sedang berdinas & menunggu check-out. Kunci record & shift ke transaksi ini!
             $record = $openUnclosed;
             if ($openUnclosed->schedule_id) {
-                $activeShift = \App\Models\Schedule::find($openUnclosed->schedule_id);
+                $activeShift = Schedule::find($openUnclosed->schedule_id);
             }
-            if (!$activeShift) {
+            if (! $activeShift) {
                 $activeShift = AttendanceRules::resolveShiftFor($employee, Carbon::parse($openUnclosed->date));
             }
             $allShifts = AttendanceRules::resolveAllShiftsFor($employee, Carbon::parse($openUnclosed->date));
-            if ($activeShift && !collect($allShifts)->contains('id', $activeShift->id)) {
+            if ($activeShift && ! collect($allShifts)->contains('id', $activeShift->id)) {
                 array_unshift($allShifts, $activeShift);
             }
-            if (!$allRecords->contains('id', $openUnclosed->id)) {
+            if (! $allRecords->contains('id', $openUnclosed->id)) {
                 $allRecords->prepend($openUnclosed);
             }
         } else {
             // Belum ada check-in aktif / sudah check-out. Resolusi shift aktif untuk hari ini.
             $activeShift = AttendanceRules::resolveShiftFor($employee, $now, $now);
-            $allShifts   = AttendanceRules::resolveAllShiftsFor($employee, $now);
+            $allShifts = AttendanceRules::resolveAllShiftsFor($employee, $now);
 
             if ($activeShift) {
                 $record = $allRecords->firstWhere('schedule_id', $activeShift->id);
             }
-            if (!$record) {
+            if (! $record) {
                 $record = $allRecords->last();
             }
         }
 
         // Cek apakah ada pengajuan cuti/izin/sakit yang aktif hari ini
-        $activeLeave = \App\Models\LeaveRequest::where('employee_id', $employee->id)
+        $activeLeave = LeaveRequest::where('employee_id', $employee->id)
             ->where('status', 'approved')
             ->where('start_date', '<=', $todayStr)
-            ->where(function($q) use ($todayStr) {
-                $q->where(function($q2) use ($todayStr) {
+            ->where(function ($q) use ($todayStr) {
+                $q->where(function ($q2) use ($todayStr) {
                     $q2->whereNull('actual_end_date')
-                       ->whereDate('end_date', '>=', $todayStr);
-                })->orWhere(function($q2) use ($todayStr) {
+                        ->whereDate('end_date', '>=', $todayStr);
+                })->orWhere(function ($q2) use ($todayStr) {
                     $q2->whereNotNull('actual_end_date')
-                       ->whereDate('actual_end_date', '>=', $todayStr);
+                        ->whereDate('actual_end_date', '>=', $todayStr);
                 });
             })
             ->first();
@@ -114,7 +168,7 @@ class AttendanceController extends Controller
         $leaveData = null;
         if ($activeLeave) {
             $leaveData = [
-                'type'   => $activeLeave->type,
+                'type' => $activeLeave->type,
                 'reason' => $activeLeave->reason,
             ];
         }
@@ -133,17 +187,17 @@ class AttendanceController extends Controller
         if ($isExempt) {
             $approvedLetter = $employee->approvedAssignmentLetterOn(Carbon::today('Asia/Jakarta'));
             if ($approvedLetter) {
-                $dinasReason = 'Surat Tugas: ' . $approvedLetter->title;
+                $dinasReason = 'Surat Tugas: '.$approvedLetter->title;
             } else {
                 $dayName = AttendanceRules::dayNameFor(Carbon::today('Asia/Jakarta'));
                 $sched = $employee->schedules()->wherePivot('day_of_week', $dayName)->first();
-                $dinasReason = 'Shift: ' . ($sched ? $sched->name : 'Dinas Luar');
+                $dinasReason = 'Shift: '.($sched ? $sched->name : 'Dinas Luar');
             }
         }
 
         return response()->json([
             'success' => true,
-            'data'    => $record ? new AttendanceResource($record) : null,
+            'data' => $record ? new AttendanceResource($record) : null,
             'records' => AttendanceResource::collection($allRecords),
             'active_shift' => $activeShift ? [
                 'id' => $activeShift->id,
@@ -152,7 +206,7 @@ class AttendanceController extends Controller
                 'end_time' => $activeShift->end_time,
                 'color' => $activeShift->color,
             ] : null,
-            'today_shifts' => array_map(fn($s) => [
+            'today_shifts' => array_map(fn ($s) => [
                 'id' => $s->id,
                 'name' => $s->name,
                 'start_time' => $s->start_time,
@@ -168,10 +222,10 @@ class AttendanceController extends Controller
 
     /**
      * GET /api/attendance/all-today
-     * 
+     *
      * Mengambil data kehadiran seluruh karyawan untuk hari berjalan (hanya untuk Admin).
-     * 
-     * @return \Illuminate\Http\JsonResponse
+     *
+     * @return JsonResponse
      */
     public function allToday()
     {
@@ -184,8 +238,8 @@ class AttendanceController extends Controller
 
         // Ambil semua karyawan aktif beserta relasinya
         $employees = Employee::with(['user', 'department', 'position', 'schedules'])
-                             ->where('status', 'active')
-                             ->get();
+            ->where('status', 'active')
+            ->get();
 
         // Ambil data absensi aktual hari ini (utamakan record yang sudah memiliki check_in dan check_out)
         $attendancesList = Attendance::where('date', $todayStr)
@@ -195,7 +249,7 @@ class AttendanceController extends Controller
 
         $attendances = collect();
         foreach ($attendancesList as $attRec) {
-            if (!$attendances->has($attRec->employee_id)) {
+            if (! $attendances->has($attRec->employee_id)) {
                 $attendances->put($attRec->employee_id, $attRec);
             }
         }
@@ -203,8 +257,8 @@ class AttendanceController extends Controller
         // Pre-fetch roster tanggal spesifik (work_date) hari ini
         $todayRosters = collect();
         try {
-            if (\Illuminate\Support\Facades\Schema::hasColumn('employee_schedule', 'work_date')) {
-                $todayRosters = \Illuminate\Support\Facades\DB::table('employee_schedule')
+            if (Schema::hasColumn('employee_schedule', 'work_date')) {
+                $todayRosters = DB::table('employee_schedule')
                     ->join('schedules', 'employee_schedule.schedule_id', '=', 'schedules.id')
                     ->where('employee_schedule.work_date', $todayStr)
                     ->whereNotNull('employee_schedule.work_date')
@@ -234,13 +288,13 @@ class AttendanceController extends Controller
                     }
                 }
 
-                if (!$schedule || $isOffShift) {
+                if (! $schedule || $isOffShift) {
                     $status = 'tidak_ada_shift';
                     $shiftName = $schedule ? $schedule->name : 'Tidak Ada Shift';
                     $note = $isOffShift ? 'Libur Jaga (LJ) — Tidak Wajib Absen' : 'Hari Libur / Tidak Ada Shift';
                 } else {
                     $shiftName = $schedule->name;
-                    
+
                     // Evaluasi apakah batas waktu check-in sudah terlewati
                     $now = Carbon::now('Asia/Jakarta');
                     $shiftStart = $schedule->start_time; // "HH:mm:ss"
@@ -262,7 +316,7 @@ class AttendanceController extends Controller
                     $holiday = AttendanceRules::holidayOn(Carbon::today('Asia/Jakarta'));
                     $isAssigned = $holiday ? AttendanceRules::isAssignedToWorkOnHoliday($emp, $holiday) : false;
 
-                    if ($holiday && !$isAssigned) {
+                    if ($holiday && ! $isAssigned) {
                         $status = 'belum_hadir';
                         $note = 'Hari Libur (Tidak Wajib)';
                     } else {
@@ -272,28 +326,28 @@ class AttendanceController extends Controller
                 }
 
                 $records[] = [
-                    'id'                 => null,
-                    'date'               => $todayStr,
-                    'check_in'           => null,
-                    'check_out'          => null,
-                    'status'             => $status,
-                    'duration_min'       => null,
-                    'latitude'           => null,
-                    'longitude'          => null,
-                    'accuracy'           => null,
+                    'id' => null,
+                    'date' => $todayStr,
+                    'check_in' => null,
+                    'check_out' => null,
+                    'status' => $status,
+                    'duration_min' => null,
+                    'latitude' => null,
+                    'longitude' => null,
+                    'accuracy' => null,
                     'is_within_geofence' => false,
-                    'note'               => $note,
-                    'image_check_in'     => null,
-                    'image_check_out'    => null,
-                    'shift_name'         => $shiftName,
-                    'employee'           => [
-                        'id'         => $emp->id,
-                        'name'       => $emp->user?->name ?? 'Karyawan',
-                        'nik_ktp'    => $emp->nik_ktp,
+                    'note' => $note,
+                    'image_check_in' => null,
+                    'image_check_out' => null,
+                    'shift_name' => $shiftName,
+                    'employee' => [
+                        'id' => $emp->id,
+                        'name' => $emp->user?->name ?? 'Karyawan',
+                        'nik_ktp' => $emp->nik_ktp,
                         'department' => $emp->department?->name ?? 'Umum',
-                        'position'   => $emp->position?->name ?? 'Staff',
+                        'position' => $emp->position?->name ?? 'Staff',
                         'profile_picture' => $emp->user?->profile_picture ? url($emp->user->profile_picture) : null,
-                    ]
+                    ],
                 ];
             }
         }
@@ -303,19 +357,19 @@ class AttendanceController extends Controller
 
     /**
      * POST /api/attendance/check-in
-     * 
+     *
      * Melakukan absensi masuk (check-in) karyawan.
      * Meliputi validasi status sistem, validasi masa cuti/izin aktif, pencegahan absensi ganda,
      * validasi radius koordinat GPS (geofence), penentuan status (hadir vs telat),
      * serta penyimpanan foto selfie.
-     * 
-     * @param Request $request
-     * @return \Illuminate\Http\JsonResponse
+     *
+     * @param  Request  $request
+     * @return JsonResponse
      */
     public function checkIn(CheckInRequest $request)
     {
-        \Illuminate\Support\Facades\Log::info('Check-in request inputs: ' . json_encode($request->all()));
-        
+        \Illuminate\Support\Facades\Log::info('Check-in request inputs: '.json_encode($request->all()));
+
         $validated = $request->validated();
 
         // 1. Validasi keaktifan sistem absensi secara global
@@ -328,7 +382,7 @@ class AttendanceController extends Controller
         }
 
         $employee = $request->user()->employee;
-        if (!$employee) {
+        if (! $employee) {
             return response()->json(['success' => false, 'message' => 'Data karyawan tidak ditemukan.'], 404);
         }
 
@@ -338,49 +392,34 @@ class AttendanceController extends Controller
 
         // Cari semua record yang belum di-checkout (tidak hanya kemarin, tapi juga hari-hari sebelumnya)
         $unclosedRecords = Attendance::where('employee_id', $employee->id)
-                                     ->whereDate('date', '<', $todayStr)
-                                     ->whereNotNull('check_in')
-                                     ->whereNull('check_out')
-                                     ->orderBy('date', 'desc')
-                                     ->get();
+            ->whereDate('date', '<', $todayStr)
+            ->whereNotNull('check_in')
+            ->whereNull('check_out')
+            ->orderBy('date', 'desc')
+            ->get();
 
         foreach ($unclosedRecords as $unclosedRecord) {
             // Cek apakah record ini masih dalam window checkout yang valid
             if (AttendanceRules::isOpenAttendanceValidForCheckout($unclosedRecord, $now)) {
                 // Window checkout masih buka → blokir check-in, minta user checkout dulu
-                $yShift = $unclosedRecord->schedule_id ? \App\Models\Schedule::find($unclosedRecord->schedule_id) : null;
-                if (!$yShift) {
+                $yShift = $unclosedRecord->schedule_id ? Schedule::find($unclosedRecord->schedule_id) : null;
+                if (! $yShift) {
                     $yShift = AttendanceRules::resolveShiftFor($employee, Carbon::parse($unclosedRecord->date));
                 }
                 $shiftLabel = $yShift ? $yShift->name : 'shift sebelumnya';
+
                 return response()->json([
                     'success' => false,
-                    'message' => 'Check-in ditolak: Anda belum melakukan check-out untuk ' . $shiftLabel . ' (' . Carbon::parse($unclosedRecord->date)->format('d/m/Y') . '). Silakan lakukan check-out terlebih dahulu.',
+                    'message' => 'Check-in ditolak: Anda belum melakukan check-out untuk '.$shiftLabel.' ('.Carbon::parse($unclosedRecord->date)->format('d/m/Y').'). Silakan lakukan check-out terlebih dahulu.',
                 ], 422);
             } else {
-                // Window checkout sudah expired → auto-close record lama agar tidak memblokir
-                $yShift = $unclosedRecord->schedule_id ? \App\Models\Schedule::find($unclosedRecord->schedule_id) : null;
-                if (!$yShift) {
-                    $yShift = AttendanceRules::resolveShiftFor($employee, Carbon::parse($unclosedRecord->date));
-                }
-
-                // Tentukan waktu checkout otomatis = jam selesai shift
-                $endTimeStr = $yShift ? $yShift->end_time : '17:00:00';
-                $attDate = Carbon::parse($unclosedRecord->date);
-                $startTimeStr = $yShift ? $yShift->start_time : '08:30:00';
-                $startMins = (int)substr($startTimeStr, 0, 2) * 60 + (int)substr($startTimeStr, 3, 2);
-                $endMins   = (int)substr($endTimeStr, 0, 2) * 60 + (int)substr($endTimeStr, 3, 2);
-                $isOvernight = $endMins <= $startMins;
-
-                // Untuk shift malam, checkout otomatis = jam pulang di hari berikutnya
-                $autoCheckoutTime = $endTimeStr;
-
-                $unclosedRecord->update([
-                    'check_out' => substr($autoCheckoutTime, 0, 5) . ':00',
-                    'note'      => ($unclosedRecord->note ? $unclosedRecord->note . ' | ' : '') . 'Auto-closed: tidak melakukan check-out tepat waktu',
-                ]);
-
-                \Illuminate\Support\Facades\Log::info("Auto-closed stale attendance #{$unclosedRecord->id} for employee #{$employee->id} (date: {$unclosedRecord->date})");
+                // Window checkout sudah kedaluwarsa; record lama tetap tidak lengkap.
+                // Shift lama sudah berakhir. Biarkan check_out tetap NULL agar
+                // riwayat mencatatnya sebagai "Tidak Lengkap", tetapi jangan
+                // menghalangi check-in pegawai pada shift berikutnya.
+                \Illuminate\Support\Facades\Log::info(
+                    "Leaving stale attendance #{$unclosedRecord->id} incomplete for employee #{$employee->id} (date: {$unclosedRecord->date})"
+                );
             }
         }
 
@@ -388,7 +427,7 @@ class AttendanceController extends Controller
         $todayShift = AttendanceRules::resolveShiftFor($employee, $now, $now);
         $isFallback = false;
 
-        if (!$todayShift) {
+        if (! $todayShift) {
             return response()->json([
                 'success' => false,
                 'message' => 'Anda belum memiliki jadwal shift untuk saat ini. Silakan hubungi Penanggung Jawab Bagian atau Administrator.',
@@ -397,13 +436,13 @@ class AttendanceController extends Controller
 
         // 3. Validasi absensi ganda pada shift yang sama hari ini
         $existing = Attendance::withTrashed()
-                              ->where('employee_id', $employee->id)
-                              ->where('date', today()->toDateString())
-                              ->where(function($q) use ($todayShift) {
-                                  $q->where('schedule_id', $todayShift->id)
-                                    ->orWhereNull('schedule_id');
-                              })
-                              ->first();
+            ->where('employee_id', $employee->id)
+            ->where('date', today()->toDateString())
+            ->where(function ($q) use ($todayShift) {
+                $q->where('schedule_id', $todayShift->id)
+                    ->orWhereNull('schedule_id');
+            })
+            ->first();
 
         if ($existing) {
             if ($existing->trashed()) {
@@ -414,6 +453,7 @@ class AttendanceController extends Controller
 
             if (in_array($existing->status, ['sakit', 'izin', 'cuti'])) {
                 $typeName = $existing->status === 'sakit' ? 'Sakit' : ($existing->status === 'izin' ? 'Izin' : 'Cuti');
+
                 return response()->json([
                     'success' => false,
                     'message' => "Check-in ditolak: Anda sedang dalam masa {$typeName} untuk hari ini.",
@@ -423,7 +463,7 @@ class AttendanceController extends Controller
             if ($existing->check_in) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Anda sudah melakukan check-in untuk ' . $todayShift->name . ' hari ini pukul ' . substr($existing->check_in, 0, 5) . '.',
+                    'message' => 'Anda sudah melakukan check-in untuk '.$todayShift->name.' hari ini pukul '.substr($existing->check_in, 0, 5).'.',
                     'errors' => null,
                 ], 409);
             }
@@ -433,56 +473,78 @@ class AttendanceController extends Controller
         $shiftType = AttendanceRules::shiftTypeFor($employee, $now);
 
         // 5. Validasi Geofence (menggunakan rumus Matematika Haversine)
-        $clientLat  = $request->input('latitude');
-        $clientLng  = $request->input('longitude');
-        $clientAcc  = $request->input('accuracy');
+        $clientLat = $request->input('latitude');
+        $clientLng = $request->input('longitude');
+        $clientAcc = $request->input('accuracy');
+        $locationTimestamp = $request->input('location_timestamp');
 
         $enableGpsValidation = (Setting::get('enable_gps_validation', '1') !== '0');
         $isWithinGeofence = false;
         $distance = null;
-
-        if ($clientLat !== null && $clientLng !== null) {
-            $refLat  = (float) Setting::get('hospital_latitude', Setting::get('hospital_lat', '5.552740480177099'));
-            $refLng  = (float) Setting::get('hospital_longitude', Setting::get('hospital_lng', '95.33486560781716'));
-            $distance = AttendanceRules::haversineDistanceMeters((float)$clientLat, (float)$clientLng, $refLat, $refLng);
-            $maxRadius = (float) Setting::get('attendance_radius_meters', Setting::get('gps_radius', '100'));
-            $isWithinGeofence = ($distance <= $maxRadius);
-        }
 
         // ── PENGECEKAN DINAS LUAR (Surat Tugas) — Harus dilakukan SEBELUM validasi GPS ──
         // Jika pegawai punya Surat Tugas aktif hari ini, GPS validation dilewati.
         // Foto + koordinat tetap dikirim dan disimpan sebagai log.
         $activeDinasLuarLetter = $employee->approvedAssignmentLetterOn(Carbon::today('Asia/Jakarta'));
         $isDinasLuar = ($activeDinasLuarLetter !== null);
+        $isGpsExempt = AttendanceRules::isExemptFromGps($employee, $now);
 
-        if (!$enableGpsValidation || $isDinasLuar) {
-            // Bypass radius: GPS dimatikan global ATAU pegawai sedang dinas luar
+        if (! $enableGpsValidation || $isGpsExempt) {
+            // GPS nonaktif/dinas luar: koordinat bersifat audit dan tidak boleh
+            // menghalangi absensi.
             $isWithinGeofence = true;
+            if (is_numeric($clientLat) && is_numeric($clientLng)) {
+                $refLat = (float) Setting::get('hospital_latitude', Setting::get('hospital_lat', '5.552740480177099'));
+                $refLng = (float) Setting::get('hospital_longitude', Setting::get('hospital_lng', '95.33486560781716'));
+                $distance = AttendanceRules::haversineDistanceMeters(
+                    (float) $clientLat,
+                    (float) $clientLng,
+                    $refLat,
+                    $refLng
+                );
+            }
+
             if ($isDinasLuar) {
                 \Illuminate\Support\Facades\Log::info(
                     "Dinas luar bypass GPS for employee #{$employee->id}: {$activeDinasLuarLetter->title} (ID: {$activeDinasLuarLetter->id})"
                 );
             }
-        }
+        } else {
+            $gpsResult = AttendanceRules::validateGpsReading(
+                $clientLat,
+                $clientLng,
+                $clientAcc,
+                $locationTimestamp,
+                $now
+            );
 
-        if ($enableGpsValidation && !$isDinasLuar && !AttendanceRules::isExemptFromGps($employee, $now)) {
-            if ($clientLat === null || $clientLng === null) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Koordinat GPS diperlukan untuk melakukan check-in. Aktifkan GPS pada perangkat Anda.',
-                ], 422);
+            if (! $gpsResult['valid']) {
+                \Illuminate\Support\Facades\Log::warning('Check-in ditolak karena kualitas GPS.', [
+                    'employee_id' => $employee->id,
+                    'code' => $gpsResult['code'],
+                    'accuracy' => $clientAcc,
+                ]);
+
+                return $this->gpsQualityErrorResponse($gpsResult);
             }
 
-            if (!$isWithinGeofence) {
+            $clientLat = $gpsResult['latitude'];
+            $clientLng = $gpsResult['longitude'];
+            $clientAcc = $gpsResult['accuracy'];
+            $assessment = AttendanceRules::evaluateGeofence($clientLat, $clientLng, $clientAcc);
+            $distance = $assessment['distance_meters'];
+            $isWithinGeofence = $assessment['is_within'];
+
+            if (! $isWithinGeofence) {
                 \Illuminate\Support\Facades\Log::warning(sprintf(
-                    'Check-in ditolak karena berada %.0f meter dari RSUCL (di luar radius wajib).',
-                    $distance
+                    'Check-in GPS ditolak: status=%s, jarak=%.0fm, akurasi=+/-%.0fm, radius=%.0fm.',
+                    $assessment['status'],
+                    $assessment['distance_meters'],
+                    $assessment['accuracy_meters'],
+                    $assessment['radius_meters']
                 ));
 
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Anda berada di luar radius lokasi absensi yang diizinkan.',
-                ], 422);
+                return $this->geofenceErrorResponse($assessment);
             }
         }
 
@@ -492,22 +554,22 @@ class AttendanceController extends Controller
 
         // Cari jam mulai shift dari database / helper
         $shiftStartTimeStr = $todayShift->start_time ?? ($shiftType === 'saturday' ? '08:30:00' : '08:30:00');
-        $shiftStart = Carbon::parse($today . ' ' . $shiftStartTimeStr);
+        $shiftStart = Carbon::parse($today.' '.$shiftStartTimeStr);
         $checkinWindowEnd = $shiftStart->copy()->addHours(6);
 
         $tepatWaktuMinutes = (int) Setting::get('tepat_waktu_tolerance_minutes', '10');
-        $toleranceMinutes  = (int) Setting::get('attendance_late_tolerance_minutes', '10');
+        $toleranceMinutes = (int) Setting::get('attendance_late_tolerance_minutes', '10');
 
         $classification = AttendanceRules::classifyCheckin($now, $shiftStart, $checkinWindowEnd, $tepatWaktuMinutes, $toleranceMinutes);
-        $status                 = $classification['status'];
-        $punctuality            = $classification['punctuality'];
-        $effectiveCheckinTime   = $classification['effective_checkin_time'];
+        $status = $classification['status'];
+        $punctuality = $classification['punctuality'];
+        $effectiveCheckinTime = $classification['effective_checkin_time'];
 
         // Simpan file foto check-in (sama seperti check-out)
         $photoUrl = null;
         if ($request->hasFile('photo')) {
             $path = $request->file('photo')->store('attendance-photos', 'public');
-            $photoUrl = '/storage/' . $path;
+            $photoUrl = '/storage/'.$path;
         } elseif ($request->input('photo_url')) {
             // Fallback: jika dikirim sebagai string URL (base64 atau URL langsung)
             $photoUrl = $request->input('photo_url');
@@ -515,16 +577,16 @@ class AttendanceController extends Controller
 
         // 7. Simpan atau update record absensi secara atomic (DB Transaction dengan Pessimistic Locking)
         try {
-            $record = \Illuminate\Support\Facades\DB::transaction(function () use (
+            $record = DB::transaction(function () use (
                 $employee, $today, $todayShift, $now, $status, $punctuality, $effectiveCheckinTime,
                 $clientLat, $clientLng, $clientAcc, $isWithinGeofence, $distance, $photoUrl, $request,
                 $isDinasLuar, $activeDinasLuarLetter
             ) {
                 $lockedExisting = Attendance::where('employee_id', $employee->id)
                     ->where('date', $today)
-                    ->where(function($q) use ($todayShift) {
+                    ->where(function ($q) use ($todayShift) {
                         $q->where('schedule_id', $todayShift->id)
-                          ->orWhereNull('schedule_id');
+                            ->orWhereNull('schedule_id');
                     })
                     ->lockForUpdate()
                     ->first();
@@ -548,57 +610,61 @@ class AttendanceController extends Controller
                 }
 
                 $attendanceData = [
-                    'schedule_id'             => $todayShift->id,
-                    'check_in'                => $now->format('H:i:s'),
-                    'status'                  => $status,
-                    'note'                    => null, // Reset/clear stale leave note upon check-in
-                    'checkin_punctuality'     => $punctuality,
-                    'effective_checkin_time'  => $effectiveCheckinTime,
-                    'latitude'                => $clientLat,
-                    'longitude'               => $clientLng,
-                    'accuracy'                => $clientAcc,
-                    'is_within_geofence'      => $isWithinGeofence,
-                    'checkin_photo_url'       => $photoUrl,
-                    'image_check_in'          => $photoUrl, // backward compatibility
-                    'checkin_latitude'        => $clientLat,
-                    'checkin_longitude'       => $clientLng,
-                    'checkin_distance_meters' => $distance !== null ? (int)round($distance) : null,
-                    'checkin_location_note'   => $request->input('location_note'),
+                    'schedule_id' => $todayShift->id,
+                    'check_in' => $now->format('H:i:s'),
+                    'status' => $status,
+                    'note' => null, // Reset/clear stale leave note upon check-in
+                    'checkin_punctuality' => $punctuality,
+                    'effective_checkin_time' => $effectiveCheckinTime,
+                    'latitude' => $clientLat,
+                    'longitude' => $clientLng,
+                    'accuracy' => $clientAcc,
+                    'is_within_geofence' => $isWithinGeofence,
+                    'checkin_photo_url' => $photoUrl,
+                    'image_check_in' => $photoUrl, // backward compatibility
+                    'checkin_latitude' => $clientLat,
+                    'checkin_longitude' => $clientLng,
+                    'checkin_distance_meters' => $distance !== null ? (int) round($distance) : null,
+                    'checkin_location_note' => $request->input('location_note'),
                     // Dinas Luar (Surat Tugas bypass GPS)
-                    'is_dinas_luar'           => $isDinasLuar,
-                    'assignment_letter_id'    => $isDinasLuar && $activeDinasLuarLetter ? $activeDinasLuarLetter->id : null,
+                    'is_dinas_luar' => $isDinasLuar,
+                    'assignment_letter_id' => $isDinasLuar && $activeDinasLuarLetter ? $activeDinasLuarLetter->id : null,
                 ];
 
                 if ($lockedExisting) {
                     $lockedExisting->update($attendanceData);
+
                     return $lockedExisting;
                 } else {
                     $attendanceData['employee_id'] = $employee->id;
-                    $attendanceData['date']        = $today;
+                    $attendanceData['date'] = $today;
+
                     return Attendance::create($attendanceData);
                 }
             });
-        } catch (\Illuminate\Database\QueryException $e) {
-            \Log::error('Check-in QueryException: ' . $e->getMessage(), [
+        } catch (QueryException $e) {
+            \Log::error('Check-in QueryException: '.$e->getMessage(), [
                 'code' => $e->getCode(),
                 'errorInfo' => $e->errorInfo,
             ]);
             // Tangkap duplikasi entry jika constraint unique terpicu
             if (isset($e->errorInfo[1]) && $e->errorInfo[1] == 1062) {
                 $dup = Attendance::where('employee_id', $employee->id)
-                                 ->where('date', $today)
-                                 ->first();
+                    ->where('date', $today)
+                    ->first();
                 $timeStr = $dup && $dup->check_in ? substr($dup->check_in, 0, 5) : '--:--';
+
                 return response()->json([
                     'success' => false,
                     'message' => "Anda sudah melakukan check-in hari ini pukul {$timeStr}.",
-                    'errors'  => null,
+                    'errors' => null,
                 ], 409);
             }
+
             return response()->json([
                 'success' => false,
                 'message' => 'Terjadi kesalahan database saat menyimpan absensi.',
-                'error_detail' => $e->getMessage()
+                'error_detail' => $e->getMessage(),
             ], 500);
         } catch (\Exception $e) {
             $code = $e->getCode();
@@ -606,7 +672,7 @@ class AttendanceController extends Controller
                 return response()->json([
                     'success' => false,
                     'message' => $e->getMessage(),
-                    'errors'  => null,
+                    'errors' => null,
                 ], 409);
             }
             if ($code === 422) {
@@ -628,44 +694,44 @@ class AttendanceController extends Controller
 
         // Kirim notifikasi keterlambatan ke administrator jika statusnya terlambat
         if ($status === 'telat') {
-            $notifLate = \App\Models\Setting::get('notif_late', '1');
+            $notifLate = Setting::get('notif_late', '1');
             if ($notifLate !== '0') {
-                $admins = \App\Models\User::whereIn('role', ['admin', 'super_admin'])->get();
+                $admins = User::whereIn('role', ['admin', 'super_admin'])->get();
                 foreach ($admins as $admin) {
                     // Cegah duplikasi notifikasi harian untuk karyawan terlambat yang sama
-                    $exists = \App\Models\Notification::where('user_id', $admin->id)
+                    $exists = Notification::where('user_id', $admin->id)
                         ->where('type', 'attendance')
                         ->where('data->employee_id', $employee->id)
                         ->whereDate('created_at', today())
                         ->exists();
 
-                    if (!$exists) {
-                        \App\Models\Notification::create([
+                    if (! $exists) {
+                        Notification::create([
                             'user_id' => $admin->id,
-                            'title'   => 'Karyawan Terlambat',
-                            'body'    => ($employee->user?->name ?? 'Karyawan') . ' terlambat check-in pada pukul ' . substr($record->check_in, 0, 5) . ' WIB.',
-                            'type'    => 'attendance',
-                            'data'    => ['attendance_id' => $record->id, 'employee_id' => $employee->id],
+                            'title' => 'Karyawan Terlambat',
+                            'body' => ($employee->user?->name ?? 'Karyawan').' terlambat check-in pada pukul '.substr($record->check_in, 0, 5).' WIB.',
+                            'type' => 'attendance',
+                            'data' => ['attendance_id' => $record->id, 'employee_id' => $employee->id],
                         ]);
                     }
                 }
             }
 
             // Kirim notifikasi email ke admin jika diaktifkan
-            $notifEmail = \App\Models\Setting::get('notif_email', '1');
+            $notifEmail = Setting::get('notif_email', '1');
             if ($notifEmail !== '0') {
-                $admins = \App\Models\User::whereIn('role', ['admin', 'super_admin'])->get();
+                $admins = User::whereIn('role', ['admin', 'super_admin'])->get();
                 foreach ($admins as $admin) {
                     try {
-                        \Illuminate\Support\Facades\Mail::raw(
-                            "Halo {$admin->name},\n\nKaryawan " . ($employee->user?->name ?? 'Karyawan') . " terlambat melakukan check-in hari ini.\n\nDetail:\n- Jam Absen: " . substr($record->check_in, 0, 5) . " WIB\n- Status: Terlambat\n\nSilakan cek detail absensi di sistem RSUCL.",
+                        Mail::raw(
+                            "Halo {$admin->name},\n\nKaryawan ".($employee->user?->name ?? 'Karyawan')." terlambat melakukan check-in hari ini.\n\nDetail:\n- Jam Absen: ".substr($record->check_in, 0, 5)." WIB\n- Status: Terlambat\n\nSilakan cek detail absensi di sistem RSUCL.",
                             function ($message) use ($admin) {
                                 $message->to($admin->email)
-                                        ->subject('Peringatan Keterlambatan Karyawan - RSUCL');
+                                    ->subject('Peringatan Keterlambatan Karyawan - RSUCL');
                             }
                         );
                     } catch (\Exception $e) {
-                        \Illuminate\Support\Facades\Log::error('Gagal mengirim email keterlambatan: ' . $e->getMessage());
+                        \Illuminate\Support\Facades\Log::error('Gagal mengirim email keterlambatan: '.$e->getMessage());
                     }
                 }
             }
@@ -674,29 +740,29 @@ class AttendanceController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Check-in berhasil.',
-            'data'    => new AttendanceResource($record),
+            'data' => new AttendanceResource($record),
         ]);
     }
 
     /**
      * POST /api/attendance/check-out
-     * 
+     *
      * Melakukan absensi pulang (check-out) karyawan.
      * Mendukung deteksi shift normal maupun shift lintas malam (overnight).
      * Melakukan validasi geofence, window waktu check-out (termasuk diskriminasi hari Sabtu),
      * serta meng-update database absensi berjalan.
-     * 
-     * @param Request $request
-     * @return \Illuminate\Http\JsonResponse
+     *
+     * @param  Request  $request
+     * @return JsonResponse
      */
     public function checkOut(CheckOutRequest $request)
     {
-        \Illuminate\Support\Facades\Log::info('Check-out request inputs: ' . json_encode($request->all()));
-        
+        \Illuminate\Support\Facades\Log::info('Check-out request inputs: '.json_encode($request->all()));
+
         $validated = $request->validated();
 
         $employee = $request->user()->employee;
-        if (!$employee) {
+        if (! $employee) {
             return response()->json(['success' => false, 'message' => 'Data karyawan tidak ditemukan.'], 404);
         }
 
@@ -710,28 +776,28 @@ class AttendanceController extends Controller
         $record = null;
         if ($todayShift) {
             $record = Attendance::where('employee_id', $employee->id)
-                                ->whereDate('date', $todayStr)
-                                ->where('schedule_id', $todayShift->id)
-                                ->whereNotNull('check_in')
-                                ->whereNull('check_out')
-                                ->first();
+                ->whereDate('date', $todayStr)
+                ->where('schedule_id', $todayShift->id)
+                ->whereNotNull('check_in')
+                ->whereNull('check_out')
+                ->first();
         }
 
-        if (!$record) {
+        if (! $record) {
             $record = Attendance::where('employee_id', $employee->id)
-                                ->whereDate('date', $todayStr)
-                                ->whereNotNull('check_in')
-                                ->whereNull('check_out')
-                                ->first();
+                ->whereDate('date', $todayStr)
+                ->whereNotNull('check_in')
+                ->whereNull('check_out')
+                ->first();
         }
 
         // 2. Fallback untuk record check-in yang belum di-checkout (lembur / lintas hari / shift malam yang masih valid):
-        if (!$record) {
+        if (! $record) {
             $unclosedCandidates = Attendance::where('employee_id', $employee->id)
-                                         ->whereNotNull('check_in')
-                                         ->whereNull('check_out')
-                                         ->orderBy('date', 'desc')
-                                         ->get();
+                ->whereNotNull('check_in')
+                ->whereNull('check_out')
+                ->orderBy('date', 'desc')
+                ->get();
             foreach ($unclosedCandidates as $cand) {
                 if (AttendanceRules::isOpenAttendanceValidForCheckout($cand, $now)) {
                     $record = $cand;
@@ -741,14 +807,14 @@ class AttendanceController extends Controller
         }
 
         // Fallback terakhir: jika tidak ada record unclosed, ambil record hari ini
-        if (!$record) {
+        if (! $record) {
             $record = Attendance::where('employee_id', $employee->id)
-                                ->whereDate('date', $todayStr)
-                                ->whereNotNull('check_in')
-                                ->first();
+                ->whereDate('date', $todayStr)
+                ->whereNotNull('check_in')
+                ->first();
         }
 
-        if (!$record || !$record->check_in) {
+        if (! $record || ! $record->check_in) {
             return response()->json([
                 'success' => false,
                 'message' => 'Anda belum melakukan check-in.',
@@ -758,7 +824,7 @@ class AttendanceController extends Controller
         if ($record->check_out) {
             return response()->json([
                 'success' => false,
-                'message' => 'Anda sudah melakukan check-out hari ini pada pukul ' . $record->check_out . '.',
+                'message' => 'Anda sudah melakukan check-out hari ini pada pukul '.$record->check_out.'.',
             ], 422);
         }
 
@@ -766,16 +832,16 @@ class AttendanceController extends Controller
         $shiftDate = Carbon::parse($record->date);
         $todayShift = null;
         if ($record->schedule_id) {
-            $todayShift = \App\Models\Schedule::find($record->schedule_id);
+            $todayShift = Schedule::find($record->schedule_id);
         }
-        if (!$todayShift) {
+        if (! $todayShift) {
             $todayShift = AttendanceRules::resolveShiftFor($employee, $shiftDate, $now);
         }
-        if (!$todayShift) {
+        if (! $todayShift) {
             $todayShift = $this->getEmployeeTodayShift($employee, $shiftDate);
         }
 
-        if (!$todayShift) {
+        if (! $todayShift) {
             return response()->json([
                 'success' => false,
                 'message' => 'Check-out ditolak: Tidak ada jadwal shift yang terasosiasi dengan absensi ini.',
@@ -786,70 +852,90 @@ class AttendanceController extends Controller
         $shiftType = AttendanceRules::shiftTypeFor($employee, $shiftDate);
 
         // 3. Validasi Geofence (Haversine)
-        $clientLat  = $request->input('latitude');
-        $clientLng  = $request->input('longitude');
-        $clientAcc  = $request->input('accuracy');
+        $clientLat = $request->input('latitude');
+        $clientLng = $request->input('longitude');
+        $clientAcc = $request->input('accuracy');
+        $locationTimestamp = $request->input('location_timestamp');
 
         $enableGpsValidation = (Setting::get('enable_gps_validation', '1') !== '0');
+        $isGpsExempt = AttendanceRules::isExemptFromGps($employee, $shiftDate);
         $isWithinGeofence = false;
         $distance = null;
 
-        if ($clientLat !== null && $clientLng !== null) {
-            $refLat  = (float) Setting::get('hospital_latitude', Setting::get('hospital_lat', '5.552740480177099'));
-            $refLng  = (float) Setting::get('hospital_longitude', Setting::get('hospital_lng', '95.33486560781716'));
-            $distance = AttendanceRules::haversineDistanceMeters((float)$clientLat, (float)$clientLng, $refLat, $refLng);
-            $maxRadius = (float) Setting::get('attendance_radius_meters', Setting::get('gps_radius', '100'));
-            $isWithinGeofence = ($distance <= $maxRadius);
-        }
-
-        if (!$enableGpsValidation) {
+        if (! $enableGpsValidation || $isGpsExempt) {
             $isWithinGeofence = true;
-        }
+            if (is_numeric($clientLat) && is_numeric($clientLng)) {
+                $refLat = (float) Setting::get('hospital_latitude', Setting::get('hospital_lat', '5.552740480177099'));
+                $refLng = (float) Setting::get('hospital_longitude', Setting::get('hospital_lng', '95.33486560781716'));
+                $distance = AttendanceRules::haversineDistanceMeters(
+                    (float) $clientLat,
+                    (float) $clientLng,
+                    $refLat,
+                    $refLng
+                );
+            }
+        } else {
+            $gpsResult = AttendanceRules::validateGpsReading(
+                $clientLat,
+                $clientLng,
+                $clientAcc,
+                $locationTimestamp,
+                $now
+            );
 
-        if ($enableGpsValidation && !AttendanceRules::isExemptFromGps($employee, $shiftDate)) {
-            if ($clientLat === null || $clientLng === null) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Koordinat GPS diperlukan untuk melakukan check-out. Aktifkan GPS pada perangkat Anda.',
-                ], 422);
+            if (! $gpsResult['valid']) {
+                \Illuminate\Support\Facades\Log::warning('Check-out ditolak karena kualitas GPS.', [
+                    'employee_id' => $employee->id,
+                    'code' => $gpsResult['code'],
+                    'accuracy' => $clientAcc,
+                ]);
+
+                return $this->gpsQualityErrorResponse($gpsResult);
             }
 
-            if (!$isWithinGeofence) {
+            $clientLat = $gpsResult['latitude'];
+            $clientLng = $gpsResult['longitude'];
+            $clientAcc = $gpsResult['accuracy'];
+            $assessment = AttendanceRules::evaluateGeofence($clientLat, $clientLng, $clientAcc);
+            $distance = $assessment['distance_meters'];
+            $isWithinGeofence = $assessment['is_within'];
+
+            if (! $isWithinGeofence) {
                 \Illuminate\Support\Facades\Log::warning(sprintf(
-                    'Check-out ditolak karena berada %.0f meter dari RSUCL (di luar radius wajib).',
-                    $distance
+                    'Check-out GPS ditolak: status=%s, jarak=%.0fm, akurasi=+/-%.0fm, radius=%.0fm.',
+                    $assessment['status'],
+                    $assessment['distance_meters'],
+                    $assessment['accuracy_meters'],
+                    $assessment['radius_meters']
                 ));
 
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Anda berada di luar radius lokasi absensi yang diizinkan.',
-                ], 422);
+                return $this->geofenceErrorResponse($assessment);
             }
         }
 
         // Tentukan waktu check-out
         $now = Carbon::now('Asia/Jakarta');
 
-        $shiftStart    = substr($todayShift->start_time, 0, 5);
-        $shiftEnd      = substr($todayShift->end_time,   0, 5);
+        $shiftStart = substr($todayShift->start_time, 0, 5);
+        $shiftEnd = substr($todayShift->end_time, 0, 5);
 
         // 4. Hitung parameter batas pembukaan & penutupan check-out (Diferensiasi Hari Sabtu vs Hari Biasa)
         $isSaturday = Carbon::parse($record->date)->dayOfWeek === Carbon::SATURDAY;
         if ($isSaturday) {
-            $satOpenOffset  = (int) Setting::get('sat_checkout_open', '0');
+            $satOpenOffset = (int) Setting::get('sat_checkout_open', '0');
             $satCloseOffset = (int) Setting::get('sat_checkout_close', '60');
-            $checkoutOpen   = ($satOpenOffset > 0) ? $this->subMins($shiftEnd, $satOpenOffset) : $shiftEnd;
-            $checkoutClose  = $this->addMins($shiftEnd, $satCloseOffset);
+            $checkoutOpen = ($satOpenOffset > 0) ? $this->subMins($shiftEnd, $satOpenOffset) : $shiftEnd;
+            $checkoutClose = $this->addMins($shiftEnd, $satCloseOffset);
         } else {
-            $wkOpenOffset   = (int) Setting::get('checkout_open', '0');
-            $wkCloseOffset  = (int) Setting::get('checkout_close', '60');
-            $checkoutOpen   = ($wkOpenOffset > 0) ? $this->subMins($shiftEnd, $wkOpenOffset) : $shiftEnd;
-            $checkoutClose  = $this->addMins($shiftEnd, $wkCloseOffset);
+            $wkOpenOffset = (int) Setting::get('checkout_open', '0');
+            $wkCloseOffset = (int) Setting::get('checkout_close', '60');
+            $checkoutOpen = ($wkOpenOffset > 0) ? $this->subMins($shiftEnd, $wkOpenOffset) : $shiftEnd;
+            $checkoutClose = $this->addMins($shiftEnd, $wkCloseOffset);
         }
-        $isOvernight   = $this->timeToMins($shiftEnd) < $this->timeToMins($shiftStart);
+        $isOvernight = $this->timeToMins($shiftEnd) < $this->timeToMins($shiftStart);
 
-        $nowMins   = $now->hour * 60 + $now->minute;
-        $openMins  = $this->timeToMins($checkoutOpen);
+        $nowMins = $now->hour * 60 + $now->minute;
+        $openMins = $this->timeToMins($checkoutOpen);
         $closeMins = $this->timeToMins($checkoutClose);
 
         // 5. Validasi window check-out
@@ -859,7 +945,7 @@ class AttendanceController extends Controller
         // 6. Klasifikasi Pulang Cepat / Lembur
         $employee->load('schedules'); // Pastikan relasi ter-load untuk ScheduleRules
         $expectedCheckout = ScheduleRules::expectedCheckoutTime($employee, $shiftDate, $todayShift);
-        $earlyGrace    = (int) Setting::get('early_checkout_grace_minutes', '15');
+        $earlyGrace = (int) Setting::get('early_checkout_grace_minutes', '15');
         $overtimeGrace = (int) Setting::get('overtime_grace_minutes', '15');
 
         $classification = ScheduleRules::classifyCheckout($now, $expectedCheckout, $earlyGrace, $overtimeGrace);
@@ -874,55 +960,55 @@ class AttendanceController extends Controller
         $photoUrl = null;
         if ($request->hasFile('photo')) {
             $path = $request->file('photo')->store('attendance-photos', 'public');
-            $photoUrl = '/storage/' . $path;
+            $photoUrl = '/storage/'.$path;
         }
 
         // 7. Bangun data update untuk database
         $updateData = [
-            'check_out'                => $now->format('H:i:s'),
-            'latitude'                 => $clientLat,
-            'longitude'                => $clientLng,
-            'accuracy'                 => $clientAcc,
-            'is_within_geofence'       => $isWithinGeofence,
-            'checkout_photo_url'       => $photoUrl,
-            'image_check_out'          => $photoUrl, // backward compatibility
-            'checkout_latitude'        => $clientLat,
-            'checkout_longitude'       => $clientLng,
-            'checkout_distance_meters' => $distance !== null ? (int)round($distance) : null,
-            'checkout_location_note'   => $request->input('location_note') ?? 'Gedung RSUCL / Area RS',
+            'check_out' => $now->format('H:i:s'),
+            'latitude' => $clientLat,
+            'longitude' => $clientLng,
+            'accuracy' => $clientAcc,
+            'is_within_geofence' => $isWithinGeofence,
+            'checkout_photo_url' => $photoUrl,
+            'image_check_out' => $photoUrl, // backward compatibility
+            'checkout_latitude' => $clientLat,
+            'checkout_longitude' => $clientLng,
+            'checkout_distance_meters' => $distance !== null ? (int) round($distance) : null,
+            'checkout_location_note' => $request->input('location_note') ?? 'Gedung RSUCL / Area RS',
         ];
 
         // Data pulang cepat — dicatat saja, tidak memerlukan persetujuan
         if ($classification['is_early']) {
-            $updateData['is_early_checkout']     = true;
+            $updateData['is_early_checkout'] = true;
             $updateData['early_checkout_reason'] = $earlyReason;
         }
 
         // Data lembur (Sistem Baru & Lama Berdampingan untuk Kompatibilitas)
-        $attendanceService = new \App\Services\AttendanceService();
+        $attendanceService = new AttendanceService;
         $overtimeCalc = $attendanceService->hitungStatusLembur($employee, $now, $shiftDate, $todayShift);
 
         if ($overtimeCalc['is_lembur']) {
             // Simpan ke kolom baru (internal detection)
-            $updateData['jam_pulang_normal']      = $overtimeCalc['jam_pulang_normal'];
-            $updateData['is_lembur']              = true;
-            $updateData['durasi_lembur_menit']    = $overtimeCalc['durasi_lembur_menit'];
-            $updateData['keterangan_lembur']      = null;
+            $updateData['jam_pulang_normal'] = $overtimeCalc['jam_pulang_normal'];
+            $updateData['is_lembur'] = true;
+            $updateData['durasi_lembur_menit'] = $overtimeCalc['durasi_lembur_menit'];
+            $updateData['keterangan_lembur'] = null;
             $updateData['status_approval_lembur'] = null; // New system uses OvertimeRequest for approval flow
 
             // Sinkronkan ke kolom legacy demi kompatibilitas backward
-            $updateData['is_overtime']            = true;
-            $updateData['overtime_minutes']       = $overtimeCalc['durasi_lembur_menit'];
-            $updateData['overtime_note']          = null;
-            $updateData['overtime_status']        = null;
+            $updateData['is_overtime'] = true;
+            $updateData['overtime_minutes'] = $overtimeCalc['durasi_lembur_menit'];
+            $updateData['overtime_note'] = null;
+            $updateData['overtime_status'] = null;
         } else {
             // Set data lembur kosong jika tidak lembur
-            $updateData['jam_pulang_normal']      = $overtimeCalc['jam_pulang_normal'];
-            $updateData['is_lembur']              = false;
-            $updateData['durasi_lembur_menit']    = 0;
-            $updateData['keterangan_lembur']      = null;
+            $updateData['jam_pulang_normal'] = $overtimeCalc['jam_pulang_normal'];
+            $updateData['is_lembur'] = false;
+            $updateData['durasi_lembur_menit'] = 0;
+            $updateData['keterangan_lembur'] = null;
             $updateData['status_approval_lembur'] = null;
-            $updateData['overtime_status']        = null;
+            $updateData['overtime_status'] = null;
         }
 
         // 8. Update database
@@ -934,40 +1020,39 @@ class AttendanceController extends Controller
         }
 
         return response()->json([
-            'success'    => true,
-            'message'    => $message,
-            'data'       => new AttendanceResource($record),
+            'success' => true,
+            'message' => $message,
+            'data' => new AttendanceResource($record),
             'is_early_checkout' => $classification['is_early'],
-            'is_overtime'       => $overtimeCalc['is_lembur'],
-            'overtime_minutes'  => $overtimeCalc['durasi_lembur_menit'],
+            'is_overtime' => $overtimeCalc['is_lembur'],
+            'overtime_minutes' => $overtimeCalc['durasi_lembur_menit'],
         ]);
     }
 
     /**
      * GET /api/attendance/history
-     * 
+     *
      * Mengambil riwayat absensi.
      * Jika melampirkan parameter query 'month' & 'year', sistem akan menjana (generate) laporan bulanan lengkap
      * termasuk kalkulasi Alpa/off-day (menggunakan model Attendance::getMonthlyReportData).
      * Jika tanpa parameter, akan mengambil 100 log riwayat absensi mentah terakhir.
-     * 
-     * @param Request $request
-     * @return \Illuminate\Http\JsonResponse
+     *
+     * @return JsonResponse
      */
     public function history(Request $request)
     {
         $user = $request->user();
-        \Illuminate\Support\Facades\Log::info('History request by user ID: ' . ($user ? $user->id : 'null') . ' | Role: ' . ($user ? $user->role : 'null'));
-        \Illuminate\Support\Facades\Log::info('Query params: ' . json_encode($request->all()));
+        \Illuminate\Support\Facades\Log::info('History request by user ID: '.($user ? $user->id : 'null').' | Role: '.($user ? $user->role : 'null'));
+        \Illuminate\Support\Facades\Log::info('Query params: '.json_encode($request->all()));
 
         // Kasus A: Filter bulanan spesifik (menghasilkan laporan lengkap)
         if ($request->has('month') && $request->has('year')) {
-            $month = (int)$request->query('month');
-            $year  = (int)$request->query('year');
-            $employeeId = !$user->isAdmin() ? ($user->employee?->id) : null;
-            \Illuminate\Support\Facades\Log::info("Monthly history filter applied. Month: {$month}, Year: {$year}, Employee ID: " . ($employeeId ?? 'null'));
+            $month = (int) $request->query('month');
+            $year = (int) $request->query('year');
+            $employeeId = ! $user->isAdmin() ? ($user->employee?->id) : null;
+            \Illuminate\Support\Facades\Log::info("Monthly history filter applied. Month: {$month}, Year: {$year}, Employee ID: ".($employeeId ?? 'null'));
 
-            if (!$user->isAdmin() && !$employeeId) {
+            if (! $user->isAdmin() && ! $employeeId) {
                 return response()->json(['success' => false, 'message' => 'Data karyawan tidak ditemukan.'], 404);
             }
 
@@ -990,28 +1075,29 @@ class AttendanceController extends Controller
                     );
                 }
             }
-            \Illuminate\Support\Facades\Log::info('Monthly records count returned: ' . count($records));
+            \Illuminate\Support\Facades\Log::info('Monthly records count returned: '.count($records));
+
             return response()->json(['success' => true, 'data' => $records]);
         }
 
         // Kasus B: Mengambil 100 log absensi mentah terakhir
         $query = Attendance::with(['employee.user', 'employee.department', 'employee.schedules'])
-                           ->orderBy('date', 'desc')
-                           ->limit(100);
+            ->orderBy('date', 'desc')
+            ->limit(100);
 
-        if (!$user->isAdmin()) {
+        if (! $user->isAdmin()) {
             $employee = $user->employee;
-            if (!$employee) {
+            if (! $employee) {
                 return response()->json(['success' => false, 'message' => 'Data karyawan tidak ditemukan.'], 404);
             }
             \Illuminate\Support\Facades\Log::info("Filtering history query for non-admin employee ID: {$employee->id}");
             $query->where('employee_id', $employee->id);
         } else {
-            \Illuminate\Support\Facades\Log::info("User is admin. No employee filter applied to history query.");
+            \Illuminate\Support\Facades\Log::info('User is admin. No employee filter applied to history query.');
         }
 
         $records = AttendanceResource::collection($query->get());
-        \Illuminate\Support\Facades\Log::info('Query records count returned: ' . count($records));
+        \Illuminate\Support\Facades\Log::info('Query records count returned: '.count($records));
 
         return response()->json(['success' => true, 'data' => $records]);
     }
@@ -1021,34 +1107,31 @@ class AttendanceController extends Controller
     /**
      * Mengubah string format waktu "HH:mm" atau "HH:mm:ss" ke jumlah total menit dari tengah malam.
      * Mempermudah operasi matematika pembandingan waktu.
-     * 
-     * @param string $hhmm
+     *
      * @return int Jumlah menit
      */
     private function timeToMins(string $hhmm): int
     {
         [$h, $m] = explode(':', $hhmm);
-        return (int)$h * 60 + (int)$m;
+
+        return (int) $h * 60 + (int) $m;
     }
 
     /**
      * Menambahkan sejumlah menit ke format string "HH:mm".
-     * 
-     * @param string $hhmm
-     * @param int $mins
+     *
      * @return string String "HH:mm" baru
      */
     private function addMins(string $hhmm, int $mins): string
     {
         $total = $this->timeToMins($hhmm) + $mins;
+
         return sprintf('%02d:%02d', intdiv($total, 60) % 24, $total % 60);
     }
 
     /**
      * Mengurangi sejumlah menit dari format string "HH:mm".
-     * 
-     * @param string $hhmm
-     * @param int $mins
+     *
      * @return string String "HH:mm" baru
      */
     private function subMins(string $hhmm, int $mins): string
@@ -1057,17 +1140,16 @@ class AttendanceController extends Controller
         if ($total < 0) {
             $total += 24 * 60;
         }
+
         return sprintf('%02d:%02d', intdiv($total, 60) % 24, $total % 60);
     }
 
     /**
      * Mengambil jadwal shift kerja karyawan yang berlaku hari ini.
-     * 
-     * @param Employee $employee
-     * @param Carbon $now Tanggal/waktu pembanding
-     * @return \App\Models\Schedule|null
+     *
+     * @param  Carbon  $now  Tanggal/waktu pembanding
      */
-    private function getEmployeeTodayShift(\App\Models\Employee $employee, Carbon $now): ?\App\Models\Schedule
+    private function getEmployeeTodayShift(Employee $employee, Carbon $now): ?Schedule
     {
         // 1. Coba resolve via AttendanceRules (Mendukung work_date, roster tanggal spesifik & sub-shift)
         $schedule = AttendanceRules::resolveShiftFor($employee, $now, $now);
@@ -1079,21 +1161,21 @@ class AttendanceController extends Controller
         $todayName = $dayMap[$now->dayOfWeek];
 
         // 2. Fallback ke pivot mingguan
-        if (!$schedule) {
+        if (! $schedule) {
             $schedule = $employee->schedules()->wherePivot('day_of_week', $todayName)->first();
         }
 
-        if (!$schedule) {
+        if (! $schedule) {
             return null;
         }
 
         // Jika schedule adalah parent template yang memiliki children, kita cari sub-shift yang cocok
         if ($schedule->parent_id === null && $schedule->children()->exists()) {
             // Cek apakah karyawan sudah melakukan check-in hari ini
-            $record = \App\Models\Attendance::where('employee_id', $employee->id)
+            $record = Attendance::where('employee_id', $employee->id)
                 ->whereDate('date', $now->toDateString())
                 ->first();
-            
+
             $timeToMatch = $now;
             if ($record && $record->check_in) {
                 // Gunakan jam check-in yang sudah tercatat
@@ -1109,6 +1191,7 @@ class AttendanceController extends Controller
                 $cloned->end_time = $matchedChild->end_time;
                 $cloned->name = $matchedChild->name;
                 $cloned->exists = true;
+
                 return $cloned;
             }
         }
@@ -1118,13 +1201,8 @@ class AttendanceController extends Controller
 
     /**
      * Mencocokkan sub-shift (anak) yang aktif di bawah parent template berdasarkan jam kerja/check-in saat ini.
-     *
-     * @param \App\Models\Schedule $parent
-     * @param string $todayName
-     * @param Carbon $now
-     * @return \App\Models\Schedule|null
      */
-    private function resolveActiveSubShift(\App\Models\Schedule $parent, string $todayName, Carbon $now): ?\App\Models\Schedule
+    private function resolveActiveSubShift(Schedule $parent, string $todayName, Carbon $now): ?Schedule
     {
         $children = $parent->children()->get();
         if ($children->isEmpty()) {
@@ -1134,8 +1212,8 @@ class AttendanceController extends Controller
         $nowMins = $now->hour * 60 + $now->minute;
 
         // Toleransi global dari settings (default: 30 menit sebelum, 60 menit sesudah)
-        $checkinOpenOffset  = (int) \App\Models\Setting::get('checkin_open', '30');
-        $closeCheckinOffset = (int) \App\Models\Setting::get('close_checkin', '60');
+        $checkinOpenOffset = (int) Setting::get('checkin_open', '30');
+        $closeCheckinOffset = (int) Setting::get('close_checkin', '60');
 
         $matched = null;
         $closestDiff = 999999;
@@ -1157,7 +1235,7 @@ class AttendanceController extends Controller
             $startTime = substr($child->start_time, 0, 5);
             $startMins = $this->timeToMins($startTime);
 
-            $openLimitMins  = $startMins - $checkinOpenOffset;
+            $openLimitMins = $startMins - $checkinOpenOffset;
             $closeLimitMins = $startMins + $closeCheckinOffset;
 
             // Handle overnight check-in window
@@ -1194,20 +1272,20 @@ class AttendanceController extends Controller
 
     /**
      * Menghitung jarak antara dua titik koordinat GPS menggunakan Rumus Haversine (meter).
-     * 
-     * @param float $lat1 Lintang titik pertama
-     * @param float $lon1 Bujur titik pertama
-     * @param float $lat2 Lintang titik kedua
-     * @param float $lon2 Bujur titik kedua
+     *
+     * @param  float  $lat1  Lintang titik pertama
+     * @param  float  $lon1  Bujur titik pertama
+     * @param  float  $lat2  Lintang titik kedua
+     * @param  float  $lon2  Bujur titik kedua
      * @return float Jarak dalam satuan meter
      */
     private function haversine(float $lat1, float $lon1, float $lat2, float $lon2): float
     {
-        $R    = 6371000; // Radius rata-rata bumi dalam meter
-        $φ1   = deg2rad($lat1);
-        $φ2   = deg2rad($lat2);
-        $Δφ   = deg2rad($lat2 - $lat1);
-        $Δλ   = deg2rad($lon2 - $lon1);
+        $R = 6371000; // Radius rata-rata bumi dalam meter
+        $φ1 = deg2rad($lat1);
+        $φ2 = deg2rad($lat2);
+        $Δφ = deg2rad($lat2 - $lat1);
+        $Δλ = deg2rad($lon2 - $lon1);
 
         $a = sin($Δφ / 2) ** 2 + cos($φ1) * cos($φ2) * sin($Δλ / 2) ** 2;
         $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
@@ -1217,20 +1295,20 @@ class AttendanceController extends Controller
 
     /**
      * Menyimpan gambar Base64 (foto selfie) ke public storage disk.
-     * 
-     * @param string $imgData String Base64 gambar
-     * @param string $baseName Nama dasar file unik
+     *
+     * @param  string  $imgData  String Base64 gambar
+     * @param  string  $baseName  Nama dasar file unik
      * @return string|null Path relatif file gambar hasil penyimpanan
      */
     private function storeBase64Image(string $imgData, string $baseName): ?string
     {
-        if (!preg_match('/^data:image\/(\w+);base64,/', $imgData, $type)) {
+        if (! preg_match('/^data:image\/(\w+);base64,/', $imgData, $type)) {
             return null;
         }
         $imgData = substr($imgData, strpos($imgData, ',') + 1);
-        $type    = strtolower($type[1]); // jpeg, png, webp
+        $type = strtolower($type[1]); // jpeg, png, webp
 
-        if (!in_array($type, ['jpg', 'jpeg', 'png'])) {
+        if (! in_array($type, ['jpg', 'jpeg', 'png'])) {
             return null;
         }
         $decoded = base64_decode($imgData);
@@ -1238,10 +1316,10 @@ class AttendanceController extends Controller
             return null;
         }
 
-        $fileName = $baseName . '.' . $type;
-        \Illuminate\Support\Facades\Storage::disk('public')->put('selfies/' . $fileName, $decoded);
+        $fileName = $baseName.'.'.$type;
+        Storage::disk('public')->put('selfies/'.$fileName, $decoded);
 
-        return '/storage/selfies/' . $fileName;
+        return '/storage/selfies/'.$fileName;
     }
 
     private function formatPhotoUrl(?string $path): ?string
@@ -1252,29 +1330,29 @@ class AttendanceController extends Controller
         if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://') || str_starts_with($path, 'data:')) {
             return $path;
         }
+
         return url($path);
     }
 
     /**
      * Memformat output record absensi agar konsisten untuk dikonsumsi frontend.
-     * 
-     * @param Attendance $r Record absensi
-     * @param bool $withEmployee Sertakan detail profile karyawan
-     * @return array
+     *
+     * @param  Attendance  $r  Record absensi
+     * @param  bool  $withEmployee  Sertakan detail profile karyawan
      */
     private function formatRecord(Attendance $r, bool $withEmployee = false): array
     {
         $shiftName = 'Tidak Ada Shift';
         if ($r->schedule_id) {
-            $sched = \App\Models\Schedule::find($r->schedule_id);
+            $sched = Schedule::find($r->schedule_id);
             if ($sched) {
                 $shiftName = $sched->name;
             }
         }
 
         if (($shiftName === 'Tidak Ada Shift' || empty($shiftName)) && $r->employee && $r->date) {
-            $carbonDate = \Carbon\Carbon::parse($r->date);
-            $resolved = \App\Support\AttendanceRules::resolveShiftFor($r->employee, $carbonDate);
+            $carbonDate = Carbon::parse($r->date);
+            $resolved = AttendanceRules::resolveShiftFor($r->employee, $carbonDate);
             if ($resolved) {
                 $shiftName = $resolved->name;
             }
@@ -1284,43 +1362,43 @@ class AttendanceController extends Controller
         $displayStatus = $isIncomplete ? 'tidak_lengkap' : $r->status;
 
         $data = [
-            'id'                 => $r->id,
-            'date'               => $r->date?->toDateString(),
-            'check_in'           => $r->check_in,
-            'check_out'          => $r->check_out,
-            'status'             => $r->status,
-            'display_status'     => $displayStatus,
-            'checkin_punctuality'     => $r->checkin_punctuality,
-            'effective_checkin_time'  => $r->effective_checkin_time,
-            'duration_min'       => $r->duration_minutes_attribute ?? null,
-            'latitude'           => $r->latitude,
-            'longitude'          => $r->longitude,
-            'accuracy'           => $r->accuracy,
+            'id' => $r->id,
+            'date' => $r->date?->toDateString(),
+            'check_in' => $r->check_in,
+            'check_out' => $r->check_out,
+            'status' => $r->status,
+            'display_status' => $displayStatus,
+            'checkin_punctuality' => $r->checkin_punctuality,
+            'effective_checkin_time' => $r->effective_checkin_time,
+            'duration_min' => $r->duration_minutes_attribute ?? null,
+            'latitude' => $r->latitude,
+            'longitude' => $r->longitude,
+            'accuracy' => $r->accuracy,
             'is_within_geofence' => $r->is_within_geofence,
-            'note'               => $r->note,
-            'checkin_location_note'  => $r->checkin_location_note,
+            'note' => $r->note,
+            'checkin_location_note' => $r->checkin_location_note,
             'checkout_location_note' => $r->checkout_location_note,
-            'image_check_in'     => $this->formatPhotoUrl($r->image_check_in),
-            'image_check_out'    => $this->formatPhotoUrl($r->image_check_out),
-            'checkin_photo_url'  => $this->formatPhotoUrl($r->checkin_photo_url ?? $r->image_check_in),
+            'image_check_in' => $this->formatPhotoUrl($r->image_check_in),
+            'image_check_out' => $this->formatPhotoUrl($r->image_check_out),
+            'checkin_photo_url' => $this->formatPhotoUrl($r->checkin_photo_url ?? $r->image_check_in),
             'checkout_photo_url' => $this->formatPhotoUrl($r->checkout_photo_url ?? $r->image_check_out),
-            'shift_name'         => $shiftName,
+            'shift_name' => $shiftName,
             // ── Pulang Cepat ──────────────────────────────────────────────
-            'is_early_checkout'        => (bool) $r->is_early_checkout,
-            'early_checkout_reason'    => $r->early_checkout_reason,
-            'early_checkout_status'    => $r->early_checkout_status,
-            'early_checkout_admin_note'=> $r->early_checkout_admin_note,
+            'is_early_checkout' => (bool) $r->is_early_checkout,
+            'early_checkout_reason' => $r->early_checkout_reason,
+            'early_checkout_status' => $r->early_checkout_status,
+            'early_checkout_admin_note' => $r->early_checkout_admin_note,
             // ── Lembur ────────────────────────────────────────────────────
-            'is_overtime'      => (bool) $r->is_overtime,
+            'is_overtime' => (bool) $r->is_overtime,
             'overtime_minutes' => $r->overtime_minutes,
-            'overtime_note'    => $r->overtime_note,
+            'overtime_note' => $r->overtime_note,
         ];
 
         if ($withEmployee && $r->employee) {
             $data['employee'] = [
-                'id'         => $r->employee->id,
-                'name'       => $r->employee->user?->name,
-                'nik_ktp'    => $r->employee->nik_ktp,
+                'id' => $r->employee->id,
+                'name' => $r->employee->user?->name,
+                'nik_ktp' => $r->employee->nik_ktp,
                 'department' => $r->employee->department?->name,
                 'profile_picture' => $this->formatPhotoUrl($r->employee->user?->profile_picture),
             ];
@@ -1331,12 +1409,11 @@ class AttendanceController extends Controller
 
     /**
      * GET /api/attendance/early-checkouts
-     * 
+     *
      * Mengambil daftar absensi yang ditandai pulang cepat (is_early_checkout = true).
      * Hanya dapat diakses oleh Administrator.
-     * 
-     * @param Request $request
-     * @return \Illuminate\Http\JsonResponse
+     *
+     * @return JsonResponse
      */
     public function earlyCheckouts(Request $request)
     {
@@ -1351,32 +1428,30 @@ class AttendanceController extends Controller
 
         // Filter bulan & tahun opsional
         if ($request->has('month') && $request->has('year')) {
-            $query->whereMonth('date', (int)$request->query('month'))
-                  ->whereYear('date', (int)$request->query('year'));
+            $query->whereMonth('date', (int) $request->query('month'))
+                ->whereYear('date', (int) $request->query('year'));
         }
 
         $records = AttendanceResource::collection($query->limit(200)->get());
 
         return response()->json([
             'success' => true,
-            'data'    => $records,
+            'data' => $records,
         ]);
     }
 
     /**
      * PUT /api/attendance/{id}/early-checkout/approve
-     * 
+     *
      * Admin menyetujui laporan pulang cepat. Opsional: simpan catatan admin.
-     * 
-     * @param Request $request
-     * @param int $id
-     * @return \Illuminate\Http\JsonResponse
+     *
+     * @return JsonResponse
      */
     public function approveEarlyCheckout(Request $request, int $id)
     {
         $record = Attendance::findOrFail($id);
 
-        if (!$record->is_early_checkout) {
+        if (! $record->is_early_checkout) {
             return response()->json([
                 'success' => false,
                 'message' => 'Rekaman ini bukan pulang cepat.',
@@ -1384,25 +1459,23 @@ class AttendanceController extends Controller
         }
 
         $record->update([
-            'early_checkout_status'     => 'approved',
+            'early_checkout_status' => 'approved',
             'early_checkout_admin_note' => $request->input('admin_note'),
         ]);
 
         return response()->json([
             'success' => true,
             'message' => 'Pulang cepat disetujui.',
-            'data'    => new AttendanceResource($record->fresh(['employee.user', 'employee.department'])),
+            'data' => new AttendanceResource($record->fresh(['employee.user', 'employee.department'])),
         ]);
     }
 
     /**
      * PUT /api/attendance/{id}/early-checkout/reject
-     * 
+     *
      * Admin menolak laporan pulang cepat. Catatan admin WAJIB diisi.
-     * 
-     * @param Request $request
-     * @param int $id
-     * @return \Illuminate\Http\JsonResponse
+     *
+     * @return JsonResponse
      */
     public function rejectEarlyCheckout(Request $request, int $id)
     {
@@ -1414,7 +1487,7 @@ class AttendanceController extends Controller
 
         $record = Attendance::findOrFail($id);
 
-        if (!$record->is_early_checkout) {
+        if (! $record->is_early_checkout) {
             return response()->json([
                 'success' => false,
                 'message' => 'Rekaman ini bukan pulang cepat.',
@@ -1422,14 +1495,14 @@ class AttendanceController extends Controller
         }
 
         $record->update([
-            'early_checkout_status'     => 'rejected',
+            'early_checkout_status' => 'rejected',
             'early_checkout_admin_note' => $request->input('admin_note'),
         ]);
 
         return response()->json([
             'success' => true,
             'message' => 'Pulang cepat ditolak.',
-            'data'    => new AttendanceResource($record->fresh(['employee.user', 'employee.department'])),
+            'data' => new AttendanceResource($record->fresh(['employee.user', 'employee.department'])),
         ]);
     }
 
@@ -1445,7 +1518,7 @@ class AttendanceController extends Controller
         ]);
 
         $employee = $request->user()->employee;
-        if (!$employee) {
+        if (! $employee) {
             return response()->json(['success' => false, 'message' => 'Data karyawan tidak ditemukan.'], 404);
         }
 
@@ -1454,13 +1527,13 @@ class AttendanceController extends Controller
             ->where('is_overtime', true)
             ->where(function ($query) {
                 $query->whereDate('date', today())
-                      ->orWhereDate('date', today()->subDay());
+                    ->orWhereDate('date', today()->subDay());
             })
             ->orderBy('date', 'desc')
             ->orderBy('id', 'desc')
             ->first();
 
-        if (!$record) {
+        if (! $record) {
             return response()->json([
                 'success' => false,
                 'message' => 'Rekaman absensi lembur tidak ditemukan atau Anda tidak terdeteksi lembur hari ini.',
@@ -1474,7 +1547,7 @@ class AttendanceController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Catatan lembur berhasil diperbarui.',
-            'data'    => new AttendanceResource($record),
+            'data' => new AttendanceResource($record),
         ]);
     }
 
@@ -1489,40 +1562,45 @@ class AttendanceController extends Controller
 
         // Filter by status if provided
         if ($request->filled('status')) {
-            $statuses = (array)$request->input('status');
-            $rows = array_filter($rows, function($row) use ($statuses) {
+            $statuses = (array) $request->input('status');
+            $rows = array_filter($rows, function ($row) use ($statuses) {
                 $rowStatus = $row['display_status'] ?? $row['status'];
+
                 return in_array($rowStatus, $statuses);
             });
             $rows = array_values($rows); // reset array keys
         }
 
         // Manual pagination
-        $currentPage = \Illuminate\Pagination\LengthAwarePaginator::resolveCurrentPage() ?: 1;
-        $perPage = (int)$request->query('per_page', 20);
-        if ($perPage < 1) $perPage = 20;
-        if ($perPage > 100) $perPage = 100;
+        $currentPage = LengthAwarePaginator::resolveCurrentPage() ?: 1;
+        $perPage = (int) $request->query('per_page', 20);
+        if ($perPage < 1) {
+            $perPage = 20;
+        }
+        if ($perPage > 100) {
+            $perPage = 100;
+        }
 
         $col = collect($rows);
         $currentPageResults = $col->slice(($currentPage - 1) * $perPage, $perPage)->values();
 
-        $paginated = new \Illuminate\Pagination\LengthAwarePaginator(
+        $paginated = new LengthAwarePaginator(
             $currentPageResults,
             $col->count(),
             $perPage,
             $currentPage,
-            ['path' => \Illuminate\Pagination\LengthAwarePaginator::resolveCurrentPath()]
+            ['path' => LengthAwarePaginator::resolveCurrentPath()]
         );
 
         return response()->json([
             'success' => true,
-            'data'    => $paginated->items(),
-            'meta'    => [
+            'data' => $paginated->items(),
+            'meta' => [
                 'current_page' => $paginated->currentPage(),
-                'last_page'    => $paginated->lastPage(),
-                'per_page'     => $paginated->perPage(),
-                'total'        => $paginated->total(),
-            ]
+                'last_page' => $paginated->lastPage(),
+                'per_page' => $paginated->perPage(),
+                'total' => $paginated->total(),
+            ],
         ]);
     }
 
@@ -1558,13 +1636,13 @@ class AttendanceController extends Controller
 
         return response()->json([
             'success' => true,
-            'data'    => [
-                'hadir'         => $hadir,
-                'terlambat'     => $telat,
-                'alpha'         => $alpha,
-                'cuti'          => $cuti,
+            'data' => [
+                'hadir' => $hadir,
+                'terlambat' => $telat,
+                'alpha' => $alpha,
+                'cuti' => $cuti,
                 'tidak_lengkap' => $tidakLengkap,
-            ]
+            ],
         ]);
     }
 
@@ -1576,32 +1654,32 @@ class AttendanceController extends Controller
     {
         $user = $request->user();
         $dateFrom = $request->query('date_from');
-        $dateTo   = $request->query('date_to');
-        
-        $isRangeMode = !empty($dateFrom) && !empty($dateTo);
-        
+        $dateTo = $request->query('date_to');
+
+        $isRangeMode = ! empty($dateFrom) && ! empty($dateTo);
+
         // 1. Get active employees matching search and department filters
-        $empQuery = \App\Models\Employee::where('status', 'active')
+        $empQuery = Employee::where('status', 'active')
             ->with(['user', 'department', 'position', 'schedules']);
 
         // Scope to PJ Bagian department(s) if user is PJ Bagian and not Admin
-        if ($user->isPjBagian() && !$user->isAdmin()) {
+        if ($user->isPjBagian() && ! $user->isAdmin()) {
             $deptIds = $user->getPjDepartmentIds();
-            if (!empty($deptIds)) {
+            if (! empty($deptIds)) {
                 $empQuery->whereIn('department_id', $deptIds);
             }
         }
 
         if ($request->filled('search')) {
             $search = $request->query('search');
-            $empQuery->where(function($q) use ($search) {
+            $empQuery->where(function ($q) use ($search) {
                 $q->where('nik_ktp', 'like', "%{$search}%")
-                  ->orWhereHas('user', function($uq) use ($search) {
-                      $uq->where('name', 'like', "%{$search}%");
-                  })
-                  ->orWhereHas('department', function($dq) use ($search) {
-                      $dq->where('name', 'like', "%{$search}%");
-                  });
+                    ->orWhereHas('user', function ($uq) use ($search) {
+                        $uq->where('name', 'like', "%{$search}%");
+                    })
+                    ->orWhereHas('department', function ($dq) use ($search) {
+                        $dq->where('name', 'like', "%{$search}%");
+                    });
             });
         }
 
@@ -1618,7 +1696,7 @@ class AttendanceController extends Controller
             3 => 'Rabu',   4 => 'Kamis', 5 => 'Jumat', 6 => 'Sabtu',
         ];
 
-        if (!$isRangeMode) {
+        if (! $isRangeMode) {
             // Mode Harian (Single Date)
             $targetDate = $request->query('date', today('Asia/Jakarta')->toDateString());
             $carbonDate = Carbon::parse($targetDate);
@@ -1637,8 +1715,8 @@ class AttendanceController extends Controller
                 if ($attGroup->count() === 1) {
                     $attendances->put($empId, $attGroup->first());
                 } else {
-                    $checkInRow = $attGroup->first(fn($a) => !empty($a->check_in));
-                    $checkOutRow = $attGroup->first(fn($a) => !empty($a->check_out));
+                    $checkInRow = $attGroup->first(fn ($a) => ! empty($a->check_in));
+                    $checkOutRow = $attGroup->first(fn ($a) => ! empty($a->check_out));
 
                     if ($checkInRow && $checkOutRow && $checkInRow->id !== $checkOutRow->id) {
                         $merged = clone $checkOutRow;
@@ -1651,10 +1729,17 @@ class AttendanceController extends Controller
                         $merged->checkin_location_note = $checkInRow->checkin_location_note;
                         $attendances->put($empId, $merged);
                     } else {
-                        $best = $attGroup->sortBy(function($a) {
-                            if (!empty($a->check_in) && !empty($a->check_out)) return 1;
-                            if (!empty($a->check_in)) return 2;
-                            if (!empty($a->check_out)) return 3;
+                        $best = $attGroup->sortBy(function ($a) {
+                            if (! empty($a->check_in) && ! empty($a->check_out)) {
+                                return 1;
+                            }
+                            if (! empty($a->check_in)) {
+                                return 2;
+                            }
+                            if (! empty($a->check_out)) {
+                                return 3;
+                            }
+
                             return 4;
                         })->first();
                         $attendances->put($empId, $best);
@@ -1663,16 +1748,16 @@ class AttendanceController extends Controller
             }
 
             // Fetch approved leaves overlapping this single date
-            $leaves = \App\Models\LeaveRequest::where('status', 'approved')
+            $leaves = LeaveRequest::where('status', 'approved')
                 ->whereIn('employee_id', $employeeIds)
                 ->whereDate('start_date', '<=', $targetDate)
-                ->where(function($q) use ($targetDate) {
-                    $q->where(function($q2) use ($targetDate) {
+                ->where(function ($q) use ($targetDate) {
+                    $q->where(function ($q2) use ($targetDate) {
                         $q2->whereNull('actual_end_date')
-                           ->whereDate('end_date', '>=', $targetDate);
-                    })->orWhere(function($q2) use ($targetDate) {
+                            ->whereDate('end_date', '>=', $targetDate);
+                    })->orWhere(function ($q2) use ($targetDate) {
                         $q2->whereNotNull('actual_end_date')
-                           ->whereDate('actual_end_date', '>=', $targetDate);
+                            ->whereDate('actual_end_date', '>=', $targetDate);
                     });
                 })
                 ->with(['specialLeaveCategory'])
@@ -1680,7 +1765,7 @@ class AttendanceController extends Controller
                 ->keyBy('employee_id');
 
             $holiday = AttendanceRules::holidayOn($carbonDate);
-            
+
             // For Alpha/Belum Hadir calculation limits
             $firstAttDate = Attendance::orderBy('date', 'asc')->value('date');
             $systemStartDate = $firstAttDate ? Carbon::parse($firstAttDate)->startOfDay() : today('Asia/Jakarta');
@@ -1688,11 +1773,11 @@ class AttendanceController extends Controller
             $limitDate = $carbonDate->gt($today) ? $today : $carbonDate;
 
             foreach ($employees as $emp) {
-                $matchingShift = $emp->schedules->first(function($s) use ($dayName) {
+                $matchingShift = $emp->schedules->first(function ($s) use ($dayName) {
                     return $s->pivot->day_of_week === $dayName;
                 });
-                
-                $hasShift = !empty($matchingShift);
+
+                $hasShift = ! empty($matchingShift);
 
                 if ($attendances->has($emp->id)) {
                     $att = $attendances->get($emp->id);
@@ -1709,20 +1794,20 @@ class AttendanceController extends Controller
                         }
                     }
 
-                    if (!$hasShift || $isOffShift) {
+                    if (! $hasShift || $isOffShift) {
                         continue;
                     }
 
                     if ($holiday) {
                         $isAssigned = AttendanceRules::isAssignedToWorkOnHoliday($emp, $holiday);
-                        if (!$isAssigned) {
+                        if (! $isAssigned) {
                             continue;
                         }
                     }
 
                     if ($carbonDate->lte($limitDate) && $carbonDate->gte($systemStartDate)) {
                         $status = 'alpha';
-                        $note = 'Tidak Hadir Tanpa Keterangan' . ($holiday ? ' (Mangkir Penugasan)' : '');
+                        $note = 'Tidak Hadir Tanpa Keterangan'.($holiday ? ' (Mangkir Penugasan)' : '');
 
                         if ($carbonDate->isToday() && $matchingShift) {
                             $now = Carbon::now('Asia/Jakarta');
@@ -1741,10 +1826,10 @@ class AttendanceController extends Controller
                             $shiftStartCarbon = Carbon::today('Asia/Jakarta')->setTimeFromTimeString($shiftStart);
                             $closeLimitCarbon = Carbon::today('Asia/Jakarta')->setTimeFromTimeString($resolvedCloseTime);
 
-                        if ($carbonDate->isToday()) {
-                            $status = 'belum_hadir';
-                            $note = 'Belum Absen Masuk';
-                        }
+                            if ($carbonDate->isToday()) {
+                                $status = 'belum_hadir';
+                                $note = 'Belum Absen Masuk';
+                            }
                         }
 
                         $rows[] = $this->formatRowForAbsent($emp, $targetDate, $status, $note, $matchingShift);
@@ -1760,16 +1845,16 @@ class AttendanceController extends Controller
                 ->get();
 
             // Fetch approved leaves overlapping range
-            $leaves = \App\Models\LeaveRequest::where('status', 'approved')
+            $leaves = LeaveRequest::where('status', 'approved')
                 ->whereIn('employee_id', $employeeIds)
                 ->whereDate('start_date', '<=', $dateTo)
-                ->where(function($q) use ($dateFrom) {
-                    $q->where(function($q2) use ($dateFrom) {
+                ->where(function ($q) use ($dateFrom) {
+                    $q->where(function ($q2) use ($dateFrom) {
                         $q2->whereNull('actual_end_date')
-                           ->whereDate('end_date', '>=', $dateFrom);
-                    })->orWhere(function($q2) use ($dateFrom) {
+                            ->whereDate('end_date', '>=', $dateFrom);
+                    })->orWhere(function ($q2) use ($dateFrom) {
                         $q2->whereNotNull('actual_end_date')
-                           ->whereDate('actual_end_date', '>=', $dateFrom);
+                            ->whereDate('actual_end_date', '>=', $dateFrom);
                     });
                 })
                 ->with(['specialLeaveCategory'])
@@ -1777,23 +1862,27 @@ class AttendanceController extends Controller
 
             foreach ($attendances as $att) {
                 $emp = $employees->firstWhere('id', $att->employee_id);
-                if (!$emp) continue;
-                
+                if (! $emp) {
+                    continue;
+                }
+
                 $dayName = $dayMap[$att->date->dayOfWeek];
-                $matchingShift = $emp->schedules->first(function($s) use ($dayName) {
+                $matchingShift = $emp->schedules->first(function ($s) use ($dayName) {
                     return $s->pivot->day_of_week === $dayName;
                 });
-                
+
                 $rows[] = $this->formatRowFromAttendance($att, $emp, $matchingShift);
             }
 
             foreach ($leaves as $leave) {
                 $emp = $employees->firstWhere('id', $leave->employee_id);
-                if (!$emp) continue;
+                if (! $emp) {
+                    continue;
+                }
 
                 $startDateCarbon = Carbon::parse($leave->start_date);
                 $dayName = $dayMap[$startDateCarbon->dayOfWeek];
-                $matchingShift = $emp->schedules->first(function($s) use ($dayName) {
+                $matchingShift = $emp->schedules->first(function ($s) use ($dayName) {
                     return $s->pivot->day_of_week === $dayName;
                 });
 
@@ -1803,7 +1892,7 @@ class AttendanceController extends Controller
         }
 
         // Sort: date DESC, name A-Z
-        usort($rows, function($a, $b) {
+        usort($rows, function ($a, $b) {
             $dateA = $a['row_type'] === 'leave_period' ? $a['start_date'] : $a['date'];
             $dateB = $b['row_type'] === 'leave_period' ? $b['start_date'] : $b['date'];
 
@@ -1835,7 +1924,7 @@ class AttendanceController extends Controller
             'latitude' => $att->latitude,
             'longitude' => $att->longitude,
             'accuracy' => $att->accuracy,
-            'is_within_geofence' => (bool)$att->is_within_geofence,
+            'is_within_geofence' => (bool) $att->is_within_geofence,
             'note' => (in_array($displayStatus, ['hadir', 'telat']) && $att->note && str_starts_with($att->note, 'Masa ')) ? null : $att->note,
             'checkin_location_note' => $att->checkin_location_note,
             'checkout_location_note' => $att->checkout_location_note,
@@ -1851,7 +1940,7 @@ class AttendanceController extends Controller
             'checkout_distance_meters' => $att->checkout_distance_meters,
             'shift_name' => $matchingShift ? $matchingShift->name : 'Reguler',
             'shift_type' => $matchingShift ? ($matchingShift->shift_type ?? 'normal') : 'normal',
-            'is_holiday_work' => (bool)$att->is_holiday_work,
+            'is_holiday_work' => (bool) $att->is_holiday_work,
             'holiday' => $att->relationLoaded('holiday') && $att->holiday ? $att->holiday->name : ($att->holiday ? $att->holiday->name : null),
             'row_type' => 'daily',
             'employee' => [
@@ -1868,7 +1957,7 @@ class AttendanceController extends Controller
     private function formatRowFromLeave($leave, $emp, $date, $matchingShift, $rowType)
     {
         return [
-            'id' => 'leave_' . $leave->id,
+            'id' => 'leave_'.$leave->id,
             'employee_id' => $emp->id,
             'date' => $date,
             'start_date' => $leave->start_date ? $leave->start_date->toDateString() : null,
@@ -1956,16 +2045,16 @@ class AttendanceController extends Controller
 
     /**
      * GET /api/attendance/overtimes
-     * 
+     *
      * Mengambil daftar lembur pegawai (is_overtime = true) dengan paginasi.
      */
     public function overtimes(Request $request)
     {
         $status = $request->query('status', 'pending');
-        
+
         $dateFrom = $request->query('date_from', now()->startOfMonth()->toDateString());
-        $dateTo   = $request->query('date_to', now()->endOfMonth()->toDateString());
-        
+        $dateTo = $request->query('date_to', now()->endOfMonth()->toDateString());
+
         $query = Attendance::where('is_overtime', true)
             ->with(['employee.user', 'employee.department'])
             ->whereBetween('date', [$dateFrom, $dateTo]);
@@ -1984,42 +2073,46 @@ class AttendanceController extends Controller
             $search = $request->query('search');
             $query->whereHas('employee', function ($q) use ($search) {
                 $q->where('nik_ktp', 'like', "%{$search}%")
-                  ->orWhereHas('user', function ($uq) use ($search) {
-                      $uq->where('name', 'like', "%{$search}%");
-                  });
+                    ->orWhereHas('user', function ($uq) use ($search) {
+                        $uq->where('name', 'like', "%{$search}%");
+                    });
             });
         }
 
         $query->orderBy('date', 'desc');
 
         $perPage = (int) $request->query('per_page', 20);
-        if ($perPage < 1) $perPage = 20;
-        if ($perPage > 100) $perPage = 100;
+        if ($perPage < 1) {
+            $perPage = 20;
+        }
+        if ($perPage > 100) {
+            $perPage = 100;
+        }
 
         $paginator = $query->paginate($perPage);
 
         return response()->json([
             'success' => true,
-            'data'    => AttendanceResource::collection($paginator->items()),
-            'meta'    => [
+            'data' => AttendanceResource::collection($paginator->items()),
+            'meta' => [
                 'current_page' => $paginator->currentPage(),
-                'last_page'    => $paginator->lastPage(),
-                'per_page'     => $paginator->perPage(),
-                'total'        => $paginator->total(),
-            ]
+                'last_page' => $paginator->lastPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+            ],
         ]);
     }
 
     /**
      * GET /api/attendance/overtimes/summary
-     * 
+     *
      * Mengambil ringkasan data statistik lembur berdasarkan filter yang dipilih.
      */
     public function overtimesSummary(Request $request)
     {
         $dateFrom = $request->query('date_from', now()->startOfMonth()->toDateString());
-        $dateTo   = $request->query('date_to', now()->endOfMonth()->toDateString());
-        
+        $dateTo = $request->query('date_to', now()->endOfMonth()->toDateString());
+
         $baseQuery = Attendance::where('is_overtime', true)
             ->whereBetween('date', [$dateFrom, $dateTo]);
 
@@ -2033,41 +2126,41 @@ class AttendanceController extends Controller
             $search = $request->query('search');
             $baseQuery->whereHas('employee', function ($q) use ($search) {
                 $q->where('nik_ktp', 'like', "%{$search}%")
-                  ->orWhereHas('user', function ($uq) use ($search) {
-                      $uq->where('name', 'like', "%{$search}%");
-                  });
+                    ->orWhereHas('user', function ($uq) use ($search) {
+                        $uq->where('name', 'like', "%{$search}%");
+                    });
             });
         }
 
-        $pending  = (clone $baseQuery)->where('overtime_status', 'pending')->count();
+        $pending = (clone $baseQuery)->where('overtime_status', 'pending')->count();
         $approved = (clone $baseQuery)->where('overtime_status', 'approved')->count();
         $rejected = (clone $baseQuery)->where('overtime_status', 'rejected')->count();
-        
+
         $totalMinutes = (int) (clone $baseQuery)->where('overtime_status', 'approved')->sum('overtime_minutes');
         $totalHours = round($totalMinutes / 60, 1);
 
         return response()->json([
             'success' => true,
-            'data'    => [
-                'pending'       => $pending,
-                'approved'      => $approved,
-                'rejected'      => $rejected,
+            'data' => [
+                'pending' => $pending,
+                'approved' => $approved,
+                'rejected' => $rejected,
                 'total_minutes' => $totalMinutes,
-                'total_hours'   => $totalHours,
-            ]
+                'total_hours' => $totalHours,
+            ],
         ]);
     }
 
     /**
      * PUT /api/attendance/{id}/overtime/approve
-     * 
+     *
      * Admin menyetujui lembur karyawan.
      */
     public function approveOvertime(Request $request, int $id)
     {
         $record = Attendance::findOrFail($id);
 
-        if (!$record->is_overtime) {
+        if (! $record->is_overtime) {
             return response()->json([
                 'success' => false,
                 'message' => 'Rekaman ini tidak terdeteksi lembur.',
@@ -2082,32 +2175,32 @@ class AttendanceController extends Controller
         }
 
         $record->update([
-            'overtime_status'        => 'approved',
-            'overtime_reviewed_by'   => $request->user()->id,
-            'overtime_reviewed_at'   => now(),
-            'overtime_admin_note'    => $request->input('overtime_admin_note'),
+            'overtime_status' => 'approved',
+            'overtime_reviewed_by' => $request->user()->id,
+            'overtime_reviewed_at' => now(),
+            'overtime_admin_note' => $request->input('overtime_admin_note'),
             'status_approval_lembur' => 'disetujui', // sync backward compatibility
         ]);
 
         // Kirim notifikasi ke karyawan
-        \App\Models\Notification::create([
+        Notification::create([
             'user_id' => $record->employee->user_id,
-            'title'   => 'Lembur Disetujui ✅',
-            'body'    => 'Lembur Anda tanggal ' . ($record->date ? $record->date->toDateString() : '-') . ' telah disetujui.',
-            'type'    => 'overtime',
-            'data'    => ['attendance_id' => $record->id]
+            'title' => 'Lembur Disetujui ✅',
+            'body' => 'Lembur Anda tanggal '.($record->date ? $record->date->toDateString() : '-').' telah disetujui.',
+            'type' => 'overtime',
+            'data' => ['attendance_id' => $record->id],
         ]);
 
         return response()->json([
             'success' => true,
             'message' => 'Lembur disetujui.',
-            'data'    => new AttendanceResource($record->fresh(['employee.user', 'employee.department'])),
+            'data' => new AttendanceResource($record->fresh(['employee.user', 'employee.department'])),
         ]);
     }
 
     /**
      * PUT /api/attendance/{id}/overtime/reject
-     * 
+     *
      * Admin menolak lembur karyawan. Catatan alasan wajib diisi.
      */
     public function rejectOvertime(Request $request, int $id)
@@ -2120,7 +2213,7 @@ class AttendanceController extends Controller
 
         $record = Attendance::findOrFail($id);
 
-        if (!$record->is_overtime) {
+        if (! $record->is_overtime) {
             return response()->json([
                 'success' => false,
                 'message' => 'Rekaman ini tidak terdeteksi lembur.',
@@ -2135,26 +2228,26 @@ class AttendanceController extends Controller
         }
 
         $record->update([
-            'overtime_status'        => 'rejected',
-            'overtime_reviewed_by'   => $request->user()->id,
-            'overtime_reviewed_at'   => now(),
-            'overtime_admin_note'    => $request->input('overtime_admin_note'),
+            'overtime_status' => 'rejected',
+            'overtime_reviewed_by' => $request->user()->id,
+            'overtime_reviewed_at' => now(),
+            'overtime_admin_note' => $request->input('overtime_admin_note'),
             'status_approval_lembur' => 'ditolak', // sync backward compatibility
         ]);
 
         // Kirim notifikasi ke karyawan
-        \App\Models\Notification::create([
+        Notification::create([
             'user_id' => $record->employee->user_id,
-            'title'   => 'Lembur Ditolak ❌',
-            'body'    => 'Lembur Anda tanggal ' . ($record->date ? $record->date->toDateString() : '-') . ' ditolak. Alasan: ' . $request->input('overtime_admin_note'),
-            'type'    => 'overtime',
-            'data'    => ['attendance_id' => $record->id]
+            'title' => 'Lembur Ditolak ❌',
+            'body' => 'Lembur Anda tanggal '.($record->date ? $record->date->toDateString() : '-').' ditolak. Alasan: '.$request->input('overtime_admin_note'),
+            'type' => 'overtime',
+            'data' => ['attendance_id' => $record->id],
         ]);
 
         return response()->json([
             'success' => true,
             'message' => 'Lembur ditolak.',
-            'data'    => new AttendanceResource($record->fresh(['employee.user', 'employee.department'])),
+            'data' => new AttendanceResource($record->fresh(['employee.user', 'employee.department'])),
         ]);
     }
 }

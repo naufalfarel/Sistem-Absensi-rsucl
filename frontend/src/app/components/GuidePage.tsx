@@ -427,7 +427,7 @@ export function GuidePage() {
     <div className="p-5 md:p-7 max-w-3xl mx-auto font-sans">
       
       {/* ── Header Banner ── */}
-      <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-[#16A34A] to-[#15803D] text-white shadow-xs">
+      <div className="page-banner mb-6 p-4 rounded-2xl text-white ">
         <div className="flex items-center gap-3">
           {/* Logo */}
           <div className="w-11 h-11 rounded-xl bg-white flex items-center justify-center flex-shrink-0 overflow-hidden shadow-sm p-1">

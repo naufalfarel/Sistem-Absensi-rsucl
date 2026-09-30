@@ -235,6 +235,13 @@ class EmployeeController extends Controller
             return response()->json(['success' => false, 'message' => 'Akun user karyawan tidak ditemukan.'], 404);
         }
 
+        if (!\App\Support\PjScheduleRules::syncStandardSchedule($employee)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Shift standar PJ belum tersedia. Pastikan template Administrasi/staff office memiliki sub-shift Normal Senin-Jumat dan Sabtu.',
+            ], 422);
+        }
+
         // Cek & sesuaikan PJ Bagian lama pada departemen yang dipilih
         foreach ($departmentIds as $deptId) {
             $otherPjs = User::where('role', 'pj_bagian')

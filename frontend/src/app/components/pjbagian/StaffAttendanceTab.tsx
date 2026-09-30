@@ -457,8 +457,7 @@ export function StaffAttendanceTab({ user }: StaffAttendanceTabProps) {
   return (
     <div className="space-y-6 font-sans pb-10">
       {/* ── HEADER TITLE BANNER ────────────────────────────────────────── */}
-      <div className="bg-gradient-to-br from-[#16A34A] to-[#0B7A36] rounded-3xl p-6 text-white shadow-sm relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-32 h-32 rounded-full border-[20px] border-white/10 translate-x-8 -translate-y-8" />
+      <div className="page-banner rounded-3xl p-6 text-white relative overflow-hidden">
         <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-4 z-10">
           <div>
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 text-white text-[11px] font-bold mb-2 backdrop-blur-xs">
@@ -593,7 +592,7 @@ export function StaffAttendanceTab({ user }: StaffAttendanceTabProps) {
         </div>
 
         {/* Bottom Row: Month/Year & Department Picker & Status Filters */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 flex-wrap">
+        <div className="staff-attendance-filters flex flex-col md:flex-row md:items-end justify-between gap-4 flex-wrap">
           {/* Date & Department Picker Component */}
           <div className="flex items-end gap-3 flex-wrap">
             {filterMode === 'monthly' && (
@@ -974,7 +973,7 @@ export function StaffAttendanceTab({ user }: StaffAttendanceTabProps) {
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                             : 'bg-rose-50 text-rose-700 border-rose-200'
                       }`}>
-                        {isDinas ? '📍 Dinas Luar (Bebas GPS)' : isGeofenceOk ? '✓ Dalam Area Geofence' : '⚠ Di Luar Area Geofence'}
+                        {isDinas ? 'Dinas Luar (Bebas GPS)' : isGeofenceOk ? '✓ Dalam Area Geofence' : 'Di Luar Area Geofence'}
                       </span>
                     </div>
 
@@ -1099,7 +1098,7 @@ export function StaffAttendanceTab({ user }: StaffAttendanceTabProps) {
                     )}
                     {detailModalRecord.checkin_location_note && (
                       <p className="text-[10.5px] text-gray-500 italic mt-1 bg-gray-50 p-2 rounded-xl border border-gray-100">
-                        📍 "{detailModalRecord.checkin_location_note}"
+                        "{detailModalRecord.checkin_location_note}"
                       </p>
                     )}
                   </div>
@@ -1125,7 +1124,7 @@ export function StaffAttendanceTab({ user }: StaffAttendanceTabProps) {
                     )}
                     {detailModalRecord.checkout_location_note && (
                       <p className="text-[10.5px] text-gray-500 italic mt-1 bg-gray-50 p-2 rounded-xl border border-gray-100">
-                        📍 "{detailModalRecord.checkout_location_note}"
+                        "{detailModalRecord.checkout_location_note}"
                       </p>
                     )}
                   </div>

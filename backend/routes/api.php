@@ -204,6 +204,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/resignation-requests/{id}', [\App\Http\Controllers\Api\ResignationRequestController::class, 'destroy']);
         // Mencatat pengunduran diri karyawan secara langsung oleh admin / super_admin
         Route::post('/resignation-requests/admin-record', [\App\Http\Controllers\Api\ResignationRequestController::class, 'adminRecord']);
+        // Menonaktifkan akun pegawai setelah pengunduran diri disetujui
+        Route::put('/resignation-requests/{id}/deactivate-account', [\App\Http\Controllers\Api\ResignationRequestController::class, 'deactivateEmployeeAccount']);
 
         // ── CRUD Karyawan & Onboarding Draf Registrasi (Admin)
         Route::get('/employee-registrations', [AdminEmployeeRegistrationController::class, 'index']);
@@ -259,6 +261,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/reports/vehicles/export', [ReportController::class, 'exportVehicles']);
         // Mengekspor data media sosial seluruh pegawai ke file Excel (.xlsx)
         Route::get('/reports/social-media/export', [ReportController::class, 'exportSocialMedia']);
+        // Mengekspor data fasilitas kesehatan seluruh pegawai ke file Excel (.xlsx)
+        Route::get('/reports/faskes/export', [ReportController::class, 'exportFaskes']);
 
         // ── Pengaturan Sistem
         // Mengubah parameter pengaturan global (koordinat geofence, radius, dll)

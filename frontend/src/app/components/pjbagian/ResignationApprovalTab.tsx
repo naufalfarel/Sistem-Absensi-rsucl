@@ -86,9 +86,7 @@ export function ResignationApprovalTab({ user, onUpdateCount }: ResignationAppro
   return (
     <div className="space-y-4">
       {/* Header Banner Hijau */}
-      <div className="bg-gradient-to-br from-emerald-600 to-[#0B7A36] rounded-2xl p-5 relative overflow-hidden shadow-sm text-left animate-fade-in">
-        <div className="absolute top-0 right-0 w-32 h-32 rounded-full border-[20px] border-white/10 translate-x-8 -translate-y-8" />
-        <div className="absolute bottom-0 left-0 w-20 h-20 rounded-full border-[12px] border-white/10 -translate-x-6 translate-y-6" />
+      <div className="page-banner rounded-2xl p-5 relative overflow-hidden text-left ">
         
         <div className="relative flex items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">

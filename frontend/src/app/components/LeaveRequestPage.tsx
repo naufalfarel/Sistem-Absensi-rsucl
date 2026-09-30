@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import logoImg from '../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
-import { leaveApi, LeaveRequest as ApiLeave, LeaveQuota, specialLeaveApi, departmentApi, DepartmentModel } from '../../services/api';
+import { leaveApi, LeaveRequest as ApiLeave, LeaveQuota, specialLeaveApi, departmentApi, DepartmentModel, holidayApi } from '../../services/api';
 import { MonthYearDeptFilter } from './ui/MonthYearDeptFilter';
 import { LeaveFormPrintModal } from './ui/LeaveFormPrintModal';
 
@@ -107,6 +107,8 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
   const [substitute4, setSubstitute4] = useState('');
   const [numSubstitutesSelect, setNumSubstitutesSelect] = useState(1);
   const [alamatCuti, setAlamatCuti] = useState('');
+  const [departments, setDepartments] = useState<DepartmentModel[]>([]);
+  const [holidayDates, setHolidayDates] = useState<Set<string>>(new Set());
 
   // Sync numSubstitutesSelect based on selected dates duration automatically
   useEffect(() => {
@@ -123,7 +125,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
       setSubstitute3('');
       setSubstitute4('');
     }
-  }, [startDate, endDate]);
+  }, [startDate, endDate, holidayDates]);
 
   // Sync default form custom fields when user profile loads
   useEffect(() => {
@@ -132,8 +134,6 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
       setUnitKerja(user.department || 'Adm');
     }
   }, [user]);
-
-  const [departments, setDepartments] = useState<DepartmentModel[]>([]);
 
   const loadDepartments = async () => {
     try {
@@ -144,7 +144,19 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
     }
   };
 
+  const loadHolidays = async () => {
+    try {
+      const res = await holidayApi.list();
+      if (res.success) {
+        setHolidayDates(new Set((res.data || []).map(holiday => holiday.date.substring(0, 10))));
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const isCountSundayActive = (): boolean => {
+    if (user?.role === 'pj_bagian') return false;
     if (user?.count_sunday_in_leave) return true;
     const targetDeptName = (unitKerja || user?.department || '').trim().toLowerCase();
     if (!targetDeptName) return false;
@@ -152,15 +164,25 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
     return found ? !!found.count_sunday_in_leave : false;
   };
 
+  const dateKey = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const isExcludedLeaveDate = (date: Date, countSunday: boolean): boolean =>
+    !countSunday && (date.getDay() === 0 || holidayDates.has(dateKey(date)));
+
   // Helper to add N work days (respecting unit count_sunday_in_leave rule)
   const addWorkDays = (startStr: string, targetWorkDays: number): string => {
     if (!startStr) return '';
     const cur = new Date(startStr);
     const countSunday = isCountSundayActive();
-    let workDays = (countSunday || cur.getDay() !== 0) ? 1 : 0;
+    let workDays = isExcludedLeaveDate(cur, countSunday) ? 0 : 1;
     while (workDays < targetWorkDays) {
       cur.setDate(cur.getDate() + 1);
-      if (countSunday || cur.getDay() !== 0) {
+      if (!isExcludedLeaveDate(cur, countSunday)) {
         workDays++;
       }
     }
@@ -273,6 +295,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
     loadAll();
     loadCategories();
     loadDepartments();
+    loadHolidays();
   }, []);
 
   const [attachmentError, setAttachmentError] = useState('');
@@ -283,7 +306,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
     if (!file) return;
     if (file.size > 2 * 1024 * 1024) {
       const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
-      setAttachmentError(`⚠️ Ukuran file terlalu besar (${sizeMB}MB). Maksimal ukuran file 2MB. Silakan pilih/kompres file lain di bawah 2MB.`);
+      setAttachmentError(`Ukuran file terlalu besar (${sizeMB}MB). Maksimal ukuran file 2MB. Silakan pilih/kompres file lain di bawah 2MB.`);
       setAttachmentName('');
       setAttachmentFile(null);
       setAttachmentBase64(null);
@@ -291,7 +314,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
     }
     const allowed = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
     if (!allowed.includes(file.type)) {
-      setAttachmentError('⚠️ Format file harus berupa PDF, PNG, atau JPG/JPEG.');
+      setAttachmentError('Format file harus berupa PDF, PNG, atau JPG/JPEG.');
       setAttachmentName('');
       setAttachmentFile(null);
       setAttachmentBase64(null);
@@ -325,7 +348,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
     let count = 0;
     const cur = new Date(start);
     while (cur <= end) {
-      if (countSunday || cur.getDay() !== 0) {
+      if (!isExcludedLeaveDate(cur, countSunday)) {
         count++;
       }
       cur.setDate(cur.getDate() + 1);
@@ -357,7 +380,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
     let count = 0;
     const cur = new Date(overlapStart);
     while (cur <= overlapEnd) {
-      if (countSunday || cur.getDay() !== 0) count++;
+      if (!isExcludedLeaveDate(cur, countSunday)) count++;
       cur.setDate(cur.getDate() + 1);
     }
     return count;
@@ -384,7 +407,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
         let count = 0;
         const cur = new Date(oStart);
         while (cur <= oEnd) {
-          if (countSunday || cur.getDay() !== 0) count++;
+          if (!isExcludedLeaveDate(cur, countSunday)) count++;
           cur.setDate(cur.getDate() + 1);
         }
         return total + count;
@@ -679,9 +702,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
         )}
 
         {/* Info Pegawai Card */}
-        <div className="bg-gradient-to-br from-[#16A34A] to-[#0B7A36] rounded-2xl p-5 mb-4 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 rounded-full border-[20px] border-white/10 translate-x-8 -translate-y-8" />
-          <div className="absolute -bottom-6 -left-6 w-28 h-28 rounded-full border-[16px] border-white/10" />
+        <div className="page-banner rounded-2xl p-5 mb-4 relative overflow-hidden">
           <div className="relative flex items-center gap-4">
             <div className="w-14 h-14 rounded-2xl bg-white/20 border-2 border-white/30 flex items-center justify-center flex-shrink-0">
               {user?.profile_picture ? (
@@ -876,7 +897,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
               ) : (
                 <div>
                   <div className="flex items-center gap-2.5 bg-orange-50 border border-orange-100 rounded-xl px-3.5 py-3">
-                    <span className="text-[18px]">✨</span>
+                    <Info size={18} aria-hidden="true" />
                     <div>
                       <p className="text-[12px] font-bold text-orange-800">Cuti Khusus / Diluar Tanggungan</p>
                       <p className="text-[11px] text-orange-600">Tidak memotong kuota cuti tahunan 12 hari</p>
@@ -921,7 +942,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
                 if (catName.includes('melahirkan') || catName.includes('keguguran')) {
                   return (
                     <div className="mt-2 text-[11.5px] bg-purple-50 border border-purple-200 text-purple-800 px-3.5 py-2 rounded-xl flex items-center gap-2 font-sans">
-                      <span className="text-base">🔒</span>
+                      <Shield size={18} aria-hidden="true" />
                       <span><strong>Ketentuan Dikunci:</strong> Durasi Cuti Melahirkan/Keguguran dikunci maksimal <strong>90 Hari (3 Bulan)</strong>.</span>
                     </div>
                   );
@@ -929,7 +950,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
                 if (catName.includes('meninggal') || catName.includes('duka') || catName.includes('kepergian')) {
                   return (
                     <div className="mt-2 text-[11.5px] bg-rose-50 border border-rose-200 text-rose-800 px-3.5 py-2 rounded-xl flex items-center gap-2 font-sans">
-                      <span className="text-base">🔒</span>
+                      <Shield size={18} aria-hidden="true" />
                       <span><strong>Ketentuan Dikunci:</strong> Cuti Duka / Kematian dikunci maksimal <strong>3 Hari / Pengajuan</strong> &amp; <strong>Maks. 3 Hari / Bulan</strong>.</span>
                     </div>
                   );
@@ -937,7 +958,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
                 if (catName.includes('menikah')) {
                   return (
                     <div className="mt-2 text-[11.5px] bg-amber-50 border border-amber-200 text-amber-800 px-3.5 py-2 rounded-xl flex items-center gap-2 font-sans">
-                      <span className="text-base">🔒</span>
+                      <Shield size={18} aria-hidden="true" />
                       <span><strong>Ketentuan Dikunci:</strong> Cuti Menikah dikunci maksimal <strong>3 Hari / Pengajuan</strong> &amp; <strong>Maks. 3 Hari dalam 1 Tahun</strong>.</span>
                     </div>
                   );
@@ -945,7 +966,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
                 if (catName.includes('sakit')) {
                   return (
                     <div className="mt-2 text-[11.5px] bg-green-50 border border-green-200 text-green-800 px-3.5 py-2 rounded-xl flex items-center gap-2 font-sans">
-                      <span className="text-base">🩺</span>
+                      <FileText size={18} aria-hidden="true" />
                       <span><strong>Sakit Kekhususan:</strong> Durasi &amp; Kuota <strong>TIDAK DIKUNCI</strong> (bebas disesuaikan dengan instruksi surat dokter).</span>
                     </div>
                   );
@@ -1029,11 +1050,11 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
                   </div>
                   {isCountSundayActive() ? (
                     <p className="text-[10.5px] text-amber-800 font-medium">
-                      ℹ️ Hari Minggu <strong>tetap dihitung hari cuti</strong> karena Unit Kerja <strong>{unitKerja || user?.department || 'Anda'}</strong> beroperasi 24 jam / shift.
+                      Hari Minggu <strong>tetap dihitung hari cuti</strong> karena Unit Kerja <strong>{unitKerja || user?.department || 'Anda'}</strong> beroperasi 24 jam / shift.
                     </p>
                   ) : (
                     <p className="text-[10.5px] text-gray-500 font-medium">
-                      ℹ️ Hari Minggu <strong>dikecualikan</strong> dari perhitungan cuti (libur reguler).
+                      Hari Minggu dan tanggal merah <strong>dikecualikan</strong> dari perhitungan cuti (kalender kerja office).
                     </p>
                   )}
                   {/* Monthly limit warning */}
@@ -1147,7 +1168,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
                     </>
                   ) : (
                     <div className="bg-amber-50/50 border border-amber-200/60 rounded-xl p-3.5 text-center text-amber-700 text-[11.5px] font-medium">
-                      ⚠️ Silakan tentukan tanggal mulai & selesai terlebih dahulu untuk menentukan rekan kerja pengganti.
+                      Silakan tentukan tanggal mulai & selesai terlebih dahulu untuk menentukan rekan kerja pengganti.
                     </div>
                   )}
                 </div>

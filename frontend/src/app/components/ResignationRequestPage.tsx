@@ -290,7 +290,7 @@ export const ResignationRequestPage: React.FC<ResignationRequestPageProps> = ({ 
   return (
     <div className="p-4 md:p-6 space-y-5 font-sans pb-10 max-w-7xl mx-auto">
       {/* ── HEADER BANNER UTAMA (RSUCL THEME) ───────────────────────────── */}
-      <div className="bg-gradient-to-r from-[#16A34A] to-[#0D9240] rounded-3xl p-6 md:p-7 text-white shadow-md relative overflow-hidden">
+      <div className="page-banner rounded-3xl p-6 md:p-7 text-white relative overflow-hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
           <div className="space-y-1">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 text-white text-[10.5px] font-extrabold uppercase tracking-wider">
@@ -314,7 +314,7 @@ export const ResignationRequestPage: React.FC<ResignationRequestPageProps> = ({ 
               <div className="px-4 py-2.5 bg-white/15 backdrop-blur-md rounded-2xl border border-white/20 text-left sm:text-right">
                 <span className="text-[10px] font-extrabold uppercase text-green-100 block">Status Pengajuan</span>
                 <span className="text-[12.5px] font-bold text-white">
-                  {activeRequest.status === 'pending' ? '⏳ Menunggu Persetujuan' : '✅ Disetujui (Transisi)'}
+                  {activeRequest.status === 'pending' ? 'Menunggu Persetujuan' : 'Disetujui (Transisi)'}
                 </span>
               </div>
             )}
@@ -672,13 +672,13 @@ export const ResignationRequestPage: React.FC<ResignationRequestPageProps> = ({ 
                       const file = e.target.files?.[0] || null;
                       if (!file) return;
                       if (file.type !== 'application/pdf') {
-                        setAttachmentError('⚠️ Format berkas wajib berupa file PDF!');
+                        setAttachmentError('Format berkas wajib berupa file PDF!');
                         setAttachment(null);
                         return;
                       }
                       if (file.size > 2 * 1024 * 1024) {
                         const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
-                        setAttachmentError(`⚠️ Ukuran berkas terlalu besar (${sizeMB}MB). Maksimal 2MB. Silakan kompres PDF di bawah 2MB.`);
+                        setAttachmentError(`Ukuran berkas terlalu besar (${sizeMB}MB). Maksimal 2MB. Silakan kompres PDF di bawah 2MB.`);
                         setAttachment(null);
                         return;
                       }

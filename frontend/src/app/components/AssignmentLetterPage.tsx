@@ -369,7 +369,7 @@ export default function AssignmentLetterPage() {
     if (!file) return;
     if (file.size > 2 * 1024 * 1024) {
       const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
-      setDocumentError(`⚠️ Ukuran file terlalu besar (${sizeMB}MB). Maksimal 2MB. Silakan pilih/kompres file di bawah 2MB.`);
+      setDocumentError(`Ukuran file terlalu besar (${sizeMB}MB). Maksimal 2MB. Silakan pilih/kompres file di bawah 2MB.`);
       setDocumentFile(null);
       return;
     }
@@ -383,7 +383,7 @@ export default function AssignmentLetterPage() {
     if (!file) return;
     if (file.size > 2 * 1024 * 1024) {
       const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
-      setReportProofError(`⚠️ Ukuran foto terlalu besar (${sizeMB}MB). Maksimal 2MB. Silakan pilih foto di bawah 2MB.`);
+      setReportProofError(`Ukuran foto terlalu besar (${sizeMB}MB). Maksimal 2MB. Silakan pilih foto di bawah 2MB.`);
       setReportProofFile(null);
       return;
     }
@@ -512,7 +512,7 @@ export default function AssignmentLetterPage() {
               <p className="text-[12px] font-bold text-blue-800 mb-1">Cara Kerja Surat Tugas</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-0.5">
                 <div>
-                  <p className="text-[11px] text-blue-700 font-semibold mb-0.5">📤 Diajukan oleh Saya (Pegawai)</p>
+                  <p className="text-[11px] text-blue-700 font-semibold mb-0.5">Diajukan oleh Saya (Pegawai)</p>
                   <ol className="text-[10.5px] text-blue-600 space-y-0.5 list-decimal list-inside">
                     <li>Isi & kirim formulir pengajuan</li>
                     <li>Admin membalas dengan surat resmi</li>
@@ -520,7 +520,7 @@ export default function AssignmentLetterPage() {
                   </ol>
                 </div>
                 <div>
-                  <p className="text-[11px] text-blue-700 font-semibold mb-0.5">📥 Diterbitkan oleh Admin</p>
+                  <p className="text-[11px] text-blue-700 font-semibold mb-0.5">Diterbitkan oleh Admin</p>
                   <ol className="text-[10.5px] text-blue-600 space-y-0.5 list-decimal list-inside">
                     <li>Admin langsung menerbitkan surat tugas</li>
                     <li>Anda menerima dokumen surat resmi</li>

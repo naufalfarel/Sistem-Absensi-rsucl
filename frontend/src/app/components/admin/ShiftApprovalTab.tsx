@@ -94,7 +94,7 @@ export function ShiftApprovalTab() {
         </div>
 
         {/* Tab Filters */}
-        <div className="flex bg-gray-50 p-1.5 rounded-full border border-gray-100 flex-shrink-0">
+        <div className="flex flex-wrap gap-1 bg-gray-50 p-1.5 rounded-xl border border-gray-100 max-w-full">
           {(['pending', 'approved', 'rejected', 'all'] as const).map(status => (
             <button
               key={status}

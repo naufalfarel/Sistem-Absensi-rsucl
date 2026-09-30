@@ -602,17 +602,10 @@ class LeaveRequestController extends Controller
 
         if ($user->isAdmin()) {
             // Generate attendance records immediately
-            $countSunday = $employee ? $employee->shouldCountSundayInLeave() : false;
-            if (!$countSunday && $lr->unit_kerja) {
-                $dept = \App\Models\Department::where('name', $lr->unit_kerja)->first();
-                if ($dept && $dept->count_sunday_in_leave) {
-                    $countSunday = true;
-                }
-            }
             $start = \Carbon\Carbon::parse($lr->start_date);
             $end = \Carbon\Carbon::parse($lr->effective_end_date);
             for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
-                if (!$countSunday && $date->isSunday()) {
+                if (LeaveQuotaHelper::isExcludedLeaveDate($date, $employee, $lr->unit_kerja)) {
                     continue;
                 }
                 $dateStr = $date->toDateString();
@@ -882,17 +875,10 @@ class LeaveRequestController extends Controller
 
             // Jika disetujui, buat/perbarui record absensi harian karyawan tersebut
             if ($newStatus === 'approved') {
-                $countSunday = $lr->employee ? $lr->employee->shouldCountSundayInLeave() : false;
-                if (!$countSunday && $lr->unit_kerja) {
-                    $dept = \App\Models\Department::where('name', $lr->unit_kerja)->first();
-                    if ($dept && $dept->count_sunday_in_leave) {
-                        $countSunday = true;
-                    }
-                }
                 $start = \Carbon\Carbon::parse($lr->start_date);
                 $end = \Carbon\Carbon::parse($lr->effective_end_date);
                 for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
-                    if (!$countSunday && $date->isSunday()) {
+                    if (LeaveQuotaHelper::isExcludedLeaveDate($date, $lr->employee, $lr->unit_kerja)) {
                         continue;
                     }
                     $dateStr = $date->toDateString();
@@ -1192,8 +1178,8 @@ class LeaveRequestController extends Controller
     /**
      * PUT /api/leave-requests/{id}/edit-admin
      *
-     * Edit dates and details of any leave request (Admin/Super Admin only).
-     * Supports lengthening, shortening, or correcting input mistakes in start/end dates.
+     * Edit the type, dates, and details of any leave request (Admin/Super Admin only).
+     * Supports correcting a miscategorized request and adjusting its duration.
      */
     public function editLeaveAdmin(Request $request, $id)
     {
@@ -1202,6 +1188,7 @@ class LeaveRequestController extends Controller
         }
 
         $request->validate([
+            'type'       => 'required|in:cuti,sakit,cuti_khusus',
             'start_date' => 'required|date',
             'end_date'   => 'required|date|after_or_equal:start_date',
             'admin_note' => 'nullable|string|max:255',
@@ -1211,15 +1198,23 @@ class LeaveRequestController extends Controller
 
         $newStart = \Carbon\Carbon::parse($request->input('start_date'));
         $newEnd   = \Carbon\Carbon::parse($request->input('end_date'));
+        $newType  = $request->input('type');
         $adminNote = $request->input('admin_note');
 
         $updateData = [
+            'type'              => $newType,
             'start_date'        => $newStart->toDateString(),
             'end_date'          => $newEnd->toDateString(),
             'actual_end_date'   => null,
             'shortened_by'      => $request->user()->id,
             'shortened_at'      => now(),
         ];
+
+        // Kategori khusus tidak boleh tertinggal ketika jenis pengajuan diubah.
+        if ($newType !== 'cuti_khusus') {
+            $updateData['special_leave_category_id'] = null;
+            $updateData['special_leave_category_other'] = null;
+        }
 
         if ($adminNote !== null && trim($adminNote) !== '') {
             $updateData['admin_note'] = trim($adminNote);
@@ -1237,18 +1232,30 @@ class LeaveRequestController extends Controller
                       ->orWhere('date', '>', $newEnd->toDateString());
                 })
                 ->delete();
+
+            // Sinkronkan record absensi otomatis di dalam rentang yang diedit.
+            // Record absensi riil (memiliki jam masuk/keluar) tidak disentuh.
+            \App\Models\Attendance::where('employee_id', $lr->employee_id)
+                ->whereBetween('date', [$newStart->toDateString(), $newEnd->toDateString()])
+                ->whereIn('status', ['cuti', 'izin', 'sakit'])
+                ->whereNull('check_in')
+                ->whereNull('check_out')
+                ->update([
+                    'status' => $newType === 'cuti_khusus' ? 'cuti' : $newType,
+                    'note'   => 'Masa ' . ucfirst(str_replace('_', ' ', $newType)) . ': ' . $lr->reason,
+                ]);
         }
 
         // Kirim notifikasi ke pegawai
         Notification::create([
             'user_id' => $lr->employee->user_id,
             'title'   => 'Pengajuan Cuti/Sakit Diperbarui ✏️',
-            'body'    => 'Pengajuan ' . $lr->type . ' Anda telah disesuaikan oleh Admin menjadi tanggal ' . $newStart->toDateString() . ' s/d ' . $newEnd->toDateString() . ($adminNote ? '. Catatan Admin: ' . $adminNote : ''),
+            'body'    => 'Pengajuan Anda telah disesuaikan oleh Admin menjadi ' . str_replace('_', ' ', $newType) . ' untuk tanggal ' . $newStart->toDateString() . ' s/d ' . $newEnd->toDateString() . ($adminNote ? '. Catatan Admin: ' . $adminNote : ''),
             'type'    => 'leave',
             'data'    => ['leave_request_id' => $lr->id],
         ]);
 
-        $lr->load(['employee.user', 'employee.department', 'reviewer']);
+        $lr->load(['employee.user', 'employee.department', 'reviewer', 'specialLeaveCategory']);
 
         return response()->json([
             'success' => true,

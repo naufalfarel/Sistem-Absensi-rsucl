@@ -8,6 +8,7 @@ use App\Models\LeaveRequest;
 use App\Models\Department;
 use App\Exports\VehicleExport;
 use App\Exports\SocialMediaExport;
+use App\Exports\FaskesExport;
 use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Http\Request;
 
@@ -100,12 +101,25 @@ class ReportController extends Controller
         $overtimeTotalIncidents = $approvedOvertimeRequests->count();
         $overtimeTotalMinutes   = 0;
         foreach ($approvedOvertimeRequests as $req) {
-            $reqDateStr = $req->date instanceof \Carbon\Carbon ? $req->date->toDateString() : (string) $req->date;
-            $att = Attendance::where('employee_id', $req->employee_id)
-                ->whereDate('date', $reqDateStr)
-                ->first();
-            if ($att) {
-                $overtimeTotalMinutes += $att->overtime_minutes ?? 0;
+            if ($req->start_time && $req->end_time) {
+                try {
+                    $start = \Carbon\Carbon::parse($req->start_time);
+                    $end = \Carbon\Carbon::parse($req->end_time);
+                    if ($end->lessThan($start)) {
+                        $end->addDay();
+                    }
+                    $overtimeTotalMinutes += (int) $end->diffInMinutes($start);
+                } catch (\Exception $e) {
+                    // Ignore parse error
+                }
+            } else {
+                $reqDateStr = $req->date instanceof \Carbon\Carbon ? $req->date->toDateString() : (string) $req->date;
+                $att = Attendance::where('employee_id', $req->employee_id)
+                    ->whereDate('date', $reqDateStr)
+                    ->first();
+                if ($att) {
+                    $overtimeTotalMinutes += $att->overtime_minutes ?? 0;
+                }
             }
         }
 
@@ -347,9 +361,24 @@ class ReportController extends Controller
      */
     public function monthlyRekap(Request $request)
     {
-        // Filter bulan & tahun rekap, default menggunakan bulan berjalan
-        $month = (int)$request->query('month', now('Asia/Jakarta')->month);
-        $year  = (int)$request->query('year', now('Asia/Jakarta')->year);
+        $validated = $request->validate([
+            'month'     => 'nullable|integer|between:1,12',
+            'year'      => 'nullable|integer|between:2020,2100',
+            'date_from' => 'nullable|date_format:Y-m-d|required_with:date_to',
+            'date_to'   => 'nullable|date_format:Y-m-d|required_with:date_from|after_or_equal:date_from',
+        ]);
+
+        // Rentang tanggal diprioritaskan. Parameter month/year tetap didukung agar
+        // pemanggil lama tidak terputus.
+        if (!empty($validated['date_from']) && !empty($validated['date_to'])) {
+            $startDate = \Carbon\Carbon::createFromFormat('Y-m-d', $validated['date_from'], 'Asia/Jakarta')->startOfDay();
+            $endDate = \Carbon\Carbon::createFromFormat('Y-m-d', $validated['date_to'], 'Asia/Jakarta')->endOfDay();
+        } else {
+            $month = (int)($validated['month'] ?? now('Asia/Jakarta')->month);
+            $year = (int)($validated['year'] ?? now('Asia/Jakarta')->year);
+            $startDate = \Carbon\Carbon::createFromDate($year, $month, 1, 'Asia/Jakarta')->startOfMonth();
+            $endDate = $startDate->copy()->endOfMonth();
+        }
 
         // Ambil data seluruh karyawan aktif
         $employees = Employee::with(['user', 'department', 'position'])
@@ -357,13 +386,27 @@ class ReportController extends Controller
             ->get()
             ->sortBy(fn($emp) => ($emp->department?->name ?? 'Umum') . '_' . ($emp->user?->name ?? 'Karyawan'));
 
-        // Generate database laporan bulanan real-time
-        $records = Attendance::getMonthlyReportData($month, $year);
-        $recordsByEmployee = collect($records)->groupBy('employee_id');
+        // Generator absensi bekerja per bulan. Gabungkan setiap bulan yang
+        // disentuh rentang, lalu pangkas record persis ke tanggal pilihan admin.
+        $records = collect();
+        for ($cursor = $startDate->copy()->startOfMonth(); $cursor->lte($endDate); $cursor->addMonth()) {
+            $monthRecords = Attendance::getMonthlyReportData($cursor->month, $cursor->year);
+            $records = $records->concat($monthRecords);
+        }
+        $records = $records->filter(function ($record) use ($startDate, $endDate) {
+            $date = $record['date'] instanceof \Carbon\Carbon
+                ? $record['date']->toDateString()
+                : (string)$record['date'];
+
+            return $date >= $startDate->toDateString() && $date <= $endDate->toDateString();
+        });
+        $recordsByEmployee = $records->groupBy('employee_id');
 
         // Pre-fetch overtime requests sekaligus (menghindari N+1 query)
-        $approvedReqsByEmp = \App\Models\OvertimeRequest::whereMonth('date', $month)
-            ->whereYear('date', $year)
+        $approvedReqsByEmp = \App\Models\OvertimeRequest::whereBetween('date', [
+                $startDate->toDateString(),
+                $endDate->toDateString(),
+            ])
             ->where('status', 'approved')
             ->get()
             ->groupBy('employee_id');
@@ -395,12 +438,25 @@ class ReportController extends Controller
             $approvedReqs = $approvedReqsByEmp->get($emp->id, collect());
             $overtimeMinutes = 0;
             foreach ($approvedReqs as $req) {
-                $attRecord = $empRecords->first(function($r) use ($req) {
-                    $rDate = $r['date'] instanceof \Carbon\Carbon ? $r['date']->toDateString() : $r['date'];
-                    return $rDate === $req->date->toDateString();
-                });
-                if ($attRecord) {
-                    $overtimeMinutes += $attRecord['overtime_minutes'] ?? 0;
+                if ($req->start_time && $req->end_time) {
+                    try {
+                        $start = \Carbon\Carbon::parse($req->start_time);
+                        $end = \Carbon\Carbon::parse($req->end_time);
+                        if ($end->lessThan($start)) {
+                            $end->addDay();
+                        }
+                        $overtimeMinutes += (int) $end->diffInMinutes($start);
+                    } catch (\Exception $e) {
+                        // Ignore
+                    }
+                } else {
+                    $attRecord = $empRecords->first(function($r) use ($req) {
+                        $rDate = $r['date'] instanceof \Carbon\Carbon ? $r['date']->toDateString() : $r['date'];
+                        return $rDate === $req->date->toDateString();
+                    });
+                    if ($attRecord) {
+                        $overtimeMinutes += $attRecord['overtime_minutes'] ?? 0;
+                    }
                 }
             }
 
@@ -450,6 +506,14 @@ class ReportController extends Controller
     public function exportSocialMedia()
     {
         return Excel::download(new SocialMediaExport, 'Data_Media_Sosial_Pegawai_RSUCL.xlsx');
+    }
+
+    /**
+     * Mengekspor data fasilitas kesehatan seluruh pegawai ke file Excel (.xlsx).
+     */
+    public function exportFaskes()
+    {
+        return Excel::download(new FaskesExport, 'Data_Faskes_Pegawai_RSUCL.xlsx');
     }
 
     /**

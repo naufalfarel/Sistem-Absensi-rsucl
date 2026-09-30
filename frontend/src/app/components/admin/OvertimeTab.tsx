@@ -497,7 +497,7 @@ export function OvertimeTab({ onUpdateCount }: OvertimeTabProps) {
 
                     {isDraft && (
                       <p className="text-[10px] text-amber-700 font-semibold bg-amber-50 px-2 py-1 rounded-lg border border-amber-200/50">
-                        ⚠️ Pengajuan ini belum disetujui PJ Bagian. Anda dapat memprosesnya langsung.
+                        Pengajuan ini belum disetujui PJ Bagian. Anda dapat memprosesnya langsung.
                       </p>
                     )}
 
@@ -726,7 +726,7 @@ Otorisasi Final: Direktur PT Cempaka Lima (Amir Hidayat, ST., MKM)`;
                   <div className="text-right">
                     <span className="font-bold text-gray-500">Lembur Pada Waktu :</span>
                     <span className="ml-2 font-semibold text-gray-800 border border-gray-800 px-2 py-0.5 rounded bg-gray-50">
-                      {selectedSplRecord.overtime_day_type === 'holiday' ? '☑ Hari Libur' : '☑ Hari Kerja'}
+                      {selectedSplRecord.overtime_day_type === 'holiday' ? 'Hari Libur' : 'Hari Kerja'}
                     </span>
                   </div>
                   <div>

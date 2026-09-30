@@ -704,7 +704,7 @@ export function EmployeeRegistrationPage({ onBack, onGoToCheckStatus, initialDat
 
                 {/* Warning box mencolok agar tidak lupa ss / simpan */}
                 <div className="bg-amber-500/15 border border-amber-500/30 p-3 rounded-xl text-left text-amber-200 text-[10.5px] leading-relaxed">
-                  <strong>⚠️ PENTING / HARAP DIINGAT:</strong> Silakan screenshot layar ini atau catat/salin Nomor Referensi di atas. Jika Anda kehilangan nomor referensi ini, Anda <strong>tidak akan bisa</strong> mengecek status persetujuan atau melihat password akun Anda nantinya!
+                  <strong>PENTING / HARAP DIINGAT:</strong> Silakan screenshot layar ini atau catat/salin Nomor Referensi di atas. Jika Anda kehilangan nomor referensi ini, Anda <strong>tidak akan bisa</strong> mengecek status persetujuan atau melihat password akun Anda nantinya!
                 </div>
               </div>
 

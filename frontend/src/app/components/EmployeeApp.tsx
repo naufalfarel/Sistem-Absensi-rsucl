@@ -159,7 +159,7 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
   };
 
   const SidebarContent = ({ mobile }: { mobile?: boolean }) => (
-    <div className="flex flex-col h-full bg-white">
+    <div className="app-sidebar flex flex-col h-full bg-white">
       {/* Logo */}
       <div className="px-5 pt-5 pb-4 border-b border-gray-100">
         <div className="flex items-center gap-3">
@@ -185,6 +185,7 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
             return (
               <button
                 key={item.id}
+                aria-current={isActive ? "page" : undefined}
                 onClick={() => { handleTabChange(item.id); if (mobile) setSidebarOpen(false); }}
                 className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-[12.5px] transition-all ${
                   isActive
@@ -216,6 +217,7 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
             return (
               <button
                 key={item.id}
+                aria-current={isActive ? "page" : undefined}
                 onClick={() => { handleTabChange(item.id); if (mobile) setSidebarOpen(false); }}
                 className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-[12.5px] transition-all ${
                   isActive
@@ -272,7 +274,7 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
   const allNavItems = [...mainNavItems, ...proposalNavItems];
 
   return (
-    <div className="flex h-screen bg-[#F5F7FA] overflow-hidden" style={{ fontFamily: "'Inter', sans-serif" }}>
+    <div className="rs-app flex h-screen overflow-hidden" style={{ fontFamily: "'Inter', sans-serif" }}>
       {/* Desktop Sidebar */}
       <div className="hidden md:flex w-60 flex-shrink-0 h-full border-r border-gray-100 shadow-sm">
         <div className="w-full">
@@ -288,7 +290,8 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
             <SidebarContent mobile />
             <button
               onClick={() => setSidebarOpen(false)}
-              className="absolute top-4 right-4 w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center"
+              aria-label="Tutup menu"
+              className="app-icon-button absolute top-3 right-3 bg-gray-100 flex items-center justify-center"
             >
               <X size={14} className="text-gray-500" />
             </button>
@@ -299,11 +302,12 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
       {/* Main area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Mobile top bar */}
-        <div className="md:hidden bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between flex-shrink-0">
+        <div className="app-header md:hidden bg-white border-b flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-2.5">
             <button
               onClick={() => setSidebarOpen(true)}
-              className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center"
+              aria-label="Buka menu" aria-expanded={sidebarOpen}
+              className="app-icon-button bg-gray-100 flex items-center justify-center"
             >
               <Menu size={16} className="text-gray-600" />
             </button>
@@ -319,11 +323,12 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <p className="text-[12px] font-mono text-gray-500">{timeStr}</p>
+            <p className="hidden sm:block text-[12px] font-mono text-gray-500">{timeStr}</p>
             <div className="relative">
               <button
                 onClick={() => setActiveTab('notifications')}
-                className="w-8 h-8 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center"
+                aria-label="Notifikasi"
+                className="app-icon-button flex items-center justify-center"
               >
                 <Bell size={14} className="text-gray-500" />
               </button>
@@ -337,12 +342,12 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
         </div>
 
         {/* Page content */}
-        <div className="flex-1 overflow-y-auto pb-20 md:pb-0">
+        <div className="app-main employee-main flex-1 overflow-y-auto pb-20 md:pb-0">
           {renderPage()}
         </div>
 
         {/* Bottom Nav (mobile) */}
-        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 shadow-lg z-[9990]">
+        <div className="app-bottom-nav md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40">
           <div className="flex items-center justify-around px-2 py-1.5 pb-safe">
             {[
               { id: 'dashboard',  icon: Home,     label: 'Beranda' },
@@ -353,6 +358,7 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
             ].map(item => (
               <button
                 key={item.id}
+                aria-current={activeTab === item.id ? "page" : undefined}
                 onClick={() => handleTabChange(item.id as Tab)}
                 className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all relative ${
                   activeTab === item.id ? 'text-[#16A34A]' : 'text-gray-400'

@@ -28,11 +28,40 @@ class DatabaseSeeder extends Seeder
             'Depo 1', 'Depo 2', 'Depo 3', 'Depo 4', 'Depo Poli Eksekutif', 'Gudang Farmasi',
             'Instalasi Bedah Sentral', 'Instalasi CSSD', 'Instalasi Gas Medis', 'Instalasi Laundry',
             'IPSRS', 'ATEM', 'Taman', 'Juru Masak', 'Pramusaji', 'Instalasi Ambulance',
-            'Transporter', 'IPSL', 'Cleaning Service Kantor', 'RO (Air)',
+            'Transporter', 'IPSL', 'Cleaning Service Kantor', 'RO (Air)', 'Poli Gigi',
         ];
+
+        // Exact defaults avoid treating regular units such as general medical
+        // records or an outpatient surgery clinic as Sunday-counted shift units.
+        $shiftDepartmentNames = [
+            'icu', 'igd', 'laboratorium', 'radiologi', 'instalasi gawat darurat',
+            'jeumpa a', 'jeumpa b', 'seulanga', 'meulu', 'kupula', 'transit',
+            'instalasi kamar bersalin', 'nicu', 'rekam medis igd',
+            'depo 1', 'depo 2', 'depo 3', 'depo 4', 'depo poli eksekutif',
+            'instalasi bedah sentral', 'instalasi cssd', 'instalasi laundry',
+            'kasir', 'juru masak', 'instalasi ambulance', 'transporter',
+        ];
+        $normalizeDepartmentName = static fn (string $name): string => strtolower(
+            trim((string) preg_replace('/\s+/', ' ', $name))
+        );
+
         $deptMap = [];
         foreach ($departments as $name) {
-            $deptMap[$name] = Department::create(['name' => $name])->id;
+            $normalizedName = $normalizeDepartmentName($name);
+            $isShiftDepartment = in_array($normalizedName, $shiftDepartmentNames, true);
+
+            $department = Department::firstOrCreate(
+                ['name' => $name],
+                ['count_sunday_in_leave' => $isShiftDepartment]
+            );
+
+            // Seeder remains additive when rerun: it fixes known shift units but
+            // does not disable a custom flag that an administrator set manually.
+            if ($isShiftDepartment && ! $department->count_sunday_in_leave) {
+                $department->update(['count_sunday_in_leave' => true]);
+            }
+
+            $deptMap[$name] = $department->id;
         }
 
         // ── 2. Jabatan ─────────────────────────────────────────────────

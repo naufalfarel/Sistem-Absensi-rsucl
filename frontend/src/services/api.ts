@@ -279,6 +279,7 @@ export interface ResignationRequest {
   employee?: {
     id: number;
     nik_ktp: string;
+    status?: 'active' | 'inactive';
     user?: {
       name: string;
       email: string;
@@ -535,6 +536,7 @@ export const attendanceApi = {
     accuracy?: number,
     photo?: File | Blob,
     locationNote?: string,
+    locationTimestamp?: number,
   ) => {
     const formData = new FormData();
     if (lat !== undefined && lat !== null)
@@ -543,6 +545,8 @@ export const attendanceApi = {
       formData.append("longitude", String(lng));
     if (accuracy !== undefined && accuracy !== null)
       formData.append("accuracy", String(accuracy));
+    if (locationTimestamp !== undefined && locationTimestamp !== null)
+      formData.append("location_timestamp", String(locationTimestamp));
     if (photo) formData.append("photo", photo);
     if (locationNote) formData.append("location_note", locationNote);
     return api.post<{
@@ -561,6 +565,7 @@ export const attendanceApi = {
     earlyCheckoutReason?: string,
     overtimeNote?: string,
     keteranganLembur?: string,
+    locationTimestamp?: number,
   ) => {
     const formData = new FormData();
     if (lat !== undefined && lat !== null)
@@ -569,6 +574,8 @@ export const attendanceApi = {
       formData.append("longitude", String(lng));
     if (accuracy !== undefined && accuracy !== null)
       formData.append("accuracy", String(accuracy));
+    if (locationTimestamp !== undefined && locationTimestamp !== null)
+      formData.append("location_timestamp", String(locationTimestamp));
     if (photo) formData.append("photo", photo);
     if (locationNote) formData.append("location_note", locationNote);
     if (earlyCheckoutReason)
@@ -882,13 +889,14 @@ export const leaveApi = {
   // Admin mengedit tanggal & detail pengajuan cuti
   editAdmin: (
     id: number,
+    type: Exclude<LeaveRequest["type"], "izin">,
     start_date: string,
     end_date: string,
     admin_note?: string,
   ) =>
     api.put<{ success: boolean; data: LeaveRequest }>(
       `/leave-requests/${id}/edit-admin`,
-      { start_date, end_date, admin_note },
+      { type, start_date, end_date, admin_note },
     ),
   // Admin mempersingkat pengajuan cuti (approved)
   shortenAdmin: (
@@ -1080,10 +1088,16 @@ export const reportApi = {
     );
   },
   // Rekapitulasi bulanan absensi seluruh karyawan
-  monthlyRekap: (month: number, year: number) =>
-    api.get<{ success: boolean; data: MonthlyRekapRecord[] }>(
-      `/reports/monthly-rekap?month=${month}&year=${year}`,
-    ),
+  monthlyRekap: (month: number, year: number, dateFrom?: string, dateTo?: string) => {
+    const params = new URLSearchParams({ month: String(month), year: String(year) });
+    if (dateFrom && dateTo) {
+      params.set("date_from", dateFrom);
+      params.set("date_to", dateTo);
+    }
+    return api.get<{ success: boolean; data: MonthlyRekapRecord[] }>(
+      `/reports/monthly-rekap?${params.toString()}`,
+    );
+  },
   // Laporan keterlambatan & potongan Rupiah per menit
   lateness: (month: number, year: number, department?: string) => {
     const params = new URLSearchParams({ month: String(month), year: String(year) });
@@ -1222,6 +1236,7 @@ export interface ShiftSchedule {
 export interface EmployeeWeeklySchedule {
   employee_id: number;
   name: string;
+  role?: string;
   schedules: Record<
     string,
     {
@@ -2215,6 +2230,14 @@ export const resignationApi = {
       success: boolean;
       message: string;
     }>(`/resignation-requests/${id}`);
+  },
+
+  deactivateAccount: (id: number) => {
+    return api.put<{
+      success: boolean;
+      message: string;
+      data: { employee_id: number; account_status: 'inactive' };
+    }>(`/resignation-requests/${id}/deactivate-account`, {});
   },
 
   /**

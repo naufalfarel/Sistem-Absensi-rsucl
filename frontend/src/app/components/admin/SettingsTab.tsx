@@ -658,7 +658,7 @@ export function SettingsTab() {
                   onChange={handleLogoFile}
                 />
               </div>
-               <div className="flex gap-2">
+               <div className="flex flex-wrap gap-2">
                 {logoFile ? (
                   <>
                     <button
@@ -916,7 +916,7 @@ export function SettingsTab() {
                 <span className="font-bold text-amber-950"> Data akun login, NIK KTP, dan profil seluruh pegawai TIDAK AKAN HILANG / TERHAPUS.</span> Anda tidak perlu membuat akun ulang.
               </p>
               <p className="text-amber-800 font-medium">
-                💡 <strong>Pengingat Admin:</strong> Pada bulan Maret (terutama 10 hari sebelum akhir bulan Maret), pastikan Anda melakukan <strong>Export Excel / Simpan Data</strong> sanksi disiplin dan rekap absensi untuk salinan arsip tahunan.
+                <strong>Pengingat Admin:</strong> Pada bulan Maret (terutama 10 hari sebelum akhir bulan Maret), pastikan Anda melakukan <strong>Export Excel / Simpan Data</strong> sanksi disiplin dan rekap absensi untuk salinan arsip tahunan.
               </p>
             </div>
           </div>
@@ -1105,7 +1105,7 @@ export function SettingsTab() {
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 text-[11px] text-gray-600 pt-1.5 border-t border-green-100/50">
               <div>
-                <p className="font-bold text-gray-700 mb-1 flex items-center gap-1">⏱️ Absen Masuk (Check-in)</p>
+                <p className="font-bold text-gray-700 mb-1 flex items-center gap-1">Absen Masuk (Check-in)</p>
                 <div className="space-y-1 pl-3.5 border-l border-green-200">
                   <p>• Buka check-in mulai: <span className="font-mono text-gray-800 font-bold">{getPreviewTime('08:00', checkinOpen, 'sub')} WIB</span> <span className="text-gray-400">({checkinOpen || 0} menit sebelum shift)</span></p>
                   <p>• Tepat waktu: <span className="font-mono text-[#16A34A] font-bold">{getPreviewTime('08:00', checkinOpen, 'sub')} - {getPreviewTime('08:00', lateLimit)} WIB</span> <span className="text-gray-400">(sampai {lateLimit || 0} menit setelah shift)</span></p>
@@ -1115,7 +1115,7 @@ export function SettingsTab() {
                 </div>
               </div>
               <div>
-                <p className="font-bold text-gray-700 mb-1 flex items-center gap-1">🚪 Absen Pulang (Check-out)</p>
+                <p className="font-bold text-gray-700 mb-1 flex items-center gap-1">Absen Pulang (Check-out)</p>
                 <div className="space-y-1 pl-3.5 border-l border-green-200">
                   <p>• Buka check-out (Sen-Jum): <span className="font-mono text-gray-800 font-bold">{getPreviewTime('17:00', checkoutOpen, 'sub')} WIB</span> <span className="text-gray-400">({checkoutOpen || 0} menit sebelum selesai)</span></p>
                   <p>• Tutup check-out (Sen-Jum): <span className="font-semibold text-[#16A34A]">Fleksibel</span> <span className="text-gray-400">(Dapat absen pulang kapan saja, terhitung lembur jika melewati shift)</span></p>

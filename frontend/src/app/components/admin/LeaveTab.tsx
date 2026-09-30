@@ -7,6 +7,7 @@ import { LeaveFormPrintModal } from '../ui/LeaveFormPrintModal';
 import logoImg from '../../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg';
 
 type LeaveType = 'cuti' | 'izin' | 'sakit' | 'cuti_khusus';
+type EditableLeaveType = Exclude<LeaveType, 'izin'>;
 type LeaveStatus = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'draft';
 
 const typeConfig: Record<LeaveType, { label: string; color: string; bg: string; border: string }> = {
@@ -168,9 +169,10 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
   const [confirmModal, setConfirmModal] = useState<{ id: number; action: 'approve' | 'reject'; name: string } | null>(null);
   
   const [cancelModal, setCancelModal] = useState<{ id: number; name: string } | null>(null);
-  const [editModal, setEditModal] = useState<{ id: number; name: string; startDate: string; endDate: string; adminNote: string } | null>(null);
+  const [editModal, setEditModal] = useState<{ id: number; name: string; type: LeaveType; startDate: string; endDate: string; adminNote: string } | null>(null);
 
   const [cancellationReason, setCancellationReason] = useState('');
+  const [editType, setEditType] = useState<EditableLeaveType | ''>('');
   const [editStartDate, setEditStartDate] = useState('');
   const [editEndDate, setEditEndDate] = useState('');
   const [editAdminNote, setEditAdminNote] = useState('');
@@ -432,7 +434,11 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
     }
   };
 
-  const handleEditAdmin = async (id: number, startDate: string, endDate: string, note: string) => {
+  const handleEditAdmin = async (id: number, type: EditableLeaveType | '', startDate: string, endDate: string, note: string) => {
+    if (!type) {
+      alert('Jenis cuti wajib dipilih.');
+      return;
+    }
     if (!startDate || !endDate) {
       alert('Tanggal mulai dan tanggal selesai wajib diisi.');
       return;
@@ -442,7 +448,7 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
       return;
     }
     try {
-      const res = await leaveApi.editAdmin(id, startDate, endDate, note);
+      const res = await leaveApi.editAdmin(id, type, startDate, endDate, note);
       if (res.success) {
         setRequests(prev => prev.map(r => r.id === id ? res.data : r));
         loadPossibleReturns();
@@ -452,6 +458,7 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
       alert(err?.message ?? 'Gagal memperbarui pengajuan cuti.');
     } finally {
       setEditModal(null);
+      setEditType('');
       setEditStartDate('');
       setEditEndDate('');
       setEditAdminNote('');
@@ -601,10 +608,12 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
                       setEditModal({ 
                         id: leave_request.id, 
                         name: leave_request.employee.name, 
+                        type: leave_request.type as LeaveType,
                         startDate: leave_request.start_date, 
                         endDate: leave_request.effective_end_date || leave_request.end_date,
                         adminNote: leave_request.admin_note || ''
                       });
+                      setEditType(leave_request.type === 'izin' ? '' : leave_request.type as EditableLeaveType);
                       setEditStartDate(leave_request.start_date);
                       setEditEndDate(leave_request.effective_end_date || leave_request.end_date);
                       setEditAdminNote(leave_request.admin_note || '');
@@ -770,14 +779,14 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
                         <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ color: sc.color, background: sc.bg }}>{sc.label}</span>
                         {req.pj_status === 'pending' && req.status === 'pending' && (
                           <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full flex items-center gap-1">
-                            ⚠️ Belum di-ACC PJ Bagian
+                            Belum di-ACC PJ Bagian
                           </span>
                         )}
                       </div>
                       <p className="text-[12px] text-gray-500 mb-1">{req.employee?.department || 'Karyawan'}</p>
                       {req.employee?.quota_info && (
                         <div className="flex items-center gap-2 my-1.5 px-2.5 py-1 bg-emerald-50/90 border border-emerald-200 rounded-xl text-[11px] font-semibold w-fit shadow-2xs">
-                          <span className="text-emerald-800">📊 Akumulasi Cuti Disetujui: <strong>{req.employee.quota_info.used}</strong> / {req.employee.quota_info.quota} hari</span>
+                          <span className="text-emerald-800">Akumulasi Cuti Disetujui: <strong>{req.employee.quota_info.used}</strong> / {req.employee.quota_info.quota} hari</span>
                           <span className="text-emerald-300">•</span>
                           <span className="text-emerald-700">Sisa Kuota: <strong>{req.employee.quota_info.remaining}</strong> hari</span>
                         </div>
@@ -800,7 +809,7 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
                         <p className="text-[12px] text-gray-600 italic">"{req.reason}"</p>
                         {req.substitute_name && (
                           <p className="text-[11px] text-gray-500 font-medium pt-1 border-t border-gray-100">
-                            👥 Rekan Kerja Pengganti: <span className="font-bold text-gray-800">{req.substitute_name}</span>
+                            Rekan Kerja Pengganti: <span className="font-bold text-gray-800">{req.substitute_name}</span>
                           </p>
                         )}
                       </div>
@@ -869,7 +878,7 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
                     <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
                       {req.pj_status === 'pending' && (
                         <div className="rounded-xl px-3 py-2 border border-amber-200 bg-amber-50 text-[10.5px] text-amber-800 font-semibold max-w-[200px] leading-normal w-full mb-1">
-                          ⚠️ Belum di-ACC PJ Bagian.
+                          Belum di-ACC PJ Bagian.
                         </div>
                       )}
                       <button onClick={() => setConfirmModal({ id: req.id, action: 'approve', name: req.employee.name })}
@@ -881,10 +890,12 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
                           setEditModal({
                             id: req.id,
                             name: req.employee.name,
+                            type: req.type as LeaveType,
                             startDate: req.start_date,
                             endDate: req.effective_end_date || req.end_date,
                             adminNote: req.admin_note || ''
                           });
+                          setEditType(req.type === 'izin' ? '' : req.type as EditableLeaveType);
                           setEditStartDate(req.start_date);
                           setEditEndDate(req.effective_end_date || req.end_date);
                           setEditAdminNote(req.admin_note || '');
@@ -906,10 +917,12 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
                           setEditModal({
                             id: req.id,
                             name: req.employee.name,
+                            type: req.type as LeaveType,
                             startDate: req.start_date,
                             endDate: req.effective_end_date || req.end_date,
                             adminNote: req.admin_note || ''
                           });
+                          setEditType(req.type === 'izin' ? '' : req.type as EditableLeaveType);
                           setEditStartDate(req.start_date);
                           setEditEndDate(req.effective_end_date || req.end_date);
                           setEditAdminNote(req.admin_note || '');
@@ -942,10 +955,12 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
                           setEditModal({
                             id: req.id,
                             name: req.employee.name,
+                            type: req.type as LeaveType,
                             startDate: req.start_date,
                             endDate: req.effective_end_date || req.end_date,
                             adminNote: req.admin_note || ''
                           });
+                          setEditType(req.type === 'izin' ? '' : req.type as EditableLeaveType);
                           setEditStartDate(req.start_date);
                           setEditEndDate(req.effective_end_date || req.end_date);
                           setEditAdminNote(req.admin_note || '');
@@ -1045,7 +1060,7 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
       {/* Edit / Penyesuaian Modal */}
       {editModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-          <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => { setEditModal(null); setEditStartDate(''); setEditEndDate(''); setEditAdminNote(''); }} />
+          <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => { setEditModal(null); setEditType(''); setEditStartDate(''); setEditEndDate(''); setEditAdminNote(''); }} />
           <div className="relative bg-white rounded-2xl p-6 shadow-2xl w-full max-w-sm">
             <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center mx-auto mb-4">
               <Edit3 size={22} className="text-amber-600" />
@@ -1054,9 +1069,22 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
               Edit Pengajuan Cuti / Sakit
             </h3>
             <p className="text-[11.5px] text-gray-500 text-center mb-4 leading-relaxed">
-              Koreksi kesalahan tanggal atau sesuaikan durasi (persingkat / perpanjang) untuk <strong>{editModal.name}</strong>.
+              Koreksi jenis cuti, tanggal, atau durasi pengajuan untuk <strong>{editModal.name}</strong>.
             </p>
             <div className="space-y-3.5 mb-4">
+              <div>
+                <label className="block text-[12px] font-semibold text-gray-700 mb-1">Jenis Cuti</label>
+                <select
+                  value={editType}
+                  onChange={e => setEditType(e.target.value as EditableLeaveType)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-[12px] bg-gray-50 focus:outline-none focus:border-[#16A34A] transition-all cursor-pointer font-semibold text-gray-800"
+                >
+                  <option value="" disabled>Pilih jenis cuti</option>
+                  <option value="cuti">Cuti Tahunan</option>
+                  <option value="cuti_khusus">Cuti Khusus</option>
+                  <option value="sakit">Sakit</option>
+                </select>
+              </div>
               <div>
                 <label className="block text-[12px] font-semibold text-gray-700 mb-1">Tanggal Mulai Baru</label>
                 <input 
@@ -1089,13 +1117,13 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
             </div>
             <div className="flex gap-2">
               <button 
-                onClick={() => { setEditModal(null); setEditStartDate(''); setEditEndDate(''); setEditAdminNote(''); }}
+                onClick={() => { setEditModal(null); setEditType(''); setEditStartDate(''); setEditEndDate(''); setEditAdminNote(''); }}
                 className="flex-1 py-2.5 border border-gray-200 rounded-xl text-[12px] font-semibold text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer"
               >
                 Batal
               </button>
               <button 
-                onClick={() => handleEditAdmin(editModal.id, editStartDate, editEndDate, editAdminNote)}
+                onClick={() => handleEditAdmin(editModal.id, editType, editStartDate, editEndDate, editAdminNote)}
                 className="flex-1 py-2.5 rounded-xl text-[12px] font-bold text-white bg-[#16A34A] hover:bg-[#0d9240] transition-all shadow-sm cursor-pointer"
               >
                 Simpan Edit
@@ -1214,7 +1242,7 @@ export function LeaveTab({ onUpdateCount }: LeaveTabProps) {
                   })()}
 
                   <p className="text-[11px] text-orange-800 font-semibold">
-                    💡 <strong>Info:</strong> Cuti Khusus <u>TIDAK memotong</u> kuota cuti tahunan pegawai.
+                    <strong>Info:</strong> Cuti Khusus <u>TIDAK memotong</u> kuota cuti tahunan pegawai.
                   </p>
                 </div>
               )}

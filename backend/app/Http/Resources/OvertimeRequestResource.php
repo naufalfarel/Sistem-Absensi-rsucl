@@ -2,10 +2,10 @@
 
 namespace App\Http\Resources;
 
-use Illuminate\Http\Request;
-use Illuminate\Http\Resources\Json\JsonResource;
 use App\Models\Attendance;
 use Carbon\Carbon;
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
 
 class OvertimeRequestResource extends JsonResource
 {
@@ -17,46 +17,50 @@ class OvertimeRequestResource extends JsonResource
         // Cari data attendance pembanding jika user adalah admin
         $systemCheckoutData = null;
         if ($request->user() && $request->user()->isAdmin() && $employee && $dateStr) {
-            $attendance = Attendance::where('employee_id', $employee->id)
-                ->whereDate('date', $dateStr)
-                ->first();
+            $attendance = $this->resource->relationLoaded('systemCheckoutAttendance')
+                ? $this->resource->getRelation('systemCheckoutAttendance')
+                : Attendance::where('employee_id', $employee->id)
+                    ->whereDate('date', $dateStr)
+                    ->first();
 
             $systemCheckoutData = [
-                'check_in'         => $attendance?->check_in,
-                'check_out'        => $attendance?->check_out,
-                'is_overtime'      => $attendance ? (bool)$attendance->is_overtime : false,
+                'check_in' => $attendance?->check_in,
+                'check_out' => $attendance?->check_out,
+                'is_overtime' => $attendance ? (bool) $attendance->is_overtime : false,
                 'overtime_minutes' => $attendance?->overtime_minutes ?? 0,
             ];
         }
 
         return [
-            'id'            => $this->id,
-            'employee_id'   => $this->employee_id,
-            'employee'      => $this->employee ? [
-                'id'         => $this->employee->id,
-                'name'       => $this->employee->user?->name,
-                'nik_ktp'    => $this->employee->nik_ktp,
+            'id' => $this->id,
+            'employee_id' => $this->employee_id,
+            'employee' => $this->employee ? [
+                'id' => $this->employee->id,
+                'name' => $this->employee->user?->name,
+                'nik_ktp' => $this->employee->nik_ktp,
+                'department_id' => $this->employee->department_id,
                 'department' => $this->employee->department?->name,
+                'count_sunday_in_leave' => (bool) ($this->employee->department?->count_sunday_in_leave ?? false),
             ] : null,
-            'date'          => $dateStr,
-            'reason'        => $this->reason,
-            'photo_url'     => $this->photo_url ? url($this->photo_url) : null,
+            'date' => $dateStr,
+            'reason' => $this->reason,
+            'photo_url' => $this->photo_url ? url($this->photo_url) : null,
             'location_note' => $this->location_note,
-            'status'            => $this->status,
-            'admin_note'        => $this->admin_note,
-            'reviewed_by'       => $this->reviewed_by,
-            'reviewed_at'       => $this->reviewed_at ? $this->reviewed_at->toDateTimeString() : null,
-            'pj_status'         => $this->pj_status,
-            'pj_note'           => $this->pj_note,
-            'pj_reviewed_at'    => $this->pj_reviewed_at ? $this->pj_reviewed_at->toDateTimeString() : null,
-            'pj_reviewer'       => $this->pjReviewer ? ['name' => $this->pjReviewer->name] : null,
-            'unit_kerja'        => $this->unit_kerja,
+            'status' => $this->status,
+            'admin_note' => $this->admin_note,
+            'reviewed_by' => $this->reviewed_by,
+            'reviewed_at' => $this->reviewed_at ? $this->reviewed_at->toDateTimeString() : null,
+            'pj_status' => $this->pj_status,
+            'pj_note' => $this->pj_note,
+            'pj_reviewed_at' => $this->pj_reviewed_at ? $this->pj_reviewed_at->toDateTimeString() : null,
+            'pj_reviewer' => $this->pjReviewer ? ['name' => $this->pjReviewer->name] : null,
+            'unit_kerja' => $this->unit_kerja,
             'overtime_day_type' => $this->overtime_day_type,
-            'start_time'        => $this->start_time,
-            'end_time'          => $this->end_time,
-            'tasks'             => $this->tasks,
-            'created_at'        => $this->created_at ? $this->created_at->toDateTimeString() : null,
-            'updated_at'        => $this->updated_at ? $this->updated_at->toDateTimeString() : null,
+            'start_time' => $this->start_time,
+            'end_time' => $this->end_time,
+            'tasks' => $this->tasks,
+            'created_at' => $this->created_at ? $this->created_at->toDateTimeString() : null,
+            'updated_at' => $this->updated_at ? $this->updated_at->toDateTimeString() : null,
             'system_checkout_data' => $systemCheckoutData,
         ];
     }

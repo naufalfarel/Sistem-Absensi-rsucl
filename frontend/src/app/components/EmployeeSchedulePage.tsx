@@ -428,9 +428,7 @@ export function EmployeeSchedulePage() {
       `}</style>
       
       {/* Modern Title Banner */}
-      <div className="bg-gradient-to-r from-[#16A34A] to-[#0D9240] rounded-3xl p-6 md:p-8 text-white shadow-md relative overflow-hidden">
-        <div className="absolute right-0 top-0 w-64 h-64 bg-white/5 rounded-full blur-2xl -translate-y-12 translate-x-12 pointer-events-none" />
-        <div className="absolute left-1/3 bottom-0 w-32 h-32 bg-white/5 rounded-full blur-xl translate-y-6 pointer-events-none" />
+      <div className="page-banner rounded-3xl p-6 md:p-8 text-white relative overflow-hidden">
         
         <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>

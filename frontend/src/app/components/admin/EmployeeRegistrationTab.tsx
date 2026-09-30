@@ -163,7 +163,7 @@ export function EmployeeRegistrationTab() {
         setRevertNote('');
         setRevertStep(1);
         loadData();
-        alert('✅ Persetujuan berhasil dibatalkan. Status dikembalikan ke Perlu Revisi.');
+        alert('Persetujuan berhasil dibatalkan. Status dikembalikan ke Perlu Revisi.');
       }
     } catch (err: any) {
       if ((err as any)?.status === 401) {

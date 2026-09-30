@@ -26,12 +26,12 @@ interface JadwalShiftTabProps {
 
 type IconKey = 'sun' | 'sunset' | 'moon' | 'star' | 'zap';
 
-const ICON_MAP: Record<IconKey, { component: typeof Sun; label: string; emoji: string }> = {
-  sun:    { component: Sun,    label: 'Pagi',    emoji: '☀️' },
-  sunset: { component: Sunset, label: 'Sore',    emoji: '🌅' },
-  moon:   { component: Moon,   label: 'Malam',   emoji: '🌙' },
-  star:   { component: Star,   label: 'Bintang', emoji: '⭐' },
-  zap:    { component: Zap,    label: 'Khusus',  emoji: '⚡' },
+const ICON_MAP: Record<IconKey, { component: typeof Sun; label: string }> = {
+  sun:    { component: Sun,    label: 'Pagi' },
+  sunset: { component: Sunset, label: 'Sore' },
+  moon:   { component: Moon,   label: 'Malam' },
+  star:   { component: Star,   label: 'Bintang' },
+  zap:    { component: Zap,    label: 'Khusus' },
 };
 
 const COLOR_PRESETS = [
@@ -253,7 +253,7 @@ function AddShiftModal({ onClose, onAdd, user, activeDeptId }: { onClose: () => 
               ))}
             </div>
             <p className="text-[10px] text-gray-400 mt-1.5">
-              💡 Baris yang namanya kosong tidak akan disimpan.
+              Baris yang namanya kosong tidak akan disimpan.
             </p>
           </div>
 
@@ -262,11 +262,11 @@ function AddShiftModal({ onClose, onAdd, user, activeDeptId }: { onClose: () => 
           <div>
             <label className="block text-[12px] font-semibold text-gray-700 mb-2">Pilih Ikon</label>
             <div className="flex gap-2">
-              {(Object.entries(ICON_MAP) as [IconKey, typeof ICON_MAP[IconKey]][]).map(([key, { component: Ic, emoji, label }]) => (
+              {(Object.entries(ICON_MAP) as [IconKey, typeof ICON_MAP[IconKey]][]).map(([key, { component: Ic, label }]) => (
                 <button key={key} onClick={() => setIcon(key)} title={label}
                   className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-xl border-2 transition-all ${icon === key ? 'border-[#16A34A] bg-green-50 shadow-sm' : 'border-gray-100 bg-gray-50 hover:border-gray-200'}`}>
                   <Ic size={16} style={{ color: icon === key ? preset.color : '#9CA3AF' }} />
-                  <span className="text-[9px] text-gray-500">{emoji}</span>
+                  <span className="sr-only">{label}</span>
                 </button>
               ))}
             </div>
@@ -484,8 +484,8 @@ function BulkAssignModal({ user, shifts, employees, year, month, daysInMonth, on
             <select value={selectedShiftId} onChange={e => setSelectedShiftId(e.target.value as any)}
               className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] cursor-pointer font-semibold">
               <option value="">-- Pilih Shift --</option>
-              <option value="libur" className="text-gray-500">⬜ Libur / OFF</option>
-              <option value="lj" className="text-slate-700 font-semibold">🌙 Libur Jaga (LJ)</option>
+              <option value="libur" className="text-gray-500">Libur / OFF</option>
+              <option value="lj" className="text-slate-700 font-semibold">Libur Jaga (LJ)</option>
               {shifts
                 .filter(s => {
                   const n = s.name.toLowerCase();
@@ -2253,7 +2253,7 @@ function EmergencyShiftModal({ user, employees, shifts, onClose, onSaved }: Emer
       });
 
       if (res.success) {
-        alert(`🚨 ${res.message}`);
+        alert(`${res.message}`);
         onSaved();
         onClose();
       }
@@ -2270,7 +2270,7 @@ function EmergencyShiftModal({ user, employees, shifts, onClose, onSaved }: Emer
         <div className="flex items-center justify-between border-b border-slate-100 pb-3.5">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center font-bold">
-              🚨
+              <Zap size={20} aria-hidden="true" />
             </div>
             <div>
               <h3 className="text-base font-bold text-slate-900">Penugasan Shift Dadakan / On-Call</h3>
@@ -2348,7 +2348,7 @@ function EmergencyShiftModal({ user, employees, shifts, onClose, onSaved }: Emer
 
             {activeSelectedShift && activeSelectedShift.start !== '--:--' && (
               <div className="mt-2 p-2.5 bg-blue-50 border border-blue-100 rounded-xl text-[11.5px] text-blue-800 font-medium flex items-center gap-2">
-                <span>⏰ Jam Kerja Shift:</span>
+                <span>Jam Kerja Shift:</span>
                 <strong className="font-mono text-blue-900 bg-white px-2 py-0.5 rounded border border-blue-200">
                   {activeSelectedShift.start} WIB – {activeSelectedShift.end} WIB
                 </strong>
@@ -2371,7 +2371,7 @@ function EmergencyShiftModal({ user, employees, shifts, onClose, onSaved }: Emer
           </div>
 
           <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl text-[11.5px] text-rose-800 font-medium leading-snug">
-            💡 <strong>Info:</strong> Penugasan shift dadakan ini akan langsung ditambahkan ke jadwal harian pegawai dan notifikasi push/sistem akan langsung terkirim ke HP pegawai.
+            <strong>Info:</strong> Penugasan shift dadakan ini akan langsung ditambahkan ke jadwal harian pegawai dan notifikasi push/sistem akan langsung terkirim ke HP pegawai.
           </div>
 
           <div className="flex items-center gap-3 pt-2 border-t border-slate-100">
@@ -2387,7 +2387,7 @@ function EmergencyShiftModal({ user, employees, shifts, onClose, onSaved }: Emer
               disabled={submitting}
               className="flex-1 py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white font-bold text-[12.5px] rounded-2xl transition-all shadow-sm active:scale-95 cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
             >
-              {submitting ? 'Mengirim...' : '🚨 Kirim Shift Dadakan'}
+              {submitting ? 'Mengirim...' : 'Kirim Shift Dadakan'}
             </button>
           </div>
         </form>

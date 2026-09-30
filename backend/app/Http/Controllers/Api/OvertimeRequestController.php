@@ -3,13 +3,14 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\OvertimeRequest;
 use App\Http\Requests\StoreOvertimeRequestRequest;
 use App\Http\Requests\UpdateOvertimeRequestStatusRequest;
 use App\Http\Resources\OvertimeRequestResource;
+use App\Models\Attendance;
+use App\Models\OvertimeRequest;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
-use Carbon\Carbon;
 
 class OvertimeRequestController extends Controller
 {
@@ -19,7 +20,7 @@ class OvertimeRequestController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
-        $query = OvertimeRequest::with(['employee.user', 'employee.department']);
+        $query = OvertimeRequest::with(['employee.user', 'employee.department', 'pjReviewer']);
 
         if ($request->query('personal') == '1') {
             $employee = $user->employee;
@@ -90,13 +91,24 @@ class OvertimeRequestController extends Controller
             }
         }
 
-        $query->orderBy('date', 'desc');
+        $query->orderBy('date', 'desc')->orderBy('id', 'desc');
 
-        $perPage = (int)$request->query('per_page', 20);
-        if ($perPage < 1) $perPage = 20;
-        if ($perPage > 100) $perPage = 100;
+        $perPage = (int) $request->query('per_page', 20);
+        if ($perPage < 1) {
+            $perPage = 20;
+        }
+
+        // Laporan admin meminta seluruh data dalam satu halaman (saat ini 9.999
+        // baris). Tetap batasi pengguna non-admin agar endpoint daftar pribadi
+        // dan PJ Bagian tidak dapat menarik dataset yang terlalu besar.
+        $maxPerPage = $user->isAdmin() ? 10000 : 100;
+        $perPage = min($perPage, $maxPerPage);
 
         $paginator = $query->paginate($perPage);
+
+        if ($user->isAdmin()) {
+            $this->preloadSystemCheckoutAttendance($paginator->items());
+        }
 
         return response()->json([
             'success' => true,
@@ -108,6 +120,51 @@ class OvertimeRequestController extends Controller
                 'total'        => $paginator->total(),
             ]
         ]);
+    }
+
+    /**
+     * Attach attendance comparisons in one query so a large report export does
+     * not execute one attendance query for every overtime request row.
+     *
+     * @param  array<int, OvertimeRequest>  $overtimeRequests
+     */
+    private function preloadSystemCheckoutAttendance(array $overtimeRequests): void
+    {
+        if ($overtimeRequests === []) {
+            return;
+        }
+
+        $requests = collect($overtimeRequests);
+        $employeeIds = $requests->pluck('employee_id')->filter()->unique()->values();
+        $dates = $requests
+            ->pluck('date')
+            ->filter()
+            ->map(fn ($date) => Carbon::parse($date)->toDateString())
+            ->unique()
+            ->values();
+
+        if ($employeeIds->isEmpty() || $dates->isEmpty()) {
+            return;
+        }
+
+        $attendanceByEmployeeAndDate = Attendance::query()
+            ->whereIn('employee_id', $employeeIds)
+            ->whereBetween('date', [
+                Carbon::parse($dates->min())->startOfDay(),
+                Carbon::parse($dates->max())->endOfDay(),
+            ])
+            ->get()
+            ->groupBy(
+                fn (Attendance $attendance): string => $attendance->employee_id . '|' . $attendance->date->toDateString()
+            );
+
+        foreach ($overtimeRequests as $overtimeRequest) {
+            $key = $overtimeRequest->employee_id . '|' . $overtimeRequest->date->toDateString();
+            $overtimeRequest->setRelation(
+                'systemCheckoutAttendance',
+                $attendanceByEmployeeAndDate->get($key)?->first()
+            );
+        }
     }
 
     /**
@@ -144,11 +201,24 @@ class OvertimeRequestController extends Controller
         $approvedRequests = (clone $query)->where('status', 'approved')->get();
         $totalMinutes = 0;
         foreach ($approvedRequests as $req) {
-            $att = \App\Models\Attendance::where('employee_id', $req->employee_id)
-                ->whereDate('date', $req->date->toDateString())
-                ->first();
-            if ($att) {
-                $totalMinutes += $att->overtime_minutes ?? 0;
+            if ($req->start_time && $req->end_time) {
+                try {
+                    $start = \Carbon\Carbon::parse($req->start_time);
+                    $end = \Carbon\Carbon::parse($req->end_time);
+                    if ($end->lessThan($start)) {
+                        $end->addDay();
+                    }
+                    $totalMinutes += (int) $start->diffInMinutes($end);
+                } catch (\Exception $e) {
+                    // Ignore parse error
+                }
+            } else {
+                $att = \App\Models\Attendance::where('employee_id', $req->employee_id)
+                    ->whereDate('date', $req->date->toDateString())
+                    ->first();
+                if ($att) {
+                    $totalMinutes += $att->overtime_minutes ?? 0;
+                }
             }
         }
 

@@ -327,12 +327,12 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
   ];
 
   return (
-    <div className="p-5 md:p-7 max-w-5xl mx-auto">
+    <div className="personal-dashboard mx-auto">
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
           <p className="text-[13px] text-gray-500 mb-0.5">{dateStr}</p>
-          <h1 className="text-xl font-semibold text-gray-900">{getGreeting()}, <span className="text-[#16A34A]">{user?.name}</span> 👋</h1>
+          <h1 className="text-xl font-semibold text-gray-900">{getGreeting()}, <span className="text-[#16A34A]">{user?.name}</span> </h1>
           <p className="text-[13px] text-gray-500 mt-0.5">{user?.position} · {user?.department}</p>
         </div>
         <div className="text-right hidden sm:block">
@@ -375,7 +375,7 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
       )}
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+      <div className="personal-stats grid gap-3 mb-6">
         {stats.map((s, i) => (
           <div
             key={i}
@@ -384,8 +384,8 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
             title={s.isGpsCard ? "Klik untuk memperbarui lokasi GPS secara realtime" : undefined}
           >
             <div className="flex items-start justify-between mb-3">
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: s.bg }}>
-                <s.icon size={16} style={{ color: s.color }} />
+              <div className="w-8 h-8 flex items-center justify-center text-gray-500">
+                <s.icon size={18} strokeWidth={1.6} />
               </div>
               <span className="text-[11px] font-medium px-2 py-0.5 rounded-full" style={{ color: s.badgeColor, background: s.badgeBg }}>
                 {s.badge}
@@ -431,7 +431,7 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
                           <p className="text-[13px] font-bold text-gray-900">{sName}</p>
                           {sItem.is_emergency_callout && (
                             <span className="text-[9.5px] font-extrabold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200">
-                              🚨 Shift Dadakan
+                              Shift Dadakan
                             </span>
                           )}
                         </div>
@@ -478,7 +478,7 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
 
                     {rItem?.check_out && (
                       <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-100 rounded-xl">
-                        <span className="text-sm">✅</span>
+                        <CheckCircle2 size={18} aria-hidden="true" />
                         <p className="text-[11.5px] text-green-700">
                           Check-out tercatat pukul <strong>{fmtTime(rItem.check_out)} WIB</strong>.
                         </p>
@@ -513,7 +513,7 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
             {/* Catatan tidak ada shift */}
             {todayShift === null && (
               <div className="flex items-center gap-2.5 px-3.5 py-2.5 bg-gray-50 border border-gray-100 rounded-xl">
-                <span className="text-base">📋</span>
+                <Calendar size={18} aria-hidden="true" />
                 <p className="text-[12px] text-gray-500">Belum ada shift yang ditugaskan untuk hari ini. Hubungi admin untuk pengaturan jadwal.</p>
               </div>
             )}
@@ -571,7 +571,7 @@ export function DashboardHome({ onNavigate }: { onNavigate: (tab: string) => voi
                   onClick={() => onNavigate('notifications')}
                   className={`flex items-start gap-3 p-2.5 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors ${!n.is_read ? 'bg-green-50/60' : ''}`}
                 >
-                  <span className="text-lg mt-0.5">{n.type === 'leave' ? '📅' : n.type === 'attendance' ? '⏰' : '🔔'}</span>
+                  <span className="text-gray-500 mt-0.5" aria-hidden="true">{n.type === 'leave' ? <Calendar size={18} /> : n.type === 'attendance' ? <Clock size={18} /> : <Bell size={18} />}</span>
                   <div className="flex-1 min-w-0">
                     <p className={`text-[12px] leading-tight ${!n.is_read ? 'font-medium text-gray-800' : 'text-gray-600'}`}>{n.title}</p>
                     <p className="text-[11px] text-gray-400 mt-0.5">{n.body}</p>

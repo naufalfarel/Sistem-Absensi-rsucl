@@ -314,9 +314,8 @@ export const DisciplinaryTab: React.FC = () => {
   return (
     <div className="space-y-6 font-sans pb-12">
       {/* ── HEADER BANNER ─────────────────────────────────────────────── */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-950 rounded-3xl p-6 md:p-8 text-white shadow-xl relative overflow-hidden border border-slate-700/30">
-        <div className="absolute right-0 top-0 w-80 h-80 bg-rose-500/10 rounded-full blur-3xl -translate-y-16 translate-x-16 pointer-events-none" />
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="page-banner rounded-3xl p-6 md:p-8 text-white relative overflow-hidden border border-slate-700/30">
+        <div className="relative z-10 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
           <div>
             <span className="bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">
               Kedisiplinan &amp; Kepatuhan
@@ -326,7 +325,7 @@ export const DisciplinaryTab: React.FC = () => {
               Terbitkan surat teguran, SP1, SP2, atau PHK resmi kepada pegawai yang melanggar tata tertib Rumah Sakit.
             </p>
           </div>
-          <div className="flex gap-2.5 flex-wrap w-full md:w-auto">
+          <div className="flex gap-2.5 flex-wrap w-full xl:w-auto">
             <button
               onClick={handleExportExcel}
               className="inline-flex items-center justify-center gap-2 px-4.5 py-3 bg-[#16A34A] hover:bg-[#0d9240] text-white rounded-2xl text-[13px] font-bold shadow-md hover:shadow-lg transition-all cursor-pointer flex-1 md:flex-none"
@@ -366,7 +365,7 @@ export const DisciplinaryTab: React.FC = () => {
                   Saat ini memasuki 10 hari terakhir bulan Maret. Mohon ekspor &amp; simpan data sanksi disiplin dan laporan penting ke Excel/PDF sebagai arsip sebelum pergantian periode tahunan pada <strong>1 April</strong>.
                   <br />
                   <span className="text-white font-bold underline decoration-amber-200 mt-1 block">
-                    🔒 Catatan Keamanan: Data akun &amp; profil pegawai yang sudah terdaftar TIDAK AKAN HILANG atau terhapus (tidak perlu membuat akun dari awal).
+                    Catatan Keamanan: Data akun &amp; profil pegawai yang sudah terdaftar TIDAK AKAN HILANG atau terhapus (tidak perlu membuat akun dari awal).
                   </span>
                 </p>
               </div>
@@ -402,7 +401,7 @@ export const DisciplinaryTab: React.FC = () => {
             <span className="font-bold text-amber-950"> Data akun, login, NIK KTP, dan profil seluruh pegawai yang telah terdaftar TIDAK AKAN HILANG / TERHAPUS.</span> Anda tidak perlu mendaftarkan atau membuat ulang akun pegawai dari awal.
           </p>
           <p className="text-amber-800 text-[11.5px] font-medium bg-white/70 border border-amber-200/60 p-2.5 rounded-xl">
-            📌 <strong>Petunjuk Simpan Data Bulan Maret:</strong> Pada bulan Maret (khususnya 10 hari menjelang akhir bulan Maret), Admin dan Super Admin diimbau mengunduh laporan sanksi disiplin dan rekap absensi melalui tombol <strong>Export Excel Sanksi</strong> untuk menyimpan salinan arsip tahunan secara rapi.
+            <strong>Petunjuk Simpan Data Bulan Maret:</strong> Pada bulan Maret (khususnya 10 hari menjelang akhir bulan Maret), Admin dan Super Admin diimbau mengunduh laporan sanksi disiplin dan rekap absensi melalui tombol <strong>Export Excel Sanksi</strong> untuk menyimpan salinan arsip tahunan secara rapi.
           </p>
         </div>
       </div>

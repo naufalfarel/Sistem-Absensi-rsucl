@@ -291,7 +291,7 @@ export function HistoryPage() {
       </div>
 
       {/* Status Filter & Search */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-4">
+      <div className="history-toolbar flex flex-wrap gap-3 mb-4">
         <div className="flex gap-1.5 bg-white rounded-xl border border-gray-100 p-1 shadow-sm overflow-x-auto scrollbar-hide">
           {statusFilters.map(f => (
             <button
@@ -403,7 +403,7 @@ export function HistoryPage() {
                           </div>
                           {record.checkinPhotoUrl && (
                             <a href={record.checkinPhotoUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[10.5px] text-[#16A34A] font-medium hover:underline">
-                              📸 Lihat Foto
+                              Lihat Foto
                             </a>
                           )}
                         </div>
@@ -421,7 +421,7 @@ export function HistoryPage() {
                           </div>
                           {record.checkoutPhotoUrl && (
                             <a href={record.checkoutPhotoUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-red-500 font-medium hover:underline">
-                              📸 Lihat Foto
+                              Lihat Foto
                             </a>
                           )}
                         </div>

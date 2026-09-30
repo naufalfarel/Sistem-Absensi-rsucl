@@ -26,6 +26,7 @@ import {
   Edit2,
   Trash2,
   ChevronDown,
+  ChevronRight,
   Building2,
   Trophy,
   Award,
@@ -725,7 +726,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
             employees.filter((e) => e.today_attendance?.status === "telat")
               .length,
           ),
-      sub: "absen masuk > 08:30",
+      sub: "berdasarkan jadwal shift",
       color: "#D97706",
       bg: "#FFFBEB",
     },
@@ -823,7 +824,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
     ];
 
     return (
-      <div className="flex flex-col h-full bg-white">
+      <div className="app-sidebar flex flex-col h-full bg-white">
         {/* Header Logo */}
         <div className="px-5 py-4 border-b border-gray-100 flex-shrink-0">
           <div className="flex items-center gap-3">
@@ -866,6 +867,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
                   return (
                     <button
                       key={item.id}
+                      aria-current={isActive ? "page" : undefined}
                       onClick={() => {
                         setActiveTab(item.id);
                         if (mobile) setSidebarOpen(false);
@@ -941,7 +943,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
 
   return (
     <div
-      className="flex h-screen bg-[#F5F7FA] overflow-hidden"
+      className="rs-app flex h-screen overflow-hidden"
       style={{ fontFamily: "'Inter', sans-serif" }}
       onClick={() => openMenuId !== null && setOpenMenuId(null)}
     >
@@ -961,7 +963,8 @@ export function AdminApp({ onLogout }: AdminAppProps) {
             <SidebarContent mobile />
             <button
               onClick={() => setSidebarOpen(false)}
-              className="absolute top-4 right-4 w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center"
+              aria-label="Tutup menu"
+              className="app-icon-button absolute top-3 right-3 bg-gray-100 flex items-center justify-center"
             >
               <X size={14} className="text-gray-500" />
             </button>
@@ -972,11 +975,12 @@ export function AdminApp({ onLogout }: AdminAppProps) {
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Topbar */}
-        <div className="bg-white border-b border-gray-100 px-5 py-3.5 flex items-center justify-between flex-shrink-0">
+        <div className="app-header bg-white border-b flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(true)}
-              className="md:hidden w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center"
+              aria-label="Buka menu" aria-expanded={sidebarOpen}
+              className="app-icon-button md:hidden bg-gray-100 flex items-center justify-center"
             >
               <Menu size={16} className="text-gray-600" />
             </button>
@@ -998,7 +1002,8 @@ export function AdminApp({ onLogout }: AdminAppProps) {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setActiveTab("notifications")}
-              className="relative w-8 h-8 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors shadow-sm"
+              aria-label="Notifikasi"
+              className="app-icon-button relative flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors"
               title="Notifikasi"
             >
               <Bell size={15} />
@@ -1012,7 +1017,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-5 md:p-6">
+        <div className="app-main admin-main flex-1 overflow-y-auto p-5 md:p-8">
           {errorMsg && (
             <div className="bg-red-50 border border-red-100 rounded-2xl p-4 text-[13px] text-red-600 mb-5 flex items-center justify-between">
               <span>{errorMsg}</span>
@@ -1027,31 +1032,25 @@ export function AdminApp({ onLogout }: AdminAppProps) {
 
           {/* ── DASHBOARD ── */}
           {activeTab === "dashboard" && (
-            <div className="max-w-6xl mx-auto space-y-5">
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                {stats.map((s, i) => (
-                  <div
-                    key={i}
-                    className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4"
-                  >
-                    <div
-                      className="w-8 h-8 rounded-xl flex items-center justify-center mb-3"
-                      style={{ background: s.bg }}
-                    >
-                      <s.icon size={15} style={{ color: s.color }} />
+            <div className="admin-dashboard max-w-6xl mx-auto space-y-6">
+              <div className="dashboard-intro">
+                <h1>Ringkasan kehadiran</h1>
+                <p>Pantau kehadiran pegawai dan pengajuan yang perlu ditinjau.</p>
+              </div>
+              <div className="dashboard-stats">
+                {stats.map((s) => (
+                  <div key={s.label} className="dashboard-stat">
+                    <div className="dashboard-stat-label">
+                      <span>{s.label}</span>
+                      <s.icon size={18} strokeWidth={1.6} aria-hidden="true" />
                     </div>
-                    <p className="text-[22px] font-bold text-gray-900">
-                      {s.value}
-                    </p>
-                    <p className="text-[11px] font-medium text-gray-600">
-                      {s.label}
-                    </p>
-                    <p className="text-[10px] text-gray-400 mt-0.5">{s.sub}</p>
+                    <p className="dashboard-stat-value">{s.value}</p>
+                    <p className="dashboard-stat-note">{s.sub}</p>
                   </div>
                 ))}
               </div>
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                <div className="dashboard-panel lg:col-span-2">
                   <div className="flex items-center justify-between mb-4">
                     <div>
                       <p className="text-[14px] font-semibold text-gray-800">
@@ -1063,8 +1062,8 @@ export function AdminApp({ onLogout }: AdminAppProps) {
                     </div>
                     <div className="flex gap-3">
                       {[
-                        ["#16A34A", "Hadir"],
-                        ["#F87171", "Alpha"],
+                        ["#42795a", "Hadir"],
+                        ["#c79088", "Alpha"],
                       ].map(([c, l]) => (
                         <div key={l} className="flex items-center gap-1">
                           <div
@@ -1107,14 +1106,14 @@ export function AdminApp({ onLogout }: AdminAppProps) {
                         <Bar
                           dataKey="hadir"
                           name="Hadir"
-                          fill="#16A34A"
+                          fill="#42795a"
                           radius={[3, 3, 0, 0]}
                           isAnimationActive={false}
                         />
                         <Bar
                           dataKey="alpha"
                           name="Alpha"
-                          fill="#F87171"
+                          fill="#c79088"
                           radius={[3, 3, 0, 0]}
                           isAnimationActive={false}
                         />
@@ -1126,7 +1125,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
                     </div>
                   )}
                 </div>
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col justify-between">
+                <div className="dashboard-panel flex flex-col justify-between">
                   <div className="mb-4">
                     <p className="text-[14px] font-semibold text-gray-800">
                       Status Kehadiran Bulan Ini
@@ -1140,7 +1139,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
                       <span className="text-[12px] text-gray-500 font-medium">
                         Total Check-In
                       </span>
-                      <span className="text-[13px] font-bold text-[#16A34A]">
+                      <span className="text-[13px] font-bold text-[#42795a]">
                         {(reportSummary?.this_month.hadir ?? 0) +
                           (reportSummary?.this_month.telat ?? 0)}{" "}
                         kali
@@ -1180,16 +1179,12 @@ export function AdminApp({ onLogout }: AdminAppProps) {
               {/* ── SEKSI TAMBAHAN: LIVE FEED & PINTASAN AKSI ── */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-5">
                 {/* Kolom Kiri: Log Aktivitas Absensi Hari Ini (lg:col-span-2) */}
-                <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col justify-between">
-                  <div className="px-5 py-4 border-b border-gray-50 bg-gradient-to-r from-[#F0FDF4] to-[#DCFCE7]/30 flex items-center justify-between flex-shrink-0">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                      <p className="text-[14px] font-bold text-gray-800">
-                        Log Aktivitas Absensi Hari Ini (Real-time)
-                      </p>
-                    </div>
-                    <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
-                      Live Feed
+                <div className="lg:col-span-2 bg-white rounded-xl border border-[#e2e7e5] overflow-hidden flex flex-col">
+                  <div className="dashboard-live-header">
+                    <p className="dashboard-panel-title">Aktivitas hari ini</p>
+                    <span className="flex items-center gap-2 text-xs text-gray-500">
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-600" />
+                      Diperbarui otomatis
                     </span>
                   </div>
 
@@ -1208,7 +1203,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
                         return (
                           <div className="flex flex-col items-center justify-center py-16 text-center h-full">
                             <div className="w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 mb-3 border border-emerald-100/50">
-                              <Clock size={20} className="animate-pulse" />
+                              <Clock size={20} />
                             </div>
                             <p className="text-[12.5px] font-bold text-gray-700">Menunggu Absensi Hari Ini</p>
                             <p className="text-[10.5px] text-gray-400 max-w-xs mt-1 leading-relaxed">
@@ -1219,47 +1214,47 @@ export function AdminApp({ onLogout }: AdminAppProps) {
                       }
 
                       return (
-                        <div className="space-y-2.5 max-h-[260px] overflow-y-auto pr-1">
+                        <div className="max-h-[380px] overflow-y-auto px-1">
                           {checkedInToday.slice(0, 6).map((emp) => {
                             const isLate = emp.today_attendance?.status === "telat";
                             return (
-                              <div key={emp.id} className="flex items-center justify-between p-2.5 border border-gray-50 rounded-xl hover:bg-slate-50/50 transition-colors">
-                                <div className="flex items-center gap-3">
+                              <div key={emp.id} className="dashboard-live-row">
+                                <div className="dashboard-live-person">
                                   <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[12px] flex items-center justify-center">
                                     {emp.name.charAt(0).toUpperCase()}
                                   </div>
-                                  <div>
-                                    <p className="text-[12px] font-bold text-gray-800">{emp.name}</p>
-                                    <p className="text-[10px] text-gray-400 mt-0.5">{emp.department}</p>
+                                  <div className="min-w-0">
+                                    <p className="text-[13px] font-medium text-gray-800 break-words">{emp.name}</p>
+                                    <p className="text-xs text-gray-500 mt-0.5">{emp.department}</p>
                                   </div>
                                 </div>
-                                <div className="flex items-center gap-4">
+                                <div className="dashboard-live-times">
                                   <div className="text-right">
-                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono ${
+                                    <span className={`px-2 py-0.5 rounded text-[11px] font-medium ${
                                       isLate 
                                         ? "bg-amber-50 border border-amber-250 text-amber-700" 
                                         : "bg-green-50 border border-green-200 text-green-700"
                                     }`}>
                                       Masuk: {emp.today_attendance?.check_in?.substring(0, 5) ?? "—"}
                                     </span>
-                                    <p className="text-[8px] text-gray-450 mt-0.5 uppercase tracking-wider font-bold">
+                                    <p className="text-[10px] text-gray-500 mt-0.5 uppercase tracking-wider font-bold">
                                       {isLate ? "Terlambat" : "Tepat Waktu"}
                                     </p>
                                   </div>
                                   <div className="text-right min-w-[75px]">
                                     {emp.today_attendance?.check_out ? (
                                       <>
-                                        <span className="px-2 py-0.5 bg-blue-50 border border-blue-150 rounded text-[10px] font-bold font-mono text-blue-700">
+                                        <span className="px-2 py-0.5 bg-blue-50 border border-blue-150 rounded text-[11px] font-medium text-blue-700">
                                           Pulang: {emp.today_attendance.check_out.substring(0, 5)}
                                         </span>
-                                        <p className="text-[8px] text-gray-450 mt-0.5 uppercase tracking-wider font-bold">Selesai</p>
+                                        <p className="text-[10px] text-gray-500 mt-0.5 uppercase tracking-wider font-bold">Selesai</p>
                                       </>
                                     ) : (
                                       <>
-                                        <span className="px-2 py-0.5 bg-slate-100 border border-slate-200 rounded text-[10px] font-bold font-mono text-slate-500">
+                                        <span className="px-2 py-0.5 bg-slate-100 border border-slate-200 rounded text-[11px] font-medium text-slate-500">
                                           Aktif Kerja
                                         </span>
-                                        <p className="text-[8px] text-gray-450 mt-0.5 uppercase tracking-wider font-bold">Di Lapangan</p>
+                                        <p className="text-[10px] text-gray-500 mt-0.5 uppercase tracking-wider font-bold">Di Lapangan</p>
                                       </>
                                     )}
                                   </div>
@@ -1275,93 +1270,34 @@ export function AdminApp({ onLogout }: AdminAppProps) {
 
                 {/* Kolom Kanan: Pintasan Aksi & Unit Kerja Terbaik (lg:col-span-1) */}
                 <div className="space-y-4 flex flex-col">
-                  {/* Pintasan Tugas Pending */}
-                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4.5 space-y-3">
-                    <p className="text-[13px] font-bold text-gray-800">⚡ Tindakan Cepat Diperlukan</p>
-                    
-                    <div className="space-y-2">
-                      {/* Row Cuti */}
-                      <div 
-                        onClick={() => setActiveTab("leaves")}
-                        className="flex items-center justify-between p-2.5 bg-indigo-50/40 hover:bg-indigo-50 border border-indigo-100/50 rounded-xl cursor-pointer transition-colors"
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="text-lg">📅</span>
-                          <div>
-                            <p className="text-[11.5px] font-bold text-indigo-950">Persetujuan Cuti</p>
-                            <p className="text-[9.5px] text-indigo-600 mt-0.5">
-                              {reportSummary?.pending_leave && reportSummary.pending_leave > 0 
-                                ? `${reportSummary.pending_leave} pengajuan baru` 
-                                : "Tidak ada antrean"}
-                            </p>
-                          </div>
-                        </div>
-                        {reportSummary?.pending_leave && reportSummary.pending_leave > 0 ? (
-                          <span className="w-5 h-5 bg-indigo-600 text-white rounded-full text-[9px] font-black flex items-center justify-center animate-pulse">
-                            {reportSummary.pending_leave}
+                  <div className="dashboard-panel">
+                    <p className="dashboard-panel-title">Perlu ditinjau</p>
+                    <p className="dashboard-panel-note">Pengajuan dan data pegawai baru</p>
+                    {[
+                      { tab: "leave", label: "Persetujuan cuti", count: reportSummary?.pending_leave ?? 0, icon: CalendarDays },
+                      { tab: "overtime", label: "Persetujuan lembur", count: pendingOvertimeCount, icon: Clock },
+                      { tab: "onboarding", label: "Draf pegawai", count: pendingRegistrationCount, icon: UserCheck },
+                    ].map((action) => (
+                      <button key={action.tab} type="button" onClick={() => setActiveTab(action.tab)} className="dashboard-action">
+                        <span className="dashboard-action-label">
+                          <action.icon size={19} strokeWidth={1.6} aria-hidden="true" />
+                          <span>
+                            <span className="block text-[13px] font-medium">{action.label}</span>
+                            <span className="block text-xs text-gray-500 mt-1">
+                              {action.count > 0 ? `${action.count} menunggu ditinjau` : "Tidak ada antrean"}
+                            </span>
                           </span>
-                        ) : (
-                          <span className="text-indigo-400 text-xs">➔</span>
-                        )}
-                      </div>
-
-                      {/* Row Lembur */}
-                      <div 
-                        onClick={() => setActiveTab("overtimes")}
-                        className="flex items-center justify-between p-2.5 bg-amber-50/40 hover:bg-amber-50 border border-amber-100/50 rounded-xl cursor-pointer transition-colors"
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="text-lg">⏰</span>
-                          <div>
-                            <p className="text-[11.5px] font-bold text-amber-950">Persetujuan Lembur</p>
-                            <p className="text-[9.5px] text-amber-600 mt-0.5">
-                              {pendingOvertimeCount > 0 
-                                ? `${pendingOvertimeCount} pengajuan baru` 
-                                : "Tidak ada antrean"}
-                            </p>
-                          </div>
-                        </div>
-                        {pendingOvertimeCount > 0 ? (
-                          <span className="w-5 h-5 bg-amber-600 text-white rounded-full text-[9px] font-black flex items-center justify-center animate-pulse">
-                            {pendingOvertimeCount}
-                          </span>
-                        ) : (
-                          <span className="text-amber-400 text-xs">➔</span>
-                        )}
-                      </div>
-
-                      {/* Row Onboarding */}
-                      <div 
-                        onClick={() => setActiveTab("onboarding")}
-                        className="flex items-center justify-between p-2.5 bg-teal-50/40 hover:bg-teal-50 border border-teal-100/50 rounded-xl cursor-pointer transition-colors"
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="text-lg">👤</span>
-                          <div>
-                            <p className="text-[11.5px] font-bold text-teal-955">Draf Onboarding</p>
-                            <p className="text-[9.5px] text-teal-600 mt-0.5">
-                              {pendingRegistrationCount > 0 
-                                ? `${pendingRegistrationCount} draf menunggu` 
-                                : "Tidak ada antrean"}
-                            </p>
-                          </div>
-                        </div>
-                        {pendingRegistrationCount > 0 ? (
-                          <span className="w-5 h-5 bg-teal-600 text-white rounded-full text-[9px] font-black flex items-center justify-center animate-pulse">
-                            {pendingRegistrationCount}
-                          </span>
-                        ) : (
-                          <span className="text-teal-400 text-xs">➔</span>
-                        )}
-                      </div>
-                    </div>
+                        </span>
+                        {action.count > 0 ? <span className="dashboard-count">{action.count}</span> : <ChevronRight size={16} className="text-gray-400" />}
+                      </button>
+                    ))}
                   </div>
 
                   {/* Unit Kerja Teraktif */}
-                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4.5 space-y-3 flex-1 flex flex-col justify-between">
+                  <div className="dashboard-panel space-y-3 flex-1 flex flex-col">
                     <div>
-                      <p className="text-[13px] font-bold text-gray-800">🏢 Unit Kerja Teraktif Bulan Ini</p>
-                      <p className="text-[10px] text-gray-400 mt-0.5">Persentase kehadiran unit tertinggi</p>
+                      <p className="dashboard-panel-title">Kehadiran per unit</p>
+                      <p className="dashboard-panel-note">Tiga unit dengan persentase tertinggi bulan ini</p>
                     </div>
                     <div className="space-y-2 mt-2 flex-1 flex flex-col justify-center">
                       {!reportSummary?.dept_attendance || reportSummary.dept_attendance.length === 0 ? (
@@ -1371,11 +1307,10 @@ export function AdminApp({ onLogout }: AdminAppProps) {
                           .sort((a, b) => b.persen - a.persen)
                           .slice(0, 3)
                           .map((d, i) => (
-                            <div key={i} className="flex items-center justify-between text-[11px] p-2 bg-slate-50/50 rounded-lg border border-slate-100/30">
-                              <span className="font-semibold text-gray-700 truncate max-w-[120px]">{d.dept}</span>
+                            <div key={i} className="flex items-center justify-between gap-3 text-[13px] py-2 border-b border-gray-100 last:border-0">
+                              <span className="font-medium text-gray-700 min-w-0">{d.dept}</span>
                               <div className="flex items-center gap-2">
-                                <span className="font-mono font-bold text-[#16A34A]">{d.persen}%</span>
-                                <span className="text-[9px] bg-green-50 text-green-700 px-1 py-0.2 rounded font-bold uppercase">Top {i+1}</span>
+                                <span className="font-mono font-bold text-[#42795a]">{d.persen}%</span>
                               </div>
                             </div>
                           ))

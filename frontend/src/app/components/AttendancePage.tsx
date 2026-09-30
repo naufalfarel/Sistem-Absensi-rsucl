@@ -19,7 +19,11 @@ import {
   Info,
   Upload,
 } from "lucide-react";
-import { useRealtimeGps } from "../../hooks/useRealtimeGps";
+import {
+  GPS_MAX_ACCURACY_METERS,
+  GPS_MAX_LOCATION_AGE_MS,
+  useRealtimeGps,
+} from "../../hooks/useRealtimeGps";
 import {
   MapContainer,
   TileLayer,
@@ -79,6 +83,19 @@ function RecenterMap({ lat, lng }: { lat: number; lng: number }) {
     map.setView([lat, lng], map.getZoom());
   }, [lat, lng, map]);
   return null;
+}
+
+type GpsGeofenceState = "inside" | "outside" | "uncertain" | "unavailable";
+
+function getGpsGeofenceState(
+  distance: number | null,
+  accuracy: number | null,
+  radius: number,
+): GpsGeofenceState {
+  if (distance === null || accuracy === null) return "unavailable";
+  if (distance + accuracy <= radius) return "inside";
+  if (Math.max(0, distance - accuracy) > radius) return "outside";
+  return "uncertain";
 }
 
 // ── Time logic ─────────────────────────────────────────────────────────
@@ -622,7 +639,7 @@ function FaceVerificationCard({
       <div className="px-5 py-3.5 border-b border-green-100 flex items-center gap-2">
         <CheckCircle2 size={15} className="text-[#16A34A]" />
         <span className="text-[13px] font-semibold text-green-800">
-          Wajah Terverifikasi ✅
+          Wajah Terverifikasi
         </span>
       </div>
       <div className="p-4 flex items-center gap-4">
@@ -667,6 +684,11 @@ function FaceVerificationCard({
 function GPSCard({
   userLocation,
   gpsActive,
+  isLocationReady,
+  isStabilizing,
+  locationAgeMs,
+  gpsErrorMsg,
+  geofenceState,
   inGeofence,
   distance,
   hospLat,
@@ -676,8 +698,18 @@ function GPSCard({
   isGpsDisabledByAdmin = false,
   onRefreshLocation,
 }: {
-  userLocation: { lat: number; lng: number; accuracy: number } | null;
+  userLocation: {
+    lat: number;
+    lng: number;
+    accuracy: number;
+    timestamp: number;
+  } | null;
   gpsActive: boolean;
+  isLocationReady: boolean;
+  isStabilizing: boolean;
+  locationAgeMs: number | null;
+  gpsErrorMsg?: string | null;
+  geofenceState: GpsGeofenceState;
   inGeofence: boolean;
   distance: number | null;
   hospLat: number;
@@ -687,12 +719,29 @@ function GPSCard({
   isGpsDisabledByAdmin?: boolean;
   onRefreshLocation?: () => void;
 }) {
-  // Kekuatan sinyal diukur dari akurasi GPS (di bawah 15 meter dianggap sangat bagus)
-  const signalBars = gpsActive
-    ? userLocation && userLocation.accuracy <= 15
+  // Kekuatan sinyal mewakili nilai accuracy sebenarnya, bukan sekadar GPS aktif.
+  const signalBars = !gpsActive || !userLocation
+    ? 0
+    : userLocation.accuracy <= 20
       ? 4
-      : 3
-    : 0;
+      : userLocation.accuracy <= 50
+        ? 3
+        : userLocation.accuracy <= GPS_MAX_ACCURACY_METERS
+          ? 2
+          : 1;
+  const gpsValidationBypassed = isDinasLuar || isGpsDisabledByAdmin;
+  const isBoundaryUncertain =
+    !gpsValidationBypassed && geofenceState === "uncertain";
+  const gpsNeedsAttention =
+    !gpsValidationBypassed && (!isLocationReady || isBoundaryUncertain);
+  const gpsQualityOk = isLocationReady || gpsValidationBypassed;
+  const gpsStatusLabel = isStabilizing
+    ? "Menstabilkan..."
+    : isLocationReady
+      ? "Presisi"
+      : gpsActive
+        ? "Kurang Akurat"
+        : "Mencari...";
 
   const mapCenter: [number, number] = userLocation
     ? [userLocation.lat, userLocation.lng]
@@ -712,14 +761,18 @@ function GPSCard({
       label: "Akurasi",
       value: userLocation ? `±${userLocation.accuracy} meter` : "—",
     },
-    { label: "Status GPS", value: gpsActive ? "Aktif" : "Mencari..." },
+    { label: "Status GPS", value: gpsStatusLabel },
     {
       label: "Status",
       value: isDinasLuar
         ? "Dinas Luar (Bebas)"
-        : inGeofence
-          ? "Dalam Area"
-          : "Luar Area",
+        : !isLocationReady
+          ? "Belum Presisi"
+          : isBoundaryUncertain
+            ? "Posisi di Batas"
+          : inGeofence
+            ? "Dalam Area"
+            : "Luar Area",
     },
   ];
 
@@ -738,11 +791,12 @@ function GPSCard({
             <button
               type="button"
               onClick={onRefreshLocation}
-              className="flex items-center gap-1.5 text-[11px] font-bold text-[#16A34A] bg-green-50 border border-green-200 px-2.5 py-1 rounded-xl hover:bg-green-100 transition-all active:scale-95 cursor-pointer"
+              disabled={isStabilizing}
+              className="flex items-center gap-1.5 text-[11px] font-bold text-[#16A34A] bg-green-50 border border-green-200 px-2.5 py-1 rounded-xl hover:bg-green-100 transition-all active:scale-95 cursor-pointer disabled:opacity-60 disabled:cursor-wait"
               title="Muat ulang GPS realtime"
             >
-              <RotateCw size={12} />
-              <span>Refresh GPS</span>
+              <RotateCw size={12} className={isStabilizing ? "animate-spin" : ""} />
+              <span>{isStabilizing ? "Menstabilkan" : "Refresh GPS"}</span>
             </button>
           )}
           {/* Signal bars */}
@@ -757,12 +811,12 @@ function GPSCard({
           </div>
           <div className="flex items-center gap-1">
             <div
-              className={`w-1.5 h-1.5 rounded-full ${gpsActive ? "bg-[#16A34A] animate-pulse" : "bg-red-500"}`}
+              className={`w-1.5 h-1.5 rounded-full ${gpsQualityOk ? "bg-[#16A34A] animate-pulse" : isStabilizing ? "bg-amber-500 animate-pulse" : "bg-red-500"}`}
             />
             <span
-              className={`text-[11px] font-medium ${gpsActive ? "text-[#16A34A]" : "text-red-500"}`}
+              className={`text-[11px] font-medium ${gpsQualityOk ? "text-[#16A34A]" : isStabilizing ? "text-amber-600" : "text-red-500"}`}
             >
-              {gpsActive ? "GPS Aktif" : "GPS Mati"}
+              {gpsStatusLabel}
             </span>
           </div>
         </div>
@@ -772,24 +826,31 @@ function GPSCard({
       <div className="h-56 w-full relative" style={{ isolation: "isolate" }}>
         {/* Floating Refresh Location Button on Map Overlay */}
         {onRefreshLocation && (
-          <button
-            type="button"
-            onClick={onRefreshLocation}
-            className="absolute top-3 right-3 z-[1000] bg-white/95 hover:bg-white text-gray-800 border border-gray-200 shadow-lg rounded-xl px-3 py-1.5 text-[11.5px] font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer backdrop-blur-xs"
-            title="Muat Ulang Koordinat GPS Realtime"
-          >
-            <RotateCw size={13} className="text-[#16A34A] animate-spin-once" />
-            <span>Refresh Maps GPS</span>
+            <button
+              type="button"
+              onClick={onRefreshLocation}
+              disabled={isStabilizing}
+              className="absolute top-3 right-3 z-[1000] bg-white/95 hover:bg-white text-gray-800 border border-gray-200 shadow-lg rounded-xl px-3 py-1.5 text-[11.5px] font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer backdrop-blur-xs disabled:opacity-70 disabled:cursor-wait"
+              title="Muat Ulang Koordinat GPS Realtime"
+            >
+              <RotateCw size={13} className={`text-[#16A34A] ${isStabilizing ? "animate-spin" : ""}`} />
+              <span>{isStabilizing ? "Menstabilkan GPS" : "Refresh Maps GPS"}</span>
           </button>
         )}
 
         {/* Searching Overlay if Location is not yet acquired */}
-        {!userLocation && (
+        {(!userLocation || isStabilizing) && (
           <div className="absolute inset-0 z-[999] bg-slate-900/40 backdrop-blur-xs flex flex-col items-center justify-center p-4 text-center">
             <MapPin size={24} className="text-white animate-bounce mb-1.5" />
-            <p className="text-white text-[12.5px] font-bold">Membaca Koordinat GPS Realtime...</p>
-            <p className="text-slate-200 text-[11px] mt-0.5 mb-3">Pastikan izin lokasi (GPS) pada browser/HP diizinkan.</p>
-            {onRefreshLocation && (
+            <p className="text-white text-[12.5px] font-bold">
+              {isStabilizing ? "Menstabilkan GPS Presisi..." : "Membaca Koordinat GPS Realtime..."}
+            </p>
+            <p className="text-slate-200 text-[11px] mt-0.5 mb-3">
+              {userLocation
+                ? `Akurasi sementara ±${userLocation.accuracy} m · tunggu hingga maksimal ±${GPS_MAX_ACCURACY_METERS} m`
+                : "Pastikan izin Lokasi Presisi pada browser/HP diaktifkan."}
+            </p>
+            {onRefreshLocation && !isStabilizing && (
               <button
                 type="button"
                 onClick={onRefreshLocation}
@@ -840,6 +901,16 @@ function GPSCard({
           {/* User location marker */}
           {userLocation && (
             <>
+              <Circle
+                center={[userLocation.lat, userLocation.lng]}
+                radius={Math.max(1, userLocation.accuracy)}
+                pathOptions={{
+                  color: isLocationReady ? "#3B82F6" : "#F59E0B",
+                  fillColor: isLocationReady ? "#3B82F6" : "#F59E0B",
+                  fillOpacity: 0.08,
+                  weight: 1,
+                }}
+              />
               <Marker
                 position={[userLocation.lat, userLocation.lng]}
                 icon={userIcon}
@@ -875,7 +946,7 @@ function GPSCard({
           {gpsData.slice(3).map(({ label, value }) => {
             const isOk =
               (label === "Status" && (inGeofence || isDinasLuar)) ||
-              (label === "Status GPS" && gpsActive);
+              (label === "Status GPS" && gpsQualityOk);
             return (
               <div
                 key={label}
@@ -895,24 +966,34 @@ function GPSCard({
         </div>
         {/* In-range indicator */}
         <div
-          className={`mt-3 flex items-center gap-2 px-3 py-2 rounded-xl border ${inGeofence ? "bg-green-50 border-green-100" : "bg-red-50 border-red-100"}`}
+          className={`mt-3 flex items-center gap-2 px-3 py-2 rounded-xl border ${inGeofence ? "bg-green-50 border-green-100" : gpsNeedsAttention ? "bg-amber-50 border-amber-200" : "bg-red-50 border-red-100"}`}
         >
           <Target
             size={13}
             className={
               inGeofence
                 ? "text-[#16A34A] flex-shrink-0"
-                : "text-red-500 flex-shrink-0"
+                : gpsNeedsAttention
+                  ? "text-amber-500 flex-shrink-0"
+                  : "text-red-500 flex-shrink-0"
             }
           />
           <div className="flex-1">
             <p
-              className={`text-[11px] font-semibold ${inGeofence ? "text-green-800" : "text-red-800"}`}
+              className={`text-[11px] font-semibold ${inGeofence ? "text-green-800" : gpsNeedsAttention ? "text-amber-800" : "text-red-800"}`}
             >
               {isGpsDisabledByAdmin
                 ? "Validasi GPS Nonaktif oleh Admin (Bisa Absen)"
                 : isDinasLuar
                   ? "Dinas Luar: Validasi Radius GPS Dikecualikan"
+                  : isStabilizing
+                    ? "Menstabilkan GPS, mohon tunggu..."
+                    : !isLocationReady
+                      ? userLocation
+                        ? `GPS belum presisi (±${userLocation.accuracy} m)`
+                        : "Menunggu lokasi GPS..."
+                    : isBoundaryUncertain
+                      ? "Akurasi GPS memotong batas area, coba stabilkan kembali"
                   : inGeofence
                     ? `Di dalam area RS (~${Math.round(distance ?? 0)} meter)`
                     : distance !== null
@@ -920,15 +1001,15 @@ function GPSCard({
                       : "Menunggu lokasi GPS..."}
             </p>
             <p
-              className={`text-[10px] ${inGeofence ? "text-green-600" : "text-red-600"} truncate`}
+              className={`text-[10px] ${inGeofence ? "text-green-600" : gpsNeedsAttention ? "text-amber-700" : "text-red-600"} truncate`}
             >
               {userLocation
-                ? `${userLocation.lat.toFixed(6)}, ${userLocation.lng.toFixed(6)}`
-                : "Memuat lokasi..."}
+                ? `${userLocation.lat.toFixed(6)}, ${userLocation.lng.toFixed(6)} · ${Math.round((locationAgeMs ?? 0) / 1000)} dtk lalu`
+                : gpsErrorMsg || "Memuat lokasi..."}
             </p>
           </div>
           <div
-            className={`w-2 h-2 rounded-full ${inGeofence ? "bg-[#16A34A] animate-pulse" : "bg-red-500"}`}
+            className={`w-2 h-2 rounded-full ${inGeofence ? "bg-[#16A34A] animate-pulse" : gpsNeedsAttention ? "bg-amber-500 animate-pulse" : "bg-red-500"}`}
           />
         </div>
       </div>
@@ -1089,6 +1170,7 @@ export function AttendancePage() {
 
   // Indikator status loading saat absensi sedang diposting ke API
   const [submitting, setSubmitting] = useState(false);
+  const [checkingLocation, setCheckingLocation] = useState(false);
 
   // Status state machine untuk verifikasi wajah ('idle', 'scanning', 'captured', 'confirmed')
   const [faceStep, setFaceStep] = useState<FaceStep>("idle");
@@ -1141,6 +1223,11 @@ export function AttendancePage() {
     location: userLocation,
     gpsActive,
     refreshLocation,
+    acquireFreshPosition,
+    isLocationReady,
+    isStabilizing,
+    locationAgeMs,
+    errorMsg: gpsErrorMsg,
   } = useRealtimeGps();
 
   // Load shift settings + jadwal shift karyawan dari API
@@ -1313,11 +1400,14 @@ export function AttendancePage() {
   const isDinasLuar =
     todayShift?.shift_type === "dinas_luar" || isExemptFromGps || isGpsDisabledByAdmin;
 
-  const inGeofence = isDinasLuar
-    ? true
-    : distance !== null
-      ? distance <= HOSP_RADIUS
-      : false;
+  const geofenceState = isLocationReady
+    ? getGpsGeofenceState(
+        distance,
+        userLocation?.accuracy ?? null,
+        HOSP_RADIUS,
+      )
+    : "unavailable";
+  const inGeofence = isDinasLuar || geofenceState === "inside";
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
@@ -1432,7 +1522,8 @@ export function AttendancePage() {
     return "Absen Dikunci";
   };
 
-  const handleAction = () => {
+  const handleAction = async () => {
+    if (checkingLocation || submitting) return;
     setErrorMsg(null);
     if (!faceVerified) {
       setFaceStep("scanning");
@@ -1442,21 +1533,107 @@ export function AttendancePage() {
       }
       return;
     }
-    if (!inGeofence && !isGpsDisabledByAdmin && !isDinasLuar) {
-      refreshLocation();
-      setErrorMsg("Sistem sedang memperbarui lokasi GPS Anda. Silakan pastikan GPS HP aktif di area RSUCL dan coba lagi.");
+
+    // Dinas luar / validasi GPS yang dinonaktifkan admin tidak dipaksa menunggu fix.
+    if (isDinasLuar) {
+      setShowModal(true);
       return;
     }
-    setShowModal(true);
+
+    setCheckingLocation(true);
+    try {
+      // Gunakan fix yang baru saja selesai distabilkan agar iPhone/HP lambat
+      // tidak perlu menyalakan sesi GPS 20 detik kedua secara berurutan.
+      // Gunakan sampai mendekati batas 15 detik, dengan cadangan 1 detik.
+      const recentReadyLocation =
+        userLocation &&
+        isLocationReady &&
+        Date.now() - userLocation.timestamp <= GPS_MAX_LOCATION_AGE_MS - 1_000
+          ? userLocation
+          : null;
+      const freshLocation =
+        recentReadyLocation ?? (await acquireFreshPosition());
+      const freshDistance = getDistance(
+        freshLocation.lat,
+        freshLocation.lng,
+        HOSP_LAT,
+        HOSP_LNG,
+      );
+      const freshGeofenceState = getGpsGeofenceState(
+        freshDistance,
+        freshLocation.accuracy,
+        HOSP_RADIUS,
+      );
+
+      if (freshGeofenceState === "outside") {
+        setErrorMsg(
+          `Lokasi terbaru berada sekitar ${Math.round(freshDistance)} meter dari titik RSUCL (akurasi ±${freshLocation.accuracy} m). Pastikan Anda berada di area rumah sakit.`,
+        );
+        return;
+      }
+      if (freshGeofenceState === "uncertain") {
+        setErrorMsg(
+          `Posisi GPS masih memotong batas area RSUCL (jarak ${Math.round(freshDistance)} m, akurasi ±${freshLocation.accuracy} m). Stabilkan GPS kembali agar seluruh rentang akurasi berada di dalam area.`,
+        );
+        return;
+      }
+
+      setShowModal(true);
+    } catch (err: any) {
+      setErrorMsg(
+        err?.message ||
+          "GPS belum cukup presisi. Aktifkan Lokasi Presisi, tunggu di dekat jendela atau area terbuka, lalu coba kembali.",
+      );
+    } finally {
+      setCheckingLocation(false);
+    }
   };
 
   const confirmAction = async (earlyReason?: any) => {
     if (submitting) return;
     setSubmitting(true);
     try {
-      const latVal = userLocation?.lat ?? HOSP_LAT;
-      const lngVal = userLocation?.lng ?? HOSP_LNG;
-      const accVal = userLocation?.accuracy ?? undefined;
+      // Ambil ulang tepat sebelum API dipanggil karena pengguna dapat cukup lama
+      // berada di dialog/foto. Jangan pernah mengganti lokasi kosong dengan titik RS.
+      let attendanceLocation =
+        isDinasLuar && isLocationReady ? userLocation : null;
+
+      if (!isDinasLuar) {
+        const recentReadyLocation =
+          userLocation &&
+          isLocationReady &&
+          Date.now() - userLocation.timestamp <= GPS_MAX_LOCATION_AGE_MS - 1_000
+            ? userLocation
+            : null;
+        attendanceLocation =
+          recentReadyLocation ?? (await acquireFreshPosition());
+        const submitDistance = getDistance(
+          attendanceLocation.lat,
+          attendanceLocation.lng,
+          HOSP_LAT,
+          HOSP_LNG,
+        );
+        const submitGeofenceState = getGpsGeofenceState(
+          submitDistance,
+          attendanceLocation.accuracy,
+          HOSP_RADIUS,
+        );
+        if (submitGeofenceState === "outside") {
+          throw new Error(
+            `Lokasi terbaru berada sekitar ${Math.round(submitDistance)} meter dari titik RSUCL (akurasi ±${attendanceLocation.accuracy} m). Absensi belum dapat dikirim.`,
+          );
+        }
+        if (submitGeofenceState === "uncertain") {
+          throw new Error(
+            `Posisi GPS masih berada di batas area (jarak ${Math.round(submitDistance)} m, akurasi ±${attendanceLocation.accuracy} m). Stabilkan GPS kembali sebelum mengirim absensi.`,
+          );
+        }
+      }
+
+      const latVal = attendanceLocation?.lat;
+      const lngVal = attendanceLocation?.lng;
+      const accVal = attendanceLocation?.accuracy;
+      const locationTimestamp = attendanceLocation?.timestamp;
 
       const earlyReasonStr =
         typeof earlyReason === "string" && earlyReason.trim()
@@ -1505,6 +1682,7 @@ export function AttendancePage() {
           accVal,
           photoFile,
           noteFinal,
+          locationTimestamp,
         );
         if (res.success) {
           const rawCheckIn = res.data?.check_in || current.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
@@ -1532,6 +1710,7 @@ export function AttendancePage() {
           earlyReasonStr,
           undefined,
           undefined,
+          locationTimestamp,
         );
         if (res.success) {
           const rawCheckOut = res.data?.check_out || current.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
@@ -1786,7 +1965,7 @@ export function AttendancePage() {
         <div className="mb-4 p-3.5 bg-gradient-to-r from-emerald-50 to-green-50/80 border border-emerald-200 rounded-2xl space-y-2.5 font-sans shadow-sm">
           <div className="flex items-center justify-between flex-wrap gap-1">
             <span className="text-[12px] font-bold text-emerald-950 flex items-center gap-1.5">
-              <span>⚡</span> Multi-Shift Hari Ini ({todayShiftsList.length} Shift Terdaftar)
+              <Clock size={18} aria-hidden="true" /> Multi-Shift Hari Ini ({todayShiftsList.length} Shift Terdaftar)
             </span>
             <span className="text-[11px] text-emerald-700 font-semibold">Pilih shift untuk melakukan absensi</span>
           </div>
@@ -1849,7 +2028,7 @@ export function AttendancePage() {
                   </span>
                 </div>
                 <p className="mt-1 text-purple-800 text-[11.5px] leading-relaxed">
-                  ✨ Hari ini Anda sedang dalam jadwal <strong>Libur Jaga (LJ)</strong>. 
+                  Hari ini Anda sedang dalam jadwal <strong>Libur Jaga (LJ)</strong>.
                   Anda <strong>TIDAK PERLU ABSEN Presensi</strong> (masuk maupun pulang). Status kehadiran Anda tidak akan dihitung Alpa / Tanpa Keterangan.
                 </p>
               </div>
@@ -1903,11 +2082,10 @@ export function AttendancePage() {
           </div>
           <div className="flex-1">
             <span className="font-bold block text-amber-900">
-              Status: GPS Bebas
+              Status: Lokasi GPS
             </span>
             <span className="text-amber-750 text-[11px]">
-              {dinasReasonToday ||
-                "Dinas Luar (Validasi radius GPS dinonaktifkan untuk hari ini)"}
+              Lokasi GPS dinonaktifkan sementara saja
             </span>
           </div>
         </div>
@@ -2091,29 +2269,41 @@ export function AttendancePage() {
                 <p className="text-[12px] text-amber-700">
                   {!faceVerified
                     ? "Selesaikan verifikasi wajah terlebih dahulu"
-                    : "Anda harus berada di dalam area geofence RSUCL"}
+                    : checkingLocation || isStabilizing
+                      ? "Menstabilkan GPS presisi, mohon tunggu hingga proses selesai"
+                      : !isLocationReady
+                        ? `GPS belum presisi. Diperlukan akurasi maksimal ±${GPS_MAX_ACCURACY_METERS} meter dan usia lokasi maksimal ${GPS_MAX_LOCATION_AGE_MS / 1000} detik`
+                        : geofenceState === "uncertain"
+                          ? "Posisi GPS masih menyentuh batas area. Tekan tombol untuk menstabilkan ulang"
+                        : "Anda harus berada di dalam area geofence RSUCL"}
                 </p>
               </div>
             )}
             <button
-              onClick={handleAction}
-              disabled={!faceVerified || !inGeofence}
+              onClick={() => void handleAction()}
+              disabled={!faceVerified || checkingLocation || submitting}
               className={`w-full py-4 rounded-2xl font-semibold text-[16px] transition-all flex items-center justify-center gap-3 ${
                 faceVerified && inGeofence
                   ? "bg-[#16A34A] hover:bg-[#0d9240] text-white shadow-lg shadow-green-200/60 active:scale-[0.98]"
+                  : faceVerified
+                    ? "bg-amber-500 hover:bg-amber-600 text-white shadow-lg shadow-amber-200/60 active:scale-[0.98]"
                   : "bg-gray-100 text-gray-300 cursor-not-allowed border-2 border-dashed border-gray-200"
               }`}
             >
-              {faceVerified && inGeofence ? (
+              {checkingLocation || (isStabilizing && faceVerified) ? (
+                <RotateCw size={20} className="animate-spin" />
+              ) : faceVerified && inGeofence ? (
                 <CheckCircle2 size={20} />
               ) : (
                 <Lock size={18} />
               )}
-              {faceVerified && inGeofence
+              {checkingLocation || (isStabilizing && faceVerified)
+                ? "MENSTABILKAN GPS..."
+                : faceVerified && inGeofence
                 ? "CHECK IN"
-                : !inGeofence
-                  ? "Di Luar Area Geofence"
-                  : "Verifikasi Wajah Diperlukan"}
+                : faceVerified
+                  ? "STABILKAN GPS & CHECK IN"
+                  : "VERIFIKASI WAJAH DIPERLUKAN"}
             </button>
           </div>
         ) : canCheckOut ? (
@@ -2124,27 +2314,37 @@ export function AttendancePage() {
                 <p className="text-[12px] text-amber-700">
                   {!faceVerified
                     ? "Ambil foto selfie di atas terlebih dahulu untuk check-out"
-                    : "Sistem sedang memverifikasi lokasi GPS Anda (pastikan di area RSUCL)"}
+                    : checkingLocation || isStabilizing
+                      ? "Menstabilkan GPS presisi, mohon tunggu hingga proses selesai"
+                      : !isLocationReady
+                        ? `GPS belum presisi. Diperlukan akurasi maksimal ±${GPS_MAX_ACCURACY_METERS} meter dan usia lokasi maksimal ${GPS_MAX_LOCATION_AGE_MS / 1000} detik`
+                        : geofenceState === "uncertain"
+                          ? "Posisi GPS masih menyentuh batas area. Tekan tombol untuk menstabilkan ulang"
+                        : "Lokasi berada di luar area RSUCL. Tekan tombol untuk memeriksa ulang"}
                 </p>
               </div>
             )}
             <button
-              onClick={handleAction}
-              disabled={submitting}
+              onClick={() => void handleAction()}
+              disabled={submitting || checkingLocation}
               className={`w-full py-4 rounded-2xl font-semibold text-[16px] transition-all flex items-center justify-center gap-3 active:scale-[0.98] ${
                 faceVerified && inGeofence
                   ? "bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-200/60"
                   : "bg-amber-500 hover:bg-amber-600 text-white shadow-lg shadow-amber-200/60"
               }`}
             >
-              {faceVerified && inGeofence ? (
+              {checkingLocation || (isStabilizing && faceVerified) ? (
+                <RotateCw size={20} className="animate-spin" />
+              ) : faceVerified && inGeofence ? (
                 <Clock size={20} />
               ) : !faceVerified ? (
                 <Camera size={20} />
               ) : (
                 <MapPin size={20} />
               )}
-              {faceVerified && inGeofence
+              {checkingLocation || (isStabilizing && faceVerified)
+                ? "MENSTABILKAN GPS..."
+                : faceVerified && inGeofence
                 ? "CHECK OUT"
                 : !faceVerified
                   ? "AMBIL FOTO UNTUK CHECK OUT"
@@ -2178,6 +2378,11 @@ export function AttendancePage() {
       <GPSCard
         userLocation={userLocation}
         gpsActive={gpsActive}
+        isLocationReady={isLocationReady}
+        isStabilizing={isStabilizing}
+        locationAgeMs={locationAgeMs}
+        gpsErrorMsg={gpsErrorMsg}
+        geofenceState={geofenceState}
         inGeofence={inGeofence}
         distance={distance}
         hospLat={HOSP_LAT}
@@ -2286,8 +2491,14 @@ export function AttendancePage() {
           {
             icon: Navigation,
             label: "GPS",
-            st: gpsActive ? "Aktif" : "Nonaktif",
-            ok: gpsActive,
+            st: isStabilizing
+              ? "Stabilisasi"
+              : isLocationReady
+                ? "Presisi"
+                : gpsActive
+                  ? "Kurang Akurat"
+                  : "Nonaktif",
+            ok: isLocationReady || isDinasLuar,
           },
           {
             icon: Target,
@@ -2296,7 +2507,9 @@ export function AttendancePage() {
               ? "Dinas Luar (Bebas)"
               : inGeofence
                 ? "Terverifikasi"
-                : "Di Luar Area",
+                : !isLocationReady
+                  ? "Menunggu GPS"
+                  : "Di Luar Area",
             ok: isDinasLuar ? true : inGeofence,
           },
         ].map(({ icon: Icon, label, st, ok }, i) => (
@@ -2440,7 +2653,7 @@ export function AttendancePage() {
                 />
                 <p className="text-[11.5px] text-amber-800 leading-relaxed font-medium">
                   <span className="block font-bold text-amber-900 mb-0.5">
-                    ⚠️ Perhatian!
+                    Perhatian!
                   </span>
                   Pastikan Anda melakukan checkout sesuai dengan waktu
                   kepulangan yang sebenarnya.{" "}
@@ -2487,7 +2700,7 @@ export function AttendancePage() {
                     ? `Dalam Area (~${Math.round(distance ?? 0)}m)`
                     : `Luar Area (~${Math.round(distance ?? 0)}m)`,
                 },
-                { label: "Verifikasi Wajah", value: "✅ Terverifikasi" },
+                { label: "Verifikasi Wajah", value: "Terverifikasi" },
               ].map(({ label, value }, i) => (
                 <div key={i} className="flex justify-between">
                   <span className="text-[12px] text-gray-500">{label}</span>
@@ -2499,7 +2712,7 @@ export function AttendancePage() {
 
               {!canCheckIn && !canCheckOut && (
                 <div className="p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-[11px] font-semibold text-center mt-2 leading-relaxed">
-                  ⚠️ Batas waktu absensi telah ditutup. Anda tidak dapat
+                  Batas waktu absensi telah ditutup. Anda tidak dapat
                   melakukan absensi saat ini.
                 </div>
               )}

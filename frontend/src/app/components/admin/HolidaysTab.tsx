@@ -295,7 +295,7 @@ export function HolidaysTab() {
         </div>
         
         {/* Year Filter */}
-        <div className="flex items-center gap-2 bg-white rounded-xl border border-gray-100 p-1 shadow-sm">
+        <div className="flex flex-wrap items-center gap-2 bg-white rounded-xl border border-gray-100 p-1">
           {Array.from({ length: 7 }, (_, i) => currentYear - 2 + i).map(yr => (
             <button
               key={yr}
@@ -613,7 +613,7 @@ export function HolidaysTab() {
                           </div>
                           {assign.note && (
                             <p className="text-[10.5px] text-purple-600 bg-purple-50/50 border border-purple-100/50 rounded px-2 py-0.5 w-max mt-1.5">
-                              📌 {assign.note}
+                              {assign.note}
                             </p>
                           )}
                         </div>

@@ -137,6 +137,12 @@ class Employee extends Model
      */
     public function shouldCountSundayInLeave(): bool
     {
+        // PJ Bagian mengikuti kalender kerja office meskipun berasal dari unit 24 jam/shift.
+        $this->loadMissing('user');
+        if ($this->user?->isPjBagian()) {
+            return false;
+        }
+
         $dept = $this->department;
         if (!$dept && $this->department_id) {
             $dept = Department::find($this->department_id);

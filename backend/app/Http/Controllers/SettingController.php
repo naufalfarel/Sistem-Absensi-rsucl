@@ -2,12 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Notification;
 use App\Models\Setting;
+use App\Models\User;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Class SettingController
- * 
+ *
  * Mengelola konfigurasi dan parameter sistem absensi global.
  * Pengaturan mencakup batas toleransi waktu keterlambatan, geofence rumah sakit (koordinat latitude/longitude),
  * radius toleransi GPS, logo instansi, serta preferensi notifikasi sistem.
@@ -46,6 +50,8 @@ class SettingController extends Controller
         'hospital_longitude',
         'attendance_radius_meters',
         'enable_gps_validation',     // Status keaktifan validasi radius GPS (1 = aktif, 0 = nonaktif)
+        'gps_max_accuracy_meters',   // Ketidakpastian maksimum sampel GPS (default: 100 meter)
+        'gps_max_age_seconds',       // Umur maksimum sampel GPS sebelum dianggap cache/lama
         // ── Toleransi Check-in & Jendela Absen Baru ──
         'checkin_tolerance_minutes',
         'early_checkin_window_minutes',
@@ -58,11 +64,11 @@ class SettingController extends Controller
 
     /**
      * GET /api/settings
-     * 
+     *
      * Mengambil seluruh data pengaturan sistem yang ada di database.
      * Jika konfigurasi belum ada di database, maka nilai default akan digunakan.
-     * 
-     * @return \Illuminate\Http\JsonResponse
+     *
+     * @return JsonResponse
      */
     public function index()
     {
@@ -80,54 +86,55 @@ class SettingController extends Controller
 
     /**
      * PUT /api/settings
-     * 
+     *
      * Memperbarui satu atau beberapa nilai konfigurasi sistem absensi.
      * Mendukung pemrosesan upload logo berupa string Base64.
-     * 
-     * @param Request $request
-     * @return \Illuminate\Http\JsonResponse
+     *
+     * @return JsonResponse
      */
     public function update(Request $request)
     {
         // Validasi input parameter konfigurasi
         $request->validate([
-            'system_active'           => 'sometimes|in:0,1',
-            'checkin_open'            => 'sometimes|integer|min:0|max:1440',
-            'late_limit'              => 'sometimes|integer|min:0|max:1440',
-            'close_checkin'           => 'sometimes|integer|min:0|max:1440',
-            'break_start'             => 'sometimes|date_format:H:i',
-            'break_end'               => 'sometimes|date_format:H:i',
-            'checkout_open'           => 'sometimes|integer|min:0|max:1440',
-            'checkout_close'          => 'sometimes|integer|min:0|max:1440',
-            'sat_checkout_open'       => 'sometimes|integer|min:0|max:1440',
-            'sat_checkout_close'      => 'sometimes|integer|min:0|max:1440',
-            'gps_radius'              => 'sometimes|integer|min:1|max:50000',
-            'hospital_lat'            => 'sometimes|numeric',
-            'hospital_lng'            => 'sometimes|numeric',
-            'logo_url'                => 'sometimes|string|nullable',
-            'notif_email'             => 'sometimes|in:0,1',
-            'notif_late'              => 'sometimes|in:0,1',
-            'notif_leave'             => 'sometimes|in:0,1',
-            'notif_system'            => 'sometimes|in:0,1',
+            'system_active' => 'sometimes|in:0,1',
+            'checkin_open' => 'sometimes|integer|min:0|max:1440',
+            'late_limit' => 'sometimes|integer|min:0|max:1440',
+            'close_checkin' => 'sometimes|integer|min:0|max:1440',
+            'break_start' => 'sometimes|date_format:H:i',
+            'break_end' => 'sometimes|date_format:H:i',
+            'checkout_open' => 'sometimes|integer|min:0|max:1440',
+            'checkout_close' => 'sometimes|integer|min:0|max:1440',
+            'sat_checkout_open' => 'sometimes|integer|min:0|max:1440',
+            'sat_checkout_close' => 'sometimes|integer|min:0|max:1440',
+            'gps_radius' => 'sometimes|integer|min:1|max:50000',
+            'hospital_lat' => 'sometimes|numeric',
+            'hospital_lng' => 'sometimes|numeric',
+            'logo_url' => 'sometimes|string|nullable',
+            'notif_email' => 'sometimes|in:0,1',
+            'notif_late' => 'sometimes|in:0,1',
+            'notif_leave' => 'sometimes|in:0,1',
+            'notif_system' => 'sometimes|in:0,1',
             // Kuota Cuti Tahunan
-            'leave_reset_month'               => 'sometimes|integer|min:1|max:12',
-            'leave_reset_day'                 => 'sometimes|integer|min:1|max:31',
-            'annual_leave_quota_days'         => 'sometimes|integer|min:1|max:365',
+            'leave_reset_month' => 'sometimes|integer|min:1|max:12',
+            'leave_reset_day' => 'sometimes|integer|min:1|max:31',
+            'annual_leave_quota_days' => 'sometimes|integer|min:1|max:365',
             // Toleransi Pulang Cepat & Lembur
-            'early_checkout_grace_minutes'    => 'sometimes|integer|min:0|max:480',
-            'overtime_grace_minutes'          => 'sometimes|integer|min:0|max:480',
+            'early_checkout_grace_minutes' => 'sometimes|integer|min:0|max:480',
+            'overtime_grace_minutes' => 'sometimes|integer|min:0|max:480',
             // GPS Wajib & Sakelar Validasi
-            'hospital_latitude'               => 'sometimes|numeric',
-            'hospital_longitude'              => 'sometimes|numeric',
-            'attendance_radius_meters'        => 'sometimes|integer|min:1|max:50000',
-            'enable_gps_validation'           => 'sometimes|in:0,1',
+            'hospital_latitude' => 'sometimes|numeric',
+            'hospital_longitude' => 'sometimes|numeric',
+            'attendance_radius_meters' => 'sometimes|integer|min:1|max:50000',
+            'enable_gps_validation' => 'sometimes|in:0,1',
+            'gps_max_accuracy_meters' => 'sometimes|numeric|min:10|max:1000',
+            'gps_max_age_seconds' => 'sometimes|integer|min:5|max:300',
             // Toleransi Check-in & Jendela Absen Baru
-            'checkin_tolerance_minutes'       => 'sometimes|integer|min:0|max:1440',
-            'early_checkin_window_minutes'    => 'sometimes|integer|min:0|max:1440',
-            'checkin_open_time'               => 'sometimes|string',
-            'checkin_late_after_time'         => 'sometimes|string',
-            'checkin_close_time'              => 'sometimes|string',
-            'late_fee_per_minute'             => 'sometimes|integer|min:0',
+            'checkin_tolerance_minutes' => 'sometimes|integer|min:0|max:1440',
+            'early_checkin_window_minutes' => 'sometimes|integer|min:0|max:1440',
+            'checkin_open_time' => 'sometimes|string',
+            'checkin_late_after_time' => 'sometimes|string',
+            'checkin_close_time' => 'sometimes|string',
+            'late_fee_per_minute' => 'sometimes|integer|min:0',
         ]);
 
         // Proses khusus untuk upload logo instansi
@@ -140,7 +147,7 @@ class SettingController extends Controller
                 if ($logoPath) {
                     Setting::set('logo_url', asset($logoPath));
                 }
-            } else if ($logoInput === '' || $logoInput === null || $logoInput === 'none') {
+            } elseif ($logoInput === '' || $logoInput === null || $logoInput === 'none') {
                 // Hapus logo lama jika parameter diset kosong/dihapus
                 $this->deleteOldLogo();
                 Setting::set('logo_url', $logoInput ?? '');
@@ -157,14 +164,14 @@ class SettingController extends Controller
         // Buat notifikasi sistem untuk seluruh administrator jika opsi notif_system diaktifkan
         $notifSystem = Setting::get('notif_system', '0');
         if ($notifSystem !== '0') {
-            $admins = \App\Models\User::whereIn('role', ['admin', 'super_admin'])->get();
+            $admins = User::whereIn('role', ['admin', 'super_admin'])->get();
             foreach ($admins as $admin) {
-                \App\Models\Notification::create([
+                Notification::create([
                     'user_id' => $admin->id,
-                    'title'   => 'Konfigurasi Sistem Diperbarui',
-                    'body'    => 'Pengaturan sistem absensi RSUCL telah diperbarui oleh ' . $request->user()->name . '.',
-                    'type'    => 'system',
-                    'data'    => ['updated_by' => $request->user()->id],
+                    'title' => 'Konfigurasi Sistem Diperbarui',
+                    'body' => 'Pengaturan sistem absensi RSUCL telah diperbarui oleh '.$request->user()->name.'.',
+                    'type' => 'system',
+                    'data' => ['updated_by' => $request->user()->id],
                 ]);
             }
         }
@@ -175,8 +182,6 @@ class SettingController extends Controller
     /**
      * Menghapus file logo lama dari penyimpanan lokal storage public
      * jika ada, guna mencegah sampah file yang menumpuk.
-     * 
-     * @return void
      */
     private function deleteOldLogo(): void
     {
@@ -188,8 +193,8 @@ class SettingController extends Controller
                 // Konversi path URL absolute ke path Storage lokal Laravel
                 if (str_starts_with($parsed, '/storage/')) {
                     $relativePath = substr($parsed, 9); // potong string '/storage/'
-                    if (\Illuminate\Support\Facades\Storage::disk('public')->exists($relativePath)) {
-                        \Illuminate\Support\Facades\Storage::disk('public')->delete($relativePath);
+                    if (Storage::disk('public')->exists($relativePath)) {
+                        Storage::disk('public')->delete($relativePath);
                     }
                 }
             }
@@ -198,20 +203,20 @@ class SettingController extends Controller
 
     /**
      * Menyimpan data Base64 gambar logo ke public storage disk.
-     * 
-     * @param string $imgData String Base64 gambar
+     *
+     * @param  string  $imgData  String Base64 gambar
      * @return string|null Path relatif file gambar yang berhasil disimpan
      */
     private function storeBase64Logo(string $imgData): ?string
     {
         // Validasi header format Base64 image
-        if (!preg_match('/^data:image\/(\w+);base64,/', $imgData, $type)) {
+        if (! preg_match('/^data:image\/(\w+);base64,/', $imgData, $type)) {
             return null;
         }
         $imgData = substr($imgData, strpos($imgData, ',') + 1);
-        $type    = strtolower($type[1]); // Ekstensi gambar: png, jpg, jpeg, webp
+        $type = strtolower($type[1]); // Ekstensi gambar: png, jpg, jpeg, webp
 
-        if (!in_array($type, ['jpg', 'jpeg', 'png', 'webp'])) {
+        if (! in_array($type, ['jpg', 'jpeg', 'png', 'webp'])) {
             return null;
         }
         $decoded = base64_decode($imgData);
@@ -220,58 +225,60 @@ class SettingController extends Controller
         }
 
         // Tentukan nama file secara acak/unik dan simpan di folder 'logos/'
-        $fileName = 'hospital_logo_' . time() . '.' . $type;
-        \Illuminate\Support\Facades\Storage::disk('public')->put('logos/' . $fileName, $decoded);
+        $fileName = 'hospital_logo_'.time().'.'.$type;
+        Storage::disk('public')->put('logos/'.$fileName, $decoded);
 
-        return '/storage/logos/' . $fileName;
+        return '/storage/logos/'.$fileName;
     }
 
     /**
      * Mendapatkan nilai konfigurasi default untuk sistem absensi.
      * Digunakan apabila database kosong atau key belum terdaftar.
-     * 
-     * @param string $key Nama kunci konfigurasi
+     *
+     * @param  string  $key  Nama kunci konfigurasi
      * @return string Nilai bawaan sistem
      */
     private function defaults(string $key): string
     {
         return match ($key) {
-            'system_active'           => '1',
-            'checkin_open'            => '120',
-            'late_limit'              => '30',
-            'close_checkin'           => '60',
-            'break_start'             => '12:30',
-            'break_end'               => '13:30',
-            'checkout_open'           => '0',
-            'checkout_close'          => '60',
-            'sat_checkout_open'       => '0',
-            'sat_checkout_close'      => '60',
-            'gps_radius'              => '100',
-            'hospital_lat'            => '5.552740480177099',
-            'hospital_lng'            => '95.33486560781716',
-            'hospital_latitude'       => '5.552740480177099',
-            'hospital_longitude'      => '95.33486560781716',
-            'attendance_radius_meters'=> '100',
-            'enable_gps_validation'   => '1',
-            'notif_email'             => '1',
-            'notif_late'              => '1',
-            'notif_leave'             => '1',
-            'notif_system'            => '0',
+            'system_active' => '1',
+            'checkin_open' => '120',
+            'late_limit' => '30',
+            'close_checkin' => '60',
+            'break_start' => '12:30',
+            'break_end' => '13:30',
+            'checkout_open' => '0',
+            'checkout_close' => '60',
+            'sat_checkout_open' => '0',
+            'sat_checkout_close' => '60',
+            'gps_radius' => '100',
+            'hospital_lat' => '5.552740480177099',
+            'hospital_lng' => '95.33486560781716',
+            'hospital_latitude' => '5.552740480177099',
+            'hospital_longitude' => '95.33486560781716',
+            'attendance_radius_meters' => '100',
+            'enable_gps_validation' => '1',
+            'gps_max_accuracy_meters' => '100',
+            'gps_max_age_seconds' => '30',
+            'notif_email' => '1',
+            'notif_late' => '1',
+            'notif_leave' => '1',
+            'notif_system' => '0',
             // Kuota Cuti Tahunan
-            'leave_reset_month'               => '4',
-            'leave_reset_day'                 => '1',
-            'annual_leave_quota_days'         => '12',
+            'leave_reset_month' => '4',
+            'leave_reset_day' => '1',
+            'annual_leave_quota_days' => '12',
             // Toleransi Pulang Cepat & Lembur
-            'early_checkout_grace_minutes'    => '15',
-            'overtime_grace_minutes'          => '15',
+            'early_checkout_grace_minutes' => '15',
+            'overtime_grace_minutes' => '15',
             // Toleransi Check-in & Jendela Absen Baru
-            'checkin_tolerance_minutes'       => '10',
-            'early_checkin_window_minutes'    => '150',
-            'checkin_open_time'               => '08:00',
-            'checkin_late_after_time'         => '08:30',
-            'checkin_close_time'              => '09:00',
-            'late_fee_per_minute'             => '500',
-            default                           => '',
+            'checkin_tolerance_minutes' => '10',
+            'early_checkin_window_minutes' => '150',
+            'checkin_open_time' => '08:00',
+            'checkin_late_after_time' => '08:30',
+            'checkin_close_time' => '09:00',
+            'late_fee_per_minute' => '500',
+            default => '',
         };
     }
 }

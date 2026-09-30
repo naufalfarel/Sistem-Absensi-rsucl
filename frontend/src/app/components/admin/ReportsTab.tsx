@@ -43,8 +43,14 @@ import {
   assignmentLetterApi,
   resignationApi,
   disciplinarySanctionApi,
+  OvertimeRequest,
 } from "../../../services/api";
 import { MonthYearDeptFilter } from "../ui/MonthYearDeptFilter";
+import {
+  areOvertimeUnitNamesEquivalent,
+  calculateEmployeeOvertimeCompensation,
+  resolveOvertimeUnitName,
+} from "../../../utils/overtimeCompensation";
 import logoImg from "../../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x130.jpeg";
 import rsLogoImg from "../../../imports/rsucl_wide_logo.png";
 import { useAuth } from "../../../context/AuthContext";
@@ -100,6 +106,10 @@ export function ReportsTab() {
   // State khusus rentang tanggal lembur
   const [overtimeDateFrom, setOvertimeDateFrom] = useState<string>("");
   const [overtimeDateTo, setOvertimeDateTo] = useState<string>("");
+  const [monthlyDateFrom, setMonthlyDateFrom] = useState<string>("");
+  const [monthlyDateTo, setMonthlyDateTo] = useState<string>("");
+  const [leaveDateFrom, setLeaveDateFrom] = useState<string>("");
+  const [leaveDateTo, setLeaveDateTo] = useState<string>("");
 
 
   // State Laporan Keterlambatan & Potongan
@@ -237,6 +247,15 @@ export function ReportsTab() {
   const handleExportExcel = async (type: "harian" | "bulanan" = "harian") => {
     setExporting(true);
     try {
+      if (type === "bulanan" && (!!monthlyDateFrom !== !!monthlyDateTo)) {
+        alert("Pilih tanggal awal dan tanggal akhir absensi bulanan.");
+        return;
+      }
+      if (type === "bulanan" && monthlyDateFrom && monthlyDateTo && monthlyDateFrom > monthlyDateTo) {
+        alert("Tanggal awal absensi bulanan tidak boleh melewati tanggal akhir.");
+        return;
+      }
+
       // Load logo as base64 for inline embedding in HTML Excel
       const logoPath = logoUrl && logoUrl !== "none" ? logoUrl : rsLogoImg;
       let base64Logo = "";
@@ -254,8 +273,13 @@ export function ReportsTab() {
       }
 
       const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
-      const startDayStr = `01-${String(selectedMonth).padStart(2, "0")}-${selectedYear}`;
-      const endDayStr = `${String(lastDay).padStart(2, "0")}-${String(selectedMonth).padStart(2, "0")}-${selectedYear}`;
+      const defaultDateFrom = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-01`;
+      const defaultDateTo = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+      const reportDateFrom = type === "bulanan" && monthlyDateFrom ? monthlyDateFrom : defaultDateFrom;
+      const reportDateTo = type === "bulanan" && monthlyDateTo ? monthlyDateTo : defaultDateTo;
+      const formatReportDate = (value: string) => value.split("-").reverse().join("-");
+      const startDayStr = formatReportDate(reportDateFrom);
+      const endDayStr = formatReportDate(reportDateTo);
       const periodStr = `Dari ${startDayStr} s/d ${endDayStr}`;
 
       const triggerDownload = (html: string, filename: string) => {
@@ -404,7 +428,12 @@ export function ReportsTab() {
           `Laporan_Harian_RSUCL_${selectedYear}_${String(selectedMonth).padStart(2, "0")}${deptSuffix}.xls`,
         );
       } else {
-        const res = await reportApi.monthlyRekap(selectedMonth, selectedYear);
+        const res = await reportApi.monthlyRekap(
+          selectedMonth,
+          selectedYear,
+          monthlyDateFrom || undefined,
+          monthlyDateTo || undefined,
+        );
         if (!res.success || !res.data) {
           alert("Gagal memuat data rekap bulanan.");
           return;
@@ -480,7 +509,7 @@ export function ReportsTab() {
 
         triggerDownload(
           excelWrapper("Laporan Bulanan", body),
-          `Laporan_Bulanan_RSUCL_${selectedYear}_${String(selectedMonth).padStart(2, "0")}${deptSuffix}.xls`,
+          `Laporan_Bulanan_RSUCL_${reportDateFrom}_${reportDateTo}${deptSuffix}.xls`,
         );
       }
     } catch (err) {
@@ -566,6 +595,40 @@ export function ReportsTab() {
     } catch (err: any) {
       console.error(err);
       alert(err.message || "Terjadi kesalahan saat mengekspor Excel.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleExportFaskes = async () => {
+    setExporting(true);
+    try {
+      const token = getToken();
+      let envVal = import.meta.env.VITE_API_URL;
+      if (envVal === "") envVal = "";
+      else if (!envVal) envVal = "http://localhost:8000";
+      const apiUrl = envVal.replace(/\/api\/?$/, "");
+      const response = await fetch(`${apiUrl}/api/reports/faskes/export`, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        throw new Error("Gagal mengekspor data faskes. Pastikan Anda masuk sebagai Admin.");
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "Data_Faskes_Pegawai_RSUCL.xlsx";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || "Terjadi kesalahan saat mengekspor data faskes.");
     } finally {
       setExporting(false);
     }
@@ -1050,6 +1113,16 @@ export function ReportsTab() {
 
   const handleExportPDF = async (type: "harian" | "bulanan" = "harian") => {
     setExporting(true);
+    if (type === "bulanan" && (!!monthlyDateFrom !== !!monthlyDateTo)) {
+      alert("Pilih tanggal awal dan tanggal akhir absensi bulanan.");
+      setExporting(false);
+      return;
+    }
+    if (type === "bulanan" && monthlyDateFrom && monthlyDateTo && monthlyDateFrom > monthlyDateTo) {
+      alert("Tanggal awal absensi bulanan tidak boleh melewati tanggal akhir.");
+      setExporting(false);
+      return;
+    }
     const printWindow = window.open("", "_blank");
     if (!printWindow) {
       alert("Mohon izinkan popup blocker untuk mencetak laporan.");
@@ -1152,7 +1225,12 @@ export function ReportsTab() {
           })
           .join("");
       } else {
-        const res = await reportApi.monthlyRekap(selectedMonth, selectedYear);
+        const res = await reportApi.monthlyRekap(
+          selectedMonth,
+          selectedYear,
+          monthlyDateFrom || undefined,
+          monthlyDateTo || undefined,
+        );
         if (!res.success || !res.data) {
           alert("Gagal memuat data rekap bulanan.");
           printWindow.close();
@@ -1244,7 +1322,9 @@ export function ReportsTab() {
         "November",
         "Desember",
       ];
-      const periodStr = `${months[selectedMonth - 1]} ${selectedYear}`;
+      const periodStr = type === "bulanan" && monthlyDateFrom && monthlyDateTo
+        ? `${monthlyDateFrom.split("-").reverse().join("-")} s/d ${monthlyDateTo.split("-").reverse().join("-")}`
+        : `${months[selectedMonth - 1]} ${selectedYear}`;
 
       const content = `
         <html>
@@ -1446,11 +1526,132 @@ export function ReportsTab() {
     return dateStr;
   };
 
-  const getShiftType = (startTime: string) => {
-    if (!startTime) return "pagi";
-    const hr = parseInt(startTime.split(":")[0] || "0", 10);
-    if (hr >= 19 || hr < 6) return "malam";
-    return "pagi";
+  const getOvertimeReportRange = () => {
+    if (!!overtimeDateFrom !== !!overtimeDateTo) {
+      throw new Error("Pilih tanggal awal dan tanggal akhir rekap lembur.");
+    }
+    if (
+      overtimeDateFrom &&
+      overtimeDateTo &&
+      overtimeDateFrom > overtimeDateTo
+    ) {
+      throw new Error(
+        "Tanggal awal rekap lembur tidak boleh melewati tanggal akhir.",
+      );
+    }
+
+    const month = String(selectedMonth).padStart(2, "0");
+    const startDate = overtimeDateFrom || `${selectedYear}-${month}-01`;
+    const endDate =
+      overtimeDateTo ||
+      `${selectedYear}-${month}-${String(
+        new Date(selectedYear, selectedMonth, 0).getDate(),
+      ).padStart(2, "0")}`;
+
+    return {
+      startDate,
+      endDate,
+      period:
+        overtimeDateFrom && overtimeDateTo
+          ? `${overtimeDateFrom} s.d ${overtimeDateTo}`
+          : getMonthsLabel(selectedMonth, selectedYear),
+    };
+  };
+
+  /** Ambil semua halaman agar total laporan tidak terpotong batas API. */
+  const fetchAllOvertimeReportRecords = async (
+    startDate: string,
+    endDate: string,
+  ): Promise<OvertimeRequest[]> => {
+    const records: OvertimeRequest[] = [];
+    let page = 1;
+    let lastPage = 1;
+
+    do {
+      const res = await overtimeApi.list({
+        status: "approved",
+        date_from: startDate,
+        date_to: endDate,
+        page,
+        per_page: 1000,
+      });
+      if (!res.success) {
+        throw new Error("Gagal memuat data lembur.");
+      }
+
+      records.push(...res.data);
+      lastPage = Math.max(1, res.meta?.last_page ?? 1);
+      page += 1;
+    } while (page <= lastPage);
+
+    return records;
+  };
+
+  const filterOvertimeReportRecords = (
+    records: OvertimeRequest[],
+    reportDepartments: typeof departments,
+  ): OvertimeRequest[] => {
+    const selectedDepartmentName =
+      selectedDepartment === "all"
+        ? null
+        : reportDepartments.find(
+            (department) => String(department.id) === selectedDepartment,
+          )?.name ?? selectedDepartment;
+
+    return records.filter((record) => {
+      if (record.status !== "approved") return false;
+      if (!selectedDepartmentName) return true;
+      return areOvertimeUnitNamesEquivalent(
+        resolveOvertimeUnitName(record),
+        selectedDepartmentName,
+      );
+    });
+  };
+
+  const loadOvertimeReportData = async (startDate: string, endDate: string) => {
+    const [records, departmentResponse] = await Promise.all([
+      fetchAllOvertimeReportRecords(startDate, endDate),
+      departmentApi.list(),
+    ]);
+    if (!departmentResponse.success) {
+      throw new Error("Gagal memuat aturan unit kerja. Silakan ulangi ekspor lembur.");
+    }
+    const reportDepartments = departmentResponse.data;
+    return {
+      data: filterOvertimeReportRecords(records, reportDepartments),
+      reportDepartments,
+    };
+  };
+
+  const formatOvertimeDuration = (durationMinutes: number) => {
+    const hours = Math.floor(durationMinutes / 60);
+    const minutes = durationMinutes % 60;
+    if (durationMinutes === 0) return "0 Menit";
+    if (hours > 0 && minutes > 0) return `${hours} Jam ${minutes} Menit`;
+    if (hours > 0) return `${hours} Jam`;
+    return `${minutes} Menit`;
+  };
+
+  const formatOvertimePayBreakdown = (breakdown: {
+    dayShiftCount: number;
+    nightShiftCount: number;
+    regularPayableHours: number;
+    dentalPayableHours: number;
+  }) => {
+    const parts: string[] = [];
+    if (breakdown.dayShiftCount > 0) {
+      parts.push(`${breakdown.dayShiftCount} shift pagi/siang`);
+    }
+    if (breakdown.nightShiftCount > 0) {
+      parts.push(`${breakdown.nightShiftCount} shift malam`);
+    }
+    if (breakdown.regularPayableHours > 0) {
+      parts.push(`${breakdown.regularPayableHours} jam reguler`);
+    }
+    if (breakdown.dentalPayableHours > 0) {
+      parts.push(`${breakdown.dentalPayableHours} jam akumulasi Poli Gigi`);
+    }
+    return parts.length > 0 ? parts.join(" + ") : "Tidak ada waktu yang dibayar";
   };
 
 
@@ -1458,28 +1659,14 @@ export function ReportsTab() {
   const handleExportOvertimeExcel = async () => {
     setHrExporting("lembur");
     try {
+      const { startDate, endDate, period } = getOvertimeReportRange();
       const logo = await loadLogoBase64();
-      let period = getMonthsLabel(selectedMonth, selectedYear);
-      let startDate = `${selectedYear}-${String(selectedMonth).padStart(2,"0")}-01`;
-      let endDate = `${selectedYear}-${String(selectedMonth).padStart(2,"0")}-${String(new Date(selectedYear, selectedMonth, 0).getDate()).padStart(2,"0")}`;
-
-      if (overtimeDateFrom && overtimeDateTo) {
-        startDate = overtimeDateFrom;
-        endDate = overtimeDateTo;
-        period = `${overtimeDateFrom} s.d ${overtimeDateTo}`;
-      }
-
-      const res = await overtimeApi.list({ date_from: startDate, date_to: endDate, per_page: 9999 });
-      if (!res.success) { alert("Gagal memuat data lembur."); return; }
-      const data = res.data.filter(r => {
-        const deptOk = selectedDepartment === "all" || r.employee?.department === selectedDepartment;
-        return r.status === "approved" && deptOk;
-      });
+      const { data, reportDepartments } = await loadOvertimeReportData(startDate, endDate);
 
       // Group by Employee
       data.sort((a, b) => {
-        const deptA = a.employee?.department || "";
-        const deptB = b.employee?.department || "";
+        const deptA = resolveOvertimeUnitName(a);
+        const deptB = resolveOvertimeUnitName(b);
         if (deptA !== deptB) return deptA.localeCompare(deptB);
         const nameA = a.employee?.name || "";
         const nameB = b.employee?.name || "";
@@ -1489,6 +1676,12 @@ export function ReportsTab() {
       let rows = ""; let no = 1;
       let grandTotalMinutesAll = 0;
       let grandTotalPayAll = 0;
+      const grandBreakdown = {
+        dayShiftCount: 0,
+        nightShiftCount: 0,
+        regularPayableHours: 0,
+        dentalPayableHours: 0,
+      };
       
       const groupedData: Record<number, typeof data> = {};
       data.forEach(r => {
@@ -1500,45 +1693,19 @@ export function ReportsTab() {
       for (const empId of Object.keys(groupedData)) {
         const empData = groupedData[parseInt(empId, 10)];
         const emp = empData[0].employee;
-        const deptInfo = departments.find(d => d.name === emp?.department);
-        const isShift24h = deptInfo?.count_sunday_in_leave === true;
+        const compensation = calculateEmployeeOvertimeCompensation(
+          empData,
+          reportDepartments,
+        );
 
-        let empRegMins = 0;
-        let empPagiMins = 0;
-        let empMalamMins = 0;
-        
-        empData.forEach(r => {
-          let durMin = 0;
-          if (r.system_checkout_data?.overtime_minutes && r.system_checkout_data.overtime_minutes > 0) {
-            durMin = r.system_checkout_data.overtime_minutes;
-          } else if (r.start_time && r.end_time) {
-            const [sh, sm] = r.start_time.split(":").map(Number);
-            const [eh, em] = r.end_time.split(":").map(Number);
-            if (!isNaN(sh) && !isNaN(sm) && !isNaN(eh) && !isNaN(em)) {
-              let sMins = sh * 60 + sm;
-              let eMins = eh * 60 + em;
-              if (eMins < sMins) eMins += 24 * 60;
-              durMin = Math.max(0, eMins - sMins);
-            }
-          }
-          
-          if (isShift24h) {
-            const shiftType = getShiftType(r.start_time || "");
-            if (shiftType === "malam") empMalamMins += durMin;
-            else empPagiMins += durMin;
-          } else {
-            empRegMins += durMin;
-          }
-
-          const durHours = Math.floor(durMin / 60);
-          const durMinsRem = durMin % 60;
-          let durFormatted = durMin === 0 ? "0 Menit" : (durHours > 0 && durMinsRem > 0 ? `${durHours} Jam ${durMinsRem} Menit` : (durHours > 0 ? `${durHours} Jam` : `${durMinsRem} Menit`));
+        compensation.lines.forEach(({ record: r, durationMinutes, unitName }) => {
+          const durFormatted = formatOvertimeDuration(durationMinutes);
 
           rows += `<tr>
             <td class="center">${no++}</td>
             <td class="center" x:str>${emp?.nik_ktp ?? "--"}</td>
             <td class="bold">${emp?.name ?? "--"}</td>
-            <td>${emp?.department ?? "--"}</td>
+            <td>${unitName}</td>
             <td class="center">${r.date ?? "--"}</td>
             <td class="center">${r.start_time ?? "--"}</td>
             <td class="center">${r.end_time ?? "--"}</td>
@@ -1550,26 +1717,25 @@ export function ReportsTab() {
           </tr>`;
         });
 
-        const empTotalMins = empRegMins + empPagiMins + empMalamMins;
+        const empTotalMins = compensation.totalMinutes;
+        const empTotalPay = compensation.totalPay;
         grandTotalMinutesAll += empTotalMins;
-        
-        const payReg = Math.floor(empRegMins / 60) * 10000;
-        const payPagi = Math.floor(empPagiMins / 60) * 50000;
-        const payMalam = Math.floor(empMalamMins / 60) * 60000;
-        const empTotalPay = payReg + payPagi + payMalam;
         grandTotalPayAll += empTotalPay;
+        grandBreakdown.dayShiftCount += compensation.breakdown.dayShiftCount;
+        grandBreakdown.nightShiftCount += compensation.breakdown.nightShiftCount;
+        grandBreakdown.regularPayableHours +=
+          compensation.breakdown.regularPayableHours;
+        grandBreakdown.dentalPayableHours +=
+          compensation.breakdown.dentalPayableHours;
 
-        const empHours = Math.floor(empTotalMins / 60);
-        const empMinsRem = empTotalMins % 60;
-        const empFormatted = empHours > 0 
-          ? `${empHours} Jam ${empMinsRem > 0 ? `${empMinsRem} Menit` : ''}`.trim() + ` (${empTotalMins} Menit)`
-          : `${empMinsRem} Menit`;
+        const empFormatted = `${formatOvertimeDuration(empTotalMins)} (${empTotalMins} Menit)`;
+        const payBreakdown = formatOvertimePayBreakdown(compensation.breakdown);
 
         rows += `
           <tr style="background-color:#F9FAFB;font-weight:bold;">
-            <td colspan="7" style="text-align:right;padding:6px;">TOTAL LEMBUR & NOMINAL ${emp?.name.toUpperCase()} :</td>
+            <td colspan="7" style="text-align:right;padding:6px;">TOTAL LEMBUR & NOMINAL ${(emp?.name ?? "--").toUpperCase()} :</td>
             <td class="center bold" style="background-color:#FDE68A;color:#78350F;">${empFormatted}</td>
-            <td colspan="4" style="color:#065F46;text-align:center;">Nominal: Rp ${empTotalPay.toLocaleString('id-ID')}</td>
+            <td colspan="4" style="color:#065F46;text-align:center;">${payBreakdown}<br>Nominal: Rp ${empTotalPay.toLocaleString('id-ID')}</td>
           </tr>
         `;
       }
@@ -1584,7 +1750,7 @@ export function ReportsTab() {
         <tr style="background-color:#F3F4F6;font-weight:bold;">
           <td colspan="7" style="text-align:right;padding:8px;">TOTAL AKUMULASI KESELURUHAN WAKTU LEMBUR:</td>
           <td class="center bold" style="background-color:#FDE68A;color:#78350F;padding:8px;">${grandTotalFormatted}</td>
-          <td colspan="4" style="padding:8px;text-align:center;color:#065F46;">TOTAL NOMINAL: Rp ${grandTotalPayAll.toLocaleString('id-ID')}</td>
+          <td colspan="4" style="padding:8px;text-align:center;color:#065F46;">${formatOvertimePayBreakdown(grandBreakdown)}<br>TOTAL NOMINAL: Rp ${grandTotalPayAll.toLocaleString('id-ID')}</td>
         </tr>
       `;
 
@@ -1594,37 +1760,37 @@ export function ReportsTab() {
         </tr></thead><tbody>${rows || '<tr><td colspan="12" style="text-align:center;padding:20px;color:#9CA3AF;">Tidak ada data lembur pada periode ini.</td></tr>'}</tbody>
         <tfoot>${summaryFooterRow}</tfoot>
         </table>`;
-      triggerHrDownload(excelWrapperHr("Rekap Lembur", body), `Rekap_Lembur_RSUCL_${selectedYear}_${String(selectedMonth).padStart(2,"0")}.xls`);
-    } catch(e) { alert("Gagal ekspor data lembur."); } finally { setHrExporting(null); }
+      triggerHrDownload(excelWrapperHr("Rekap Lembur", body), `Rekap_Lembur_RSUCL_${startDate}_${endDate}.xls`);
+    } catch(e) {
+      alert(e instanceof Error ? e.message : "Gagal ekspor data lembur.");
+    } finally { setHrExporting(null); }
   };
 
   const handleExportOvertimePDF = async () => {
     setHrExporting("lembur-pdf");
+    let reportRange: ReturnType<typeof getOvertimeReportRange>;
+    try {
+      reportRange = getOvertimeReportRange();
+    } catch (error) {
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Rentang tanggal rekap lembur tidak valid.",
+      );
+      setHrExporting(null);
+      return;
+    }
     const pw = window.open("", "_blank");
     if (!pw) { alert("Izinkan popup untuk mencetak."); setHrExporting(null); return; }
     try {
+      const { startDate, endDate, period } = reportRange;
       const logo = await loadLogoBase64();
-      let period = getMonthsLabel(selectedMonth, selectedYear);
-      let startDate = `${selectedYear}-${String(selectedMonth).padStart(2,"0")}-01`;
-      let endDate = `${selectedYear}-${String(selectedMonth).padStart(2,"0")}-${String(new Date(selectedYear, selectedMonth, 0).getDate()).padStart(2,"0")}`;
-
-      if (overtimeDateFrom && overtimeDateTo) {
-        startDate = overtimeDateFrom;
-        endDate = overtimeDateTo;
-        period = `${overtimeDateFrom} s.d ${overtimeDateTo}`;
-      }
-
-      const res = await overtimeApi.list({ date_from: startDate, date_to: endDate, per_page: 9999 });
-      if (!res.success) { pw.close(); return; }
-      const data = res.data.filter(r => {
-        const deptOk = selectedDepartment === "all" || r.employee?.department === selectedDepartment;
-        return r.status === "approved" && deptOk;
-      });
+      const { data, reportDepartments } = await loadOvertimeReportData(startDate, endDate);
 
       // Group by Employee
       data.sort((a, b) => {
-        const deptA = a.employee?.department || "";
-        const deptB = b.employee?.department || "";
+        const deptA = resolveOvertimeUnitName(a);
+        const deptB = resolveOvertimeUnitName(b);
         if (deptA !== deptB) return deptA.localeCompare(deptB);
         const nameA = a.employee?.name || "";
         const nameB = b.employee?.name || "";
@@ -1634,6 +1800,12 @@ export function ReportsTab() {
       let rows = ""; let no = 1;
       let grandTotalMinutesAll = 0;
       let grandTotalPayAll = 0;
+      const grandBreakdown = {
+        dayShiftCount: 0,
+        nightShiftCount: 0,
+        regularPayableHours: 0,
+        dentalPayableHours: 0,
+      };
 
       const groupedData: Record<number, typeof data> = {};
       data.forEach(r => {
@@ -1645,48 +1817,21 @@ export function ReportsTab() {
       for (const empId of Object.keys(groupedData)) {
         const empData = groupedData[parseInt(empId, 10)];
         const emp = empData[0].employee;
-        const deptInfo = departments.find(d => d.name === emp?.department);
-        const isShift24h = deptInfo?.count_sunday_in_leave === true;
+        const compensation = calculateEmployeeOvertimeCompensation(
+          empData,
+          reportDepartments,
+        );
 
-        let empRegMins = 0;
-        let empPagiMins = 0;
-        let empMalamMins = 0;
-
-        empData.forEach(r => {
+        compensation.lines.forEach(({ record: r, durationMinutes, unitName }) => {
           const statusColor = r.status === "approved" ? "#D1FAE5" : r.status === "pending" ? "#FEF9C3" : "#FEE2E2";
           const statusText = r.status === "approved" ? "#065F46" : r.status === "pending" ? "#92400E" : "#991B1B";
-
-          let durMin = 0;
-          if (r.system_checkout_data?.overtime_minutes && r.system_checkout_data.overtime_minutes > 0) {
-            durMin = r.system_checkout_data.overtime_minutes;
-          } else if (r.start_time && r.end_time) {
-            const [sh, sm] = r.start_time.split(":").map(Number);
-            const [eh, em] = r.end_time.split(":").map(Number);
-            if (!isNaN(sh) && !isNaN(sm) && !isNaN(eh) && !isNaN(em)) {
-              let sMins = sh * 60 + sm;
-              let eMins = eh * 60 + em;
-              if (eMins < sMins) eMins += 24 * 60;
-              durMin = Math.max(0, eMins - sMins);
-            }
-          }
-          
-          if (isShift24h) {
-            const shiftType = getShiftType(r.start_time || "");
-            if (shiftType === "malam") empMalamMins += durMin;
-            else empPagiMins += durMin;
-          } else {
-            empRegMins += durMin;
-          }
-
-          const durHours = Math.floor(durMin / 60);
-          const durMinsRem = durMin % 60;
-          let durFormatted = durMin === 0 ? "0 Menit" : (durHours > 0 && durMinsRem > 0 ? `${durHours} Jam ${durMinsRem} Menit` : (durHours > 0 ? `${durHours} Jam` : `${durMinsRem} Menit`));
+          const durFormatted = formatOvertimeDuration(durationMinutes);
 
           rows += `<tr style="border-bottom:1px solid #E5E7EB;font-size:10px;">
             <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${no++}</td>
             <td style="padding:6px;border-right:1px solid #E5E7EB;">${emp?.nik_ktp ?? "--"}</td>
             <td style="padding:6px;font-weight:bold;border-right:1px solid #E5E7EB;">${emp?.name ?? "--"}</td>
-            <td style="padding:6px;border-right:1px solid #E5E7EB;">${emp?.department ?? "--"}</td>
+            <td style="padding:6px;border-right:1px solid #E5E7EB;">${unitName}</td>
             <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${r.date ?? "--"}</td>
             <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${r.start_time ?? "--"}</td>
             <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${r.end_time ?? "--"}</td>
@@ -1698,26 +1843,25 @@ export function ReportsTab() {
           </tr>`;
         });
 
-        const empTotalMins = empRegMins + empPagiMins + empMalamMins;
+        const empTotalMins = compensation.totalMinutes;
+        const empTotalPay = compensation.totalPay;
         grandTotalMinutesAll += empTotalMins;
-
-        const payReg = Math.floor(empRegMins / 60) * 10000;
-        const payPagi = Math.floor(empPagiMins / 60) * 50000;
-        const payMalam = Math.floor(empMalamMins / 60) * 60000;
-        const empTotalPay = payReg + payPagi + payMalam;
         grandTotalPayAll += empTotalPay;
+        grandBreakdown.dayShiftCount += compensation.breakdown.dayShiftCount;
+        grandBreakdown.nightShiftCount += compensation.breakdown.nightShiftCount;
+        grandBreakdown.regularPayableHours +=
+          compensation.breakdown.regularPayableHours;
+        grandBreakdown.dentalPayableHours +=
+          compensation.breakdown.dentalPayableHours;
 
-        const empHours = Math.floor(empTotalMins / 60);
-        const empMinsRem = empTotalMins % 60;
-        const empFormatted = empHours > 0 
-          ? `${empHours} Jam ${empMinsRem > 0 ? `${empMinsRem} Menit` : ''}`.trim() + ` (${empTotalMins} Menit)`
-          : `${empMinsRem} Menit`;
+        const empFormatted = `${formatOvertimeDuration(empTotalMins)} (${empTotalMins} Menit)`;
+        const payBreakdown = formatOvertimePayBreakdown(compensation.breakdown);
 
         rows += `
           <tr style="background-color:#F9FAFB;font-weight:bold;font-size:10px;">
-            <td colspan="7" style="text-align:right;padding:6px;">TOTAL LEMBUR & NOMINAL ${emp?.name.toUpperCase()} :</td>
+            <td colspan="7" style="text-align:right;padding:6px;">TOTAL LEMBUR & NOMINAL ${(emp?.name ?? "--").toUpperCase()} :</td>
             <td class="center bold" style="background-color:#FDE68A;color:#78350F;">${empFormatted}</td>
-            <td colspan="4" style="color:#065F46;text-align:center;padding:6px;">Nominal: Rp ${empTotalPay.toLocaleString('id-ID')}</td>
+            <td colspan="4" style="color:#065F46;text-align:center;padding:6px;">${payBreakdown}<br>Nominal: Rp ${empTotalPay.toLocaleString('id-ID')}</td>
           </tr>
         `;
       }
@@ -1732,13 +1876,16 @@ export function ReportsTab() {
         <tr style="background-color:#F3F4F6;font-size:10px;font-weight:bold;border-top:2px solid #16A34A;">
           <td colspan="7" style="padding:8px;text-align:right;">TOTAL AKUMULASI KESELURUHAN WAKTU LEMBUR:</td>
           <td style="padding:8px;text-align:center;background-color:#FDE68A;color:#78350F;font-weight:bold;">${grandTotalFormatted}</td>
-          <td colspan="4" style="padding:8px;text-align:center;color:#065F46;">TOTAL NOMINAL: Rp ${grandTotalPayAll.toLocaleString('id-ID')}</td>
+          <td colspan="4" style="padding:8px;text-align:center;color:#065F46;">${formatOvertimePayBreakdown(grandBreakdown)}<br>TOTAL NOMINAL: Rp ${grandTotalPayAll.toLocaleString('id-ID')}</td>
         </tr>
       `;
 
       pw.document.write(`<html><head><title>Rekap Lembur</title><style>body{font-family:Arial,sans-serif;padding:20px;} table{width:100%;border-collapse:collapse;border:1px solid #E5E7EB;} th{background:#16A34A;color:#fff;font-size:10px;padding:8px;text-align:left;} @media print{@page{margin:1cm;}}</style></head><body>${buildHrPdfHeader(logo,"REKAP PENGAJUAN LEMBUR",`Periode: ${period}`)}<table><thead><tr><th style="width:30px;">No</th><th>NIK KTP</th><th>Nama</th><th>Unit Kerja</th><th>Tanggal</th><th>Jam Mulai</th><th>Jam Selesai</th><th style="background-color:#D97706;color:#FFF;">Total Waktu</th><th>Alasan</th><th>Tugas</th><th>Status</th><th>Catatan Admin</th></tr></thead><tbody>${rows || '<tr><td colspan="12" style="text-align:center;padding:20px;">Tidak ada data.</td></tr>'}</tbody><tfoot>${summaryFooterRow}</tfoot></table><script>window.onload=function(){window.print();setTimeout(function(){window.close();},500);}<\/script></body></html>`);
       pw.document.close();
-    } catch(e) { pw.close(); } finally { setHrExporting(null); }
+    } catch(e) {
+      pw.close();
+      alert(e instanceof Error ? e.message : "Gagal mencetak rekap lembur.");
+    } finally { setHrExporting(null); }
   };
 
 
@@ -1746,16 +1893,27 @@ export function ReportsTab() {
   const handleExportLeaveExcel = async () => {
     setHrExporting("cuti");
     try {
+      if (!!leaveDateFrom !== !!leaveDateTo) {
+        alert("Pilih tanggal awal dan tanggal akhir rekap cuti/izin/sakit.");
+        return;
+      }
+      if (leaveDateFrom && leaveDateTo && leaveDateFrom > leaveDateTo) {
+        alert("Tanggal awal rekap cuti tidak boleh melewati tanggal akhir.");
+        return;
+      }
       const logo = await loadLogoBase64();
-      const period = getMonthsLabel(selectedMonth, selectedYear);
+      const filterStart = leaveDateFrom || `${selectedYear}-${String(selectedMonth).padStart(2,"0")}-01`;
+      const filterEnd = leaveDateTo || `${selectedYear}-${String(selectedMonth).padStart(2,"0")}-${String(new Date(selectedYear, selectedMonth, 0).getDate()).padStart(2,"0")}`;
+      const period = leaveDateFrom && leaveDateTo
+        ? `${leaveDateFrom} s.d ${leaveDateTo}`
+        : getMonthsLabel(selectedMonth, selectedYear);
       const res = await leaveApi.list();
       if (!res.success) { alert("Gagal memuat data cuti."); return; }
-      const startDate = new Date(selectedYear, selectedMonth - 1, 1);
-      const endDate = new Date(selectedYear, selectedMonth, 0);
       const data = res.data.filter(r => {
-        const d = new Date(r.start_date);
+        const requestStart = cleanDateStr(r.start_date);
+        const requestEnd = cleanDateStr(r.effective_end_date || r.actual_end_date || r.end_date);
         const deptOk = selectedDepartment === "all" || r.employee?.department === selectedDepartment;
-        return r.status === "approved" && d >= startDate && d <= endDate && deptOk;
+        return r.status === "approved" && requestStart <= filterEnd && requestEnd >= filterStart && deptOk;
       });
       const typeLabel = (t: string) => ({ cuti: "Cuti Tahunan", sakit: "Izin Sakit", cuti_khusus: "Cuti Khusus", izin: "Izin" }[t] ?? t);
       let rows = ""; let no = 1;
@@ -1778,26 +1936,39 @@ export function ReportsTab() {
         `<table><thead><tr>
           <th style="width:35px">No</th><th>NIK KTP</th><th>Nama</th><th>Unit Kerja</th><th>Jenis</th><th>Tgl Mulai</th><th>Tgl Selesai</th><th>Durasi</th><th>Alasan</th><th>Status</th><th>Disetujui Oleh</th>
         </tr></thead><tbody>${rows || '<tr><td colspan="11" style="text-align:center;padding:20px;color:#9CA3AF;">Tidak ada data pada periode ini.</td></tr>'}</tbody></table>`;
-      triggerHrDownload(excelWrapperHr("Rekap Cuti", body), `Rekap_Cuti_RSUCL_${selectedYear}_${String(selectedMonth).padStart(2,"0")}.xls`);
+      triggerHrDownload(excelWrapperHr("Rekap Cuti", body), `Rekap_Cuti_RSUCL_${filterStart}_${filterEnd}.xls`);
     } catch(e) { alert("Gagal ekspor data cuti."); } finally { setHrExporting(null); }
   };
 
   const handleExportLeavePDF = async () => {
     setHrExporting("cuti-pdf");
+    if (!!leaveDateFrom !== !!leaveDateTo) {
+      alert("Pilih tanggal awal dan tanggal akhir rekap cuti/izin/sakit.");
+      setHrExporting(null);
+      return;
+    }
+    if (leaveDateFrom && leaveDateTo && leaveDateFrom > leaveDateTo) {
+      alert("Tanggal awal rekap cuti tidak boleh melewati tanggal akhir.");
+      setHrExporting(null);
+      return;
+    }
     const pw = window.open("", "_blank");
     if (!pw) { alert("Izinkan popup untuk mencetak."); setHrExporting(null); return; }
     try {
       const logo = await loadLogoBase64();
-      const period = getMonthsLabel(selectedMonth, selectedYear);
+      const filterStart = leaveDateFrom || `${selectedYear}-${String(selectedMonth).padStart(2,"0")}-01`;
+      const filterEnd = leaveDateTo || `${selectedYear}-${String(selectedMonth).padStart(2,"0")}-${String(new Date(selectedYear, selectedMonth, 0).getDate()).padStart(2,"0")}`;
+      const period = leaveDateFrom && leaveDateTo
+        ? `${leaveDateFrom} s.d ${leaveDateTo}`
+        : getMonthsLabel(selectedMonth, selectedYear);
       const res = await leaveApi.list();
       if (!res.success) { pw.close(); return; }
-      const startDate = new Date(selectedYear, selectedMonth - 1, 1);
-      const endDate = new Date(selectedYear, selectedMonth, 0);
       const typeLabel = (t: string) => ({ cuti: "Cuti Tahunan", sakit: "Izin Sakit", cuti_khusus: "Cuti Khusus", izin: "Izin" }[t] ?? t);
       const data = res.data.filter(r => {
-        const d = new Date(r.start_date);
+        const requestStart = cleanDateStr(r.start_date);
+        const requestEnd = cleanDateStr(r.effective_end_date || r.actual_end_date || r.end_date);
         const deptOk = selectedDepartment === "all" || r.employee?.department === selectedDepartment;
-        return r.status === "approved" && d >= startDate && d <= endDate && deptOk;
+        return r.status === "approved" && requestStart <= filterEnd && requestEnd >= filterStart && deptOk;
       });
       let rows = ""; let no = 1;
       data.forEach(r => {
@@ -2077,7 +2248,7 @@ export function ReportsTab() {
   const deptData = summary?.dept_attendance ?? [];
 
   return (
-    <div className="max-w-6xl mx-auto space-y-5">
+    <div className="reports-page max-w-6xl mx-auto space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
@@ -2094,6 +2265,7 @@ export function ReportsTab() {
       {/* ── Month, Year & Department Filter ──────────────────────── */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
         <MonthYearDeptFilter
+          embedded
           month={selectedMonth}
           year={selectedYear}
           deptId={selectedDepartment}
@@ -2108,7 +2280,7 @@ export function ReportsTab() {
       {/* ══════════════════════════════════════════════════════════════════
            SECTION: LAPORAN KEHADIRAN & OPERASIONAL
          ══════════════════════════════════════════════════════════════════ */}
-      <div className="bg-white rounded-2xl border border-green-150 shadow-sm overflow-hidden">
+      <div className="report-downloads bg-white rounded-2xl border overflow-hidden">
         {/* Header Section */}
         <div className="px-5 py-4 border-b border-green-100 bg-gradient-to-r from-green-50/60 to-emerald-50/40">
           <div className="flex items-center gap-2.5">
@@ -2117,13 +2289,13 @@ export function ReportsTab() {
             </div>
             <div>
               <h3 className="text-[13px] font-bold text-gray-900">Laporan Kehadiran &amp; Operasional</h3>
-              <p className="text-[10.5px] text-gray-400 mt-0.5">Cetak &amp; ekspor rekap kehadiran harian, bulanan, data kendaraan, dan media sosial pegawai</p>
+              <p className="text-[10.5px] text-gray-400 mt-0.5">Cetak &amp; ekspor rekap kehadiran, data kendaraan, media sosial, dan faskes pegawai</p>
             </div>
           </div>
         </div>
 
         {/* Grid Laporan */}
-        <div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="report-download-grid p-5 grid gap-4">
 
           {/* Card 1: Absensi Harian */}
           <div className="bg-blue-50/30 rounded-xl border border-blue-100 p-4 flex flex-col gap-3">
@@ -2160,9 +2332,28 @@ export function ReportsTab() {
               <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center flex-shrink-0">
                 <Users size={13} className="text-emerald-700" />
               </div>
-              <div>
+              <div className="min-w-0 flex-1">
                 <p className="text-[12px] font-bold text-gray-800">Absensi Bulanan</p>
-                <p className="text-[10px] text-gray-400">Total kehadiran &amp; jam kerja</p>
+                <p className="text-[10px] text-gray-400 mb-2">Total kehadiran &amp; jam kerja</p>
+                <div className="flex gap-2">
+                  <input
+                    aria-label="Tanggal awal absensi bulanan"
+                    type="date"
+                    value={monthlyDateFrom}
+                    max={monthlyDateTo || undefined}
+                    onChange={(e) => setMonthlyDateFrom(e.target.value)}
+                    className="w-full min-w-0 text-[10px] p-1 border rounded"
+                  />
+                  <span className="text-[10px] text-gray-500 self-center">s.d</span>
+                  <input
+                    aria-label="Tanggal akhir absensi bulanan"
+                    type="date"
+                    value={monthlyDateTo}
+                    min={monthlyDateFrom || undefined}
+                    onChange={(e) => setMonthlyDateTo(e.target.value)}
+                    className="w-full min-w-0 text-[10px] p-1 border rounded"
+                  />
+                </div>
               </div>
             </div>
             <div className="flex gap-2 mt-auto">
@@ -2227,7 +2418,30 @@ export function ReportsTab() {
             </div>
           </div>
 
-          {/* Card 5: Rekap Keterlambatan & Potongan */}
+          {/* Card 5: Data Faskes */}
+          <div className="bg-cyan-50/40 rounded-xl border border-cyan-100 p-4 flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-cyan-100 flex items-center justify-center flex-shrink-0">
+                <CheckCircle2 size={13} className="text-cyan-700" />
+              </div>
+              <div>
+                <p className="text-[12px] font-bold text-gray-800">Data Faskes Pegawai</p>
+                <p className="text-[10px] text-gray-400">Tingkat dan lokasi faskes pegawai</p>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-auto">
+              <button
+                id="btn-export-faskes-excel"
+                onClick={handleExportFaskes}
+                disabled={exporting}
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                <Download size={11} />Unduh Data Faskes (Excel)
+              </button>
+            </div>
+          </div>
+
+          {/* Card 6: Rekap Keterlambatan & Potongan */}
           <div className="bg-red-50/40 rounded-xl border border-red-100 p-4 flex flex-col gap-3">
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-lg bg-red-100 flex items-center justify-center flex-shrink-0">
@@ -2262,7 +2476,7 @@ export function ReportsTab() {
       {/* ══════════════════════════════════════════════════════════════════
            SECTION: LAPORAN MANAJEMEN SDM
          ══════════════════════════════════════════════════════════════════ */}
-      <div className="bg-white rounded-2xl border border-blue-100 shadow-sm overflow-hidden">
+      <div className="report-downloads bg-white rounded-2xl border overflow-hidden">
         {/* Header Section */}
         <div className="px-5 py-4 border-b border-blue-50 bg-gradient-to-r from-blue-50/60 to-indigo-50/40">
           <div className="flex items-center gap-2.5">
@@ -2279,7 +2493,7 @@ export function ReportsTab() {
         {/* Cards container directly without duplicate filter block */}
 
         {/* Grid Laporan */}
-        <div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="report-download-grid p-5 grid gap-4">
 
           {/* Card 1: Lembur */}
           <div className="bg-amber-50/50 rounded-xl border border-amber-100 p-4 flex flex-col gap-3">
@@ -2295,6 +2509,7 @@ export function ReportsTab() {
                   <input
                     type="date"
                     value={overtimeDateFrom}
+                    aria-label="Tanggal awal rekap lembur"
                     onChange={(e) => setOvertimeDateFrom(e.target.value)}
                     className="w-full text-[10px] p-1 border rounded"
                   />
@@ -2302,6 +2517,7 @@ export function ReportsTab() {
                   <input
                     type="date"
                     value={overtimeDateTo}
+                    aria-label="Tanggal akhir rekap lembur"
                     onChange={(e) => setOvertimeDateTo(e.target.value)}
                     className="w-full text-[10px] p-1 border rounded"
                   />
@@ -2334,9 +2550,28 @@ export function ReportsTab() {
               <div className="w-7 h-7 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
                 <Calendar size={13} className="text-green-700" />
               </div>
-              <div>
+              <div className="min-w-0 flex-1">
                 <p className="text-[12px] font-bold text-gray-800">Rekap Cuti / Izin / Sakit</p>
-                <p className="text-[10px] text-gray-400">Semua jenis pengajuan ketidakhadiran</p>
+                <p className="text-[10px] text-gray-400 mb-2">Semua jenis pengajuan ketidakhadiran</p>
+                <div className="flex gap-2">
+                  <input
+                    aria-label="Tanggal awal rekap cuti izin sakit"
+                    type="date"
+                    value={leaveDateFrom}
+                    max={leaveDateTo || undefined}
+                    onChange={(e) => setLeaveDateFrom(e.target.value)}
+                    className="w-full min-w-0 text-[10px] p-1 border rounded"
+                  />
+                  <span className="text-[10px] text-gray-500 self-center">s.d</span>
+                  <input
+                    aria-label="Tanggal akhir rekap cuti izin sakit"
+                    type="date"
+                    value={leaveDateTo}
+                    min={leaveDateFrom || undefined}
+                    onChange={(e) => setLeaveDateTo(e.target.value)}
+                    className="w-full min-w-0 text-[10px] p-1 border rounded"
+                  />
+                </div>
               </div>
             </div>
             <div className="flex gap-2 mt-auto">
@@ -3018,7 +3253,7 @@ export function ReportsTab() {
           <div className="bg-white rounded-xl border border-gray-100 p-4 space-y-3.5 shadow-xs">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="text-base">⚡</span>
+                <BarChart3 size={18} aria-hidden="true" />
                 <p className="text-[13px] font-bold text-gray-800">Tercepat Masuk Kerja Hari Ini</p>
               </div>
               <span className="text-[9.5px] bg-[#E8F5E9] text-[#2E7D32] border border-[#C8E6C9] px-2 py-0.5 rounded-lg font-extrabold uppercase tracking-wide">
@@ -3041,7 +3276,7 @@ export function ReportsTab() {
                     <div key={item.employee_id} className="flex items-center justify-between py-1.5 px-2 border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors gap-2">
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] flex-shrink-0 ${badgeBg}`}>
-                          {item.rank === 1 ? "🥇" : item.rank === 2 ? "🥈" : item.rank === 3 ? "🥉" : item.rank}
+                          {item.rank}
                         </div>
                         <div className="truncate">
                           <span className="text-[11.5px] font-bold text-gray-800 block truncate">{item.name}</span>
@@ -3064,7 +3299,7 @@ export function ReportsTab() {
           <div className="bg-white rounded-xl border border-gray-100 p-4 space-y-3.5 shadow-xs">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="text-base">🏆</span>
+                <Trophy size={18} aria-hidden="true" />
                 <p className="text-[13px] font-bold text-gray-800">Konsistensi On-Time Terbanyak</p>
               </div>
               <span className="text-[9.5px] bg-[#E8F5E9] text-[#2E7D32] border border-[#C8E6C9] px-2 py-0.5 rounded-lg font-extrabold uppercase tracking-wide">
@@ -3087,7 +3322,7 @@ export function ReportsTab() {
                     <div key={item.employee_id} className="flex items-center justify-between py-1.5 px-2 border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors gap-2">
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] flex-shrink-0 ${badgeBg}`}>
-                          {item.rank === 1 ? "🥇" : item.rank === 2 ? "🥈" : item.rank === 3 ? "🥉" : item.rank}
+                          {item.rank}
                         </div>
                         <div className="truncate">
                           <span className="text-[11.5px] font-bold text-gray-800 block truncate">{item.name}</span>

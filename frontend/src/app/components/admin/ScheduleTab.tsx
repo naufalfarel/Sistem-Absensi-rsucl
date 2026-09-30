@@ -9,12 +9,12 @@ import { useAuth } from '../../../context/AuthContext';
 
 type IconKey = 'sun' | 'sunset' | 'moon' | 'star' | 'zap';
 
-const ICON_MAP: Record<IconKey, { component: typeof Sun; label: string; emoji: string }> = {
-  sun:    { component: Sun,    label: 'Matahari',  emoji: '☀️' },
-  sunset: { component: Sunset, label: 'Senja',     emoji: '🌅' },
-  moon:   { component: Moon,   label: 'Bulan',     emoji: '🌙' },
-  star:   { component: Star,   label: 'Bintang',   emoji: '⭐' },
-  zap:    { component: Zap,    label: 'Kilat',     emoji: '⚡' },
+const ICON_MAP: Record<IconKey, { component: typeof Sun; label: string }> = {
+  sun:    { component: Sun,    label: 'Matahari' },
+  sunset: { component: Sunset, label: 'Senja' },
+  moon:   { component: Moon,   label: 'Bulan' },
+  star:   { component: Star,   label: 'Bintang' },
+  zap:    { component: Zap,    label: 'Kilat' },
 };
 
 const COLOR_PRESETS = [
@@ -25,6 +25,12 @@ const COLOR_PRESETS = [
   { id: 'rose',   color: '#E11D48', bg: '#FFF1F2', border: '#FECDD3', label: 'Merah'   },
   { id: 'cyan',   color: '#0891B2', bg: '#ECFEFF', border: '#A5F3FC', label: 'Biru Muda'},
 ];
+
+// Data shift lama dapat memiliki kolom relasi yang null/tidak lengkap.
+// Normalisasi nilai sebelum digunakan oleh pencarian agar input tidak
+// menjatuhkan seluruh halaman melalui pemanggilan .toLowerCase().
+const normalizeSearchValue = (value: unknown): string =>
+  typeof value === 'string' ? value.toLocaleLowerCase('id-ID') : '';
 
 function getPresetByHex(hex: string) {
   return COLOR_PRESETS.find(c => c.color.toLowerCase() === hex.toLowerCase()) ?? COLOR_PRESETS[0];
@@ -230,7 +236,7 @@ function AddShiftModal({ onClose, onAdd, departments }: { onClose: () => void; o
               ))}
             </div>
             <p className="text-[10px] text-gray-400 mt-1.5">
-              💡 Sub-waktu yang namanya dikosongkan tidak akan disimpan.
+              Sub-waktu yang namanya dikosongkan tidak akan disimpan.
             </p>
           </div>
 
@@ -284,7 +290,7 @@ function AddShiftModal({ onClose, onAdd, departments }: { onClose: () => void; o
           <div>
             <label className="block text-[12px] font-semibold text-gray-700 mb-2">Pilih Ikon</label>
             <div className="flex gap-2">
-              {(Object.entries(ICON_MAP) as [IconKey, typeof ICON_MAP[IconKey]][]).map(([key, { component: Ic, emoji, label }]) => (
+              {(Object.entries(ICON_MAP) as [IconKey, typeof ICON_MAP[IconKey]][]).map(([key, { component: Ic, label }]) => (
                 <button
                   key={key}
                   onClick={() => setIcon(key)}
@@ -292,7 +298,7 @@ function AddShiftModal({ onClose, onAdd, departments }: { onClose: () => void; o
                   className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-xl border-2 transition-all ${icon === key ? 'border-[#16A34A] bg-green-50 shadow-sm' : 'border-gray-100 bg-gray-50 hover:border-gray-200'}`}
                 >
                   <Ic size={16} style={{ color: icon === key ? preset.color : '#9CA3AF' }} />
-                  <span className="text-[9px] text-gray-500">{emoji}</span>
+                  <span className="sr-only">{label}</span>
                 </button>
               ))}
             </div>
@@ -387,6 +393,7 @@ function AddEmployeeToShiftModal({
   onClose: () => void;
   onAssign: (empId: number, day: string, childScheduleId: number) => Promise<void>;
 }) {
+  const { user } = useAuth();
   const [employees, setEmployees] = useState<any[]>([]);
   const [empSearch, setEmpSearch] = useState('');
   const [selectedEmpId, setSelectedEmpId] = useState<number | ''>('');
@@ -401,9 +408,12 @@ function AddEmployeeToShiftModal({
       try {
         const res = await employeeApi.list();
         if (res.success) {
-          setEmployees(res.data);
-          if (res.data.length > 0) {
-            setSelectedEmpId(res.data[0].id);
+          const availableEmployees = res.data.filter(emp =>
+            user?.role === 'admin' || user?.role === 'super_admin' || emp.role !== 'pj_bagian'
+          );
+          setEmployees(availableEmployees);
+          if (availableEmployees.length > 0) {
+            setSelectedEmpId(availableEmployees[0].id);
           }
         }
       } catch (err) {
@@ -411,9 +421,10 @@ function AddEmployeeToShiftModal({
       }
     };
     fetchEmployees();
-  }, []);
+  }, [user?.role]);
 
   const filteredEmployees = employees
+    .filter(emp => (user?.role === 'admin' || user?.role === 'super_admin') || emp.role !== 'pj_bagian')
     .filter(emp =>
       !empSearch.trim() ||
       emp.name.toLowerCase().includes(empSearch.toLowerCase()) ||
@@ -892,6 +903,10 @@ export function ScheduleTab() {
   };
 
   const handleCalCellClick = (e: React.MouseEvent, empId: number, dateStr: string) => {
+    const employeeRow = monthlyData.find(row => row.employee_id === empId);
+    const isAdminUser = user?.role === 'admin' || user?.role === 'super_admin';
+    if (employeeRow?.role === 'pj_bagian' && !isAdminUser) return;
+
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     setCalPopover({ empId, dateStr, x: rect.left, y: rect.bottom + 4 });
   };
@@ -1098,7 +1113,7 @@ export function ScheduleTab() {
   };
 
   const handleAdd = (shift: ShiftSchedule) => {
-    setShifts(prev => [...prev, shift]);
+    setShifts(prev => prev.some(existing => existing.id === shift.id) ? prev : [...prev, shift]);
     loadEmployeeSchedules();
   };
 
@@ -1165,17 +1180,30 @@ export function ScheduleTab() {
       }
     }
 
-    if (!searchQuery.trim()) return true;
-    const query = searchQuery.toLowerCase();
-    
-    const nameMatch = shift.name.toLowerCase().includes(query);
-    const deptMatch = shift.children?.some(child => 
-      child.employees?.some(emp => 
-        emp.department?.name?.toLowerCase().includes(query)
-      )
-    ) ?? false;
-    
-    return nameMatch || deptMatch;
+    const query = normalizeSearchValue(searchQuery.trim());
+    if (!query) return true;
+
+    const children = Array.isArray(shift.children)
+      ? shift.children.filter(Boolean)
+      : [];
+
+    const nameMatch = normalizeSearchValue(shift.name).includes(query);
+    const ownerDepartmentMatch = normalizeSearchValue(shift.owner_department_name).includes(query);
+    const childMatch = children.some(child => {
+      if (normalizeSearchValue(child.name).includes(query)) return true;
+
+      const employees = Array.isArray(child.employees) ? child.employees.filter(Boolean) : [];
+      return employees.some(emp => {
+        const department = emp.department as unknown;
+        const departmentName = typeof department === 'string'
+          ? department
+          : (department as { name?: unknown } | null)?.name;
+
+        return normalizeSearchValue(departmentName).includes(query);
+      });
+    });
+
+    return nameMatch || ownerDepartmentMatch || childMatch;
   });
 
   const getShiftInitials = (name: string) => {
@@ -2011,6 +2039,9 @@ export function ScheduleTab() {
                         const badge = assigned ? getShiftBadge(assigned.name) : null;
                         const isSunday = dow === 0;
                         const isHoliday = holidays.includes(dateStr);
+                        const isPjScheduleLocked = row.role === 'pj_bagian'
+                          && user?.role !== 'admin'
+                          && user?.role !== 'super_admin';
 
                         const allShifts = assigned?.all_shifts && assigned.all_shifts.length > 0 ? assigned.all_shifts : (assigned ? [assigned] : []);
 
@@ -2022,8 +2053,10 @@ export function ScheduleTab() {
                               {allShifts.length > 1 ? (
                                 <div
                                   onClick={e => handleCalCellClick(e, row.employee_id, dateStr)}
-                                  className="flex items-center justify-center gap-0.5 cursor-pointer hover:scale-105 transition-all p-0.5"
-                                  title={`[MULTI-SHIFT (${allShifts.length} Shift)]\n${allShifts.map((s: any) => `• ${s.name} (${s.start_time ?? ''}–${s.end_time ?? ''})`).join('\n')}\nKlik untuk ubah.`}
+                                  className={`flex items-center justify-center gap-0.5 transition-all p-0.5 ${isPjScheduleLocked ? 'cursor-not-allowed opacity-80' : 'cursor-pointer hover:scale-105'}`}
+                                  title={isPjScheduleLocked
+                                    ? 'Jadwal PJ Bagian hanya dapat diubah oleh Administrator.'
+                                    : `[MULTI-SHIFT (${allShifts.length} Shift)]\n${allShifts.map((s: any) => `• ${s.name} (${s.start_time ?? ''}–${s.end_time ?? ''})`).join('\n')}\nKlik untuk ubah.`}
                                 >
                                   {allShifts.map((sItem: any, sIdx: number) => {
                                     const prItem = getPresetByHex(sItem.color);
@@ -2041,7 +2074,8 @@ export function ScheduleTab() {
                                 </div>
                               ) : (
                                 <button onClick={e => handleCalCellClick(e, row.employee_id, dateStr)}
-                                  className={`w-8 h-7 mx-auto rounded-lg text-[10px] font-extrabold transition-all hover:scale-110 active:scale-95 border flex items-center justify-center ${
+                                  disabled={isPjScheduleLocked}
+                                  className={`w-8 h-7 mx-auto rounded-lg text-[10px] font-extrabold transition-all border flex items-center justify-center ${isPjScheduleLocked ? 'cursor-not-allowed opacity-80' : 'hover:scale-110 active:scale-95'} ${
                                     isPending
                                       ? 'ring-2 ring-blue-500 border-blue-400 shadow-md animate-pulse'
                                       : assigned
@@ -2049,7 +2083,9 @@ export function ScheduleTab() {
                                         : 'border-slate-100 bg-slate-50 text-slate-400 hover:bg-slate-100'
                                   }`}
                                   style={assigned && pr ? { background: pr.bg, borderColor: isPending ? '#3B82F6' : pr.border, color: assigned.color } : {}}
-                                  title={isPending
+                                  title={isPjScheduleLocked
+                                    ? 'Jadwal PJ Bagian hanya dapat diubah oleh Administrator.'
+                                    : isPending
                                     ? `[BELUM DISIMPAN] ${assigned ? assigned.name : 'Libur'}\nKlik lagi untuk ubah.`
                                     : assigned
                                       ? `${assigned.name}\n${assigned.start_time ?? ''}–${assigned.end_time ?? ''}\nKlik untuk ubah`
@@ -2236,7 +2272,9 @@ export function ScheduleTab() {
       {showEmergencyModal && (
         <AdminEmergencyShiftModal
           user={user}
-          employees={employeeSchedules.map(e => ({ id: e.employee_id, name: e.name }))}
+          employees={employeeSchedules
+            .filter(e => user?.role === 'admin' || user?.role === 'super_admin' || e.role !== 'pj_bagian')
+            .map(e => ({ id: e.employee_id, name: e.name }))}
           shifts={shifts}
           onClose={() => setShowEmergencyModal(false)}
           onSaved={() => {
@@ -2323,7 +2361,7 @@ function AdminEmergencyShiftModal({ user, employees, shifts, onClose, onSaved }:
       });
 
       if (res.success) {
-        alert(`🚨 ${res.message}`);
+        alert(`${res.message}`);
         onSaved();
         onClose();
       }
@@ -2340,7 +2378,7 @@ function AdminEmergencyShiftModal({ user, employees, shifts, onClose, onSaved }:
         <div className="flex items-center justify-between border-b border-slate-100 pb-3.5">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center font-bold">
-              🚨
+              <Zap size={20} aria-hidden="true" />
             </div>
             <div>
               <h3 className="text-base font-bold text-slate-900">Penugasan Shift Dadakan / On-Call</h3>
@@ -2418,7 +2456,7 @@ function AdminEmergencyShiftModal({ user, employees, shifts, onClose, onSaved }:
 
             {activeSelectedShift && activeSelectedShift.start !== '--:--' && (
               <div className="mt-2 p-2.5 bg-blue-50 border border-blue-100 rounded-xl text-[11.5px] text-blue-800 font-medium flex items-center gap-2">
-                <span>⏰ Jam Kerja Shift:</span>
+                <span>Jam Kerja Shift:</span>
                 <strong className="font-mono text-blue-900 bg-white px-2 py-0.5 rounded border border-blue-200">
                   {activeSelectedShift.start} WIB – {activeSelectedShift.end} WIB
                 </strong>
@@ -2441,7 +2479,7 @@ function AdminEmergencyShiftModal({ user, employees, shifts, onClose, onSaved }:
           </div>
 
           <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl text-[11.5px] text-rose-800 font-medium leading-snug">
-            💡 <strong>Info:</strong> Penugasan shift dadakan ini akan langsung ditambahkan ke jadwal harian pegawai dan notifikasi push/sistem akan langsung terkirim ke HP pegawai.
+            <strong>Info:</strong> Penugasan shift dadakan ini akan langsung ditambahkan ke jadwal harian pegawai dan notifikasi push/sistem akan langsung terkirim ke HP pegawai.
           </div>
 
           <div className="flex items-center gap-3 pt-2 border-t border-slate-100">
@@ -2457,7 +2495,7 @@ function AdminEmergencyShiftModal({ user, employees, shifts, onClose, onSaved }:
               disabled={submitting}
               className="flex-1 py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white font-bold text-[12.5px] rounded-2xl transition-all shadow-sm active:scale-95 cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
             >
-              {submitting ? 'Mengirim...' : '🚨 Kirim Shift Dadakan'}
+              {submitting ? 'Mengirim...' : 'Kirim Shift Dadakan'}
             </button>
           </div>
         </form>

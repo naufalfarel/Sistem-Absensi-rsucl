@@ -173,14 +173,14 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
   ];
 
   return (
-    <div className="h-screen bg-[#F5F7FA] flex overflow-hidden">
+    <div className="rs-app h-screen flex overflow-hidden">
       {/* Drawer Overlay Mobile */}
       {sidebarOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-40 md:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
       {/* Sidebar (Desktop & Drawer Mobile) */}
-      <aside className={`fixed inset-y-0 left-0 bg-white border-r border-gray-150 w-64 z-50 transition-transform duration-300 md:relative md:translate-x-0 md:h-full md:flex-shrink-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`app-sidebar fixed inset-y-0 left-0 bg-white border-r border-gray-150 w-64 z-50 transition-transform duration-300 md:relative md:translate-x-0 md:h-full md:flex-shrink-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="flex flex-col h-full bg-white">
           {/* Logo */}
           <div className="px-5 pt-5 pb-4 border-b border-gray-100 flex items-center justify-between">
@@ -210,7 +210,7 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
                   })()}
                 </p>
               </div>            </div>
-            <button className="md:hidden text-gray-400 hover:text-gray-600" onClick={() => setSidebarOpen(false)}>
+            <button aria-label="Tutup menu" className="app-icon-button md:hidden text-gray-400 hover:text-gray-600" onClick={() => setSidebarOpen(false)}>
               <X size={18} />
             </button>
           </div>
@@ -226,6 +226,7 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
                 return (
                   <button
                     key={item.id}
+                    aria-current={isActive ? "page" : undefined}
                     onClick={() => {
                       setActiveTab(item.id);
                       setSidebarOpen(false);
@@ -261,6 +262,7 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
                 return (
                   <button
                     key={item.id}
+                    aria-current={isActive ? "page" : undefined}
                     onClick={() => {
                       setActiveTab(item.id);
                       setSidebarOpen(false);
@@ -296,6 +298,7 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
                 return (
                   <button
                     key={item.id}
+                    aria-current={isActive ? "page" : undefined}
                     onClick={() => {
                       setActiveTab(item.id);
                       setSidebarOpen(false);
@@ -373,9 +376,9 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Header Top-Bar */}
-        <header className="bg-white border-b border-gray-150 h-14 flex items-center justify-between px-4 flex-shrink-0 z-30">
+        <header className="app-header bg-white border-b flex items-center justify-between flex-shrink-0 z-30">
           <div className="flex items-center gap-3">
-            <button className="md:hidden text-gray-500 hover:text-gray-700" onClick={() => setSidebarOpen(true)}>
+            <button aria-label="Buka menu" aria-expanded={sidebarOpen} className="app-icon-button md:hidden text-gray-500 hover:text-gray-700" onClick={() => setSidebarOpen(true)}>
               <Menu size={20} />
             </button>
             <p className="text-[13px] font-bold text-gray-800 truncate hidden md:block" title={
@@ -400,7 +403,7 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
           <div className="flex items-center gap-3">
             {/* Realtime clock */}
             <div className="bg-gray-50 border border-gray-100 rounded-xl px-3 py-1 flex items-center gap-1.5 shadow-xs">
-              <span className="w-1.5 h-1.5 bg-[#16A34A] rounded-full animate-ping" />
+              <span className="w-1.5 h-1.5 bg-[#16A34A] rounded-full" />
               <span className="text-[11px] font-bold text-gray-700">{timeStr} WIB</span>
             </div>
 
@@ -425,7 +428,7 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
         </header>
 
         {/* Dynamic Page Render */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-6">
+        <main className="app-main pj-main flex-1 overflow-y-auto p-4 md:p-8">
           {renderPage()}
         </main>
       </div>

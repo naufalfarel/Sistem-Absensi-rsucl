@@ -103,9 +103,7 @@ export function OvertimeApprovalTab({ user, onUpdateCount }: OvertimeApprovalTab
 
   return (
     <div className="space-y-4">
-      <div className="bg-gradient-to-br from-[#16A34A] to-[#0B7A36] rounded-2xl p-5 relative overflow-hidden shadow-sm text-left animate-fade-in">
-        <div className="absolute top-0 right-0 w-32 h-32 rounded-full border-[20px] border-white/10 translate-x-8 -translate-y-8" />
-        <div className="absolute bottom-0 left-0 w-20 h-20 rounded-full border-[12px] border-white/10 -translate-x-6 translate-y-6" />
+      <div className="page-banner rounded-2xl p-5 relative overflow-hidden text-left ">
         
         <div className="relative flex items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
@@ -405,7 +403,7 @@ Otorisasi Final: Direktur PT Cempaka Lima (Amir Hidayat, ST., MKM)`;
                   <div className="text-right">
                     <span className="font-bold text-gray-500">Lembur Pada Waktu :</span>
                     <span className="ml-2 font-semibold text-gray-800 border border-gray-800 px-2 py-0.5 rounded bg-gray-50">
-                      {selectedSplRecord.overtime_day_type === 'holiday' ? '☑ Hari Libur' : '☑ Hari Kerja'}
+                      {selectedSplRecord.overtime_day_type === 'holiday' ? 'Hari Libur' : 'Hari Kerja'}
                     </span>
                   </div>
                   <div>

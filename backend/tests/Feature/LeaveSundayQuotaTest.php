@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\Employee;
 use App\Models\Department;
 use App\Models\LeaveRequest;
+use App\Models\Holiday;
 use App\Support\LeaveQuotaHelper;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -136,5 +137,43 @@ class LeaveSundayQuotaTest extends TestCase
         ]);
 
         $this->assertEquals(4, $lr->days);
+    }
+
+    public function test_pj_uses_office_leave_calendar_even_when_department_uses_shifts(): void
+    {
+        $shiftDepartment = Department::create([
+            'name' => 'Kamar Bersalin',
+            'count_sunday_in_leave' => true,
+        ]);
+
+        $pjUser = User::factory()->create(['role' => 'pj_bagian']);
+        $pj = Employee::create([
+            'user_id' => $pjUser->id,
+            'department_id' => $shiftDepartment->id,
+            'nik_ktp' => 'PJ-LEAVE-001',
+            'status' => 'active',
+        ]);
+
+        Holiday::create(['date' => '2026-12-25', 'name' => 'Hari Natal']);
+        Holiday::create(['date' => '2027-01-01', 'name' => 'Tahun Baru']);
+
+        $leave = LeaveRequest::create([
+            'employee_id' => $pj->id,
+            'type' => 'cuti',
+            'start_date' => '2026-12-23',
+            'end_date' => '2027-01-02',
+            'reason' => 'Cuti Umroh',
+            'status' => 'approved',
+            'unit_kerja' => 'Kamar Bersalin',
+        ]);
+
+        // 11 hari kalender dikurangi 25 Des, Minggu 27 Des, dan 1 Jan = 8 hari cuti.
+        $this->assertSame(8, $leave->days);
+        $this->assertSame(8, LeaveQuotaHelper::countLeaveDays(
+            '2026-12-23',
+            '2027-01-02',
+            $pj,
+            'Kamar Bersalin'
+        ));
     }
 }

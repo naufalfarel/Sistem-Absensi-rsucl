@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Models\Notification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class ResignationRequestController extends Controller
@@ -535,6 +536,73 @@ class ResignationRequestController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Pengajuan pengunduran diri berhasil dihapus oleh Admin.',
+        ]);
+    }
+
+    /**
+     * Menonaktifkan akun pegawai setelah resign disetujui.
+     * Riwayat pegawai tetap disimpan, tetapi semua sesi login dicabut.
+     */
+    public function deactivateEmployeeAccount(Request $request, $id)
+    {
+        if (!$request->user()->isAdmin()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akses ditolak. Hanya Admin/Super Admin yang dapat menonaktifkan akun pegawai.',
+            ], 403);
+        }
+
+        $resignation = ResignationRequest::with(['employee.user'])->findOrFail($id);
+
+        if ($resignation->status !== 'approved') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akun hanya dapat dinonaktifkan setelah pengunduran diri disetujui HRD/Admin.',
+            ], 422);
+        }
+
+        $employee = $resignation->employee;
+        $targetUser = $employee?->user;
+
+        if (!$employee || !$targetUser) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Data pegawai atau akun pengguna tidak ditemukan.',
+            ], 404);
+        }
+
+        if ($targetUser->isAdmin()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akun Admin/Super Admin tidak dapat dinonaktifkan melalui pengajuan resign pegawai.',
+            ], 422);
+        }
+
+        if ($employee->status !== 'inactive') {
+            DB::transaction(function () use ($employee, $targetUser) {
+                $employee->update(['status' => 'inactive']);
+
+                // Akun PJ yang resign tidak boleh tetap menjadi tujuan persetujuan unit.
+                if ($targetUser->isPjBagian()) {
+                    $targetUser->pjDepartments()->detach();
+                    $targetUser->update([
+                        'role' => 'employee',
+                        'pj_bagian_department_id' => null,
+                    ]);
+                }
+
+                // Putuskan semua sesi web/mobile yang masih aktif.
+                $targetUser->tokens()->delete();
+            });
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Akun pegawai berhasil dinonaktifkan. Seluruh sesi login telah dicabut.',
+            'data' => [
+                'employee_id' => $employee->id,
+                'account_status' => 'inactive',
+            ],
         ]);
     }
 }

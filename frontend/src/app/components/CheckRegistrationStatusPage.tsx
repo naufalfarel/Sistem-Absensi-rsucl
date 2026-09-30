@@ -406,7 +406,7 @@ export function CheckRegistrationStatusPage({ onBack, onGoToLogin, initialRegNum
               {result.status === 'approved' && (
                 <div className="space-y-4">
                   <div className="p-4 bg-emerald-50/70 border border-emerald-150 rounded-2xl space-y-3">
-                    <p className="text-[13px] font-bold text-emerald-950">Selamat! Pengajuan Pendaftaran Anda Disetujui 🎉</p>
+                    <p className="text-[13px] font-bold text-emerald-950">Selamat! Pengajuan Pendaftaran Anda Disetujui </p>
                     <p className="text-[11.5px] text-emerald-800">Akun pegawai Anda telah diaktifkan di sistem absensi RSUCL.</p>
 
                     <div className="grid grid-cols-2 gap-3 pt-2 text-[12px]">

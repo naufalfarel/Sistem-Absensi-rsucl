@@ -77,8 +77,7 @@ export const DisciplinaryPage: React.FC = () => {
   return (
     <div className="p-4 md:p-6 space-y-5 font-sans pb-10 max-w-5xl mx-auto">
       {/* ── HEADER BANNER ─────────────────────────────────────────────── */}
-      <div className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-3xl p-6 text-white shadow-md relative overflow-hidden border border-slate-700/30">
-        <div className="absolute right-0 top-0 w-64 h-64 bg-rose-500/10 rounded-full blur-3xl -translate-y-12 translate-x-12 pointer-events-none" />
+      <div className="page-banner rounded-3xl p-6 text-white relative overflow-hidden border border-slate-700/30">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
           <div>
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/20 text-rose-350 text-[10.5px] font-extrabold uppercase tracking-wider border border-rose-500/30">

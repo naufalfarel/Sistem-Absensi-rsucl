@@ -20,7 +20,8 @@ import {
   PlusCircle,
   BadgeCheck,
   ChevronDown,
-  User2
+  User2,
+  UserX
 } from 'lucide-react';
 import qrCodeImg from '../../../imports/qr_code_cempaka_lima.png';
 import qrHrdImg from '../../../imports/qr_hrd_rsucl.png';
@@ -59,6 +60,7 @@ export const ResignationTab: React.FC = () => {
   const [adminNote, setAdminNote] = useState<string>('');
   const [reviewing, setReviewing] = useState<boolean>(false);
   const [showReviewModal, setShowReviewModal] = useState<boolean>(false);
+  const [deactivatingId, setDeactivatingId] = useState<number | null>(null);
 
   // ── STATE MODAL CATAT ADMIN ─────────────────────────────────────────────────
   const [showAdminRecordModal, setShowAdminRecordModal] = useState<boolean>(false);
@@ -169,6 +171,27 @@ export const ResignationTab: React.FC = () => {
     }
   };
 
+  const handleDeactivateAccount = async (item: ResignationRequest) => {
+    const employeeName = item.employee?.user?.name || 'pegawai ini';
+    const confirmed = window.confirm(
+      `Nonaktifkan akun ${employeeName}?\n\nPegawai tidak dapat login lagi dan seluruh sesi aktif akan dicabut. Riwayat pegawai tetap tersimpan.`
+    );
+    if (!confirmed) return;
+
+    setDeactivatingId(item.id);
+    try {
+      const res = await resignationApi.deactivateAccount(item.id);
+      if (res.success) {
+        alert(res.message);
+        await fetchAllRequests();
+      }
+    } catch (err: any) {
+      alert(err?.response?.data?.message || err?.data?.message || err?.message || 'Gagal menonaktifkan akun pegawai.');
+    } finally {
+      setDeactivatingId(null);
+    }
+  };
+
   // ── HANDLER SUBMIT CATAT ADMIN ──────────────────────────────────────────────
   const resetAdminRecordForm = () => {
     setRecEmployeeId('');
@@ -238,8 +261,7 @@ export const ResignationTab: React.FC = () => {
   return (
     <div className="space-y-6 font-sans pb-12">
       {/* ── HEADER BANNER ──────────────────────────────────────────────── */}
-      <div className="bg-gradient-to-r from-slate-900 via-rose-950 to-slate-900 rounded-3xl p-6 md:p-8 text-white shadow-xl relative overflow-hidden border border-rose-900/30">
-        <div className="absolute right-0 top-0 w-80 h-80 bg-rose-500/10 rounded-full blur-3xl -translate-y-16 translate-x-16 pointer-events-none" />
+      <div className="page-banner rounded-3xl p-6 md:p-8 text-white relative overflow-hidden border border-rose-900/30">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <span className="bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">
@@ -445,6 +467,27 @@ export const ResignationTab: React.FC = () => {
                         >
                           <Printer size={14} /> Lihat Surat
                         </button>
+                      )}
+
+                      {/* NONAKTIFKAN AKUN SETELAH RESIGN DISETUJUI */}
+                      {isAdminOrSuperAdmin && item.status === 'approved' && item.employee?.status !== 'inactive' && (
+                        <button
+                          onClick={() => handleDeactivateAccount(item)}
+                          disabled={deactivatingId === item.id}
+                          title="Nonaktifkan akun pegawai yang telah resign"
+                          className="px-3 py-1.5 bg-slate-700 text-white hover:bg-slate-800 border border-slate-700 font-bold text-[12px] rounded-xl transition-all shadow-xs flex items-center gap-1 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
+                          {deactivatingId === item.id
+                            ? <Loader2 size={14} className="animate-spin" />
+                            : <UserX size={14} />}
+                          {deactivatingId === item.id ? 'Menonaktifkan...' : 'Nonaktifkan Akun'}
+                        </button>
+                      )}
+
+                      {item.employee?.status === 'inactive' && (
+                        <span className="px-3 py-1.5 bg-slate-100 text-slate-700 border border-slate-300 font-extrabold text-[11.5px] rounded-full flex items-center gap-1.5">
+                          <UserX size={14} /> Akun Nonaktif
+                        </span>
                       )}
 
                       {/* ACTION BUTTON HAPUS UNTUK ADMIN / SUPER ADMIN */}

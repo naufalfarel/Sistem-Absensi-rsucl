@@ -462,7 +462,7 @@ export function ProfilePage({
     // Untuk Cuti Khusus maksimal 2MB, untuk yang lainnya kita gunakan limit 2MB juga agar konsisten
     if (file.size > 2 * 1024 * 1024) {
       const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
-      setAttachmentError(`⚠️ Ukuran file terlalu besar (${sizeMB}MB). Maksimal ukuran file 2MB. Silakan pilih/kompres file lain di bawah 2MB.`);
+      setAttachmentError(`Ukuran file terlalu besar (${sizeMB}MB). Maksimal ukuran file 2MB. Silakan pilih/kompres file lain di bawah 2MB.`);
       setAttachmentName("");
       setAttachmentFile(null);
       setAttachmentBase64(null);
@@ -470,7 +470,7 @@ export function ProfilePage({
     }
     const allowed = ["application/pdf", "image/png", "image/jpeg", "image/jpg"];
     if (!allowed.includes(file.type)) {
-      setAttachmentError("⚠️ Format file harus berupa PDF, PNG, atau JPG/JPEG.");
+      setAttachmentError("Format file harus berupa PDF, PNG, atau JPG/JPEG.");
       setAttachmentName("");
       setAttachmentFile(null);
       setAttachmentBase64(null);
@@ -1378,8 +1378,7 @@ export function ProfilePage({
       {activeSection === "leave" && (
         <div className="space-y-4">
           {/* Quota card */}
-          <div className="bg-gradient-to-br from-[#16A34A] to-[#0B7A36] rounded-2xl p-5 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 rounded-full border-[20px] border-white/10 translate-x-8 -translate-y-8" />
+          <div className="page-banner rounded-2xl p-5 relative overflow-hidden">
             <p className="text-[12px] text-white/70 mb-3 relative">
               {quota?.period_label
                 ? `Periode: ${quota.period_label}`

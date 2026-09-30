@@ -233,24 +233,38 @@ class LeaveQuotaHelper
         $end   = Carbon::parse($endDate);
         if ($start->gt($end)) return 0;
 
-        $countSunday = false;
-        if ($employee && $employee->shouldCountSundayInLeave()) {
-            $countSunday = true;
-        }
-        if (!$countSunday && $unitKerja) {
-            $dept = \App\Models\Department::where('name', $unitKerja)->first();
-            if ($dept && $dept->count_sunday_in_leave) {
-                $countSunday = true;
-            }
-        }
-
         $days = 0;
         for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
-            if ($countSunday || !$date->isSunday()) {
+            if (!self::isExcludedLeaveDate($date, $employee, $unitKerja)) {
                 $days++;
             }
         }
         return $days;
+    }
+
+    /**
+     * Kalender office mengecualikan Minggu dan tanggal merah dari hari cuti.
+     * PJ Bagian selalu mengikuti kalender office walaupun unit asalnya 24 jam.
+     */
+    public static function isExcludedLeaveDate(Carbon $date, ?Employee $employee = null, ?string $unitKerja = null): bool
+    {
+        $countSunday = $employee?->shouldCountSundayInLeave() ?? false;
+
+        // Fallback nama unit hanya dipakai untuk data lama tanpa relasi departemen.
+        if (!$countSunday && (!$employee || !$employee->department_id) && $unitKerja) {
+            $dept = \App\Models\Department::where('name', $unitKerja)->first();
+            $countSunday = (bool) ($dept?->count_sunday_in_leave);
+        }
+
+        if ($countSunday) {
+            return false;
+        }
+
+        if ($date->isSunday()) {
+            return true;
+        }
+
+        return \App\Models\Holiday::whereDate('date', $date->toDateString())->exists();
     }
 
     /**

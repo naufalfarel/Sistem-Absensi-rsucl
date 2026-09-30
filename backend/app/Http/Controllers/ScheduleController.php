@@ -11,6 +11,23 @@ use Illuminate\Http\Request;
 class ScheduleController extends Controller
 {
     /**
+     * Jadwal akun PJ Bagian hanya boleh diubah oleh admin/super admin.
+     */
+    private function pjScheduleLockResponse(Request $request, \App\Models\Employee $employee)
+    {
+        $employee->loadMissing('user');
+
+        if (!$request->user()->isAdmin() && $employee->user?->isPjBagian()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Jadwal PJ Bagian hanya dapat diubah oleh Administrator.',
+            ], 403);
+        }
+
+        return null;
+    }
+
+    /**
      * Mencari atau membuat jadwal master "Libur / OFF" agar setiap kali
      * karyawan diatur libur pada tanggal tertentu, ada record schedule
      * eksplisit yang di-insert (bukan hanya menghapus record lama).
@@ -134,6 +151,20 @@ class ScheduleController extends Controller
         $shiftName = $data['name'] ?? '';
         $isLiburJaga = str_contains(strtolower($shiftName), 'libur jaga') || strtoupper(trim($shiftName)) === 'LJ';
 
+        // LJ adalah satu master global. Permintaan pembuatan berikutnya cukup
+        // mengembalikan master yang sama agar tidak tercipta LJ per-unit.
+        if ($isLiburJaga) {
+            $canonical = \App\Support\LiburJagaSchedule::consolidate($user->id);
+            $schedule = $canonical['parent'];
+            $schedule->load(['creator', 'updater', 'ownerDepartment', 'children']);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Master Libur Jaga global siap digunakan oleh seluruh unit.',
+                'data' => new ScheduleResource($schedule),
+            ]);
+        }
+
         if ($user->isPjBagian()) {
             $deptIds = $user->getPjDepartmentIds();
             $deptId = $request->input('department_id') ?? $request->input('owner_department_id');
@@ -246,6 +277,19 @@ class ScheduleController extends Controller
     {
         // Validasi payload perubahan data shift
         $data = $request->validated();
+
+        $schedule->loadMissing('parent');
+        $isExistingLiburJaga = \App\Support\LiburJagaSchedule::isName($schedule->name)
+            || \App\Support\LiburJagaSchedule::isName($schedule->parent?->name);
+        $isRenamedToLiburJaga = isset($data['name'])
+            && \App\Support\LiburJagaSchedule::isName($data['name']);
+
+        if ($isExistingLiburJaga || $isRenamedToLiburJaga) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Master Libur Jaga bersifat global dan tidak dapat diubah atau diduplikasi.',
+            ], 422);
+        }
         
         $user = $request->user();
                 if ($user->isPjBagian()) {
@@ -369,6 +413,15 @@ class ScheduleController extends Controller
      */
     public function destroy(Schedule $schedule)
     {
+        $schedule->loadMissing('parent');
+        if (\App\Support\LiburJagaSchedule::isName($schedule->name)
+            || \App\Support\LiburJagaSchedule::isName($schedule->parent?->name)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Master Libur Jaga global tidak dapat dihapus.',
+            ], 422);
+        }
+
         $user = request()->user();
         if ($user->isPjBagian()) {
             $deptIds = $user->getPjDepartmentIds();
@@ -438,6 +491,7 @@ class ScheduleController extends Controller
             return [
                 'employee_id' => $emp->id,
                 'name' => $emp->user->name,
+                'role' => $emp->user->role,
                 'schedules' => (object)$scheduleMap
             ];
         });
@@ -869,6 +923,10 @@ class ScheduleController extends Controller
 
         $emp = \App\Models\Employee::findOrFail($data['employee_id']);
 
+        if ($locked = $this->pjScheduleLockResponse($request, $emp)) {
+            return $locked;
+        }
+
         if ($request->user()->role === 'pj_bagian') {
             $deptIds = $request->user()->getPjDepartmentIds();
             $isSelf  = $emp->id === ($request->user()->employee?->id);
@@ -975,6 +1033,23 @@ class ScheduleController extends Controller
         $authUser = $request->user();
         $deptIds  = $authUser->isPjBagian() ? $authUser->getPjDepartmentIds() : null;
 
+        if (!$authUser->isAdmin()) {
+            $targetEmployeeIds = collect($data['assignments'])
+                ->pluck('employee_id')
+                ->unique()
+                ->values();
+            $containsPj = \App\Models\Employee::whereIn('id', $targetEmployeeIds)
+                ->whereHas('user', fn($query) => $query->where('role', 'pj_bagian'))
+                ->exists();
+
+            if ($containsPj) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Jadwal PJ Bagian hanya dapat diubah oleh Administrator.',
+                ], 403);
+            }
+        }
+
         $inserted = 0;
 
         foreach ($data['assignments'] as $assignment) {
@@ -1066,6 +1141,10 @@ class ScheduleController extends Controller
 
         $emp = \App\Models\Employee::findOrFail($data['employee_id']);
 
+        if ($locked = $this->pjScheduleLockResponse($request, $emp)) {
+            return $locked;
+        }
+
         if ($request->user()->role === 'pj_bagian') {
             $deptIds = $request->user()->getPjDepartmentIds();
             $isSelf  = $emp->id === ($request->user()->employee?->id);
@@ -1130,9 +1209,15 @@ class ScheduleController extends Controller
             }
         }
 
-        $employees = \App\Models\Employee::where('department_id', $data['department_id'])
-            ->where('status', 'active')
-            ->get();
+        $employeesQuery = \App\Models\Employee::where('department_id', $data['department_id'])
+            ->where('status', 'active');
+
+        // Penugasan massal oleh PJ tidak boleh ikut mengubah jadwal akun PJ.
+        if (!$request->user()->isAdmin()) {
+            $employeesQuery->whereDoesntHave('user', fn($query) => $query->where('role', 'pj_bagian'));
+        }
+
+        $employees = $employeesQuery->get();
 
         $scheduleName = 'Libur (Tidak Ada Shift)';
         if ($data['schedule_id']) {
@@ -1364,6 +1449,10 @@ class ScheduleController extends Controller
 
         $employee = \App\Models\Employee::findOrFail($data['employee_id']);
         $schedule = \App\Models\Schedule::findOrFail($data['schedule_id']);
+
+        if ($locked = $this->pjScheduleLockResponse($request, $employee)) {
+            return $locked;
+        }
 
         // Jika PJ Bagian, pastikan pegawai tersebut berada di departemen yang diawasi
         if ($user->isPjBagian() && !$user->isAdmin()) {

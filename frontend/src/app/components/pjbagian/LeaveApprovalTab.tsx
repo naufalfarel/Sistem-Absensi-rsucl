@@ -112,9 +112,7 @@ export function LeaveApprovalTab({ user, onUpdateCount }: LeaveApprovalTabProps)
   return (
     <div className="space-y-4">
       {/* Header Banner Hijau */}
-      <div className="bg-gradient-to-br from-[#16A34A] to-[#0B7A36] rounded-2xl p-5 relative overflow-hidden shadow-sm text-left animate-fade-in">
-        <div className="absolute top-0 right-0 w-32 h-32 rounded-full border-[20px] border-white/10 translate-x-8 -translate-y-8" />
-        <div className="absolute bottom-0 left-0 w-20 h-20 rounded-full border-[12px] border-white/10 -translate-x-6 translate-y-6" />
+      <div className="page-banner rounded-2xl p-5 relative overflow-hidden text-left ">
         
         <div className="relative flex items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
@@ -232,7 +230,7 @@ export function LeaveApprovalTab({ user, onUpdateCount }: LeaveApprovalTabProps)
                   <p className="text-[11px] text-gray-500 mb-1.5">{req.employee?.department || 'Karyawan'}</p>
                   {req.employee?.quota_info && (
                     <div className="flex items-center gap-2 mb-1.5 px-2.5 py-1 bg-emerald-50/90 border border-emerald-200 rounded-xl text-[10px] font-semibold w-fit shadow-2xs">
-                      <span className="text-emerald-800">📊 Akumulasi Cuti Disetujui: <strong>{req.employee.quota_info.used}</strong> / {req.employee.quota_info.quota} hari</span>
+                      <span className="text-emerald-800">Akumulasi Cuti Disetujui: <strong>{req.employee.quota_info.used}</strong> / {req.employee.quota_info.quota} hari</span>
                       <span className="text-emerald-300">•</span>
                       <span className="text-emerald-700">Sisa Kuota: <strong>{req.employee.quota_info.remaining}</strong> hari</span>
                     </div>
@@ -249,7 +247,7 @@ export function LeaveApprovalTab({ user, onUpdateCount }: LeaveApprovalTabProps)
                       <p className="italic">"{req.reason}"</p>
                       {req.substitute_name && (
                         <p className="not-italic text-gray-500 font-medium pt-1 border-t border-gray-100">
-                          👥 Rekan Kerja Pengganti: <span className="font-bold text-gray-800">{req.substitute_name}</span>
+                          Rekan Kerja Pengganti: <span className="font-bold text-gray-800">{req.substitute_name}</span>
                         </p>
                       )}
                     </div>

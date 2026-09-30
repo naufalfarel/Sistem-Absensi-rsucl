@@ -22,12 +22,12 @@ interface ShiftProposalTabProps {
 
 type IconKey = 'sun' | 'sunset' | 'moon' | 'star' | 'zap';
 
-const ICON_MAP: Record<IconKey, { component: typeof Sun; label: string; emoji: string }> = {
-  sun:    { component: Sun,    label: 'Matahari',  emoji: '☀️' },
-  sunset: { component: Sunset, label: 'Senja',     emoji: '🌅' },
-  moon:   { component: Moon,   label: 'Bulan',     emoji: '🌙' },
-  star:   { component: Star,   label: 'Bintang',   emoji: '⭐' },
-  zap:    { component: Zap,    label: 'Kilat',     emoji: '⚡' },
+const ICON_MAP: Record<IconKey, { component: typeof Sun; label: string }> = {
+  sun:    { component: Sun,    label: 'Matahari' },
+  sunset: { component: Sunset, label: 'Senja' },
+  moon:   { component: Moon,   label: 'Bulan' },
+  star:   { component: Star,   label: 'Bintang' },
+  zap:    { component: Zap,    label: 'Kilat' },
 };
 
 const COLOR_PRESETS = [

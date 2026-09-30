@@ -83,30 +83,12 @@ class LeaveRequest extends Model
      */
     public function getDaysAttribute(): int
     {
-        if (!$this->start_date || !$this->effective_end_date) return 0;
-        
-        $start = \Carbon\Carbon::parse($this->start_date);
-        $end   = \Carbon\Carbon::parse($this->effective_end_date);
-        if ($start->gt($end)) return 0;
-
-        $countSunday = false;
-        if ($this->employee && $this->employee->shouldCountSundayInLeave()) {
-            $countSunday = true;
-        }
-        if (!$countSunday && $this->unit_kerja) {
-            $dept = \App\Models\Department::where('name', $this->unit_kerja)->first();
-            if ($dept && $dept->count_sunday_in_leave) {
-                $countSunday = true;
-            }
-        }
-
-        $days = 0;
-        for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
-            if ($countSunday || !$date->isSunday()) {
-                $days++;
-            }
-        }
-        return $days;
+        return \App\Support\LeaveQuotaHelper::countLeaveDays(
+            $this->start_date,
+            $this->effective_end_date,
+            $this->employee,
+            $this->unit_kerja
+        );
     }
 
     /** 
