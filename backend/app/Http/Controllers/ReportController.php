@@ -246,8 +246,9 @@ class ReportController extends Controller
 
         $dailySorted = $dailyRankingRecords->map(function($att) {
             $startTimeStr = $att->schedule ? ($att->schedule->start_time ?? '08:30:00') : '08:30:00';
-            $windowOpen = \Carbon\Carbon::parse($att->date . ' ' . $startTimeStr)->subMinutes(150);
-            $checkIn = \Carbon\Carbon::parse($att->date . ' ' . $att->check_in);
+            $dateStr = $att->date instanceof \Carbon\Carbon ? $att->date->toDateString() : (string) $att->date;
+            $windowOpen = \Carbon\Carbon::parse($dateStr . ' ' . $startTimeStr)->subMinutes(150);
+            $checkIn = \Carbon\Carbon::parse($dateStr . ' ' . $att->check_in);
             
             // diffInMinutes(false) gives windowOpen - checkIn (e.g. 06:00 - 06:05 = -5)
             // multiply by -1 to get positive delay minutes after window opens
@@ -291,8 +292,9 @@ class ReportController extends Controller
             
             foreach ($hadirRecords as $att) {
                 $startTimeStr = $att->schedule ? ($att->schedule->start_time ?? '08:30:00') : '08:30:00';
-                $windowOpen = \Carbon\Carbon::parse($att->date . ' ' . $startTimeStr)->subMinutes(150);
-                $checkIn = \Carbon\Carbon::parse($att->date . ' ' . $att->check_in);
+                $dateStr = $att->date instanceof \Carbon\Carbon ? $att->date->toDateString() : (string) $att->date;
+                $windowOpen = \Carbon\Carbon::parse($dateStr . ' ' . $startTimeStr)->subMinutes(150);
+                $checkIn = \Carbon\Carbon::parse($dateStr . ' ' . $att->check_in);
                 $delay = $checkIn->diffInMinutes($windowOpen, false) * -1;
                 $totalDelay += $delay;
             }
