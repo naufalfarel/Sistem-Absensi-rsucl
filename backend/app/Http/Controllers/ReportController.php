@@ -48,7 +48,7 @@ class ReportController extends Controller
             ->count();
 
         $todayPresentTotal = $todayHadir + $todayTelat + $todayCuti;
-        $todayAlpha = max(0, $totalEmp - $todayPresentTotal);
+        $todayAlpha = Attendance::whereDate('date', today('Asia/Jakarta')->toDateString())->where('status', 'alpha')->count();
 
         // ── 2. Data absensi bulan berjalan & bulan lalu (Direct SQL Aggregates) ──
         $monthHadir = Attendance::whereMonth('date', $month)->whereYear('date', $year)->where('status', 'hadir')->count();
@@ -241,14 +241,25 @@ class ReportController extends Controller
         $dailyRankingRecords = Attendance::whereDate('date', $todayDate)
             ->where('status', 'hadir')
             ->whereNotNull('check_in')
-            ->with(['employee.user', 'employee.department'])
-            ->orderBy('check_in', 'asc')
-            ->take(10)
+            ->with(['employee.user', 'employee.department', 'schedule'])
             ->get();
+
+        $dailySorted = $dailyRankingRecords->map(function($att) {
+            $startTimeStr = $att->schedule ? ($att->schedule->start_time ?? '08:30:00') : '08:30:00';
+            $windowOpen = \Carbon\Carbon::parse($att->date . ' ' . $startTimeStr)->subMinutes(150);
+            $checkIn = \Carbon\Carbon::parse($att->date . ' ' . $att->check_in);
+            
+            // diffInMinutes(false) gives windowOpen - checkIn (e.g. 06:00 - 06:05 = -5)
+            // multiply by -1 to get positive delay minutes after window opens
+            $delay = $checkIn->diffInMinutes($windowOpen, false) * -1;
+            
+            $att->delay_minutes = $delay;
+            return $att;
+        })->sortBy('delay_minutes')->take(10)->values();
 
         $dailyDiligenceRanking = [];
         $rankIdx = 1;
-        foreach ($dailyRankingRecords as $rec) {
+        foreach ($dailySorted as $rec) {
             $dailyDiligenceRanking[] = [
                 'rank'        => $rankIdx++,
                 'employee_id' => $rec->employee_id,
@@ -261,7 +272,7 @@ class ReportController extends Controller
         // Rangking Bulanan
         $rankAtts = Attendance::whereMonth('date', $month)
             ->whereYear('date', $year)
-            ->with(['employee.user', 'employee.department'])
+            ->with(['employee.user', 'employee.department', 'schedule'])
             ->get()
             ->groupBy('employee_id');
 
@@ -273,6 +284,21 @@ class ReportController extends Controller
             $activeDays = $hadirCount + $telatCount;
             $punctualityRate = $activeDays > 0 ? round(($hadirCount / $activeDays) * 100) : 0;
 
+            // Hitung rata-rata keterlambatan dari jam buka absensi (untuk tie-breaker)
+            $totalDelay = 0;
+            $hadirRecords = $empRecords->where('status', 'hadir')->whereNotNull('check_in');
+            $hadirWithDelayCount = $hadirRecords->count();
+            
+            foreach ($hadirRecords as $att) {
+                $startTimeStr = $att->schedule ? ($att->schedule->start_time ?? '08:30:00') : '08:30:00';
+                $windowOpen = \Carbon\Carbon::parse($att->date . ' ' . $startTimeStr)->subMinutes(150);
+                $checkIn = \Carbon\Carbon::parse($att->date . ' ' . $att->check_in);
+                $delay = $checkIn->diffInMinutes($windowOpen, false) * -1;
+                $totalDelay += $delay;
+            }
+            
+            $avgDelay = $hadirWithDelayCount > 0 ? ($totalDelay / $hadirWithDelayCount) : 999999;
+
             if ($hadirCount > 0) {
                 $firstRecord = $empRecords->first();
                 $monthlyDiligenceRanking[] = [
@@ -283,6 +309,7 @@ class ReportController extends Controller
                     'telat_count'      => $telatCount,
                     'alpha_count'      => $alphaCount,
                     'punctuality_rate' => $punctualityRate,
+                    'avg_delay'        => $avgDelay,
                 ];
             }
         }
@@ -290,8 +317,13 @@ class ReportController extends Controller
         usort($monthlyDiligenceRanking, function($a, $b) {
             $hadirComp = $b['hadir_count'] <=> $a['hadir_count'];
             if ($hadirComp !== 0) return $hadirComp;
+            
+            $delayComp = $a['avg_delay'] <=> $b['avg_delay'];
+            if ($delayComp !== 0) return $delayComp;
+
             $telatComp = $a['telat_count'] <=> $b['telat_count'];
             if ($telatComp !== 0) return $telatComp;
+            
             return $a['alpha_count'] <=> $b['alpha_count'];
         });
 

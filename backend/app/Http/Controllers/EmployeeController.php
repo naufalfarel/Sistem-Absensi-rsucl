@@ -33,6 +33,7 @@ class EmployeeController extends Controller
         $query = Employee::with(['user', 'department', 'position', 'todayAttendance', 'disciplinarySanctions']);
         if ($user && $user->role === 'pj_bagian') {
             $query->whereIn('department_id', $user->getPjDepartmentIds());
+            $query->where('status', 'active');
         }
 
         $employees = $query->get()->map(fn($e) => $this->formatEmployee($e));
@@ -180,6 +181,9 @@ class EmployeeController extends Controller
     public function listPjBagian()
     {
         $pjList = User::where('role', 'pj_bagian')
+            ->whereHas('employee', function ($q) {
+                $q->where('status', 'active');
+            })
             ->with(['pjDepartments', 'employee.position'])
             ->get()
             ->map(function ($u) {
@@ -194,6 +198,7 @@ class EmployeeController extends Controller
                     'position'                => $u->employee?->position?->name,
                     'pj_bagian_department_id' => $u->pjDepartments->first()?->id,
                     'pj_bagian_department'    => $u->pjDepartments->first()?->name,
+                    'can_edit_own_schedule'   => (bool) $u->can_edit_own_schedule,
                     'pj_departments'          => $u->pjDepartments->map(fn($d) => [
                         'id'   => $d->id,
                         'name' => $d->name
@@ -212,10 +217,15 @@ class EmployeeController extends Controller
      */
     public function assignPjBagian(Request $request, Employee $employee)
     {
+        if (!$request->user()?->isAdmin()) {
+            return response()->json(['success' => false, 'message' => 'Hanya Administrator atau Super Admin yang dapat mengatur wewenang PJ Bagian.'], 403);
+        }
+
         $data = $request->validate([
             'department_ids'   => 'nullable|array',
             'department_ids.*' => 'exists:departments,id',
             'department_id'    => 'nullable|exists:departments,id', // Fallback legacy
+            'can_edit_own_schedule' => 'sometimes|boolean',
         ]);
 
         $departmentIds = [];
@@ -235,7 +245,8 @@ class EmployeeController extends Controller
             return response()->json(['success' => false, 'message' => 'Akun user karyawan tidak ditemukan.'], 404);
         }
 
-        if (!\App\Support\PjScheduleRules::syncStandardSchedule($employee)) {
+        // Jangan hapus jadwal khusus yang sudah dibuat saat admin hanya mengubah wewenang PJ.
+        if (!$targetUser->isPjBagian() && !\App\Support\PjScheduleRules::syncStandardSchedule($employee)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Shift standar PJ belum tersedia. Pastikan template Administrasi/staff office memiliki sub-shift Normal Senin-Jumat dan Sabtu.',
@@ -259,6 +270,7 @@ class EmployeeController extends Controller
                     $pj->update([
                         'role'                    => 'employee',
                         'pj_bagian_department_id' => null,
+                        'can_edit_own_schedule' => false,
                     ]);
                     \App\Models\Notification::create([
                         'user_id' => $pj->id,
@@ -279,6 +291,7 @@ class EmployeeController extends Controller
         $targetUser->update([
             'role'                    => 'pj_bagian',
             'pj_bagian_department_id' => $departmentIds[0], // simpan departemen pertama di field legacy
+            'can_edit_own_schedule'   => $data['can_edit_own_schedule'] ?? (bool) $targetUser->can_edit_own_schedule,
         ]);
 
         $targetUser->pjDepartments()->sync($departmentIds);
@@ -303,6 +316,7 @@ class EmployeeController extends Controller
                 'user_id'                 => $targetUser->id,
                 'name'                    => $targetUser->name,
                 'role'                    => $targetUser->role,
+                'can_edit_own_schedule'   => (bool) $targetUser->can_edit_own_schedule,
                 'pj_bagian_department_id' => $targetUser->pj_bagian_department_id,
                 'pj_bagian_department'    => $targetUser->pjDepartments->first()?->name,
                 'pj_departments'          => $targetUser->pjDepartments->map(fn($d) => [
@@ -318,8 +332,12 @@ class EmployeeController extends Controller
      * 
      * Mencabut status PJ Bagian dari karyawan — role dikembalikan ke 'employee'.
      */
-    public function revokePjBagian(Employee $employee)
+    public function revokePjBagian(Request $request, Employee $employee)
     {
+        if (!$request->user()?->isAdmin()) {
+            return response()->json(['success' => false, 'message' => 'Hanya Administrator atau Super Admin yang dapat mencabut wewenang PJ Bagian.'], 403);
+        }
+
         $targetUser = $employee->user;
 
         if (!$targetUser) {
@@ -333,6 +351,7 @@ class EmployeeController extends Controller
         $targetUser->update([
             'role'                    => 'employee',
             'pj_bagian_department_id' => null,
+            'can_edit_own_schedule' => false,
         ]);
 
         $targetUser->pjDepartments()->detach();

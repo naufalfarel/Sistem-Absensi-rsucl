@@ -168,6 +168,7 @@ export interface AuthUser {
   username: string;
   pj_bagian_department_id?: number;
   pj_bagian_department?: string;
+  can_edit_own_schedule?: boolean;
   employee_id?: number;
   department?: string;
   count_sunday_in_leave?: boolean;
@@ -1778,6 +1779,7 @@ export interface PjBagianUser {
   pj_bagian_department_id: number;
   pj_bagian_department: string;
   pj_departments?: { id: number; name: string }[];
+  can_edit_own_schedule: boolean;
 }
 
 export const pjBagianApi = {
@@ -1787,10 +1789,10 @@ export const pjBagianApi = {
     );
   },
 
-  assign: (employeeId: number, departmentIds: number[]) => {
+  assign: (employeeId: number, departmentIds: number[], canEditOwnSchedule: boolean) => {
     return api.put<{ success: boolean; message: string; data: any }>(
       `/employees/${employeeId}/assign-pj-bagian`,
-      { department_ids: departmentIds },
+      { department_ids: departmentIds, can_edit_own_schedule: canEditOwnSchedule },
     );
   },
   revoke: (employeeId: number) => {

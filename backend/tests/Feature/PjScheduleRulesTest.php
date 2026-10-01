@@ -85,7 +85,7 @@ class PjScheduleRulesTest extends TestCase
             'employee_id' => $target->id,
             'day_of_week' => 'Senin',
             'schedule_id' => $weekday->id,
-        ])->assertForbidden()->assertJsonPath('message', 'Jadwal PJ Bagian hanya dapat diubah oleh Administrator.');
+        ])->assertForbidden()->assertJsonPath('message', 'Jadwal PJ Bagian hanya dapat diubah oleh Administrator, kecuali PJ tersebut diberi izin khusus untuk mengubah jadwal sendiri.');
 
         $this->assertDatabaseMissing('employee_schedule', [
             'employee_id' => $target->id,
@@ -138,6 +138,84 @@ class PjScheduleRulesTest extends TestCase
             'employee_id' => $target->id,
             'work_date' => '2026-09-28',
         ]);
+    }
+
+    public function test_only_pj_with_special_permission_can_change_own_schedule(): void
+    {
+        $department = Department::create(['name' => 'Kasir']);
+        $pjUser = User::factory()->create(['role' => 'pj_bagian', 'pj_bagian_department_id' => $department->id]);
+        $pj = $this->createEmployee($pjUser, $department, 'PJ-OWN-001');
+        [, $weekday] = $this->createOfficeSchedule();
+
+        Sanctum::actingAs($pjUser);
+        $datePayload = [
+            'employee_id' => $pj->id,
+            'work_date' => '2026-10-05',
+            'schedule_id' => $weekday->id,
+        ];
+        $this->postJson('/api/employee-schedules/assign-date', $datePayload)->assertForbidden();
+        $this->postJson('/api/employee-schedules/assign-bulk-date', [
+            'assignments' => [$datePayload],
+        ])->assertForbidden();
+
+        $pjUser->update(['can_edit_own_schedule' => true]);
+        $this->postJson('/api/employee-schedules/assign-date', $datePayload)->assertOk();
+        $this->postJson('/api/employee-schedules/assign-bulk-date', [
+            'assignments' => [['employee_id' => $pj->id, 'work_date' => '2026-10-06', 'schedule_id' => $weekday->id]],
+        ])->assertOk();
+        $this->postJson('/api/employee-schedules/assign', [
+            'employee_id' => $pj->id, 'day_of_week' => 'Rabu', 'schedule_id' => $weekday->id,
+        ])->assertOk();
+        $this->assertDatabaseHas('employee_schedule', [
+            'employee_id' => $pj->id, 'work_date' => '2026-10-06', 'schedule_id' => $weekday->id,
+        ]);
+
+        $otherDepartment = Department::create(['name' => 'Kasir Lain']);
+        $otherUser = User::factory()->create(['role' => 'pj_bagian', 'pj_bagian_department_id' => $otherDepartment->id, 'can_edit_own_schedule' => true]);
+        $this->createEmployee($otherUser, $otherDepartment, 'PJ-OWN-002');
+        Sanctum::actingAs($otherUser);
+        $this->postJson('/api/employee-schedules/assign-date', $datePayload)->assertForbidden();
+        $this->postJson('/api/employee-schedules/assign-bulk-date', [
+            'assignments' => [$datePayload],
+        ])->assertForbidden();
+    }
+
+    public function test_admin_can_grant_and_revoke_permission_without_erasing_existing_pj_schedule(): void
+    {
+        $department = Department::create(['name' => 'Kasir']);
+        $pjUser = User::factory()->create(['role' => 'pj_bagian']);
+        $pj = $this->createEmployee($pjUser, $department, 'PJ-OWN-003');
+        [, $weekday] = $this->createOfficeSchedule();
+        DB::table('employee_schedule')->insert([
+            'employee_id' => $pj->id, 'schedule_id' => $weekday->id,
+            'day_of_week' => null, 'work_date' => '2026-10-05',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $admin = User::factory()->create(['role' => 'admin']);
+        Sanctum::actingAs($admin);
+        $endpoint = "/api/employees/{$pj->id}/assign-pj-bagian";
+        $this->putJson($endpoint, [
+            'department_ids' => [$department->id], 'can_edit_own_schedule' => true,
+        ])->assertOk()->assertJsonPath('data.can_edit_own_schedule', true);
+        $this->getJson('/api/employees/pj-bagian')->assertOk()
+            ->assertJsonPath('data.0.can_edit_own_schedule', true);
+        $this->assertDatabaseHas('employee_schedule', [
+            'employee_id' => $pj->id, 'work_date' => '2026-10-05', 'schedule_id' => $weekday->id,
+        ]);
+
+        $this->putJson($endpoint, [
+            'department_ids' => [$department->id], 'can_edit_own_schedule' => false,
+        ])->assertOk();
+        $this->assertDatabaseHas('users', ['id' => $pjUser->id, 'can_edit_own_schedule' => false]);
+        $this->assertDatabaseHas('employee_schedule', [
+            'employee_id' => $pj->id, 'work_date' => '2026-10-05', 'schedule_id' => $weekday->id,
+        ]);
+
+        Sanctum::actingAs($pjUser);
+        $this->putJson($endpoint, [
+            'department_ids' => [$department->id], 'can_edit_own_schedule' => true,
+        ])->assertForbidden();
     }
 
     private function createEmployee(User $user, Department $department, string $nik): Employee

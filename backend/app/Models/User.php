@@ -23,7 +23,7 @@ class User extends Authenticatable
     // Kolom-kolom yang dapat diisi secara massal
     protected $fillable = [
         'name', 'email', 'password', 'role', 'nik_ktp', 'username',
-        'profile_picture', 'pj_bagian_department_id',
+        'profile_picture', 'pj_bagian_department_id', 'can_edit_own_schedule',
     ];
 
     // Kolom-kolom yang disembunyikan dalam representasi JSON (misal saat API response)
@@ -37,6 +37,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password'          => 'hashed', // Meng-hash password secara otomatis saat disimpan
+            'can_edit_own_schedule' => 'boolean',
         ];
     }
 

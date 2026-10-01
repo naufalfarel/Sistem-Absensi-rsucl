@@ -11,16 +11,21 @@ use Illuminate\Http\Request;
 class ScheduleController extends Controller
 {
     /**
-     * Jadwal akun PJ Bagian hanya boleh diubah oleh admin/super admin.
+     * Jadwal PJ hanya boleh diubah admin atau PJ itu sendiri jika diberi izin khusus.
      */
     private function pjScheduleLockResponse(Request $request, \App\Models\Employee $employee)
     {
         $employee->loadMissing('user');
 
-        if (!$request->user()->isAdmin() && $employee->user?->isPjBagian()) {
+        $actor = $request->user();
+        $canEditSelf = $actor->isPjBagian()
+            && (bool) $actor->can_edit_own_schedule
+            && $employee->user_id === $actor->id;
+
+        if (!$actor->isAdmin() && $employee->user?->isPjBagian() && !$canEditSelf) {
             return response()->json([
                 'success' => false,
-                'message' => 'Jadwal PJ Bagian hanya dapat diubah oleh Administrator.',
+                'message' => 'Jadwal PJ Bagian hanya dapat diubah oleh Administrator, kecuali PJ tersebut diberi izin khusus untuk mengubah jadwal sendiri.',
             ], 403);
         }
 
@@ -1033,20 +1038,14 @@ class ScheduleController extends Controller
         $authUser = $request->user();
         $deptIds  = $authUser->isPjBagian() ? $authUser->getPjDepartmentIds() : null;
 
-        if (!$authUser->isAdmin()) {
-            $targetEmployeeIds = collect($data['assignments'])
-                ->pluck('employee_id')
-                ->unique()
-                ->values();
-            $containsPj = \App\Models\Employee::whereIn('id', $targetEmployeeIds)
-                ->whereHas('user', fn($query) => $query->where('role', 'pj_bagian'))
-                ->exists();
-
-            if ($containsPj) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Jadwal PJ Bagian hanya dapat diubah oleh Administrator.',
-                ], 403);
+        // Validasi seluruh target sebelum menulis agar satu target terlarang tidak
+        // menyebabkan sebagian perubahan massal terlanjur tersimpan.
+        $targets = \App\Models\Employee::with('user')
+            ->whereIn('id', collect($data['assignments'])->pluck('employee_id')->unique())
+            ->get();
+        foreach ($targets as $target) {
+            if ($locked = $this->pjScheduleLockResponse($request, $target)) {
+                return $locked;
             }
         }
 

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Sun, Sunset, Moon, Star, Zap, Plus, X, Calendar as CalendarIcon,
   Trash2, Edit2, Check, AlertCircle, ChevronLeft, ChevronRight,
-  Users, Save, Loader2, Coffee, FileText, Search
+  Users, Save, Loader2, Coffee, FileText, Search, Copy
 } from 'lucide-react';
 import {
   scheduleApi, employeeApi, ShiftSchedule, EmployeeMonthlySchedule
@@ -21,6 +21,8 @@ interface JadwalShiftTabProps {
     nik_ktp: string;
     pj_bagian_department?: string;
     pj_bagian_department_id?: number;
+    employee_id?: number;
+    can_edit_own_schedule?: boolean;
   };
 }
 
@@ -350,8 +352,9 @@ function BulkAssignModal({ user, shifts, employees, year, month, daysInMonth, on
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
 
-  const filteredEmps = employees.filter(
-    e => e.name.toLowerCase().includes(search.toLowerCase())
+  const filteredEmps = employees.filter(e =>
+    e.name.toLowerCase().includes(search.toLowerCase()) &&
+    (user.can_edit_own_schedule || Number(e.id) !== Number(user.employee_id))
   );
 
   const toggleEmp = (id: number) => setSelectedEmpIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -595,6 +598,101 @@ function BulkAssignModal({ user, shifts, employees, year, month, daysInMonth, on
   );
 }
 
+// ── Salin jadwal PJ ke pegawai terpilih ───────────────────────────────
+interface SyncPjScheduleModalProps {
+  pjRow?: EmployeeMonthlySchedule;
+  employees: any[];
+  year: number;
+  month: number;
+  daysInMonth: number;
+  onClose: () => void;
+  onSaved: () => void;
+}
+
+function SyncPjScheduleModal({ pjRow, employees, year, month, daysInMonth, onClose, onSaved }: SyncPjScheduleModalProps) {
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [search, setSearch] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const targets = employees.filter((employee: any) =>
+    Number(employee.id) !== Number(pjRow?.employee_id) &&
+    employee.role !== 'pj_bagian' &&
+    employee.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const toggle = (id: number) => setSelectedIds(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
+
+  const sourceIdsFor = (dateStr: string): number[] => {
+    const source = pjRow?.dates?.[dateStr];
+    if (!source) return [];
+    if (source.all_shifts?.length) return source.all_shifts.map(shift => Number(shift.schedule_id)).filter(Boolean);
+    return source.schedule_id && source.schedule_id !== 99999 ? [Number(source.schedule_id)] : [];
+  };
+
+  const save = async () => {
+    if (!pjRow || selectedIds.length === 0) return;
+    const assignments: Array<{ employee_id: number; work_date: string; schedule_ids: number[] }> = [];
+    for (const employeeId of selectedIds) {
+      for (let day = 1; day <= daysInMonth; day += 1) {
+        const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const scheduleIds = sourceIdsFor(dateStr);
+        // Hari tanpa jadwal PJ tidak disentuh agar jadwal pegawai tidak terhapus.
+        if (scheduleIds.length) assignments.push({ employee_id: employeeId, work_date: dateStr, schedule_ids: scheduleIds });
+      }
+    }
+    if (!assignments.length) {
+      alert('Jadwal PJ pada bulan ini belum memiliki shift yang dapat disalin.');
+      return;
+    }
+    if (!window.confirm(`Samakan jadwal kantor biasa ke ${selectedIds.length} pegawai untuk ${month}/${year}? Jadwal pegawai pada tanggal yang sama akan ditimpa.`)) return;
+    setSaving(true);
+    try {
+      const result = await scheduleApi.assignBulkByDate(assignments);
+      if (result.success) {
+        alert(`Jadwal berhasil disamakan untuk ${selectedIds.length} pegawai.`);
+        onSaved();
+        onClose();
+      }
+    } catch (error: any) {
+      alert(error?.message ?? 'Gagal menyamakan jadwal pegawai.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-xs" onClick={onClose} />
+      <div className="relative z-10 w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl">
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div>
+            <h3 className="text-[15px] font-bold text-gray-900">Samakan dengan Jadwal Kantor Biasa</h3>
+            <p className="mt-1 text-[11px] leading-relaxed text-gray-500">Jadwal pegawai yang dipilih akan disamakan dengan jadwal kantor biasa (jadwal PJ) pada bulan ini.</p>
+          </div>
+          <button onClick={onClose} className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center"><X size={14} /></button>
+        </div>
+        <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Cari nama pegawai..." className="mb-2 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-[12px] focus:outline-none focus:border-[#16A34A]" />
+        <div className="max-h-56 overflow-y-auto rounded-xl border border-gray-200 p-2 space-y-1">
+          {targets.map((employee: any) => (
+            <label key={employee.id} className="flex cursor-pointer items-center gap-2 rounded-lg p-2 text-[12px] hover:bg-green-50">
+              <input type="checkbox" checked={selectedIds.includes(Number(employee.id))} onChange={() => toggle(Number(employee.id))} className="h-4 w-4 rounded text-[#16A34A]" />
+              <span className="font-medium text-gray-800">{employee.name}</span>
+            </label>
+          ))}
+          {!targets.length && <p className="py-5 text-center text-[11px] text-gray-400">Pegawai tidak ditemukan.</p>}
+        </div>
+        <p className="mt-2 text-[10px] font-semibold text-[#16A34A]">{selectedIds.length} pegawai dipilih · {month}/{year}</p>
+        <div className="mt-4 flex gap-2">
+          <button onClick={onClose} disabled={saving} className="flex-1 rounded-xl border border-gray-200 py-2.5 text-[12px] font-semibold text-gray-600">Batal</button>
+          <button onClick={save} disabled={saving || selectedIds.length === 0 || !pjRow} className="flex-1 rounded-xl bg-[#16A34A] py-2.5 text-[12px] font-bold text-white disabled:opacity-50">
+            {saving ? 'Menyamakan...' : 'Samakan Jadwal'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Popover Pilih Shift (untuk klik sel kalender) ─────────────────────
 interface ShiftPopoverProps {
   shifts: ShiftSchedule[];
@@ -748,7 +846,9 @@ function ShiftPopover({ shifts, currentScheduleIds, onToggleSelect, onSelectSpec
 
 // ── Main JadwalShiftTab Component ──────────────────────────────────────
 export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
-  const { logoUrl } = useAuth();
+  const { logoUrl, user: currentUser, refreshUser } = useAuth();
+  const canEditOwnSchedule = !!(currentUser?.can_edit_own_schedule ?? user.can_edit_own_schedule);
+  useEffect(() => { void refreshUser(); }, []);
   const today = new Date();
   const [viewYear, setViewYear]   = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth() + 1); // 1-12
@@ -763,6 +863,7 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
   const [holidays, setHolidays] = useState<string[]>([]);
   const [showAddModal, setShowAddModal]     = useState(false);
   const [showBulkModal, setShowBulkModal]   = useState(false);
+  const [showSyncPjModal, setShowSyncPjModal] = useState(false);
 
   const [saving, setSaving]         = useState<string | null>(null); // "empId-date" key being saved
   const [pendingChanges, setPendingChanges] = useState<Record<string, { employee_id: number; work_date: string; schedule_id: number | null }>>({});
@@ -911,6 +1012,8 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
     }
   }, [viewYear, viewMonth, activeDeptId, user, pjDepts]);
 
+  const pjScheduleRow = monthlyData.find(row => Number(row.employee_id) === Number((user as any)?.employee_id));
+
 
   useEffect(() => {
     loadData();
@@ -973,6 +1076,7 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
 
   // Klik sel kalender → buka popover (posisi viewport aman dari sidebar)
   const handleCellClick = (e: React.MouseEvent, empId: number, dateStr: string) => {
+    if (Number(empId) === Number(user.employee_id) && !canEditOwnSchedule) return;
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const popoverWidth = 250;
     const popoverHeight = 360;
@@ -1506,6 +1610,10 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
             className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-700 text-[13px] font-semibold rounded-xl transition-all">
             <CalendarIcon size={15} /> Tugaskan Massal
           </button>
+          <button onClick={() => setShowSyncPjModal(true)}
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700 text-[13px] font-semibold rounded-xl transition-all">
+            <Copy size={15} /> Samakan Jadwal Kantor
+          </button>
           <button onClick={() => setShowAddModal(true)}
             className="flex items-center gap-1.5 px-4 py-2.5 bg-[#16A34A] hover:bg-[#0d9240] text-white text-[13px] font-semibold rounded-xl transition-all shadow-sm">
             <Plus size={15} /> Tambah Shift Baru
@@ -1950,6 +2058,7 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
                                 Anda (PJ)
                               </span>
                             )}
+                            {isSelfPj && !canEditOwnSchedule && <span className="text-[9px] text-slate-500">Jadwal diatur admin</span>}
                           </div>
                         </td>
                         {days.map(day => {
@@ -2000,8 +2109,8 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
                                   {allShifts.length > 1 ? (
                                     <div
                                       onClick={e => handleCellClick(e, row.employee_id, dateStr)}
-                                      className="flex items-center justify-center gap-0.5 cursor-pointer hover:scale-105 transition-all p-0.5"
-                                      title={`[MULTI-SHIFT (${allShifts.length} Shift)]\n${allShifts.map((s: any) => `• ${s.name} (${s.start_time ?? ''}–${s.end_time ?? ''})`).join('\n')}\nKlik untuk ubah.`}
+                                      className={`flex items-center justify-center gap-0.5 transition-all p-0.5 ${isSelfPj && !canEditOwnSchedule ? 'cursor-not-allowed opacity-70' : 'cursor-pointer hover:scale-105'}`}
+                                      title={isSelfPj && !canEditOwnSchedule ? 'Jadwal PJ ini hanya dapat diubah oleh administrator.' : `[MULTI-SHIFT (${allShifts.length} Shift)]\n${allShifts.map((s: any) => `• ${s.name} (${s.start_time ?? ''}–${s.end_time ?? ''})`).join('\n')}\nKlik untuk ubah.`}
                                     >
                                       {allShifts.map((sItem: any, sIdx: number) => {
                                         const prItem = getPresetByHex(sItem.color);
@@ -2020,6 +2129,7 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
                                   ) : (
                                     <button
                                       onClick={e => handleCellClick(e, row.employee_id, dateStr)}
+                                      disabled={isSelfPj && !canEditOwnSchedule}
                                       className={`w-8 h-7 mx-auto rounded-lg text-[10px] font-extrabold transition-all hover:scale-110 active:scale-95 border flex items-center justify-center ${
                                         isPending
                                           ? 'ring-2 ring-blue-500 border-blue-400 shadow-md animate-pulse'
@@ -2027,6 +2137,7 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
                                             ? 'shadow-sm hover:shadow-md'
                                             : 'border-slate-100 bg-slate-50 text-slate-400 hover:bg-slate-100'
                                       }`}
+                                      aria-label={isSelfPj && !canEditOwnSchedule ? 'Jadwal sendiri hanya dapat diubah admin' : 'Ubah jadwal'}
                                       style={assigned && pr ? {
                                         background: pr.bg,
                                         borderColor: isPending ? '#3B82F6' : pr.border,
@@ -2150,6 +2261,17 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
           month={viewMonth}
           daysInMonth={daysInMonth}
           onClose={() => setShowBulkModal(false)}
+          onSaved={loadData}
+        />
+      )}
+      {showSyncPjModal && (
+        <SyncPjScheduleModal
+          pjRow={pjScheduleRow}
+          employees={employees}
+          year={viewYear}
+          month={viewMonth}
+          daysInMonth={daysInMonth}
+          onClose={() => setShowSyncPjModal(false)}
           onSaved={loadData}
         />
       )}

@@ -141,6 +141,7 @@ class AuthController extends Controller
 
         // Sertakan info departemen yang diawasi jika PJ Bagian
         if ($user->isPjBagian()) {
+            $userData['can_edit_own_schedule'] = (bool) $user->can_edit_own_schedule;
             $user->load(['pjBagianDepartment', 'pjDepartments']);
             $userData['pj_bagian_department_id'] = $user->pj_bagian_department_id;
             $userData['pj_bagian_department']    = $user->pjBagianDepartment?->name;
@@ -211,6 +212,7 @@ class AuthController extends Controller
         ];
         // Sertakan info departemen yang diawasi jika PJ Bagian
         if ($user->isPjBagian()) {
+            $data['can_edit_own_schedule'] = (bool) $user->can_edit_own_schedule;
             $user->load(['pjBagianDepartment', 'pjDepartments']);
             $data['pj_bagian_department_id'] = $user->pj_bagian_department_id;
             $data['pj_bagian_department']    = $user->pjBagianDepartment?->name;
@@ -385,6 +387,7 @@ class AuthController extends Controller
         ];
 
         if ($user->isPjBagian()) {
+            $data['can_edit_own_schedule'] = (bool) $user->can_edit_own_schedule;
             $user->load(['pjBagianDepartment', 'pjDepartments']);
             $data['pj_bagian_department_id'] = $user->pj_bagian_department_id;
             $data['pj_bagian_department']    = $user->pjBagianDepartment?->name;

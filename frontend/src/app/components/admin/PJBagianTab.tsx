@@ -40,7 +40,7 @@ function SearchableEmployeeSelect({
   // Filter & Urutkan secara alfabetis A-Z berdasarkan NAMA PEGAWAI
   const sortedEmployees = useMemo(() => {
     return [...employees]
-      .filter(e => e.role !== 'admin' && e.role !== 'super_admin')
+      .filter(e => e.role !== 'admin' && e.role !== 'super_admin' && e.status === 'active')
       .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'id', { sensitivity: 'base' }));
   }, [employees]);
 
@@ -151,6 +151,7 @@ export function PJBagianTab() {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const [modalEmpSearch, setModalEmpSearch] = useState('');
   const [selectedDepartmentIds, setSelectedDepartmentIds] = useState<number[]>([]);
+  const [assignCanEditOwnSchedule, setAssignCanEditOwnSchedule] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   
@@ -162,6 +163,7 @@ export function PJBagianTab() {
   // Edit PJ State
   const [editingPj, setEditingPj] = useState<PjBagianUser | null>(null);
   const [editDepartmentIds, setEditDepartmentIds] = useState<number[]>([]);
+  const [editCanEditOwnSchedule, setEditCanEditOwnSchedule] = useState(false);
 
   const handleEditPj = (pj: PjBagianUser) => {
     setEditingPj(pj);
@@ -170,6 +172,7 @@ export function PJBagianTab() {
       ? pj.pj_departments.map(d => d.id)
       : (pj.pj_bagian_department_id ? [pj.pj_bagian_department_id] : []);
     setEditDepartmentIds(deptIds);
+    setEditCanEditOwnSchedule(!!pj.can_edit_own_schedule);
   };
 
   const handleSaveEditPj = async (e: React.FormEvent) => {
@@ -183,7 +186,7 @@ export function PJBagianTab() {
     setSubmitting(true);
     setErrorMsg('');
     try {
-      const res = await pjBagianApi.assign(editingPj.employee_id, editDepartmentIds);
+      const res = await pjBagianApi.assign(editingPj.employee_id, editDepartmentIds, editCanEditOwnSchedule);
       if (res.success) {
         setEditingPj(null);
         setEditDepartmentIds([]);
@@ -258,11 +261,12 @@ export function PJBagianTab() {
         }
       }
 
-      const res = await pjBagianApi.assign(Number(selectedEmployeeId), selectedDepartmentIds);
+      const res = await pjBagianApi.assign(Number(selectedEmployeeId), selectedDepartmentIds, assignCanEditOwnSchedule);
       if (res.success) {
         setIsAssignModalOpen(false);
         setSelectedEmployeeId('');
         setSelectedDepartmentIds([]);
+        setAssignCanEditOwnSchedule(false);
         loadData();
       }
     } catch (err: any) {
@@ -380,6 +384,9 @@ export function PJBagianTab() {
                         </span>
                       )}
                     </div>
+                    <span className={`mt-1 inline-block text-[10px] ${pj.can_edit_own_schedule ? 'text-emerald-700' : 'text-gray-400'}`}>
+                      Jadwal sendiri: {pj.can_edit_own_schedule ? 'diizinkan' : 'admin saja'}
+                    </span>
                   </td>
 
                   <td className="py-3 px-4 text-right">
@@ -441,6 +448,9 @@ export function PJBagianTab() {
                     </span>
                   )}
                 </div>
+                <span className={`text-[10px] ${pj.can_edit_own_schedule ? 'text-emerald-700' : 'text-gray-400'}`}>
+                  Jadwal sendiri: {pj.can_edit_own_schedule ? 'diizinkan' : 'admin saja'}
+                </span>
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => handleEditPj(pj)}
@@ -517,6 +527,11 @@ export function PJBagianTab() {
                   })}
                 </div>
               </div>
+
+              <label className="flex items-start gap-2.5 rounded-xl border border-gray-200 bg-gray-50 p-3 cursor-pointer">
+                <input type="checkbox" checked={assignCanEditOwnSchedule} onChange={e => setAssignCanEditOwnSchedule(e.target.checked)} className="mt-0.5 h-4 w-4 rounded text-[#16A34A]" />
+                <span className="text-[11px] text-gray-700"><strong>Izinkan mengubah jadwal sendiri</strong><br />Hanya jadwal PJ ini; tidak memberi akses ke jadwal PJ lain.</span>
+              </label>
 
               <div className="flex gap-2 pt-2">
                 <button
@@ -622,9 +637,9 @@ export function PJBagianTab() {
                 </div>
                 <div>
                   <h3 className="text-[14px] font-bold text-gray-900 leading-tight">
-                    Edit Wewenang Unit Kerja
+                    Edit Wewenang PJ Bagian
                   </h3>
-                  <p className="text-[10.5px] text-gray-400">Atur unit yang dipimpin oleh PJ Bagian ini</p>
+                  <p className="text-[10.5px] text-gray-400">Atur unit dan izin jadwal pribadi PJ ini</p>
                 </div>
               </div>
               <button 
@@ -708,6 +723,11 @@ export function PJBagianTab() {
                   })}
                 </div>
               </div>
+
+              <label className="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 cursor-pointer">
+                <input type="checkbox" checked={editCanEditOwnSchedule} onChange={e => setEditCanEditOwnSchedule(e.target.checked)} className="mt-0.5 h-4 w-4 rounded text-[#16A34A]" />
+                <span className="text-[11px] leading-relaxed text-gray-700"><strong>Izinkan mengubah jadwal sendiri</strong><br />PJ ini dapat mengatur shift miliknya sendiri. Jadwal PJ lain tetap hanya bisa diubah oleh admin.</span>
+              </label>
 
               <div className="flex gap-2.5 pt-2">
                 <button
