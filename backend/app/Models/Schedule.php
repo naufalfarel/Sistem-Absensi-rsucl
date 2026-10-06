@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Model;
 class Schedule extends Model
 {
     protected $fillable = [
-        'parent_id', 'name', 'start_time', 'end_time', 'color', 'icon', 'shift_type',
+        'parent_id', 'name', 'start_time', 'end_time', 'checkin_window_end_time', 'color', 'icon', 'shift_type',
         'owner_department_id', 'created_by', 'updated_by', 'status', 'admin_note', 'proposed_by'
     ];
 

@@ -464,6 +464,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
         bodyRows += `
           <tr>
             <td style="text-align:center; font-weight:bold;">${index + 1}</td>
+            <td style="text-align:center; font-family:monospace; mso-number-format:'\\@';" x:str>${emp.nip || "--"}</td>
             <td style="text-align:center; font-family:monospace; mso-number-format:'\\@';" x:str>${emp.nik_ktp || "--"}</td>
             <td style="text-align:left; font-weight:bold;">${emp.name}</td>
             <td style="text-align:left;">${emp.email || "--"}</td>
@@ -484,16 +485,16 @@ export function AdminApp({ onLogout }: AdminAppProps) {
         <table style="border:none; margin-bottom:12px; border-collapse:collapse;">
           <tr style="height:22px;">
             <td rowspan="3" colspan="3" class="logo-cell">${logoImgHtml}</td>
-            <td colspan="10" class="header-title" style="text-align:right;">DATA KEPEGAWAIAN &amp; STAF RUMAH SAKIT</td>
+            <td colspan="11" class="header-title" style="text-align:right;">DATA KEPEGAWAIAN &amp; STAF RUMAH SAKIT</td>
           </tr>
           <tr style="height:18px;">
-            <td colspan="10" class="header-rs" style="text-align:right;">RSU CEMPAKA LIMA</td>
+            <td colspan="11" class="header-rs" style="text-align:right;">RSU CEMPAKA LIMA</td>
           </tr>
           <tr style="height:16px;">
-            <td colspan="10" class="header-period" style="text-align:right;">Dicetak Tanggal: ${todayStr} | Total Pegawai: ${listToExport.length} Personel</td>
+            <td colspan="11" class="header-period" style="text-align:right;">Dicetak Tanggal: ${todayStr} | Total Pegawai: ${listToExport.length} Personel</td>
           </tr>
           <tr style="height:3px;">
-            <td colspan="13" class="separator">&nbsp;</td>
+            <td colspan="14" class="separator">&nbsp;</td>
           </tr>
         </table>
 
@@ -501,6 +502,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
         <table style="width:100%; border:1px solid #000000; border-collapse:collapse;">
           <colgroup>
             <col width="45" style="width:45px;" />
+            <col width="100" style="width:100px;" />
             <col width="150" style="width:150px;" />
             <col width="200" style="width:200px;" />
             <col width="180" style="width:180px;" />
@@ -517,6 +519,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
           <thead>
             <tr>
               <th style="width:45px; text-align:center;">No</th>
+              <th style="width:100px; text-align:center;">NIP</th>
               <th style="width:150px; text-align:center;">NIK KTP</th>
               <th style="text-align:left;">Nama Lengkap</th>
               <th style="text-align:left;">Email</th>
@@ -752,6 +755,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
     (e) =>
       e.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       e.nik_ktp.includes(searchQuery) ||
+      (e.nip?.includes(searchQuery) ?? false) ||
       e.department.toLowerCase().includes(searchQuery.toLowerCase()) ||
       e.position.toLowerCase().includes(searchQuery.toLowerCase()),
   );
@@ -1412,7 +1416,7 @@ export function AdminApp({ onLogout }: AdminAppProps) {
                       <tr className="border-b border-gray-50 bg-gray-50/50">
                         {[
                           "Nama Pegawai",
-                          "NIK KTP",
+                          "NIK / NIP",
                           "Username",
                           "Unit kerja",
                           "Jabatan",
@@ -1490,7 +1494,8 @@ export function AdminApp({ onLogout }: AdminAppProps) {
                                 </div>
                               </td>
                               <td className="px-4 py-3.5 text-[12px] font-mono text-gray-500">
-                                {emp.nik_ktp}
+                                <div>{emp.nik_ktp}</div>
+                                {emp.nip && <div className="text-indigo-600 font-bold">{emp.nip}</div>}
                               </td>
                               <td className="px-4 py-3.5">
                                 <div className="flex items-center gap-1.5">
@@ -2333,6 +2338,10 @@ export function AdminApp({ onLogout }: AdminAppProps) {
             <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
               {/* Rincian Identitas */}
               <div className="grid grid-cols-2 gap-3 bg-slate-50/80 p-3.5 rounded-2xl border border-gray-100 text-[12px]">
+                <div>
+                  <span className="text-[10px] text-gray-400 font-bold uppercase block">NIP</span>
+                  <span className="font-mono font-bold text-indigo-700">{detailModalEmp.nip || "—"}</span>
+                </div>
                 <div>
                   <span className="text-[10px] text-gray-400 font-bold uppercase block">NIK KTP</span>
                   <span className="font-mono font-bold text-gray-800">{detailModalEmp.nik_ktp}</span>

@@ -9,6 +9,8 @@ use App\Models\Department;
 use App\Exports\VehicleExport;
 use App\Exports\SocialMediaExport;
 use App\Exports\FaskesExport;
+use App\Exports\EmployeeExport;
+use App\Services\AbsenceReconciliationService;
 use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Http\Request;
 
@@ -30,8 +32,11 @@ class ReportController extends Controller
      * @param Request $request
      * @return \Illuminate\Http\JsonResponse
      */
-    public function summary(Request $request)
+    public function summary(Request $request, AbsenceReconciliationService $absenceService)
     {
+        $absenceService->reconcileOutstanding();
+        $absenceService->reconcileDate(today('Asia/Jakarta'));
+
         $today     = today()->toDateString();
         $month     = (int)$request->query('month', now('Asia/Jakarta')->month);
         $year      = (int)$request->query('year', now('Asia/Jakarta')->year);
@@ -528,6 +533,21 @@ class ReportController extends Controller
     public function exportVehicles()
     {
         return Excel::download(new VehicleExport, 'Data_Kendaraan_Pegawai_RSUCL.xlsx');
+    }
+
+    /**
+     * Mengekspor data induk pegawai beserta NIP sesuai urutan tanggal masuk.
+     */
+    public function exportEmployees(Request $request)
+    {
+        $validated = $request->validate([
+            'department_id' => 'nullable|integer|exists:departments,id',
+        ]);
+
+        return Excel::download(
+            new EmployeeExport($validated['department_id'] ?? null),
+            'Data_Induk_Pegawai_dan_NIP_RSUCL.xlsx',
+        );
     }
 
     /**

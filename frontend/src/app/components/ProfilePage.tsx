@@ -876,6 +876,7 @@ export function ProfilePage({
   const infoPersonal = [
     { icon: User, label: "Nama Lengkap", value: user?.name ?? "" },
     { icon: CreditCardIcon, label: "NIK KTP", value: user?.nik_ktp ?? "" },
+    { icon: CreditCardIcon, label: "NIP", value: user?.nip ?? "--" },
     { icon: User, label: "Username", value: user?.username ?? "" },
     { icon: Mail, label: "Email", value: user?.email ?? "" },
     { icon: Phone, label: "Nomor HP", value: user?.phone ?? "--" },

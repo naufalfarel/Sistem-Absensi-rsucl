@@ -314,6 +314,7 @@ export interface Employee {
   name: string;
   email: string;
   nik_ktp: string;
+  nip?: string;
   username: string;
   role?: string;
   department: string;

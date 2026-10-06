@@ -19,9 +19,11 @@ import {
   ChevronDown,
   ChevronUp,
   Info,
+  Printer,
 } from 'lucide-react';
 import { assignmentLetterApi, AssignmentLetter } from '../../services/api';
 import { MonthYearDeptFilter } from './ui/MonthYearDeptFilter';
+import SuratTugasModal from './admin/SuratTugasModal';
 
 /* ─── Helpers ───────────────────────────────────────────────── */
 const MONTH_NAMES = [
@@ -112,10 +114,12 @@ function LetterCard({
   letter,
   onUploadReport,
   onCancel,
+  onPrint,
 }: {
   letter: AssignmentLetter;
   onUploadReport: (l: AssignmentLetter) => void;
   onCancel: (l: AssignmentLetter) => void;
+  onPrint: (l: AssignmentLetter) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const sc = getStatusConfig(letter.status);
@@ -251,6 +255,16 @@ function LetterCard({
           </button>
         )}
 
+        {/* Tombol Cetak Surat Tugas Digital (jika diterbitkan admin) */}
+        {isAdminIssued && letter.director_type && (
+          <button
+            onClick={() => onPrint(letter)}
+            className="inline-flex items-center gap-1.5 text-[12px] font-bold text-blue-700 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-3.5 py-2 rounded-xl transition-all cursor-pointer"
+          >
+            <Printer size={14} /> Cetak
+          </button>
+        )}
+
         {/* Toggle detail */}
         <button
           onClick={() => setExpanded(!expanded)}
@@ -341,6 +355,8 @@ export default function AssignmentLetterPage() {
   const [activityNotes, setActivityNotes] = useState('');
   const [reportSubmitting, setReportSubmitting] = useState(false);
   const [reportError, setReportError] = useState('');
+
+  const [previewLetter, setPreviewLetter] = useState<AssignmentLetter | null>(null);
 
   // Filter
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'completed' | 'rejected'>('all');
@@ -735,6 +751,7 @@ export default function AssignmentLetterPage() {
                     setReportError('');
                   }}
                   onCancel={handleCancelLetter}
+                  onPrint={l => setPreviewLetter(l)}
                 />
               ))}
             </div>
@@ -827,6 +844,11 @@ export default function AssignmentLetterPage() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* ── Modal Preview Surat Digital ────────────────────────────── */}
+      {previewLetter && (
+        <SuratTugasModal letter={previewLetter} onClose={() => setPreviewLetter(null)} />
       )}
     </div>
   );

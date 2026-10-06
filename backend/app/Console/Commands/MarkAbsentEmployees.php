@@ -3,11 +3,7 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
-use App\Models\Employee;
-use App\Models\Attendance;
-use App\Models\LeaveRequest;
-use App\Support\AttendanceRules;
-use Carbon\Carbon;
+use App\Services\AbsenceReconciliationService;
 
 class MarkAbsentEmployees extends Command
 {
@@ -28,99 +24,15 @@ class MarkAbsentEmployees extends Command
     /**
      * Execute the console command.
      */
-    public function handle()
+    public function handle(AbsenceReconciliationService $absenceService): int
     {
-        $dateStr = $this->argument('date') ?: today('Asia/Jakarta')->toDateString();
-        $date = Carbon::parse($dateStr);
-        $dayMap = [
-            0 => 'Minggu', 1 => 'Senin', 2 => 'Selasa',
-            3 => 'Rabu',   4 => 'Kamis', 5 => 'Jumat', 6 => 'Sabtu',
-        ];
-        $dayName = $dayMap[$date->dayOfWeek];
+        $date = $this->argument('date');
+        $count = $date
+            ? $absenceService->reconcileDate($date)
+            : $absenceService->reconcileOutstanding() + $absenceService->reconcileDate(today('Asia/Jakarta'));
 
-        $this->info("Processing absences for date: {$dateStr} ({$dayName})");
+        $this->info("Selesai. {$count} data Alpha baru tersimpan.");
 
-        $employees = Employee::where('status', 'active')->get();
-        $holiday = AttendanceRules::holidayOn($date);
-
-        $count = 0;
-        foreach ($employees as $emp) {
-            // Check if already has attendance (any status)
-            $hasAttendance = Attendance::where('employee_id', $emp->id)
-                ->whereDate('date', $dateStr)
-                ->exists();
-            if ($hasAttendance) {
-                continue;
-            }
-
-            // Check if there is an approved leave request
-            $hasLeave = LeaveRequest::where('employee_id', $emp->id)
-                ->where('status', 'approved')
-                ->whereDate('start_date', '<=', $dateStr)
-                ->where(function($q) use ($dateStr) {
-                    $q->where(function($q2) use ($dateStr) {
-                        $q2->whereNull('actual_end_date')
-                           ->whereDate('end_date', '>=', $dateStr);
-                    })->orWhere(function($q2) use ($dateStr) {
-                        $q2->whereNotNull('actual_end_date')
-                           ->whereDate('actual_end_date', '>=', $dateStr);
-                    });
-                })
-                ->exists();
-            if ($hasLeave) {
-                continue;
-            }
-
-            // Check schedule for today (date-specific work_date roster or weekly schedule)
-            $dateRow = \Illuminate\Support\Facades\DB::table('employee_schedule')
-                ->join('schedules', 'employee_schedule.schedule_id', '=', 'schedules.id')
-                ->where('employee_schedule.employee_id', $emp->id)
-                ->where('employee_schedule.work_date', $dateStr)
-                ->select('schedules.name')
-                ->first();
-
-            $scheduleName = null;
-            if ($dateRow) {
-                $scheduleName = $dateRow->name;
-            } else {
-                $sched = $emp->schedules()->wherePivot('day_of_week', $dayName)->first();
-                if ($sched) {
-                    $scheduleName = $sched->name;
-                }
-            }
-
-            if (!$scheduleName) {
-                continue;
-            }
-
-            // Check if it's an off/libur/libur jaga shift
-            $uName = strtoupper($scheduleName);
-            if (str_contains($uName, 'LIBUR') || str_contains($uName, 'LJ') || str_contains($uName, 'OFF')) {
-                continue;
-            }
-
-            // Holiday check
-            if ($holiday) {
-                $isAssigned = AttendanceRules::isAssignedToWorkOnHoliday($emp, $holiday);
-                if (!$isAssigned) {
-                    // Pegawai tidak ditugaskan di hari libur, lewati (tidak alpha)
-                    continue;
-                }
-            }
-
-            // Create absent record
-            Attendance::create([
-                'employee_id' => $emp->id,
-                'date' => $dateStr,
-                'status' => 'alpha',
-                'note' => 'Tidak Hadir Tanpa Keterangan' . ($holiday ? ' (Mangkir Penugasan)' : ''),
-                'is_holiday_work' => false,
-                'holiday_id' => $holiday ? $holiday->id : null,
-            ]);
-
-            $count++;
-        }
-
-        $this->info("Successfully marked {$count} employees as absent.");
+        return self::SUCCESS;
     }
 }

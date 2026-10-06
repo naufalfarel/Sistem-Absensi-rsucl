@@ -259,6 +259,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/reports/lateness', [ReportController::class, 'latenessRekap']);
         // Mengekspor data plat nomor kendaraan seluruh pegawai ke file Excel (.xlsx)
         Route::get('/reports/vehicles/export', [ReportController::class, 'exportVehicles']);
+        Route::get('/reports/employees/export', [ReportController::class, 'exportEmployees']);
         // Mengekspor data media sosial seluruh pegawai ke file Excel (.xlsx)
         Route::get('/reports/social-media/export', [ReportController::class, 'exportSocialMedia']);
         // Mengekspor data fasilitas kesehatan seluruh pegawai ke file Excel (.xlsx)

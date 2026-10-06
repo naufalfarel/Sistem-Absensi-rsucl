@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\EmployeeRegistration;
 use App\Models\User;
 use App\Models\Employee;
+use App\Services\EmployeeNipService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Hash;
@@ -72,7 +73,7 @@ class AdminEmployeeRegistrationController extends Controller
      * PUT /api/employee-registrations/{id}/approve
      * Menyetujui pengajuan pendaftaran pegawai -> Otomatis generate Username & Password sementara -> Membuat Akun User & Employee.
      */
-    public function approve(Request $request, $id)
+    public function approve(Request $request, $id, EmployeeNipService $nipService)
     {
         $registration = EmployeeRegistration::findOrFail($id);
 
@@ -83,7 +84,7 @@ class AdminEmployeeRegistrationController extends Controller
             ], 422);
         }
 
-        return DB::transaction(function () use ($request, $registration) {
+        return DB::transaction(function () use ($request, $registration, $nipService) {
             // 1. Auto-generate Username (Format: nama.lengkap, lowercase, unique)
             $baseUsername = $this->generateBaseUsername($registration->name);
             $username     = $baseUsername;
@@ -112,6 +113,9 @@ class AdminEmployeeRegistrationController extends Controller
             ]);
 
             // 5. Buat Record Employee Baru
+            $joinDate = now('Asia/Jakarta')->toDateString();
+            $registration->loadMissing('position');
+
             $employee = Employee::create([
                 'user_id'       => $user->id,
                 'department_id' => $registration->department_id,
@@ -119,7 +123,9 @@ class AdminEmployeeRegistrationController extends Controller
                 'nik_ktp'       => $registration->nik_ktp,
                 'phone'         => $registration->phone,
                 'gender'        => $registration->gender,
-                'join_date'     => now()->toDateString(),
+                'join_date'     => $joinDate,
+                'nip'           => $nipService->generate($joinDate, $registration->position?->name),
+
                 'motor_plate_1' => $registration->motor_plate_1,
                 'motor_plate_2' => $registration->motor_plate_2,
                 'car_plate_1'   => $registration->car_plate_1,

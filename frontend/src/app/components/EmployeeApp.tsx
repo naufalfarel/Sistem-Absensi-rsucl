@@ -14,7 +14,7 @@ import AssignmentLetterPage from './AssignmentLetterPage';
 import { EmployeeSchedulePage } from './EmployeeSchedulePage';
 import { ResignationRequestPage } from './ResignationRequestPage';
 import { DisciplinaryPage } from './DisciplinaryPage';
-import { notificationApi } from '../../services/api';
+import { notificationApi, settingApi } from '../../services/api';
 
 // Tipe union untuk mendefinisikan tab navigasi yang valid pada dashboard karyawan
 type Tab = 'dashboard' | 'attendance' | 'history' | 'notifications' | 'profile' | 'guide' | 'overtime' | 'leave' | 'assignment' | 'schedule' | 'resignation' | 'disciplinary';
@@ -83,6 +83,16 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
     }
   };
 
+  const [enableOvertime, setEnableOvertime] = useState(true);
+
+  useEffect(() => {
+    settingApi.get().then(res => {
+      if (res.success && res.data.enable_overtime_feature !== undefined) {
+        setEnableOvertime(String(res.data.enable_overtime_feature) === '1');
+      }
+    });
+  }, []);
+
   // Efek polling untuk sinkronisasi notifikasi belum dibaca setiap 20 detik
   useEffect(() => {
     fetchUnreadCount();
@@ -111,9 +121,9 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
   // Item Navigasi Menu Pengajuan
   const proposalNavItems: { id: Tab; icon: typeof Home; label: string; badge?: number }[] = [
     { id: 'leave',      icon: FileText,   label: 'Pengajuan Cuti & Sakit' },
-    { id: 'overtime',   icon: Clock,      label: 'Pengajuan Lembur' },
+    ...(enableOvertime ? [{ id: 'overtime' as Tab,   icon: Clock as any,      label: 'Pengajuan Lembur' }] : []),
     { id: 'assignment', icon: FileText,   label: 'Pengajuan Surat Tugas' },
-    { id: 'resignation',icon: ShieldAlert, label: 'Pengajuan Resign' },
+    { id: 'resignation',icon: ShieldAlert as any, label: 'Pengajuan Resign' },
   ];
 
   const timeStr = time.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });

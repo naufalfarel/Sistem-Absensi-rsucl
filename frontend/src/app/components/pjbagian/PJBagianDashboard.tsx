@@ -49,6 +49,7 @@ export function PJBagianDashboard({ pendingLeaveCount, pendingOvertimeCount, pen
   const [hospLng, setHospLng] = useState<number>(95.33486560781716);
   const [hospRadius, setHospRadius] = useState<number>(40);
   const [gpsStatus, setGpsStatus] = useState<'loading' | 'in' | 'out' | 'unavailable'>('loading');
+  const [enableOvertime, setEnableOvertime] = useState(true);
 
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
@@ -99,6 +100,7 @@ export function PJBagianDashboard({ pendingLeaveCount, pendingOvertimeCount, pen
         if (!isNaN(lat)) setHospLat(lat);
         if (!isNaN(lng)) setHospLng(lng);
         if (!isNaN(rad) && rad > 0) setHospRadius(rad);
+        if (res.data.enable_overtime_feature !== undefined) setEnableOvertime(String(res.data.enable_overtime_feature) === '1');
       }
     }).catch(() => {});
   }, []);
@@ -417,15 +419,17 @@ export function PJBagianDashboard({ pendingLeaveCount, pendingOvertimeCount, pen
                 </div>
                 <ChevronRight size={16} className="text-amber-400 group-hover:text-amber-600 transition-colors" />
               </button>
-              <button onClick={() => onNavigate('approvals')}
-                className="w-full flex items-center justify-between p-3 rounded-xl bg-blue-50 border border-blue-100 hover:bg-blue-100 transition-colors group text-left">
-                <div>
-                  <p className="text-[20px] font-bold text-blue-700">{pendingOvertimeCount}</p>
-                  <p className="text-[11px] font-semibold text-blue-800">Persetujuan Lembur</p>
-                  <p className="text-[10px] text-blue-600 mt-0.5">Menunggu verifikasi</p>
-                </div>
-                <ChevronRight size={16} className="text-blue-400 group-hover:text-blue-600 transition-colors" />
-              </button>
+              {enableOvertime && (
+                <button onClick={() => onNavigate('approvals')}
+                  className="w-full flex items-center justify-between p-3 rounded-xl bg-blue-50 border border-blue-100 hover:bg-blue-100 transition-colors group text-left">
+                  <div>
+                    <p className="text-[20px] font-bold text-blue-700">{pendingOvertimeCount}</p>
+                    <p className="text-[11px] font-semibold text-blue-800">Persetujuan Lembur</p>
+                    <p className="text-[10px] text-blue-600 mt-0.5">Menunggu verifikasi</p>
+                  </div>
+                  <ChevronRight size={16} className="text-blue-400 group-hover:text-blue-600 transition-colors" />
+                </button>
+              )}
               <button onClick={() => onNavigate('approvals')}
                 className="w-full flex items-center justify-between p-3 rounded-xl bg-rose-50 border border-rose-100 hover:bg-rose-100 transition-colors group text-left">
                 <div>

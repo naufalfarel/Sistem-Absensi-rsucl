@@ -12,5 +12,8 @@ use Illuminate\Support\Facades\Schedule;
 // Sinkronisasi Hari Libur Nasional otomatis setiap awal bulan
 Schedule::command('attendance:sync-holidays')->monthly();
 
-// Tandai karyawan Alpa secara otomatis setiap hari pukul 23:59
-Schedule::command('attendance:mark-absent')->dailyAt('23:59');
+// Rekonsiliasi Alpha berkala; aman dijalankan berulang karena tidak membuat duplikasi.
+Schedule::command('attendance:mark-absent')
+    ->everyTenMinutes()
+    ->timezone('Asia/Jakarta')
+    ->withoutOverlapping();

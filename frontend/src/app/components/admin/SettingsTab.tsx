@@ -109,6 +109,7 @@ export function SettingsTab() {
   const [configError, setConfigError]     = useState('');
 
   // ── States Toleransi Waktu & Jadwal Absensi ──
+  const [enableOvertimeFeature, setEnableOvertimeFeature] = useState(true);
   const [checkinOpen, setCheckinOpen]           = useState('0');
   const [lateLimit, setLateLimit]               = useState('30');
   const [closeCheckin, setCloseCheckin]         = useState('60');
@@ -184,6 +185,7 @@ export function SettingsTab() {
         if (res.data.sat_checkout_close !== undefined) setSatCheckoutClose(res.data.sat_checkout_close);
         if (res.data.early_checkout_grace_minutes !== undefined) setEarlyCheckoutGrace(res.data.early_checkout_grace_minutes);
         if (res.data.overtime_grace_minutes !== undefined) setOvertimeGrace(res.data.overtime_grace_minutes);
+        if (res.data.enable_overtime_feature !== undefined) setEnableOvertimeFeature(String(res.data.enable_overtime_feature) === '1');
         if (res.data.checkin_tolerance_minutes !== undefined) setCheckinTolerance(res.data.checkin_tolerance_minutes);
         if (res.data.early_checkin_window_minutes !== undefined) setEarlyCheckinWindow(res.data.early_checkin_window_minutes);
         if (res.data.late_fee_per_minute !== undefined) setLateFeePerMinute(res.data.late_fee_per_minute);
@@ -469,6 +471,7 @@ export function SettingsTab() {
         sat_checkout_close: satCheckoutClose,
         early_checkout_grace_minutes: earlyCheckoutGrace,
         overtime_grace_minutes: overtimeGrace,
+        enable_overtime_feature: enableOvertimeFeature ? '1' : '0',
         checkin_tolerance_minutes: checkinTolerance,
         early_checkin_window_minutes: earlyCheckinWindow,
         late_fee_per_minute: lateFeePerMinute,
@@ -1126,6 +1129,24 @@ export function SettingsTab() {
             </div>
           </div>
 
+          {/* ── Konfigurasi Fitur Aplikasi ── */}
+          <div className="pt-4 border-t border-gray-50 mb-4">
+            <div className="flex items-center justify-between p-3.5 bg-gray-50/80 rounded-2xl border border-gray-100">
+              <div className="pr-4">
+                <p className="text-[13px] font-bold text-gray-800 flex items-center gap-2">
+                  <Clock size={14} className={enableOvertimeFeature ? "text-[#16A34A]" : "text-gray-400"} />
+                  Fitur Pengajuan Lembur
+                </p>
+                <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+                  {enableOvertimeFeature
+                    ? "Status Aktif: Pegawai dan PJ Bagian dapat mengakses menu pengajuan lembur."
+                    : "Status Nonaktif: Fitur pengajuan lembur disembunyikan dari aplikasi Pegawai dan PJ Bagian."}
+                </p>
+              </div>
+              <Toggle value={enableOvertimeFeature} onChange={() => setEnableOvertimeFeature(!enableOvertimeFeature)} />
+            </div>
+          </div>
+
           {/* Section 1: Check-in (Absen Masuk) */}
           <div className="pt-2">
             <h4 className="text-[12px] font-bold text-gray-800 mb-3 border-l-2 border-[#16A34A] pl-2 uppercase tracking-wider">Absen Masuk (Check-in)</h4>
@@ -1268,7 +1289,9 @@ export function SettingsTab() {
 
           {/* Section 4: Toleransi Pulang Cepat & Lembur */}
           <div className="pt-4 border-t border-gray-50">
-            <h4 className="text-[12px] font-bold text-gray-800 mb-1 border-l-2 border-amber-400 pl-2 uppercase tracking-wider">Toleransi Pulang Cepat &amp; Lembur</h4>
+            <div className="flex items-center justify-between mb-1">
+              <h4 className="text-[12px] font-bold text-gray-800 border-l-2 border-amber-400 pl-2 uppercase tracking-wider">Toleransi Pulang Cepat &amp; Lembur</h4>
+            </div>
             <p className="text-[11px] text-gray-400 mb-3 pl-2">Dibandingkan terhadap jam pulang shift masing-masing pegawai (bukan jam kerja global).</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>

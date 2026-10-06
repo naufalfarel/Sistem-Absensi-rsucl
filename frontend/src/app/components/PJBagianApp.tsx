@@ -18,7 +18,7 @@ import { JadwalShiftTab } from './pjbagian/JadwalShiftTab';
 import { StaffAttendanceTab } from './pjbagian/StaffAttendanceTab';
 import { PJBagianDashboard } from './pjbagian/PJBagianDashboard';
 import { DisciplinaryPage } from './DisciplinaryPage';
-import { notificationApi, leaveApi, overtimeApi, resignationApi } from '../../services/api';
+import { notificationApi, leaveApi, overtimeApi, resignationApi, settingApi } from '../../services/api';
 
 type Tab = 'dashboard' | 'attendance' | 'history' | 'overtime_personal' | 'approvals' | 'shift_proposals' | 'staff_attendance' | 'notifications' | 'profile' | 'leave' | 'assignment' | 'resignation' | 'guide' | 'disciplinary';
 
@@ -78,6 +78,16 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
     }
   };
 
+  const [enableOvertime, setEnableOvertime] = useState(true);
+
+  useEffect(() => {
+    settingApi.get().then(res => {
+      if (res.success && res.data.enable_overtime_feature !== undefined) {
+        setEnableOvertime(String(res.data.enable_overtime_feature) === '1');
+      }
+    });
+  }, []);
+
   useEffect(() => {
     fetchUnreadCount();
     fetchApprovalCounts();
@@ -117,8 +127,12 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
         return (
           <div className="space-y-6">
             <LeaveApprovalTab user={user} onUpdateCount={fetchApprovalCounts} />
-            <hr className="border-gray-100" />
-            <OvertimeApprovalTab user={user} onUpdateCount={fetchApprovalCounts} />
+            {enableOvertime && (
+              <>
+                <hr className="border-gray-100" />
+                <OvertimeApprovalTab user={user} onUpdateCount={fetchApprovalCounts} />
+              </>
+            )}
             <hr className="border-gray-100" />
             <ResignationApprovalTab user={user} onUpdateCount={fetchApprovalCounts} />
           </div>
@@ -161,7 +175,7 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
 
   const personalProposalItems: { id: Tab; icon: any; label: string; badge?: number }[] = [
     { id: 'leave', icon: FileText, label: 'Pengajuan Cuti & Sakit' },
-    { id: 'overtime_personal', icon: Clock, label: 'Pengajuan Lembur' },
+    ...(enableOvertime ? [{ id: 'overtime_personal' as Tab, icon: Clock, label: 'Pengajuan Lembur' }] : []),
     { id: 'assignment', icon: FileText, label: 'Pengajuan Surat Tugas' },
     { id: 'resignation', icon: ShieldAlert, label: 'Pengajuan Resign' },
   ];

@@ -60,6 +60,8 @@ class SettingController extends Controller
         'checkin_close_time',
         // ── Potongan Keterlambatan per Menit ──
         'late_fee_per_minute',
+        // ── Fitur Lembur ──
+        'enable_overtime_feature',   // Status fitur lembur (1 = aktif, 0 = nonaktif)
     ];
 
     /**
@@ -135,6 +137,7 @@ class SettingController extends Controller
             'checkin_late_after_time' => 'sometimes|string',
             'checkin_close_time' => 'sometimes|string',
             'late_fee_per_minute' => 'sometimes|integer|min:0',
+            'enable_overtime_feature' => 'sometimes|in:0,1',
         ]);
 
         // Proses khusus untuk upload logo instansi
@@ -278,6 +281,7 @@ class SettingController extends Controller
             'checkin_late_after_time' => '08:30',
             'checkin_close_time' => '09:00',
             'late_fee_per_minute' => '500',
+            'enable_overtime_feature' => '1',
             default => '',
         };
     }

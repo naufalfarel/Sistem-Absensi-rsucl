@@ -8,8 +8,10 @@ use App\Models\Department;
 use App\Models\Position;
 use App\Http\Requests\StoreEmployeeRequest;
 use App\Http\Requests\UpdateEmployeeRequest;
+use App\Services\EmployeeNipService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 /**
@@ -46,38 +48,44 @@ class EmployeeController extends Controller
      * 
      * Mendaftarkan karyawan baru. Sekaligus membuat akun user untuk otentikasi.
      */
-    public function store(StoreEmployeeRequest $request)
+    public function store(StoreEmployeeRequest $request, EmployeeNipService $nipService)
     {
         $data = $request->validated();
 
-        $user = User::create([
-            'name'     => $data['name'],
-            'email'    => $data['email'],
-            'password' => Hash::make($data['password']),
-            'role'     => 'employee',
-            'nik_ktp'  => $data['nik_ktp'],
-            'username' => $data['username'],
-        ]);
+        $employee = DB::transaction(function () use ($data, $nipService): Employee {
+            $user = User::create([
+                'name'     => $data['name'],
+                'email'    => $data['email'],
+                'password' => Hash::make($data['password']),
+                'role'     => 'employee',
+                'nik_ktp'  => $data['nik_ktp'],
+                'username' => $data['username'],
+            ]);
 
-        $employee = Employee::create([
-            'user_id'       => $user->id,
-            'department_id' => $data['department_id'],
-            'position_id'   => $data['position_id'],
-            'nik_ktp'       => $data['nik_ktp'],
-            'phone'         => $data['phone'] ?? null,
-            'gender'        => $data['gender'] ?? null,
-            'join_date'     => $data['join_date'] ?? null,
-            'motor_plate_1' => $data['motor_plate_1'] ?? null,
-            'motor_plate_2' => $data['motor_plate_2'] ?? null,
-            'car_plate_1'   => $data['car_plate_1'] ?? null,
-            'car_plate_2'   => $data['car_plate_2'] ?? null,
-            'instagram'     => $data['instagram'] ?? null,
-            'facebook'      => $data['facebook'] ?? null,
-            'tiktok'        => $data['tiktok'] ?? null,
-            'custom_leave_quota' => $data['custom_leave_quota'] ?? null,
-            'faskes_tk'     => $data['faskes_tk'] ?? null,
-            'faskes_location' => $data['faskes_location'] ?? null,
-        ]);
+            $joinDate = $data['join_date'] ?? now('Asia/Jakarta')->toDateString();
+            $position = Position::findOrFail($data['position_id']);
+
+            return Employee::create([
+                'user_id'       => $user->id,
+                'department_id' => $data['department_id'],
+                'position_id'   => $position->id,
+                'nik_ktp'       => $data['nik_ktp'],
+                'nip'           => $nipService->generate($joinDate, $position->name),
+                'phone'         => $data['phone'] ?? null,
+                'gender'        => $data['gender'] ?? null,
+                'join_date'     => $joinDate,
+                'motor_plate_1' => $data['motor_plate_1'] ?? null,
+                'motor_plate_2' => $data['motor_plate_2'] ?? null,
+                'car_plate_1'   => $data['car_plate_1'] ?? null,
+                'car_plate_2'   => $data['car_plate_2'] ?? null,
+                'instagram'     => $data['instagram'] ?? null,
+                'facebook'      => $data['facebook'] ?? null,
+                'tiktok'        => $data['tiktok'] ?? null,
+                'custom_leave_quota' => $data['custom_leave_quota'] ?? null,
+                'faskes_tk'     => $data['faskes_tk'] ?? null,
+                'faskes_location' => $data['faskes_location'] ?? null,
+            ]);
+        });
 
         $employee->load(['user', 'department', 'position']);
 
@@ -440,6 +448,7 @@ class EmployeeController extends Controller
             'name'             => $e->user?->name,
             'email'            => $e->user?->email,
             'nik_ktp'          => $e->nik_ktp,
+            'nip'              => $e->nip,
             'username'         => $e->user?->username,
             'role'             => $e->user?->role,
             'profile_picture'  => $e->user?->profile_picture ? url($e->user->profile_picture) : null,

@@ -520,6 +520,45 @@ export function ReportsTab() {
     }
   };
 
+  const handleExportEmployees = async () => {
+    setExporting(true);
+    try {
+      const token = getToken();
+      let envVal = import.meta.env.VITE_API_URL;
+      if (envVal === "") envVal = "";
+      else if (!envVal) envVal = "http://localhost:8000";
+      const apiUrl = envVal.replace(/\/api\/?$/, "");
+      const params = new URLSearchParams();
+      if (selectedDepartment !== "all") {
+        params.set("department_id", selectedDepartment);
+      }
+      const query = params.toString() ? `?${params.toString()}` : "";
+      const response = await fetch(`${apiUrl}/api/reports/employees/export${query}`, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        throw new Error("Gagal mengekspor data induk pegawai dan NIP.");
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "Data_Induk_Pegawai_dan_NIP_RSUCL.xlsx";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || "Terjadi kesalahan saat mengekspor data pegawai.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const handleExportVehicles = async () => {
     setExporting(true);
     try {
@@ -2289,7 +2328,7 @@ export function ReportsTab() {
             </div>
             <div>
               <h3 className="text-[13px] font-bold text-gray-900">Laporan Kehadiran &amp; Operasional</h3>
-              <p className="text-[10.5px] text-gray-400 mt-0.5">Cetak &amp; ekspor rekap kehadiran, data kendaraan, media sosial, dan faskes pegawai</p>
+              <p className="text-[10.5px] text-gray-400 mt-0.5">Cetak &amp; ekspor rekap kehadiran, data induk pegawai, kendaraan, media sosial, dan faskes</p>
             </div>
           </div>
         </div>
@@ -2374,7 +2413,29 @@ export function ReportsTab() {
             </div>
           </div>
 
-          {/* Card 3: Data Kendaraan */}
+          {/* Card 3: Data Induk Pegawai */}
+          <div className="bg-indigo-50/30 rounded-xl border border-indigo-100 p-4 flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                <Shield size={13} className="text-indigo-700" />
+              </div>
+              <div>
+                <p className="text-[12px] font-bold text-gray-800">Data Induk Pegawai &amp; NIP</p>
+                <p className="text-[10px] text-gray-400">Urutan NIP berdasarkan tanggal masuk</p>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-auto">
+              <button
+                onClick={handleExportEmployees}
+                disabled={exporting}
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                <Download size={11} />Unduh Data Pegawai (Excel)
+              </button>
+            </div>
+          </div>
+
+          {/* Card 4: Data Kendaraan */}
           <div className="bg-purple-50/30 rounded-xl border border-purple-100 p-4 flex flex-col gap-3">
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">

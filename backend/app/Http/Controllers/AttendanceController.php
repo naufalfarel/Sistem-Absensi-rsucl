@@ -13,6 +13,7 @@ use App\Models\Schedule;
 use App\Models\Setting;
 use App\Models\User;
 use App\Services\AttendanceService;
+use App\Services\AbsenceReconciliationService;
 use App\Support\AttendanceRules;
 use App\Support\ScheduleRules;
 use Carbon\Carbon;
@@ -227,8 +228,11 @@ class AttendanceController extends Controller
      *
      * @return JsonResponse
      */
-    public function allToday()
+    public function allToday(AbsenceReconciliationService $absenceService)
     {
+        $absenceService->reconcileOutstanding();
+        $absenceService->reconcileDate(today('Asia/Jakarta'));
+
         $todayStr = today()->toDateString();
         $dayMap = [
             0 => 'Minggu', 1 => 'Senin', 2 => 'Selasa',
@@ -1609,8 +1613,14 @@ class AttendanceController extends Controller
      *
      * Get attendance counts/summary for the active filters.
      */
-    public function adminStatusSummary(Request $request)
+    public function adminStatusSummary(Request $request, AbsenceReconciliationService $absenceService)
     {
+        $absenceService->reconcileOutstanding();
+        $targetDate = $request->query('date', today('Asia/Jakarta')->toDateString());
+        if (! $request->filled('date_from') && Carbon::parse($targetDate)->isToday()) {
+            $absenceService->reconcileDate($targetDate);
+        }
+
         $rows = $this->getHistoryRows($request);
 
         $hadir = 0;
@@ -1627,7 +1637,7 @@ class AttendanceController extends Controller
                 $hadir++;
             } elseif ($status === 'telat') {
                 $telat++;
-            } elseif ($status === 'alpha' || $status === 'belum_hadir') {
+            } elseif ($status === 'alpha') {
                 $alpha++;
             } elseif (in_array($status, ['izin', 'sakit', 'cuti', 'cuti_khusus'])) {
                 $cuti++;
@@ -1826,7 +1836,7 @@ class AttendanceController extends Controller
                             $shiftStartCarbon = Carbon::today('Asia/Jakarta')->setTimeFromTimeString($shiftStart);
                             $closeLimitCarbon = Carbon::today('Asia/Jakarta')->setTimeFromTimeString($resolvedCloseTime);
 
-                            if ($carbonDate->isToday()) {
+                            if ($now->lte($closeLimitCarbon)) {
                                 $status = 'belum_hadir';
                                 $note = 'Belum Absen Masuk';
                             }

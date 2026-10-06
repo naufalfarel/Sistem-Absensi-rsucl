@@ -349,7 +349,7 @@ export function PJBagianTab() {
           <table className="w-full text-[11px] text-left border-collapse">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100 text-gray-500 font-bold uppercase text-[9px] tracking-wider">
-                <th className="py-2.5 px-4">Nama / NIK KTP</th>
+                <th className="py-2.5 px-4">Nama / NIK / NIP</th>
                 <th className="py-2.5 px-4">Jabatan</th>
                 <th className="py-2.5 px-4">Departemen yang Diawasi</th>
                 <th className="py-2.5 px-4 text-right">Aksi</th>
@@ -365,7 +365,7 @@ export function PJBagianTab() {
                       </div>
                       <div>
                         <p className="font-bold text-gray-800">{pj.name}</p>
-                        <p className="text-[10px] text-gray-400">{pj.nik_ktp}</p>
+                        <p className="text-[10px] text-gray-400">NIK: {pj.nik_ktp}{pj.nip ? ` | NIP: ${pj.nip}` : ''}</p>
                       </div>
                     </div>
                   </td>
@@ -581,8 +581,8 @@ export function PJBagianTab() {
                 <span className="font-bold text-gray-800">{revokingPj.name}</span>
               </div>
               <div className="flex justify-between items-center pb-1.5 border-b border-red-100/20">
-                <span className="text-gray-400 font-medium">NIK KTP</span>
-                <span className="font-mono font-bold text-gray-700">{revokingPj.nik_ktp}</span>
+                <span className="text-gray-400 font-medium">NIK / NIP</span>
+                <span className="font-mono font-bold text-gray-700">{revokingPj.nik_ktp}{revokingPj.nip ? ` / ${revokingPj.nip}` : ''}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-gray-400 font-medium">Departemen</span>

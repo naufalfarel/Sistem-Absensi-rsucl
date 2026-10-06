@@ -190,9 +190,10 @@ class LeaveRequestController extends Controller
 
         // Validasi input data pengajuan cuti
         $isHistoricalOrAdmin = $user->isAdmin() || $request->filled('employee_id');
+        $isSakitOrKhusus = in_array($request->input('type'), ['sakit', 'cuti_khusus']);
         $rules = [
             'type'                      => 'required|in:cuti,izin,sakit,cuti_khusus',
-            'start_date'                => 'required|date' . ($isHistoricalOrAdmin ? '' : '|after_or_equal:today'),
+            'start_date'                => 'required|date' . ($isHistoricalOrAdmin || $isSakitOrKhusus ? '' : '|after_or_equal:today'),
             'end_date'                  => 'required|date|after_or_equal:start_date',
             'reason'                    => 'required|string|max:500',
             'special_leave_category_id' => 'required_if:type,cuti_khusus|exists:special_leave_categories,id',

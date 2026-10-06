@@ -235,6 +235,18 @@ php artisan serve
 # Server berjalan di -> http://localhost:8000
 ```
 
+Jalankan scheduler Laravel agar rekonsiliasi Alpha dan sinkronisasi hari libur tetap berjalan:
+
+```bash
+# Lokal / development (terminal backend terpisah)
+php artisan schedule:work
+
+# Produksi Linux (cron, dijalankan setiap menit)
+* * * * * cd /path/ke/backend && php artisan schedule:run >> /dev/null 2>&1
+```
+
+Saat pertama kali deploy, data Alpha lama yang terlewat akan direkonsiliasi otomatis. Untuk memproses ulang satu tanggal secara manual gunakan `php artisan attendance:mark-absent 2026-10-06`.
+
 > **Tip:** Secara default, database menggunakan **SQLite** (file lokal, tidak perlu setup MySQL). Untuk menggunakan MySQL, ubah konfigurasi `DB_*` di file `.env` — lihat bagian [Konfigurasi Environment](#konfigurasi-environment).
 
 ---
