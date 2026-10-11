@@ -839,11 +839,11 @@ function GPSCard({
         )}
 
         {/* Searching Overlay if Location is not yet acquired */}
-        {(!userLocation || isStabilizing) && (
+        {(!userLocation || (isStabilizing && !gpsValidationBypassed)) && (
           <div className="absolute inset-0 z-[999] bg-slate-900/40 backdrop-blur-xs flex flex-col items-center justify-center p-4 text-center">
             <MapPin size={24} className="text-white animate-bounce mb-1.5" />
             <p className="text-white text-[12.5px] font-bold">
-              {isStabilizing ? "Menstabilkan GPS Presisi..." : "Membaca Koordinat GPS Realtime..."}
+              {isStabilizing && !gpsValidationBypassed ? "Menstabilkan GPS Presisi..." : "Membaca Koordinat GPS Realtime..."}
             </p>
             <p className="text-slate-200 text-[11px] mt-0.5 mb-3">
               {userLocation
@@ -2290,14 +2290,14 @@ export function AttendancePage() {
                   : "bg-gray-100 text-gray-300 cursor-not-allowed border-2 border-dashed border-gray-200"
               }`}
             >
-              {checkingLocation || (isStabilizing && faceVerified) ? (
+              {checkingLocation || (isStabilizing && faceVerified && !isDinasLuar) ? (
                 <RotateCw size={20} className="animate-spin" />
               ) : faceVerified && inGeofence ? (
                 <CheckCircle2 size={20} />
               ) : (
                 <Lock size={18} />
               )}
-              {checkingLocation || (isStabilizing && faceVerified)
+              {checkingLocation || (isStabilizing && faceVerified && !isDinasLuar)
                 ? "MENSTABILKAN GPS..."
                 : faceVerified && inGeofence
                 ? "CHECK IN"
@@ -2333,7 +2333,7 @@ export function AttendancePage() {
                   : "bg-amber-500 hover:bg-amber-600 text-white shadow-lg shadow-amber-200/60"
               }`}
             >
-              {checkingLocation || (isStabilizing && faceVerified) ? (
+              {checkingLocation || (isStabilizing && faceVerified && !isDinasLuar) ? (
                 <RotateCw size={20} className="animate-spin" />
               ) : faceVerified && inGeofence ? (
                 <Clock size={20} />
@@ -2342,7 +2342,7 @@ export function AttendancePage() {
               ) : (
                 <MapPin size={20} />
               )}
-              {checkingLocation || (isStabilizing && faceVerified)
+              {checkingLocation || (isStabilizing && faceVerified && !isDinasLuar)
                 ? "MENSTABILKAN GPS..."
                 : faceVerified && inGeofence
                 ? "CHECK OUT"
