@@ -46,6 +46,7 @@ class EmployeeExport extends DefaultValueBinder implements FromCollection, WithH
                 'phone' => $employee->phone ?? '',
                 'gender' => $employee->gender ?? '',
                 'join_date' => $employee->join_date?->format('d-m-Y') ?? '',
+                'work_duration' => $employee->work_duration,
                 'employment_type' => match (substr((string) $employee->nip, 2, 2)) {
                     '01' => 'Medis',
                     '02' => 'Non-Medis',
@@ -59,7 +60,7 @@ class EmployeeExport extends DefaultValueBinder implements FromCollection, WithH
     {
         return [
             'No', 'NIP', 'NIK KTP', 'Nama Pegawai', 'Unit Kerja', 'Jabatan',
-            'No. Telepon / WA', 'Jenis Kelamin', 'Tanggal Masuk', 'Status Tenaga', 'Status Akun',
+            'No. Telepon / WA', 'Jenis Kelamin', 'Tanggal Masuk', 'Lama Bekerja', 'Status Tenaga', 'Status Akun',
         ];
     }
 
@@ -112,39 +113,39 @@ class EmployeeExport extends DefaultValueBinder implements FromCollection, WithH
         return [
             AfterSheet::class => function (AfterSheet $event): void {
                 $sheet = $event->sheet->getDelegate();
-                $sheet->mergeCells('D1:K1');
-                $sheet->mergeCells('D2:K2');
-                $sheet->mergeCells('D3:K3');
+                $sheet->mergeCells('D1:L1');
+                $sheet->mergeCells('D2:L2');
+                $sheet->mergeCells('D3:L3');
                 $sheet->setCellValue('D1', 'PT. CEMPAKA LIMA UTAMA');
                 $sheet->setCellValue('D2', 'RUMAH SAKIT UMUM CEMPAKA LIMA');
                 $sheet->setCellValue('D3', 'LAPORAN DATA INDUK PEGAWAI DAN NIP');
 
-                $sheet->getStyle('D1:K1')->applyFromArray([
+                $sheet->getStyle('D1:L1')->applyFromArray([
                     'font' => ['bold' => true, 'size' => 11],
                     'alignment' => ['horizontal' => 'right'],
                 ]);
-                $sheet->getStyle('D2:K2')->applyFromArray([
+                $sheet->getStyle('D2:L2')->applyFromArray([
                     'font' => ['bold' => true, 'size' => 14, 'color' => ['rgb' => 'DC2626']],
                     'alignment' => ['horizontal' => 'right'],
                 ]);
-                $sheet->getStyle('D3:K3')->applyFromArray([
+                $sheet->getStyle('D3:L3')->applyFromArray([
                     'font' => ['bold' => true, 'size' => 9, 'color' => ['rgb' => '6B7280']],
                     'alignment' => ['horizontal' => 'right'],
                 ]);
 
-                $sheet->mergeCells('A4:K4');
-                $sheet->getStyle('A4:K4')->getBorders()->getBottom()
+                $sheet->mergeCells('A4:L4');
+                $sheet->getStyle('A4:L4')->getBorders()->getBottom()
                     ->setBorderStyle(Border::BORDER_DOUBLE)
                     ->getColor()->setRGB('000000');
 
                 $highestRow = $sheet->getHighestRow();
-                $sheet->getStyle("A6:K{$highestRow}")->getBorders()->getAllBorders()
+                $sheet->getStyle("A6:L{$highestRow}")->getBorders()->getAllBorders()
                     ->setBorderStyle(Border::BORDER_THIN)
                     ->getColor()->setRGB('D1D5DB');
                 $sheet->getStyle("A7:C{$highestRow}")->getAlignment()->setHorizontal('center');
-                $sheet->getStyle("G7:K{$highestRow}")->getAlignment()->setHorizontal('center');
+                $sheet->getStyle("G7:L{$highestRow}")->getAlignment()->setHorizontal('center');
                 $sheet->freezePane('A7');
-                $sheet->setAutoFilter("A6:K{$highestRow}");
+                $sheet->setAutoFilter("A6:L{$highestRow}");
             },
         ];
     }

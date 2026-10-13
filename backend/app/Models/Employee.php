@@ -149,4 +149,34 @@ class Employee extends Model
         }
         return $dept ? (bool) $dept->count_sunday_in_leave : false;
     }
+
+    /**
+     * Menghitung lama masa kerja pegawai dalam format "X Tahun Y Bulan Z Hari" seperti di data admin.
+     */
+    public function getWorkDurationAttribute(): string
+    {
+        if (! $this->join_date) {
+            return '-';
+        }
+
+        $now = now();
+        if ($this->join_date->isFuture()) {
+            return '0 Hari';
+        }
+
+        $diff = $this->join_date->diff($now);
+        $parts = [];
+        if ($diff->y > 0) {
+            $parts[] = "{$diff->y} Tahun";
+        }
+        if ($diff->m > 0) {
+            $parts[] = "{$diff->m} Bulan";
+        }
+        if ($diff->d > 0 || empty($parts)) {
+            $parts[] = "{$diff->d} Hari";
+        }
+
+        return implode(' ', $parts);
+    }
 }
+

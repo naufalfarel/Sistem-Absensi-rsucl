@@ -182,7 +182,7 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
               </div>
             )}
             <div>
-              <div className="text-[15px] font-semibold text-gray-900 leading-tight">Sistem Absensi Pegawai</div>
+              <div className="text-[15px] font-semibold text-gray-900 leading-tight">Sistem Informasi Absensi dan Kepegawaian</div>
               <div className="text-xs text-gray-500 mt-0.5">Rumah Sakit Umum Cempaka Lima</div>
             </div>
           </div>
@@ -316,7 +316,7 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
           </div>
 
           <p className="text-center text-[11px] text-gray-400 mt-6">
-            © 2026 RSUCL · Sistem Absensi Digital v1.0.0
+            © 2026 RSUCL · Sistem Informasi Absensi dan Kepegawaian v1.0.0
           </p>
         </div>
       </div>
@@ -333,9 +333,9 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
               <img src={logoUrl || logoImg} alt="Logo RSUCL" className="w-24 h-24 object-contain drop-shadow-lg" />
             </div>
           </div>
-          <h2 className="text-2xl font-bold text-center mb-2">Absensi Digital RSUCL</h2>
+          <h2 className="text-2xl font-bold text-center mb-2">Sistem Informasi Absensi & Kepegawaian</h2>
           <p className="text-[13px] text-white/75 text-center leading-relaxed max-w-[280px] mb-8">
-            Sistem absensi resmi Rumah Sakit Umum Cempaka Lima, Banda Aceh.
+            Sistem informasi absensi dan kepegawaian resmi Rumah Sakit Umum Cempaka Lima, Banda Aceh.
           </p>
           <div className="w-full max-w-[340px] space-y-3.5">
             <h3 className="text-[13px] font-bold uppercase tracking-wider text-white/90 text-center mb-4">

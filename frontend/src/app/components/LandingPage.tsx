@@ -103,13 +103,13 @@ export function LandingPage({ onEnter }: LandingPageProps) {
           {/* Pill badge */}
           <div className="inline-flex items-center gap-2 bg-white/15 border border-white/25 rounded-full px-4 py-1.5 mb-6">
             <div className="w-1.5 h-1.5 rounded-full bg-green-300 animate-pulse" />
-            <span className="text-white/90 text-[12px] font-medium">Sistem Absensi Digital · Versi 1.0</span>
+            <span className="text-white/90 text-[12px] font-medium">Sistem Informasi Absensi & Kepegawaian · v1.0</span>
           </div>
 
           {/* Headline */}
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight mb-4 tracking-tight">
             Selamat Datang di<br />
-            <span className="text-green-300">Sistem Absensi</span>
+            <span className="text-green-300">Sistem Informasi Absensi & Kepegawaian</span>
           </h1>
           <h2 className="text-xl md:text-2xl font-medium text-white/80 mb-3">
             Rumah Sakit Umum Cempaka Lima
@@ -267,7 +267,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
                 className="w-full py-3.5 bg-[#16A34A] hover:bg-[#0d9240] text-white rounded-2xl text-[14px] font-semibold transition-all shadow-md shadow-green-200/60 flex items-center justify-center gap-2 active:scale-95"
               >
                 <CheckCircle2 size={16} />
-                Masuk ke Sistem Absensi
+                Masuk ke Sistem Absensi & Kepegawaian
                 <ArrowRight size={15} />
               </button>
             </div>
@@ -456,7 +456,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
                 </div>
               </div>
               <p className="text-[13px] text-white/70 leading-relaxed">
-                Sistem absensi digital resmi Rumah Sakit Umum Cempaka Lima untuk mendukung pengelolaan SDM yang profesional dan efisien.
+                Sistem informasi absensi dan kepegawaian resmi Rumah Sakit Umum Cempaka Lima untuk mendukung pengelolaan SDM yang profesional dan efisien.
               </p>
             </div>
 
@@ -483,7 +483,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
 
           <div className="border-t border-white/15 pt-6 flex flex-col sm:flex-row items-center justify-between gap-2">
             <p className="text-[12px] text-white/50">© 2026 Rumah Sakit Umum Cempaka Lima. Hak cipta dilindungi.</p>
-            <p className="text-[12px] text-white/50">Sistem Absensi Digital v1.0.0</p>
+            <p className="text-[12px] text-white/50">Sistem Informasi Absensi dan Kepegawaian v1.0.0</p>
           </div>
         </div>
       </footer>

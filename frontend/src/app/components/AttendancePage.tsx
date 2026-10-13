@@ -793,10 +793,10 @@ function GPSCard({
               onClick={onRefreshLocation}
               disabled={isStabilizing}
               className="flex items-center gap-1.5 text-[11px] font-bold text-[#16A34A] bg-green-50 border border-green-200 px-2.5 py-1 rounded-xl hover:bg-green-100 transition-all active:scale-95 cursor-pointer disabled:opacity-60 disabled:cursor-wait"
-              title="Muat ulang GPS realtime"
+              title="Stabilkan koordinat GPS realtime"
             >
               <RotateCw size={12} className={isStabilizing ? "animate-spin" : ""} />
-              <span>{isStabilizing ? "Menstabilkan" : "Refresh GPS"}</span>
+              <span>{isStabilizing ? "Menstabilkan..." : "Stabilkan GPS"}</span>
             </button>
           )}
           {/* Signal bars */}
@@ -831,10 +831,10 @@ function GPSCard({
               onClick={onRefreshLocation}
               disabled={isStabilizing}
               className="absolute top-3 right-3 z-[1000] bg-white/95 hover:bg-white text-gray-800 border border-gray-200 shadow-lg rounded-xl px-3 py-1.5 text-[11.5px] font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer backdrop-blur-xs disabled:opacity-70 disabled:cursor-wait"
-              title="Muat Ulang Koordinat GPS Realtime"
+              title="Stabilkan Koordinat GPS Presisi"
             >
               <RotateCw size={13} className={`text-[#16A34A] ${isStabilizing ? "animate-spin" : ""}`} />
-              <span>{isStabilizing ? "Menstabilkan GPS" : "Refresh Maps GPS"}</span>
+              <span>{isStabilizing ? "Menstabilkan..." : "Stabilkan GPS"}</span>
           </button>
         )}
 
@@ -843,12 +843,12 @@ function GPSCard({
           <div className="absolute inset-0 z-[999] bg-slate-900/40 backdrop-blur-xs flex flex-col items-center justify-center p-4 text-center">
             <MapPin size={24} className="text-white animate-bounce mb-1.5" />
             <p className="text-white text-[12.5px] font-bold">
-              {isStabilizing && !gpsValidationBypassed ? "Menstabilkan GPS Presisi..." : "Membaca Koordinat GPS Realtime..."}
+              {isStabilizing && !gpsValidationBypassed ? "Menstabilkan GPS Presisi..." : "Membaca Koordinat GPS..."}
             </p>
             <p className="text-slate-200 text-[11px] mt-0.5 mb-3">
-              {userLocation
-                ? `Akurasi sementara ±${userLocation.accuracy} m · tunggu hingga maksimal ±${GPS_MAX_ACCURACY_METERS} m`
-                : "Pastikan izin Lokasi Presisi pada browser/HP diaktifkan."}
+              {isStabilizing
+                ? `Akurasi sementara ±${userLocation?.accuracy ?? "?"} m · menstabilkan presisi...`
+                : "Mencari titik lokasi perangkat Anda..."}
             </p>
             {onRefreshLocation && !isStabilizing && (
               <button
@@ -990,10 +990,10 @@ function GPSCard({
                     ? "Menstabilkan GPS, mohon tunggu..."
                     : !isLocationReady
                       ? userLocation
-                        ? `GPS belum presisi (±${userLocation.accuracy} m)`
+                        ? `GPS belum presisi (±${userLocation.accuracy} m). Tekan Stabilkan GPS`
                         : "Menunggu lokasi GPS..."
                     : isBoundaryUncertain
-                      ? "Akurasi GPS memotong batas area, coba stabilkan kembali"
+                      ? "Akurasi GPS di batas area RSUCL, tekan tombol Stabilkan GPS"
                   : inGeofence
                     ? `Di dalam area RS (~${Math.round(distance ?? 0)} meter)`
                     : distance !== null
@@ -2272,7 +2272,7 @@ export function AttendancePage() {
                     : checkingLocation || isStabilizing
                       ? "Menstabilkan GPS presisi, mohon tunggu hingga proses selesai"
                       : !isLocationReady
-                        ? `GPS belum presisi. Diperlukan akurasi maksimal ±${GPS_MAX_ACCURACY_METERS} meter dan usia lokasi maksimal ${GPS_MAX_LOCATION_AGE_MS / 1000} detik`
+                        ? `GPS belum presisi (±${userLocation?.accuracy ?? "?"} m). Tekan tombol untuk menstabilkan`
                         : geofenceState === "uncertain"
                           ? "Posisi GPS masih menyentuh batas area. Tekan tombol untuk menstabilkan ulang"
                         : "Anda harus berada di dalam area geofence RSUCL"}
@@ -2317,10 +2317,10 @@ export function AttendancePage() {
                     : checkingLocation || isStabilizing
                       ? "Menstabilkan GPS presisi, mohon tunggu hingga proses selesai"
                       : !isLocationReady
-                        ? `GPS belum presisi. Diperlukan akurasi maksimal ±${GPS_MAX_ACCURACY_METERS} meter dan usia lokasi maksimal ${GPS_MAX_LOCATION_AGE_MS / 1000} detik`
+                        ? `GPS belum presisi (±${userLocation?.accuracy ?? "?"} m). Tekan tombol untuk menstabilkan`
                         : geofenceState === "uncertain"
                           ? "Posisi GPS masih menyentuh batas area. Tekan tombol untuk menstabilkan ulang"
-                        : "Lokasi berada di luar area RSUCL. Tekan tombol untuk memeriksa ulang"}
+                        : "Lokasi berada di luar area RSUCL. Tekan tombol untuk menstabilkan ulang"}
                 </p>
               </div>
             )}
@@ -2348,7 +2348,7 @@ export function AttendancePage() {
                 ? "CHECK OUT"
                 : !faceVerified
                   ? "AMBIL FOTO UNTUK CHECK OUT"
-                  : "UPDATE LOKASI & CHECK OUT"}
+                  : "STABILKAN GPS & CHECK OUT"}
             </button>
           </div>
         ) : (

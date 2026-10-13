@@ -371,13 +371,56 @@ export function useRealtimeGps() {
       return;
     }
 
-    // Selalu mulai dengan pembacaan baru. maximumAge: 0 mencegah cache lokasi
-    // lama dipakai sebagai bukti absensi.
-    void acquireFreshPosition().catch(() => undefined);
+    // 1. Ambil 1 titik lokasi langsung & cepat (Quick Read) tanpa status loading stabilisasi
+    // maximumAge: 0 wajib agar browser tidak mengambil cache GPS lama (mencegah celah absensi)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        updatePosition(pos);
+      },
+      (err) => {
+        if (err.code === 1) {
+          setErrorMsg(geolocationErrorMessage(err));
+          setGpsActive(false);
+          setLoading(false);
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10_000,
+        maximumAge: 0,
+      },
+    );
+
+    // 2. Jalankan watchPosition di latar belakang agar koordinat selalu realtime & tidak kedaluwarsa
+    const persistentWatchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        updatePosition(pos);
+      },
+      (err) => {
+        if (err.code === 1) {
+          setErrorMsg(geolocationErrorMessage(err));
+          setGpsActive(false);
+          setLoading(false);
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 15_000,
+        maximumAge: 0,
+      },
+    );
 
     const handleVisibilityOrFocus = () => {
       if (document.visibilityState === "visible") {
-        void acquireFreshPosition().catch(() => undefined);
+        navigator.geolocation.getCurrentPosition(
+          (pos) => updatePosition(pos),
+          () => undefined,
+          {
+            enableHighAccuracy: true,
+            timeout: 5_000,
+            maximumAge: 0,
+          },
+        );
       }
     };
 
@@ -386,6 +429,7 @@ export function useRealtimeGps() {
 
     return () => {
       mountedRef.current = false;
+      navigator.geolocation.clearWatch(persistentWatchId);
       acquisitionCleanupRef.current?.();
       acquisitionPromiseRef.current = null;
       if (freshnessTimeoutRef.current !== null) {
@@ -395,7 +439,7 @@ export function useRealtimeGps() {
       window.removeEventListener("visibilitychange", handleVisibilityOrFocus);
       window.removeEventListener("focus", handleVisibilityOrFocus);
     };
-  }, [acquireFreshPosition]);
+  }, [updatePosition]);
 
   const locationAgeMs = location
     ? Math.max(0, freshnessClock - location.timestamp)
