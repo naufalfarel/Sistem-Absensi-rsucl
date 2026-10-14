@@ -765,7 +765,7 @@ function GPSCard({
     {
       label: "Status",
       value: isDinasLuar
-        ? "Dinas Luar (Bebas)"
+        ? "Dinonaktifkan"
         : !isLocationReady
           ? "Belum Presisi"
           : isBoundaryUncertain
@@ -985,7 +985,7 @@ function GPSCard({
               {isGpsDisabledByAdmin
                 ? "Validasi GPS Nonaktif oleh Admin (Bisa Absen)"
                 : isDinasLuar
-                  ? "Dinas Luar: Validasi Radius GPS Dikecualikan"
+                  ? "Validasi GPS Dinonaktifkan"
                   : isStabilizing
                     ? "Menstabilkan GPS, mohon tunggu..."
                     : !isLocationReady
@@ -2074,22 +2074,6 @@ export function AttendancePage() {
         )
       )}
 
-      {/* Sedang Dinas Banner */}
-      {isDinasLuar && (
-        <div className="mb-4 flex items-center gap-3 px-4 py-3 rounded-xl border text-[12px] font-medium border-amber-250 bg-amber-50 text-amber-800">
-          <div className="w-7 h-7 rounded-lg bg-amber-200 flex items-center justify-center flex-shrink-0 text-amber-800">
-            <Navigation size={13} className="animate-pulse" />
-          </div>
-          <div className="flex-1">
-            <span className="font-bold block text-amber-900">
-              Status: Lokasi GPS
-            </span>
-            <span className="text-amber-750 text-[11px]">
-              Lokasi GPS dinonaktifkan sementara saja
-            </span>
-          </div>
-        </div>
-      )}
 
       {/* 
         ── SCHEDULE TIMELINE (JADWAL ABSENSI) ── 
@@ -2504,7 +2488,7 @@ export function AttendancePage() {
             icon: Target,
             label: "Geofence",
             st: isDinasLuar
-              ? "Dinas Luar (Bebas)"
+              ? "Dinonaktifkan"
               : inGeofence
                 ? "Terverifikasi"
                 : !isLocationReady

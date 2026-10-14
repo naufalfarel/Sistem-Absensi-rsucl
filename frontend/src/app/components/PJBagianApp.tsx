@@ -38,7 +38,6 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
     localStorage.setItem("pj_active_tab", activeTab);
   }, [activeTab]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [time, setTime] = useState(new Date());
   
   // Counts
   const [unreadNotifications, setUnreadNotifications] = useState(0);
@@ -97,14 +96,7 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
     }, 20000);
     return () => clearInterval(interval);
   }, []);
-
-  useEffect(() => {
-    const t = setInterval(() => setTime(new Date()), 1000);
-    return () => clearInterval(t);
-  }, []);
-
   const totalPendingApprovals = pendingLeaveCount + pendingOvertimeCount + pendingResignationCount;
-  const timeStr = time.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
 
   const renderPage = () => {
     switch (activeTab) {
@@ -415,12 +407,6 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Realtime clock */}
-            <div className="bg-gray-50 border border-gray-100 rounded-xl px-3 py-1 flex items-center gap-1.5 shadow-xs">
-              <span className="w-1.5 h-1.5 bg-[#16A34A] rounded-full" />
-              <span className="text-[11px] font-bold text-gray-700">{timeStr} WIB</span>
-            </div>
-
             {/* Profile Brief */}
             <button
               onClick={() => setActiveTab('profile')}
