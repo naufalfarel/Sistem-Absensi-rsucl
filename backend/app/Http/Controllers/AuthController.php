@@ -142,6 +142,7 @@ class AuthController extends Controller
         // Sertakan info departemen yang diawasi jika PJ Bagian
         if ($user->isPjBagian()) {
             $userData['can_edit_own_schedule'] = (bool) $user->can_edit_own_schedule;
+            $userData['count_sunday_work']     = (bool) $user->count_sunday_work;
             $user->load(['pjBagianDepartment', 'pjDepartments']);
             $userData['pj_bagian_department_id'] = $user->pj_bagian_department_id;
             $userData['pj_bagian_department']    = $user->pjBagianDepartment?->name;
@@ -157,7 +158,7 @@ class AuthController extends Controller
             if ($emp) {
                 $userData['employee_id'] = $emp->id;
                 $userData['department']  = $emp->department?->name;
-                $userData['count_sunday_in_leave'] = (bool) $emp->department?->count_sunday_in_leave;
+                $userData['count_sunday_in_leave'] = $emp->shouldCountSundayInLeave();
                 $userData['position']    = $emp->position?->name;
                 $userData['phone']       = $emp->phone;
                 $userData['gender']      = $emp->gender;
@@ -213,6 +214,7 @@ class AuthController extends Controller
         // Sertakan info departemen yang diawasi jika PJ Bagian
         if ($user->isPjBagian()) {
             $data['can_edit_own_schedule'] = (bool) $user->can_edit_own_schedule;
+            $data['count_sunday_work']     = (bool) $user->count_sunday_work;
             $user->load(['pjBagianDepartment', 'pjDepartments']);
             $data['pj_bagian_department_id'] = $user->pj_bagian_department_id;
             $data['pj_bagian_department']    = $user->pjBagianDepartment?->name;
@@ -228,7 +230,7 @@ class AuthController extends Controller
             if ($emp) {
                 $data['employee_id'] = $emp->id;
                 $data['department']  = $emp->department?->name;
-                $data['count_sunday_in_leave'] = (bool) $emp->department?->count_sunday_in_leave;
+                $data['count_sunday_in_leave'] = $emp->shouldCountSundayInLeave();
                 $data['position']    = $emp->position?->name;
                 $data['phone']       = $emp->phone;
                 $data['gender']      = $emp->gender;
@@ -388,6 +390,7 @@ class AuthController extends Controller
 
         if ($user->isPjBagian()) {
             $data['can_edit_own_schedule'] = (bool) $user->can_edit_own_schedule;
+            $data['count_sunday_work']     = (bool) $user->count_sunday_work;
             $user->load(['pjBagianDepartment', 'pjDepartments']);
             $data['pj_bagian_department_id'] = $user->pj_bagian_department_id;
             $data['pj_bagian_department']    = $user->pjBagianDepartment?->name;
@@ -402,7 +405,7 @@ class AuthController extends Controller
             if ($emp) {
                 $data['employee_id'] = $emp->id;
                 $data['department']  = $emp->department?->name;
-                $data['count_sunday_in_leave'] = (bool) $emp->department?->count_sunday_in_leave;
+                $data['count_sunday_in_leave'] = $emp->shouldCountSundayInLeave();
                 $data['position']    = $emp->position?->name;
                 $data['phone']       = $emp->phone;
                 $data['gender']      = $emp->gender;

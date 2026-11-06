@@ -137,9 +137,13 @@ class Employee extends Model
      */
     public function shouldCountSundayInLeave(): bool
     {
-        // PJ Bagian mengikuti kalender kerja office meskipun berasal dari unit 24 jam/shift.
+        // PJ Bagian secara default mengikuti kalender kerja office meskipun berasal dari unit 24 jam/shift,
+        // KECUALI jika secara khusus diberi opsi hitung minggu kerja (count_sunday_work) seperti kasus kasir/double job.
         $this->loadMissing('user');
         if ($this->user?->isPjBagian()) {
+            if ((bool) $this->user->count_sunday_work) {
+                return true;
+            }
             return false;
         }
 

@@ -218,6 +218,72 @@ class PjScheduleRulesTest extends TestCase
         ])->assertForbidden();
     }
 
+    public function test_admin_can_toggle_count_sunday_work_for_unique_cases(): void
+    {
+        $department = Department::create(['name' => 'Kasir', 'count_sunday_in_leave' => true]);
+        $pjUser = User::factory()->create(['role' => 'pj_bagian']);
+        $pj = $this->createEmployee($pjUser, $department, 'PJ-KASIR-002');
+
+        $admin = User::factory()->create(['role' => 'admin']);
+        Sanctum::actingAs($admin);
+        $endpoint = "/api/employees/{$pj->id}/assign-pj-bagian";
+
+        // Aktifkan hitung minggu kerja
+        $this->putJson($endpoint, [
+            'department_ids' => [$department->id],
+            'can_edit_own_schedule' => true,
+            'count_sunday_work' => true,
+        ])->assertOk()
+          ->assertJsonPath('data.can_edit_own_schedule', true)
+          ->assertJsonPath('data.count_sunday_work', true);
+
+        $this->assertDatabaseHas('users', [
+            'id' => $pjUser->id,
+            'count_sunday_work' => true,
+        ]);
+
+        $this->getJson('/api/employees/pj-bagian')->assertOk()
+            ->assertJsonPath('data.0.count_sunday_work', true);
+
+        // Buat parent schedule shift 24h Kasir dengan children tanpa hari spesifik (Pagi, Siang, Malam)
+        $parentKasir = Schedule::create([
+            'name' => 'Kasir 24 Jam',
+            'start_time' => '08:00:00',
+            'end_time' => '14:00:00',
+            'status' => 'approved',
+        ]);
+        $pagi = Schedule::create([
+            'parent_id' => $parentKasir->id,
+            'name' => 'Pagi (08:00-14:00)',
+            'start_time' => '08:00:00',
+            'end_time' => '14:00:00',
+            'status' => 'approved',
+        ]);
+        $siang = Schedule::create([
+            'parent_id' => $parentKasir->id,
+            'name' => 'Siang (14:00-20:00)',
+            'start_time' => '14:00:00',
+            'end_time' => '20:00:00',
+            'status' => 'approved',
+        ]);
+
+        $pj->schedules()->attach($parentKasir->id, ['day_of_week' => 'Minggu']);
+
+        // Verifikasi pada hari Minggu (2026-10-04 adalah hari Minggu)
+        $sundayShifts = AttendanceRules::resolveAllShiftsFor($pj, Carbon::parse('2026-10-04'));
+        $this->assertNotEmpty($sundayShifts);
+        $this->assertTrue(collect($sundayShifts)->contains('id', $pagi->id));
+        $this->assertTrue(collect($sundayShifts)->contains('id', $siang->id));
+
+        // Cabut wewenang PJ
+        $this->putJson("/api/employees/{$pj->id}/revoke-pj-bagian")->assertOk();
+        $this->assertDatabaseHas('users', [
+            'id' => $pjUser->id,
+            'count_sunday_work' => false,
+            'role' => 'employee',
+        ]);
+    }
+
     private function createEmployee(User $user, Department $department, string $nik): Employee
     {
         return Employee::create([

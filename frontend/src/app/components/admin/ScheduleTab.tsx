@@ -2023,8 +2023,9 @@ export function ScheduleTab() {
                         <div className="flex items-center gap-2">
                           <p className="font-bold text-slate-800 whitespace-nowrap text-[12.5px] tracking-wide">{row.name}</p>
                           {row.role === 'pj_bagian' && (
-                            <span className="text-[8px] font-extrabold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-250/50 uppercase tracking-wider">
+                            <span className="text-[8px] font-extrabold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-250/50 uppercase tracking-wider" title={row.count_sunday_work ? 'PJ Bagian (Hitung Minggu Kerja)' : undefined}>
                               PJ {row.pj_department_name || 'Bagian'}
+                              {row.count_sunday_work && <span className="ml-1 text-[7.5px] text-amber-900">• Shift Min</span>}
                             </span>
                           )}
                         </div>

@@ -207,6 +207,7 @@ class EmployeeController extends Controller
                     'pj_bagian_department_id' => $u->pjDepartments->first()?->id,
                     'pj_bagian_department'    => $u->pjDepartments->first()?->name,
                     'can_edit_own_schedule'   => (bool) $u->can_edit_own_schedule,
+                    'count_sunday_work'       => (bool) $u->count_sunday_work,
                     'pj_departments'          => $u->pjDepartments->map(fn($d) => [
                         'id'   => $d->id,
                         'name' => $d->name
@@ -234,6 +235,7 @@ class EmployeeController extends Controller
             'department_ids.*' => 'exists:departments,id',
             'department_id'    => 'nullable|exists:departments,id', // Fallback legacy
             'can_edit_own_schedule' => 'sometimes|boolean',
+            'count_sunday_work'     => 'sometimes|boolean',
         ]);
 
         $departmentIds = [];
@@ -253,8 +255,8 @@ class EmployeeController extends Controller
             return response()->json(['success' => false, 'message' => 'Akun user karyawan tidak ditemukan.'], 404);
         }
 
-        // Jangan hapus jadwal khusus yang sudah dibuat saat admin hanya mengubah wewenang PJ.
-        if (!$targetUser->isPjBagian() && !\App\Support\PjScheduleRules::syncStandardSchedule($employee)) {
+        // Jangan hapus jadwal khusus yang sudah dibuat saat admin hanya mengubah wewenang PJ atau jika PJ diizinkan kerja shift Minggu.
+        if (!$targetUser->isPjBagian() && !($data['count_sunday_work'] ?? false) && !\App\Support\PjScheduleRules::syncStandardSchedule($employee)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Shift standar PJ belum tersedia. Pastikan template Administrasi/staff office memiliki sub-shift Normal Senin-Jumat dan Sabtu.',
@@ -278,7 +280,8 @@ class EmployeeController extends Controller
                     $pj->update([
                         'role'                    => 'employee',
                         'pj_bagian_department_id' => null,
-                        'can_edit_own_schedule' => false,
+                        'can_edit_own_schedule'   => false,
+                        'count_sunday_work'       => false,
                     ]);
                     \App\Models\Notification::create([
                         'user_id' => $pj->id,
@@ -300,6 +303,7 @@ class EmployeeController extends Controller
             'role'                    => 'pj_bagian',
             'pj_bagian_department_id' => $departmentIds[0], // simpan departemen pertama di field legacy
             'can_edit_own_schedule'   => $data['can_edit_own_schedule'] ?? (bool) $targetUser->can_edit_own_schedule,
+            'count_sunday_work'       => $data['count_sunday_work'] ?? (bool) $targetUser->count_sunday_work,
         ]);
 
         $targetUser->pjDepartments()->sync($departmentIds);
@@ -325,6 +329,7 @@ class EmployeeController extends Controller
                 'name'                    => $targetUser->name,
                 'role'                    => $targetUser->role,
                 'can_edit_own_schedule'   => (bool) $targetUser->can_edit_own_schedule,
+                'count_sunday_work'       => (bool) $targetUser->count_sunday_work,
                 'pj_bagian_department_id' => $targetUser->pj_bagian_department_id,
                 'pj_bagian_department'    => $targetUser->pjDepartments->first()?->name,
                 'pj_departments'          => $targetUser->pjDepartments->map(fn($d) => [
@@ -359,7 +364,8 @@ class EmployeeController extends Controller
         $targetUser->update([
             'role'                    => 'employee',
             'pj_bagian_department_id' => null,
-            'can_edit_own_schedule' => false,
+            'can_edit_own_schedule'   => false,
+            'count_sunday_work'       => false,
         ]);
 
         $targetUser->pjDepartments()->detach();

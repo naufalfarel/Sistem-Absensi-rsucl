@@ -152,6 +152,7 @@ export function PJBagianTab() {
   const [modalEmpSearch, setModalEmpSearch] = useState('');
   const [selectedDepartmentIds, setSelectedDepartmentIds] = useState<number[]>([]);
   const [assignCanEditOwnSchedule, setAssignCanEditOwnSchedule] = useState(false);
+  const [assignCountSundayWork, setAssignCountSundayWork] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   
@@ -164,6 +165,7 @@ export function PJBagianTab() {
   const [editingPj, setEditingPj] = useState<PjBagianUser | null>(null);
   const [editDepartmentIds, setEditDepartmentIds] = useState<number[]>([]);
   const [editCanEditOwnSchedule, setEditCanEditOwnSchedule] = useState(false);
+  const [editCountSundayWork, setEditCountSundayWork] = useState(false);
 
   const handleEditPj = (pj: PjBagianUser) => {
     setEditingPj(pj);
@@ -173,6 +175,7 @@ export function PJBagianTab() {
       : (pj.pj_bagian_department_id ? [pj.pj_bagian_department_id] : []);
     setEditDepartmentIds(deptIds);
     setEditCanEditOwnSchedule(!!pj.can_edit_own_schedule);
+    setEditCountSundayWork(!!pj.count_sunday_work);
   };
 
   const handleSaveEditPj = async (e: React.FormEvent) => {
@@ -186,7 +189,7 @@ export function PJBagianTab() {
     setSubmitting(true);
     setErrorMsg('');
     try {
-      const res = await pjBagianApi.assign(editingPj.employee_id, editDepartmentIds, editCanEditOwnSchedule);
+      const res = await pjBagianApi.assign(editingPj.employee_id, editDepartmentIds, editCanEditOwnSchedule, editCountSundayWork);
       if (res.success) {
         setEditingPj(null);
         setEditDepartmentIds([]);
@@ -261,12 +264,18 @@ export function PJBagianTab() {
         }
       }
 
-      const res = await pjBagianApi.assign(Number(selectedEmployeeId), selectedDepartmentIds, assignCanEditOwnSchedule);
+      const res = await pjBagianApi.assign(
+        Number(selectedEmployeeId),
+        selectedDepartmentIds,
+        assignCanEditOwnSchedule,
+        assignCountSundayWork
+      );
       if (res.success) {
         setIsAssignModalOpen(false);
         setSelectedEmployeeId('');
         setSelectedDepartmentIds([]);
         setAssignCanEditOwnSchedule(false);
+        setAssignCountSundayWork(false);
         loadData();
       }
     } catch (err: any) {
@@ -384,9 +393,21 @@ export function PJBagianTab() {
                         </span>
                       )}
                     </div>
-                    <span className={`mt-1 inline-block text-[10px] ${pj.can_edit_own_schedule ? 'text-emerald-700' : 'text-gray-400'}`}>
-                      Jadwal sendiri: {pj.can_edit_own_schedule ? 'diizinkan' : 'admin saja'}
-                    </span>
+                    <div className="flex flex-col gap-0.5 mt-1">
+                      <span className={`text-[10px] ${pj.can_edit_own_schedule ? 'text-emerald-700 font-medium' : 'text-gray-400'}`}>
+                        Jadwal sendiri: {pj.can_edit_own_schedule ? 'diizinkan' : 'admin saja'}
+                      </span>
+                      <span className={`text-[10px] ${pj.count_sunday_work ? 'text-amber-700 font-semibold flex items-center gap-1' : 'text-gray-400'}`}>
+                        {pj.count_sunday_work ? (
+                          <>
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                            Minggu: Dihitung Kerja (Shift)
+                          </>
+                        ) : (
+                          'Minggu: Libur Reguler'
+                        )}
+                      </span>
+                    </div>
                   </td>
 
                   <td className="py-3 px-4 text-right">
@@ -448,9 +469,21 @@ export function PJBagianTab() {
                     </span>
                   )}
                 </div>
-                <span className={`text-[10px] ${pj.can_edit_own_schedule ? 'text-emerald-700' : 'text-gray-400'}`}>
-                  Jadwal sendiri: {pj.can_edit_own_schedule ? 'diizinkan' : 'admin saja'}
-                </span>
+                <div className="flex flex-col gap-0.5">
+                  <span className={`text-[10px] ${pj.can_edit_own_schedule ? 'text-emerald-700 font-medium' : 'text-gray-400'}`}>
+                    Jadwal sendiri: {pj.can_edit_own_schedule ? 'diizinkan' : 'admin saja'}
+                  </span>
+                  <span className={`text-[10px] ${pj.count_sunday_work ? 'text-amber-700 font-semibold flex items-center gap-1' : 'text-gray-400'}`}>
+                    {pj.count_sunday_work ? (
+                      <>
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                        Minggu: Dihitung Kerja
+                      </>
+                    ) : (
+                      'Minggu: Libur'
+                    )}
+                  </span>
+                </div>
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => handleEditPj(pj)}
@@ -528,9 +561,17 @@ export function PJBagianTab() {
                 </div>
               </div>
 
-              <label className="flex items-start gap-2.5 rounded-xl border border-gray-200 bg-gray-50 p-3 cursor-pointer">
-                <input type="checkbox" checked={assignCanEditOwnSchedule} onChange={e => setAssignCanEditOwnSchedule(e.target.checked)} className="mt-0.5 h-4 w-4 rounded text-[#16A34A]" />
+              <label className="flex items-start gap-2.5 rounded-xl border border-gray-200 bg-gray-50 p-3 cursor-pointer hover:bg-gray-100/70 transition-colors">
+                <input type="checkbox" checked={assignCanEditOwnSchedule} onChange={e => setAssignCanEditOwnSchedule(e.target.checked)} className="mt-0.5 h-4 w-4 rounded text-[#16A34A] focus:ring-[#16A34A]" />
                 <span className="text-[11px] text-gray-700"><strong>Izinkan mengubah jadwal sendiri</strong><br />Hanya jadwal PJ ini; tidak memberi akses ke jadwal PJ lain.</span>
+              </label>
+
+              <label className="flex items-start gap-2.5 rounded-xl border border-gray-200 bg-gray-50 p-3 cursor-pointer hover:bg-gray-100/70 transition-colors">
+                <input type="checkbox" checked={assignCountSundayWork} onChange={e => setAssignCountSundayWork(e.target.checked)} className="mt-0.5 h-4 w-4 rounded text-[#16A34A] focus:ring-[#16A34A]" />
+                <span className="text-[11px] text-gray-700 leading-snug">
+                  <strong>Hitung hari Minggu sebagai hari kerja</strong><br />
+                  <span className="text-[10px] text-gray-500">Khusus kasus unik seperti kasir / unit shift yang tetap bekerja normal di hari Minggu (double job). Hari Minggu akan dihitung kerja dan tidak otomatis libur.</span>
+                </span>
               </label>
 
               <div className="flex gap-2 pt-2">
@@ -724,9 +765,17 @@ export function PJBagianTab() {
                 </div>
               </div>
 
-              <label className="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 cursor-pointer">
-                <input type="checkbox" checked={editCanEditOwnSchedule} onChange={e => setEditCanEditOwnSchedule(e.target.checked)} className="mt-0.5 h-4 w-4 rounded text-[#16A34A]" />
+              <label className="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 cursor-pointer hover:bg-gray-100/70 transition-colors">
+                <input type="checkbox" checked={editCanEditOwnSchedule} onChange={e => setEditCanEditOwnSchedule(e.target.checked)} className="mt-0.5 h-4 w-4 rounded text-[#16A34A] focus:ring-[#16A34A]" />
                 <span className="text-[11px] leading-relaxed text-gray-700"><strong>Izinkan mengubah jadwal sendiri</strong><br />PJ ini dapat mengatur shift miliknya sendiri. Jadwal PJ lain tetap hanya bisa diubah oleh admin.</span>
+              </label>
+
+              <label className="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 cursor-pointer hover:bg-gray-100/70 transition-colors">
+                <input type="checkbox" checked={editCountSundayWork} onChange={e => setEditCountSundayWork(e.target.checked)} className="mt-0.5 h-4 w-4 rounded text-[#16A34A] focus:ring-[#16A34A]" />
+                <span className="text-[11px] leading-relaxed text-gray-700">
+                  <strong>Hitung hari Minggu sebagai hari kerja</strong><br />
+                  <span className="text-[10.5px] text-gray-500">Khusus kasus unik seperti kasir / unit shift yang tetap bekerja normal di hari Minggu (double job). Hari Minggu akan dihitung kerja dan tidak otomatis libur.</span>
+                </span>
               </label>
 
               <div className="flex gap-2.5 pt-2">

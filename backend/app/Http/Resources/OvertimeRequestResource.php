@@ -40,7 +40,7 @@ class OvertimeRequestResource extends JsonResource
                 'nik_ktp' => $this->employee->nik_ktp,
                 'department_id' => $this->employee->department_id,
                 'department' => $this->employee->department?->name,
-                'count_sunday_in_leave' => (bool) ($this->employee->department?->count_sunday_in_leave ?? false),
+                'count_sunday_in_leave' => $this->employee ? $this->employee->shouldCountSundayInLeave() : false,
             ] : null,
             'date' => $dateStr,
             'reason' => $this->reason,

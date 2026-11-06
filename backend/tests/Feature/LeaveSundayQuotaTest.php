@@ -176,4 +176,46 @@ class LeaveSundayQuotaTest extends TestCase
             'Kamar Bersalin'
         ));
     }
+
+    public function test_pj_bagian_with_count_sunday_work_counts_sunday_as_work_day(): void
+    {
+        $shiftDepartment = Department::create([
+            'name' => 'Kasir',
+            'count_sunday_in_leave' => true,
+        ]);
+
+        $pjUser = User::factory()->create([
+            'role' => 'pj_bagian',
+            'count_sunday_work' => true,
+        ]);
+        $pj = Employee::create([
+            'user_id' => $pjUser->id,
+            'department_id' => $shiftDepartment->id,
+            'nik_ktp' => 'PJ-KASIR-001',
+            'status' => 'active',
+        ]);
+
+        Holiday::create(['date' => '2026-12-25', 'name' => 'Hari Natal']);
+        Holiday::create(['date' => '2027-01-01', 'name' => 'Tahun Baru']);
+
+        $leave = LeaveRequest::create([
+            'employee_id' => $pj->id,
+            'type' => 'cuti',
+            'start_date' => '2026-12-23',
+            'end_date' => '2027-01-02',
+            'reason' => 'Cuti Kasir',
+            'status' => 'approved',
+            'unit_kerja' => 'Kasir',
+        ]);
+
+        // 11 hari kalender penuh dihitung untuk unit shift (termasuk Minggu dan tanggal merah).
+        $this->assertTrue($pj->shouldCountSundayInLeave());
+        $this->assertSame(11, $leave->days);
+        $this->assertSame(11, LeaveQuotaHelper::countLeaveDays(
+            '2026-12-23',
+            '2027-01-02',
+            $pj,
+            'Kasir'
+        ));
+    }
 }

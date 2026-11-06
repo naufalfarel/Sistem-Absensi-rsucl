@@ -473,7 +473,7 @@ class AttendanceRules
 
         $shifts = [];
 
-        $expandSchedule = function ($sched) use ($dayOfWeek) {
+        $expandSchedule = function ($sched) use ($dayOfWeek, $employee) {
             if (! $sched) {
                 return [];
             }
@@ -506,6 +506,22 @@ class AttendanceRules
                     $sundayChildren = $children->filter(fn ($c) => str_contains(strtolower($c->name ?? ''), 'minggu'));
                     if ($sundayChildren->isNotEmpty()) {
                         return $sundayChildren->values()->all();
+                    }
+
+                    // Jika sub-shift tidak memiliki penamaan hari spesifik (seperti shift 24 jam Pagi/Siang/Malam),
+                    // dan unit/pegawai bekerja di hari Minggu, jangan kosongkan sub-shift
+                    $hasDaySpecificChildren = $children->contains(function ($child) {
+                        $name = strtolower($child->name ?? '');
+                        return str_contains($name, 'senin')
+                            || str_contains($name, 'selasa')
+                            || str_contains($name, 'rabu')
+                            || str_contains($name, 'kamis')
+                            || str_contains($name, 'jumat')
+                            || str_contains($name, 'sabtu');
+                    });
+
+                    if (!$hasDaySpecificChildren && ($employee->shouldCountSundayInLeave() || ($employee->user && (bool) $employee->user->count_sunday_work))) {
+                        return $children->values()->all();
                     }
 
                     return [];

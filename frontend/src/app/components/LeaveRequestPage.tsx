@@ -156,7 +156,8 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
   };
 
   const isCountSundayActive = (): boolean => {
-    if (user?.role === 'pj_bagian') return false;
+    if (user?.role === 'pj_bagian' && !user?.count_sunday_work) return false;
+    if (user?.count_sunday_work) return true;
     if (user?.count_sunday_in_leave) return true;
     const targetDeptName = (unitKerja || user?.department || '').trim().toLowerCase();
     if (!targetDeptName) return false;

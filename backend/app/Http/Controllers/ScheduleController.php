@@ -892,6 +892,7 @@ class ScheduleController extends Controller
                 'pj_department_name' => ($emp->user && $emp->user->role === 'pj_bagian' && $emp->user->pjBagianDepartment)
                     ? $emp->user->pjBagianDepartment->name
                     : null,
+                'count_sunday_work' => (bool) ($emp->user?->count_sunday_work ?? false),
                 'dates'       => (object)$assignMap,
             ];
         });
