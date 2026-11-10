@@ -1352,6 +1352,7 @@ class LeaveRequestController extends Controller
             'created_at'         => $lr->created_at?->toDateTimeString(),
             'employee'           => [
                 'id'         => $lr->employee?->id,
+                'user_id'    => $lr->employee?->user_id,
                 'name'       => $lr->employee?->user?->name,
                 'nik_ktp'    => $lr->employee?->nik_ktp,
                 'department' => $lr->employee?->department?->name,

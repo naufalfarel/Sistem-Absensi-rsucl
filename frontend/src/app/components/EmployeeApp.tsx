@@ -14,6 +14,7 @@ import AssignmentLetterPage from './AssignmentLetterPage';
 import { EmployeeSchedulePage } from './EmployeeSchedulePage';
 import { ResignationRequestPage } from './ResignationRequestPage';
 import { DisciplinaryPage } from './DisciplinaryPage';
+import { ErrorBoundary } from './ui/ErrorBoundary';
 import { notificationApi, settingApi } from '../../services/api';
 
 // Tipe union untuk mendefinisikan tab navigasi yang valid pada dashboard karyawan
@@ -142,7 +143,7 @@ export function EmployeeApp({ onLogout }: EmployeeAppProps) {
             }} 
           />
         );
-      case 'attendance': return <AttendancePage />;
+      case 'attendance': return <ErrorBoundary><AttendancePage /></ErrorBoundary>;
       case 'history': return <HistoryPage />;
       case 'schedule': return <EmployeeSchedulePage />;
       case 'leave': return <LeaveRequestPage onBack={() => handleTabChange('dashboard')} />;

@@ -191,6 +191,7 @@ export interface AuthUser {
   };
   faskes_tk?: string | null;
   faskes_location?: string | null;
+  nip?: string | null; // Nomor Induk Pegawai
 }
 
 /**
@@ -280,9 +281,11 @@ export interface ResignationRequest {
   director_type: 'pt_director' | 'rs_director' | null;
   employee?: {
     id: number;
+    user_id?: number;
     nik_ktp: string;
     status?: 'active' | 'inactive';
     user?: {
+      id?: number;
       name: string;
       email: string;
       profile_picture_url?: string;
@@ -445,6 +448,7 @@ export interface AttendanceRecord {
   checkout_location_note?: string | null;
   employee?: {
     id: number;
+    user_id?: number;
     name: string;
     nik_ktp: string;
     department: string;
@@ -805,6 +809,7 @@ export interface LeaveRequest {
   created_at: string;
   employee: {
     id: number;
+    user_id?: number;
     name: string;
     nik_ktp: string;
     department: string;
@@ -1179,6 +1184,7 @@ export interface AppSettings {
   checkin_tolerance_minutes?: string;
   early_checkin_window_minutes?: string;
   late_fee_per_minute?: string;
+  enable_overtime_feature?: "0" | "1"; // Aktifkan fitur lembur
 }
 
 /**
@@ -1275,6 +1281,7 @@ export interface EmployeeMonthlySchedule {
   department?: number;
   role?: string;
   pj_department_name?: string | null;
+  count_sunday_work?: boolean; // Apakah hari Minggu dihitung kerja
   dates: Record<
     string,
     {
@@ -1568,6 +1575,7 @@ export interface OvertimeRequest {
   employee_id: number;
   employee?: {
     id: number;
+    user_id?: number;
     name: string;
     nik_ktp: string;
     department?: string;
@@ -1710,6 +1718,7 @@ export interface ShiftProposal {
   id: number;
   employee: {
     id: number;
+    user_id?: number;
     name: string;
     nik_ktp: string;
     department: string;
@@ -1774,6 +1783,7 @@ export interface PjBagianUser {
   employee_id?: number;
   name: string;
   nik_ktp: string;
+  nip?: string | null; // Nomor Induk Pegawai
   email: string;
   username: string;
   profile_picture?: string | null;
@@ -1844,6 +1854,7 @@ export interface AssignmentLetter {
   created_at: string | null;
   employee?: {
     id: number;
+    user_id?: number;
     name: string;
     nik_ktp: string;
     department?: string;

@@ -796,12 +796,6 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
           >
             <Plus size={16} /> Ajukan Sakit
           </button>
-          <button
-            onClick={() => { setShowForm(true); setLeaveType('cuti_khusus'); setFormError(''); }}
-            className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl text-[13px] font-semibold transition-all shadow-sm shadow-orange-200 active:scale-[0.98] cursor-pointer"
-          >
-            <Plus size={16} /> Ajukan Cuti Khusus
-          </button>
         </div>
 
         {/* ─── SUBMISSION FORM MODAL DIALOG ──────────────────────────────────── */}

@@ -147,6 +147,8 @@ interface ShiftSettings {
   gps_radius: number;
   enable_gps_validation?: boolean;
   isOvernight: boolean; // shift lintas tengah malam (mis. Malam 21:00-07:00)
+  isOpenWrapped: boolean; // checkin_open jatuh di hari sebelumnya (mis. shift 02:00 → open 23:30)
+  shift_start: string; // jam mulai shift asli, untuk tampilan label
   early_checkout_grace_minutes?: string;
   overtime_grace_minutes?: string;
 }
@@ -166,6 +168,8 @@ const DEFAULT_SHIFT: ShiftSettings = {
   gps_radius: 100,
   enable_gps_validation: true,
   isOvernight: false,
+  isOpenWrapped: false,
+  shift_start: "08:00",
   early_checkout_grace_minutes: "15",
   overtime_grace_minutes: "15",
 };
@@ -190,6 +194,14 @@ function getWindow(
       if (mins >= openMins && mins <= closeMins) return "checkin";
     }
     if (mins <= checkoutOpen) return "working";
+    return "checkout";
+  }
+
+  // Jika checkin_open sudah melewati tengah malam (wrap ke hari sebelumnya),
+  // berarti saat ini selalu sudah melewati jam buka → langsung cek window biasa
+  if (s.isOpenWrapped) {
+    if (mins <= closeMins) return "checkin";
+    if (mins < checkoutOpen) return "working";
     return "checkout";
   }
 
@@ -1309,6 +1321,12 @@ export function AttendancePage() {
     const lateHHmm = addMins(startHHmm, 10);  // Toleransi 10 menit
     const closeHHmm = endHHmm;
 
+    // Deteksi apakah checkin_open wrap ke hari sebelumnya.
+    // subMins mengembalikan nilai >= 0 (wrap via +24*60), jadi jika startMins < 150
+    // maka openMins akan besar (>= 1290) → artinya jam buka ada di hari sebelumnya.
+    const openMins = parseMins(openHHmm);
+    const isOpenWrapped = !overnight && startMins < 150; // start < 2.5 jam → open wrap
+
     setShiftSettings((prev) => ({
       ...prev,
       checkin_open: openHHmm,
@@ -1319,6 +1337,8 @@ export function AttendancePage() {
       sat_checkout_open: satEndHHmm,
       sat_checkout_close: addMins(satEndHHmm, 60),
       isOvernight: overnight,
+      isOpenWrapped,
+      shift_start: startHHmm,
     }));
   }, [todayShift, saturdayShift]);
 
@@ -1432,18 +1452,18 @@ export function AttendancePage() {
         bg: "#FFF7ED",
         border: "#FED7AA",
         title: "Waktu Check-Out Presensi",
-        desc: "Anda terdaftar telah Check-In. Silakan lakukan Check-Out untuk menyelesaikan absensi dinas Anda (Shift Malam / 24 Jam / Terlambat Pulang).",
+        desc: "Anda terdaftar telah Check-In. Silakan lakukan Check-Out untuk menyelesaikan absensi dinas Anda.",
         sub: "Pastikan foto selfie verifikasi wajah telah diambil.",
       }
-    : (!checkedIn && (attendanceWindow === "working" || attendanceWindow === "checkout" || attendanceWindow === "late_locked" || attendanceWindow === "break"))
+    : (!checkedIn && todayShift && !isLiburShift)
     ? {
-        icon: AlertCircle,
-        iconColor: "#D97706",
-        bg: "#FFFBEB",
-        border: "#FDE68A",
-        title: "Check-In Terlambat",
-        desc: "Waktu shift telah berjalan. Anda tetap dapat melakukan Check-In (dicatat Terlambat).",
-        sub: "Silakan lengkapi verifikasi foto wajah untuk submit Check-In.",
+        icon: CheckCircle2,
+        iconColor: "#16A34A",
+        bg: "#F0FDF4",
+        border: "#BBF7D0",
+        title: "Waktu Presensi Masuk",
+        desc: `Shift ${todayShift.name} (${safeSubstr(todayShift.start_time, 0, 5, "08:00")} – ${safeSubstr(todayShift.end_time, 0, 5, "17:00")} WIB). Silakan lakukan Check-In.`,
+        sub: "Selesaikan verifikasi foto wajah dan GPS untuk submit Check-In.",
       }
     : windowConfig[attendanceWindow];
   const dayId = DAYS_ID[current.getDay()];
@@ -1454,8 +1474,8 @@ export function AttendancePage() {
   });
   const dateStr = `${dayId}, ${current.getDate()} ${["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"][current.getMonth()]} ${current.getFullYear()}`;
 
-  // Karyawan dapat check-in selama belum check-in hari ini dan bukan hari libur/off/terlalu awal
-  const canCheckIn = !checkedIn && attendanceWindow !== "no_shift" && attendanceWindow !== "sunday" && attendanceWindow !== "too_early";
+  // Karyawan dapat check-in kapan saja selama belum check-in hari ini dan ada shift aktif (tidak dikunci batas jam)
+  const canCheckIn = !checkedIn && todayShift !== null && !isLiburShift;
   // Karyawan dapat check-out kapan saja setelah check-in dan belum check-out
   const canCheckOut = checkedIn && !checkedOut;
 
@@ -1505,21 +1525,10 @@ export function AttendancePage() {
   };
 
   const lockedLabel = () => {
-    // Sudah check-in tapi belum check-out dan waktu sudah lewat
-    if (checkedIn && !checkedOut) return "Batas Waktu Check-Out Sudah Lewat";
-    // Sudah selesai keduanya — seharusnya tidak masuk blok ini, tapi sebagai fallback
     if (checkedIn && checkedOut) return "Absensi Hari Ini Selesai";
-    if (attendanceWindow === "no_shift")
-      return "Tidak ada jadwal shift hari ini";
-    if (attendanceWindow === "too_early")
-      return `Absen Dibuka Pukul ${shiftSettings.checkin_open}`;
-    if (attendanceWindow === "late_locked")
-      return `Batas Check-In Terlewat (${shiftSettings.close_checkin})`;
-    if (attendanceWindow === "break") return "Dikunci – Jam Istirahat";
-    if (attendanceWindow === "working") return "Waktu Absen Masuk Telah Lewat";
-    if (attendanceWindow === "ended") return "Waktu Absen Telah Berakhir";
-    if (attendanceWindow === "sunday") return "Hari Libur";
-    return "Absen Dikunci";
+    if (isLiburShift) return "Hari Ini Libur / Bebas Tugas";
+    if (todayShift === null) return "Tidak ada jadwal shift hari ini";
+    return "Absensi Belum Tersedia";
   };
 
   const handleAction = async () => {
@@ -1811,26 +1820,21 @@ export function AttendancePage() {
   const timelineItems = isSaturday
     ? [
         {
-          time: shiftSettings.checkin_open,
-          label: "Check-In",
+          time: safeSubstr(todayShift?.start_time, 0, 5, "08:30"),
+          label: "Mulai Shift",
           phase: "checkin",
         },
         {
-          time: shiftSettings.sat_checkout_open,
-          label: "Check-Out",
+          time: safeSubstr(todayShift?.end_time, 0, 5, "13:00"),
+          label: "Selesai Shift",
           phase: "checkout",
         },
       ]
     : [
         {
-          time: shiftSettings.checkin_open,
-          label: "Buka Absen",
+          time: safeSubstr(todayShift?.start_time, 0, 5, "08:30"),
+          label: "Mulai Shift",
           phase: "checkin",
-        },
-        {
-          time: shiftSettings.close_checkin,
-          label: "Tutup Absen",
-          phase: "late_locked",
         },
         ...(shiftSettings.break_start !== shiftSettings.checkout_open
           ? [
@@ -1847,14 +1851,9 @@ export function AttendancePage() {
             ]
           : []),
         {
-          time: shiftSettings.checkout_open,
-          label: "Check-Out",
+          time: safeSubstr(todayShift?.end_time, 0, 5, "17:00"),
+          label: "Selesai Shift",
           phase: "checkout",
-        },
-        {
-          time: shiftSettings.checkout_close,
-          label: "Batas Akhir",
-          phase: "ended",
         },
       ];
 
@@ -1885,7 +1884,7 @@ export function AttendancePage() {
   // Camera helpers and handlers
 
   return (
-    <div className="p-5 md:p-7 max-w-2xl mx-auto">
+    <div className="p-5 md:p-7 max-w-2xl mx-auto notranslate" translate="no">
       <style>{RIPPLE_STYLE}</style>
 
       {errorMsg && !showModal && (

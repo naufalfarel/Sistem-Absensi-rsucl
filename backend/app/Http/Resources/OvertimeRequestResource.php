@@ -36,6 +36,7 @@ class OvertimeRequestResource extends JsonResource
             'employee_id' => $this->employee_id,
             'employee' => $this->employee ? [
                 'id' => $this->employee->id,
+                'user_id' => $this->employee->user_id,
                 'name' => $this->employee->user?->name,
                 'nik_ktp' => $this->employee->nik_ktp,
                 'department_id' => $this->employee->department_id,

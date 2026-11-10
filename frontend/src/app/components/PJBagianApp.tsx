@@ -18,13 +18,14 @@ import { JadwalShiftTab } from './pjbagian/JadwalShiftTab';
 import { StaffAttendanceTab } from './pjbagian/StaffAttendanceTab';
 import { PJBagianDashboard } from './pjbagian/PJBagianDashboard';
 import { DisciplinaryPage } from './DisciplinaryPage';
+import { ErrorBoundary } from './ui/ErrorBoundary';
 import { notificationApi, leaveApi, overtimeApi, resignationApi, settingApi } from '../../services/api';
 
 type Tab = 'dashboard' | 'attendance' | 'history' | 'overtime_personal' | 'approvals' | 'shift_proposals' | 'staff_attendance' | 'notifications' | 'profile' | 'leave' | 'assignment' | 'resignation' | 'guide' | 'disciplinary';
 
 interface PJBagianAppProps {
   onLogout: () => void;
-  user: { id: number; name: string; username: string; nik_ktp: string; pj_bagian_department?: string; pj_bagian_department_id?: number; profile_picture?: string | null };
+  user: { id: number; name: string; username: string; nik_ktp: string; pj_bagian_department?: string; pj_bagian_department_id?: number; profile_picture?: string | null; employee_id?: number };
 }
 
 export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
@@ -110,7 +111,7 @@ export function PJBagianApp({ onLogout, user: propUser }: PJBagianAppProps) {
           />
         );
       case 'attendance':
-        return <AttendancePage />;
+        return <ErrorBoundary><AttendancePage /></ErrorBoundary>;
       case 'history':
         return <HistoryPage />;
       case 'overtime_personal':

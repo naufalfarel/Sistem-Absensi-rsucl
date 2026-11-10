@@ -8,7 +8,7 @@ import logoImg from '../../../imports/fa46c1c7-c01d-47c1-9cb0-9ab5874c3cfd_130x1
 const filterTabs = ['Semua', 'Menunggu', 'Disetujui', 'Ditolak'];
 
 interface ResignationApprovalTabProps {
-  user: { id: number; name: string };
+  user: { id: number; name: string; employee_id?: number; nik_ktp?: string };
   onUpdateCount?: () => void;
 }
 
@@ -163,7 +163,12 @@ export function ResignationApprovalTab({ user, onUpdateCount }: ResignationAppro
         )}
         {filtered.map(req => {
           const displayStatus = req.status !== 'pending' ? req.status : req.pj_status;
-          const isOwnRequest = req.employee?.id === user.id;
+          const isOwnRequest = Boolean(
+            (user.employee_id && Number(req.employee_id || req.employee?.id) === Number(user.employee_id)) ||
+            (req.employee?.user_id && Number(req.employee.user_id) === Number(user.id)) ||
+            (req.employee?.user?.id && Number(req.employee.user.id) === Number(user.id)) ||
+            (user.nik_ktp && req.employee?.nik_ktp && req.employee.nik_ktp === user.nik_ktp)
+          );
 
           return (
             <div key={req.id} className={`bg-white rounded-xl border p-4 shadow-xs ${req.pj_status === 'pending' && req.status === 'pending' ? 'border-amber-100' : 'border-gray-100'}`}>

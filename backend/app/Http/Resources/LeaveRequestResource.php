@@ -40,6 +40,7 @@ class LeaveRequestResource extends JsonResource
             'created_at'     => $this->created_at?->toDateTimeString(),
             'employee'       => [
                 'id'         => $this->employee?->id,
+                'user_id'    => $this->employee?->user_id,
                 'name'       => $this->employee?->user?->name,
                 'nik_ktp'    => $this->employee?->nik_ktp,
                 'department' => $this->employee?->department?->name,
