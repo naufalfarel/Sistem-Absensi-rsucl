@@ -65,7 +65,7 @@ const typeConfig: Record<
   izin: { label: "Izin", color: "#2563EB", bg: "#EFF6FF", border: "#BFDBFE" },
   sakit: { label: "Sakit", color: "#0891B2", bg: "#ECFEFF", border: "#A5F3FC" },
   cuti_khusus: {
-    label: "Cuti Khusus / Diluar Tanggungan",
+    label: "Cuti",
     color: "#EA580C",
     bg: "#FFF7ED",
     border: "#FFEDD5",
@@ -1449,7 +1449,7 @@ export function ProfilePage({
               }}
               className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-[#16A34A] hover:bg-[#0d9240] text-white rounded-2xl text-[13px] font-semibold transition-all shadow-sm active:scale-[0.98]"
             >
-              <Plus size={16} /> Ajukan Cuti / Izin / Sakit
+              <Plus size={16} /> Ajukan Cuti Tahunan / Sakit
             </button>
             <button
               onClick={() => {
@@ -1458,7 +1458,7 @@ export function ProfilePage({
               }}
               className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl text-[13px] font-semibold transition-all shadow-sm active:scale-[0.98]"
             >
-              <Plus size={16} /> Ajukan Cuti Khusus / Diluar Tanggungan
+              <Plus size={16} /> Ajukan Cuti
             </button>
           </div>
 
@@ -1524,13 +1524,13 @@ export function ProfilePage({
                                 ? "I"
                                 : req.type === "sakit"
                                   ? "S"
-                                  : "CK"}
+                                  : "C"}
                           </span>
                         </div>
                         <div>
                           <span className="text-[13px] font-semibold text-gray-800">
                             {req.type === "cuti_khusus" && req.special_leave_category
-                              ? `Cuti Khusus (${req.special_leave_category.name}${req.special_leave_category_other ? ` - ${req.special_leave_category_other}` : ''})`
+                              ? `Cuti (${req.special_leave_category.name}${req.special_leave_category_other ? ` - ${req.special_leave_category_other}` : ''})`
                               : tc.label}
                           </span>
                           <p className="text-[11px] text-gray-400 mt-0.5">
@@ -1736,7 +1736,7 @@ export function ProfilePage({
                 <div className="bg-orange-50 border border-orange-100 rounded-xl px-3.5 py-3 flex items-center gap-2.5">
                   <div className="w-2.5 h-2.5 rounded-full bg-orange-500 animate-pulse" />
                   <p className="text-[12px] font-semibold text-orange-800">
-                    Jenis Pengajuan: Cuti Khusus / Diluar Tanggungan
+                    Jenis Pengajuan: Cuti
                   </p>
                 </div>
               )}
@@ -1745,7 +1745,7 @@ export function ProfilePage({
               {leaveType === "cuti_khusus" && (
                 <div className="space-y-1.5">
                   <label className="block text-[12px] font-medium text-gray-600">
-                    Kategori Cuti Khusus <span className="text-red-500">*</span>
+                    Kategori Cuti <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <select
@@ -1757,7 +1757,7 @@ export function ProfilePage({
                       }}
                       className="w-full pl-3.5 pr-9 py-2.5 border border-gray-200 rounded-xl text-[13px] bg-gray-50 focus:outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/15 transition-all text-gray-700 font-medium cursor-pointer appearance-none"
                     >
-                      <option value="">-- Pilih Kategori Cuti Khusus --</option>
+                      <option value="">-- Pilih Kategori Cuti --</option>
                       {categories.map((c) => (
                         <option key={c.id} value={String(c.id)}>
                           {c.name}
@@ -1783,7 +1783,7 @@ export function ProfilePage({
                 return (
                   <div className="space-y-1.5 mt-3">
                     <label className="block text-[12px] font-medium text-gray-600">
-                      {isSakit ? 'Jenis / Nama Penyakit yang Dialami' : 'Nama / Keterangan Cuti Khusus Lainnya'} <span className="text-red-500">*</span>
+                      {isSakit ? 'Jenis / Nama Penyakit yang Dialami' : 'Nama / Keterangan Cuti Lainnya'} <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
@@ -1872,8 +1872,7 @@ export function ProfilePage({
                     )}
                     {leaveType === "cuti_khusus" && (
                       <span className="ml-1 font-normal text-orange-600/90">
-                        — Cuti khusus / diluar tanggungan tidak memotong kuota
-                        cuti tahunan.
+                        — Tidak memotong kuota cuti tahunan.
                       </span>
                     )}
                   </p>

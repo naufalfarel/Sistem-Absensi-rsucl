@@ -16,7 +16,7 @@ type LeaveStatus = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'draft';
 const typeConfig: Record<LeaveType, { label: string; color: string; bg: string; border: string; initial: string }> = {
   cuti:        { label: 'Cuti Tahunan',                     color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE', initial: 'C' },
   sakit:       { label: 'Sakit',                             color: '#92400E', bg: '#FEF3C7', border: '#D97706', initial: 'S' },
-  cuti_khusus: { label: 'Cuti Khusus / Diluar Tanggungan',  color: '#EA580C', bg: '#FFF7ED', border: '#FFEDD5', initial: 'CK' },
+  cuti_khusus: { label: 'Cuti',                             color: '#EA580C', bg: '#FFF7ED', border: '#FFEDD5', initial: 'C' },
 };
 
 const statusConfig: Record<LeaveStatus, { label: string; color: string; bg: string; icon: typeof CheckCircle2 }> = {
@@ -788,13 +788,19 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
             onClick={() => { setShowForm(true); setLeaveType('cuti'); setFormError(''); }}
             className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-[#2563EB] hover:bg-[#1d4ed8] text-white rounded-2xl text-[13px] font-semibold transition-all shadow-sm shadow-blue-200 active:scale-[0.98] cursor-pointer"
           >
-            <Plus size={16} /> Ajukan Cuti
+            <Plus size={16} /> Ajukan Cuti Tahunan
           </button>
           <button
             onClick={() => { setShowForm(true); setLeaveType('sakit'); setFormError(''); }}
             className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-amber-700 hover:bg-amber-800 text-white rounded-2xl text-[13px] font-semibold transition-all shadow-sm shadow-amber-200 active:scale-[0.98] cursor-pointer"
           >
             <Plus size={16} /> Ajukan Sakit
+          </button>
+          <button
+            onClick={() => { setShowForm(true); setLeaveType('cuti_khusus'); setFormError(''); }}
+            className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl text-[13px] font-semibold transition-all shadow-sm shadow-orange-200 active:scale-[0.98] cursor-pointer"
+          >
+            <Plus size={16} /> Ajukan Cuti
           </button>
         </div>
 
@@ -815,7 +821,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
                   </div>
                   <div>
                     <p className="text-[14px] font-bold text-gray-900">
-                      {leaveType === 'cuti_khusus' ? 'Form Cuti Khusus / Diluar Tanggungan' : 'Form Pengajuan Cuti / Sakit'}
+                      {leaveType === 'cuti_khusus' ? 'Form Pengajuan Cuti' : leaveType === 'sakit' ? 'Form Pengajuan Sakit' : 'Form Pengajuan Cuti Tahunan'}
                     </p>
                     <p className="text-[11px] text-gray-500">Isi data pengajuan dengan lengkap dan benar</p>
                   </div>
@@ -894,7 +900,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
                   <div className="flex items-center gap-2.5 bg-orange-50 border border-orange-100 rounded-xl px-3.5 py-3">
                     <Info size={18} aria-hidden="true" />
                     <div>
-                      <p className="text-[12px] font-bold text-orange-800">Cuti Khusus / Diluar Tanggungan</p>
+                      <p className="text-[12px] font-bold text-orange-800">Pengajuan Cuti</p>
                       <p className="text-[11px] text-orange-600">Tidak memotong kuota cuti tahunan 12 hari</p>
                     </div>
                   </div>
@@ -903,16 +909,16 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
                     onClick={() => { setLeaveType('cuti'); setSelectedCategory(''); setCustomCategoryOther(''); clearAttachment(); }}
                     className="mt-2 text-[11px] text-[#2563EB] font-semibold hover:underline"
                   >
-                    ← Kembali ke Cuti / Sakit biasa
+                    ← Kembali ke Cuti Tahunan / Sakit
                   </button>
                 </div>
               )}
 
-              {/* Kategori Cuti Khusus */}
+              {/* Kategori Cuti */}
               {leaveType === 'cuti_khusus' && (
                 <div>
                   <label className="block text-[12px] font-semibold text-gray-600 mb-1.5">
-                    Kategori Cuti Khusus <span className="text-red-500">*</span>
+                    Kategori Cuti <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <select
@@ -1344,7 +1350,7 @@ export function LeaveRequestPage({ onBack }: LeaveRequestPageProps) {
                         <div>
                           <span className="text-[13px] font-bold text-gray-800">
                             {req.type === 'cuti_khusus' && req.special_leave_category
-                              ? `Cuti Khusus (${req.special_leave_category.name}${req.special_leave_category_other ? ` - ${req.special_leave_category_other}` : ''})`
+                              ? `Cuti (${req.special_leave_category.name}${req.special_leave_category_other ? ` - ${req.special_leave_category_other}` : ''})`
                               : tc.label}
                           </span>
                           <p className="text-[11px] text-gray-400 mt-0.5">Diajukan: {formatDate(req.created_at)}</p>
