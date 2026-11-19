@@ -37,7 +37,7 @@ export function LeaveApprovalTab({ user, onUpdateCount }: LeaveApprovalTabProps)
   const [typeFilter, setTypeFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterMonth, setFilterMonth] = useState<number>(0);
-  const [filterYear, setFilterYear]   = useState<number>(new Date().getFullYear());
+  const [filterYear, setFilterYear]   = useState<number>(0); // 0 = Semua Tahun (memastikan pengajuan tahun berjalan & tahun berikutnya otomatis muncul)
   const [confirmModal, setConfirmModal] = useState<{ id: number; action: 'approve' | 'reject'; name: string } | null>(null);
   const [adminNote, setAdminNote] = useState('');
   const [loading, setLoading] = useState(false);
@@ -106,7 +106,7 @@ export function LeaveApprovalTab({ user, onUpdateCount }: LeaveApprovalTabProps)
     if (!dateStr) return '';
     const date = new Date(dateStr);
     const months = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
-    return `${date.getDate()} ${months[date.getMonth()]}`;
+    return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
   };
 
   return (
@@ -158,6 +158,7 @@ export function LeaveApprovalTab({ user, onUpdateCount }: LeaveApprovalTabProps)
         month={filterMonth}
         year={filterYear}
         showAllMonthsOption={true}
+        showAllYearsOption={true}
         onMonthChange={setFilterMonth}
         onYearChange={setFilterYear}
       />
