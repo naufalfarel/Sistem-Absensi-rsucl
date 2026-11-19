@@ -847,14 +847,15 @@ function ShiftPopover({ shifts, currentScheduleIds, onToggleSelect, onSelectSpec
 // ── Main JadwalShiftTab Component ──────────────────────────────────────
 export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
   const { logoUrl, user: currentUser, refreshUser } = useAuth();
-  const canEditOwnSchedule = !!(currentUser?.can_edit_own_schedule ?? user.can_edit_own_schedule);
+  const effectiveUser = (currentUser as any) || user;
+  const canEditOwnSchedule = !!(effectiveUser?.can_edit_own_schedule ?? user.can_edit_own_schedule);
   useEffect(() => { void refreshUser(); }, []);
   const today = new Date();
   const [viewYear, setViewYear]   = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth() + 1); // 1-12
   const [daysInMonth, setDaysInMonth] = useState(0);
 
-  const pjDepts = (user as any)?.pj_departments || [];
+  const pjDepts = (effectiveUser as any)?.pj_departments || (user as any)?.pj_departments || [];
   const [activeDeptId, setActiveDeptId] = useState<number>(0);
   const [shifts, setShifts]         = useState<ShiftSchedule[]>([]);
   const [monthlyData, setMonthlyData] = useState<EmployeeMonthlySchedule[]>([]);
@@ -926,7 +927,7 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
       const res = await scheduleApi.update(id, {
         name: editName.trim(),
         shift_type: 'normal', // Selalu 'normal' (GPS Wajib) untuk PJ Bagian
-        owner_department_id: activeDeptId || user.pj_bagian_department_id || null, // Otomatis ke departemen aktif/PJ Bagian
+        owner_department_id: activeDeptId || effectiveUser.pj_bagian_department_id || user.pj_bagian_department_id || null, // Otomatis ke departemen aktif/PJ Bagian
         children: editChildren.map(c => ({
           id: c.id,
           name: c.name,
@@ -992,12 +993,12 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
           if (activeDeptId === 0) {
             return pjDeptIds.length > 0
               ? pjDeptIds.includes(Number(e.department_id))
-              : Number(e.department_id) === Number(user.pj_bagian_department_id);
+              : Number(e.department_id) === Number(effectiveUser?.pj_bagian_department_id || user.pj_bagian_department_id);
           }
           return Number(e.department_id) === Number(activeDeptId);
         });
         // Tambahkan PJ Bagian itu sendiri jika belum ada di list (department_id bisa beda)
-        const pjUserId = (user as any)?.id;
+        const pjUserId = (effectiveUser as any)?.id || (user as any)?.id;
         const selfInList = pjUserId && eRes.data.find((e: any) => Number(e.user_id) === Number(pjUserId));
         const selfInFiltered = selfInList && filtered.find((e: any) => Number(e.user_id) === Number(pjUserId));
         if (selfInList && !selfInFiltered) {
@@ -1010,9 +1011,9 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
     } finally {
       setLoading(false);
     }
-  }, [viewYear, viewMonth, activeDeptId, user, pjDepts]);
+  }, [viewYear, viewMonth, activeDeptId, effectiveUser, user, pjDepts]);
 
-  const pjScheduleRow = monthlyData.find(row => Number(row.employee_id) === Number((user as any)?.employee_id));
+  const pjScheduleRow = monthlyData.find(row => Number(row.employee_id) === Number((effectiveUser as any)?.employee_id || (user as any)?.employee_id));
 
 
   useEffect(() => {
@@ -1953,7 +1954,7 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
             onDeptChange={(id) => {
               setActiveDeptId(id === 'all' ? 0 : Number(id));
             }}
-            departments={(user as any)?.pj_departments || (user.pj_bagian_department_id ? [{ id: user.pj_bagian_department_id, name: user.pj_bagian_department || 'Departemen Anda' }] : [])}
+            departments={(effectiveUser as any)?.pj_departments?.length ? (effectiveUser as any).pj_departments : (user as any)?.pj_departments || ((effectiveUser.pj_bagian_department_id || user.pj_bagian_department_id) ? [{ id: effectiveUser.pj_bagian_department_id || user.pj_bagian_department_id, name: (effectiveUser as any).pj_bagian_department || user.pj_bagian_department || 'Departemen Anda' }] : [])}
           />
         </div>
         {/* Calendar Title Bar */}
@@ -2251,10 +2252,10 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
       )}
 
       {/* Modals */}
-      {showAddModal && <AddShiftModal onClose={() => setShowAddModal(false)} onAdd={handleAdd} user={user} activeDeptId={activeDeptId} />}
+      {showAddModal && <AddShiftModal onClose={() => setShowAddModal(false)} onAdd={handleAdd} user={effectiveUser} activeDeptId={activeDeptId} />}
       {showBulkModal && (
         <BulkAssignModal
-          user={user}
+          user={effectiveUser}
           shifts={shifts.filter(s => s.status === 'approved')}
           employees={employees}
           year={viewYear}
@@ -2286,7 +2287,7 @@ export function JadwalShiftTab({ user }: JadwalShiftTabProps) {
       {/* Emergency Shift Modal */}
       {showEmergencyModal && (
         <EmergencyShiftModal
-          user={user}
+          user={effectiveUser}
           employees={employees}
           shifts={shifts.filter(s => s.status === 'approved')}
           onClose={() => setShowEmergencyModal(false)}

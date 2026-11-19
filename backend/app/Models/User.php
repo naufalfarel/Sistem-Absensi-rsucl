@@ -120,18 +120,18 @@ class User extends Authenticatable
 
     /**
      * Mengambil daftar ID departemen yang diawasi oleh PJ Bagian ini.
+     * Menggunakan relasi pivot pjDepartments sebagai sumber utama (multi-unit PJ).
+     * Kolom legacy pj_bagian_department_id hanya digunakan sebagai fallback jika pivot kosong.
+     * Tidak memasukkan employee->department_id agar unit kerja staf asal tidak tercampur.
      * 
      * @return array
      */
     public function getPjDepartmentIds(): array
     {
         if ($this->isPjBagian()) {
-            $ids = $this->pjDepartments()->pluck('departments.id')->toArray();
-            if ($this->pj_bagian_department_id) {
-                $ids[] = (int) $this->pj_bagian_department_id;
-            }
-            if ($this->employee && $this->employee->department_id) {
-                $ids[] = (int) $this->employee->department_id;
+            $ids = $this->pjDepartments()->pluck('departments.id')->map(fn($id) => (int)$id)->toArray();
+            if (empty($ids) && $this->pj_bagian_department_id) {
+                $ids = [(int) $this->pj_bagian_department_id];
             }
             return array_values(array_unique(array_filter($ids)));
         }

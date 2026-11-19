@@ -34,7 +34,13 @@ class EmployeeController extends Controller
         $user = $request->user();
         $query = Employee::with(['user', 'department', 'position', 'todayAttendance', 'disciplinarySanctions']);
         if ($user && $user->role === 'pj_bagian') {
-            $query->whereIn('department_id', $user->getPjDepartmentIds());
+            $pjDeptIds = $user->getPjDepartmentIds();
+            $query->where(function ($q) use ($pjDeptIds, $user) {
+                $q->whereIn('department_id', $pjDeptIds);
+                if ($user->employee) {
+                    $q->orWhere('id', $user->employee->id);
+                }
+            });
             $query->where('status', 'active');
         }
 
@@ -267,8 +273,10 @@ class EmployeeController extends Controller
         foreach ($departmentIds as $deptId) {
             $otherPjs = User::where('role', 'pj_bagian')
                 ->where('id', '!=', $targetUser->id)
-                ->whereHas('pjDepartments', function ($q) use ($deptId) {
-                    $q->where('departments.id', $deptId);
+                ->where(function ($q) use ($deptId) {
+                    $q->whereHas('pjDepartments', function ($sq) use ($deptId) {
+                        $sq->where('departments.id', $deptId);
+                    })->orWhere('pj_bagian_department_id', $deptId);
                 })
                 ->get();
 
@@ -292,7 +300,7 @@ class EmployeeController extends Controller
                     ]);
                 } else {
                     $pj->update([
-                        'pj_bagian_department_id' => $pj->pjDepartments->first()?->id,
+                        'pj_bagian_department_id' => $pj->pjDepartments()->first()?->id,
                     ]);
                 }
             }
