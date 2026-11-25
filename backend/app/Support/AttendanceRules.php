@@ -800,17 +800,13 @@ class AttendanceRules
 
         // Resolusi shift pegawai untuk hari tersebut
         $todayShift = self::resolveShiftFor($employee, $attendanceDate);
-        $endTimeStr = '17:00:00'; // Default fallback
-
-        if ($todayShift) {
-            $endTimeStr = $todayShift->end_time;
-        }
+        $endTimeStr = $todayShift?->end_time ?: '17:00:00'; // Default fallback
 
         // Bentuk Carbon instance untuk jam berakhir shift pada tanggal absensi
         $shiftEnd = Carbon::parse($attendanceDate->toDateString().' '.$endTimeStr);
 
         // Penanganan jika shift start > shift end (shift malam melewati tengah malam)
-        $startTimeStr = $todayShift ? $todayShift->start_time : '08:30:00';
+        $startTimeStr = $todayShift?->start_time ?: '08:30:00';
         $shiftStart = Carbon::parse($attendanceDate->toDateString().' '.$startTimeStr);
         if ($shiftEnd->lte($shiftStart)) {
             $shiftEnd->addDay();

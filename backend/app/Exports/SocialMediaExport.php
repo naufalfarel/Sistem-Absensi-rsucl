@@ -2,8 +2,8 @@
 
 namespace App\Exports;
 
+use App\Exports\Concerns\ResolvesExportLogo;
 use App\Models\Employee;
-use App\Models\Setting;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
@@ -14,13 +14,13 @@ use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithCustomValueBinder;
 use Maatwebsite\Excel\Events\AfterSheet;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
-use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 use PhpOffice\PhpSpreadsheet\Cell\Cell;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Cell\DefaultValueBinder;
 
 class SocialMediaExport extends DefaultValueBinder implements FromCollection, WithHeadings, ShouldAutoSize, WithStyles, WithDrawings, WithCustomStartCell, WithEvents, WithCustomValueBinder
 {
+    use ResolvesExportLogo;
     /**
      * Menyimpan index baris yang bertindak sebagai subheader departemen.
      *
@@ -130,35 +130,7 @@ class SocialMediaExport extends DefaultValueBinder implements FromCollection, Wi
      */
     public function drawings()
     {
-        $drawing = new Drawing();
-        $drawing->setName('Logo RSUCL');
-        $drawing->setDescription('Logo Instansi Rumah Sakit Umum Cempaka Lima');
-        
-        $logoUrl = Setting::get('logo_url');
-        $logoPath = null;
-
-        if ($logoUrl && $logoUrl !== 'none') {
-            $path = parse_url($logoUrl, PHP_URL_PATH);
-            if ($path) {
-                $relativePath = str_replace('/storage/', 'app/public/', $path);
-                if (file_exists(storage_path($relativePath))) {
-                    $logoPath = storage_path($relativePath);
-                }
-            }
-        }
-        
-        if (!$logoPath || !file_exists($logoPath)) {
-            $logoPath = public_path('rsucl_wide_logo.png');
-        }
-
-        if (file_exists($logoPath)) {
-            $drawing->setPath($logoPath);
-            $drawing->setHeight(54);
-            $drawing->setCoordinates('A1');
-            return $drawing;
-        }
-
-        return [];
+        return $this->buildLogoDrawing();
     }
 
     /**
@@ -229,7 +201,9 @@ class SocialMediaExport extends DefaultValueBinder implements FromCollection, Wi
 
                 // 1. Format nomor urut & NIK KTP di-tengah secara visual untuk baris data umum
                 $highestRow = $sheet->getHighestRow();
-                $sheet->getStyle("A7:B{$highestRow}")->getAlignment()->setHorizontal('center');
+                if ($highestRow >= 7) {
+                    $sheet->getStyle("A7:B{$highestRow}")->getAlignment()->setHorizontal('center');
+                }
 
                 // 2. Format seluruh baris subheader departemen yang tersimpan
                 foreach ($this->deptHeaderRows as $rowNum) {

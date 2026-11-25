@@ -2,8 +2,8 @@
 
 namespace App\Exports;
 
+use App\Exports\Concerns\ResolvesExportLogo;
 use App\Models\Employee;
-use App\Models\Setting;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithCustomStartCell;
@@ -18,11 +18,11 @@ use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Cell\DefaultValueBinder;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
-use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 class EmployeeExport extends DefaultValueBinder implements FromCollection, WithHeadings, ShouldAutoSize, WithStyles, WithDrawings, WithCustomStartCell, WithEvents, WithCustomValueBinder
 {
+    use ResolvesExportLogo;
     public function __construct(private readonly ?int $departmentId = null)
     {
     }
@@ -82,19 +82,7 @@ class EmployeeExport extends DefaultValueBinder implements FromCollection, WithH
 
     public function drawings()
     {
-        $logoPath = $this->resolveLogoPath();
-        if (! $logoPath) {
-            return [];
-        }
-
-        $drawing = new Drawing();
-        $drawing->setName('Logo RSUCL');
-        $drawing->setDescription('Logo Rumah Sakit Umum Cempaka Lima');
-        $drawing->setPath($logoPath);
-        $drawing->setHeight(54);
-        $drawing->setCoordinates('A1');
-
-        return $drawing;
+        return $this->buildLogoDrawing();
     }
 
     public function styles(Worksheet $sheet): array
@@ -142,27 +130,13 @@ class EmployeeExport extends DefaultValueBinder implements FromCollection, WithH
                 $sheet->getStyle("A6:L{$highestRow}")->getBorders()->getAllBorders()
                     ->setBorderStyle(Border::BORDER_THIN)
                     ->getColor()->setRGB('D1D5DB');
-                $sheet->getStyle("A7:C{$highestRow}")->getAlignment()->setHorizontal('center');
-                $sheet->getStyle("G7:L{$highestRow}")->getAlignment()->setHorizontal('center');
-                $sheet->freezePane('A7');
+                if ($highestRow >= 7) {
+                    $sheet->getStyle("A7:C{$highestRow}")->getAlignment()->setHorizontal('center');
+                    $sheet->getStyle("G7:L{$highestRow}")->getAlignment()->setHorizontal('center');
+                    $sheet->freezePane('A7');
+                }
                 $sheet->setAutoFilter("A6:L{$highestRow}");
             },
         ];
-    }
-
-    private function resolveLogoPath(): ?string
-    {
-        $logoUrl = Setting::get('logo_url');
-        if ($logoUrl && $logoUrl !== 'none') {
-            $urlPath = parse_url($logoUrl, PHP_URL_PATH);
-            $candidate = $urlPath ? storage_path(str_replace('/storage/', 'app/public/', $urlPath)) : null;
-            if ($candidate && file_exists($candidate)) {
-                return $candidate;
-            }
-        }
-
-        $fallback = public_path('rsucl_wide_logo.png');
-
-        return file_exists($fallback) ? $fallback : null;
     }
 }

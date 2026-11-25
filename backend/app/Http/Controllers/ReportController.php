@@ -37,9 +37,9 @@ class ReportController extends Controller
         $absenceService->reconcileOutstanding();
         $absenceService->reconcileDate(today('Asia/Jakarta'));
 
-        $today     = today()->toDateString();
-        $month     = (int)$request->query('month', now('Asia/Jakarta')->month);
-        $year      = (int)$request->query('year', now('Asia/Jakarta')->year);
+        $today     = today('Asia/Jakarta')->toDateString();
+        $month     = max(1, min(12, (int)$request->query('month', now('Asia/Jakarta')->month)));
+        $year      = max(2020, min(2100, (int)$request->query('year', now('Asia/Jakarta')->year)));
         $totalEmp  = Employee::where('status', 'active')->count();
 
         // ── 1. Data absensi hari ini ──
@@ -242,7 +242,7 @@ class ReportController extends Controller
         }
 
         // ── 8. Rangking Kedisiplinan ──
-        $todayDate = today()->toDateString();
+        $todayDate = today('Asia/Jakarta')->toDateString();
         $dailyRankingRecords = Attendance::whereDate('date', $todayDate)
             ->where('status', 'hadir')
             ->whereNotNull('check_in')
@@ -250,7 +250,7 @@ class ReportController extends Controller
             ->get();
 
         $dailySorted = $dailyRankingRecords->map(function($att) {
-            $startTimeStr = $att->schedule ? ($att->schedule->start_time ?? '08:30:00') : '08:30:00';
+            $startTimeStr = ($att->schedule?->start_time ?: '08:30:00');
             $dateStr = $att->date instanceof \Carbon\Carbon ? $att->date->toDateString() : (string) $att->date;
             $windowOpen = \Carbon\Carbon::parse($dateStr . ' ' . $startTimeStr)->subMinutes(150);
             $checkIn = \Carbon\Carbon::parse($dateStr . ' ' . $att->check_in);
@@ -296,7 +296,7 @@ class ReportController extends Controller
             $hadirWithDelayCount = $hadirRecords->count();
             
             foreach ($hadirRecords as $att) {
-                $startTimeStr = $att->schedule ? ($att->schedule->start_time ?? '08:30:00') : '08:30:00';
+                $startTimeStr = ($att->schedule?->start_time ?: '08:30:00');
                 $dateStr = $att->date instanceof \Carbon\Carbon ? $att->date->toDateString() : (string) $att->date;
                 $windowOpen = \Carbon\Carbon::parse($dateStr . ' ' . $startTimeStr)->subMinutes(150);
                 $checkIn = \Carbon\Carbon::parse($dateStr . ' ' . $att->check_in);
@@ -462,13 +462,18 @@ class ReportController extends Controller
             $cuti  = $empRecords->where('status', 'cuti')->count();
             $alpha = $empRecords->where('status', 'alpha')->count();
 
-            // Hitung akumulasi durasi kerja dalam menit (selisih check-in & check-out)
+            // Hitung akumulasi durasi kerja dalam menit (gunakan duration_min yang sudah menghitung lintas hari)
             $totalDurationMin = 0;
             foreach ($empRecords as $r) {
-                if ($r['check_in'] && $r['check_out']) {
+                if (isset($r['duration_min']) && $r['duration_min'] !== null) {
+                    $totalDurationMin += (int) $r['duration_min'];
+                } elseif (!empty($r['check_in']) && !empty($r['check_out'])) {
                     $checkInTime = $r['effective_checkin_time'] ?? $r['check_in'];
                     $in  = strtotime($checkInTime);
                     $out = strtotime($r['check_out']);
+                    if ($out < $in) {
+                        $out += 86400; // Shift malam/lintas hari
+                    }
                     $totalDurationMin += (int) round(($out - $in) / 60);
                 }
             }
@@ -489,9 +494,10 @@ class ReportController extends Controller
                         // Ignore
                     }
                 } else {
-                    $attRecord = $empRecords->first(function($r) use ($req) {
+                    $reqDateStr = $req->date instanceof \Carbon\Carbon ? $req->date->toDateString() : (string) $req->date;
+                    $attRecord = $empRecords->first(function($r) use ($reqDateStr) {
                         $rDate = $r['date'] instanceof \Carbon\Carbon ? $r['date']->toDateString() : $r['date'];
-                        return $rDate === $req->date->toDateString();
+                        return $rDate === $reqDateStr;
                     });
                     if ($attRecord) {
                         $overtimeMinutes += $attRecord['overtime_minutes'] ?? 0;
@@ -582,19 +588,23 @@ class ReportController extends Controller
      */
     public function latenessRekap(Request $request)
     {
-        $month = (int)$request->query('month', now('Asia/Jakarta')->month);
-        $year  = (int)$request->query('year', now('Asia/Jakarta')->year);
+        $month = max(1, min(12, (int)$request->query('month', now('Asia/Jakarta')->month)));
+        $year  = max(2020, min(2100, (int)$request->query('year', now('Asia/Jakarta')->year)));
         $departmentFilter = $request->query('department', 'all');
 
         $ratePerMinute = (int) \App\Models\Setting::get('late_fee_per_minute', '500');
 
-        $employeesQuery = Employee::with(['user', 'department', 'position'])
+        $employeesQuery = Employee::with(['user', 'department', 'position', 'schedules'])
             ->where('status', 'active');
 
         if ($departmentFilter && $departmentFilter !== 'all') {
-            $employeesQuery->whereHas('department', function ($q) use ($departmentFilter) {
-                $q->where('name', $departmentFilter);
-            });
+            if (is_numeric($departmentFilter)) {
+                $employeesQuery->where('department_id', (int) $departmentFilter);
+            } else {
+                $employeesQuery->whereHas('department', function ($q) use ($departmentFilter) {
+                    $q->where('name', $departmentFilter);
+                });
+            }
         }
 
         $employees = $employeesQuery->get()
@@ -629,10 +639,10 @@ class ReportController extends Controller
                 if (!$dateStr) continue;
 
                 $shiftName = $r->schedule?->name ?? 'Reguler';
-                $shiftStartStr = $r->schedule?->start_time ?? '08:30:00';
+                $shiftStartStr = ($r->schedule?->start_time ?: '08:30:00');
 
                 // Fallback jika schedule pada record absensi null
-                if (!$r->schedule && isset($emp->schedules)) {
+                if (!$r->schedule && $emp->relationLoaded('schedules')) {
                     $dateCarbon = \Carbon\Carbon::parse($dateStr);
                     $dayName = $dayMap[$dateCarbon->dayOfWeek];
                     $sched = $emp->schedules->first(fn($s) => isset($s->pivot) && $s->pivot->day_of_week === $dayName);
@@ -643,10 +653,10 @@ class ReportController extends Controller
                 }
 
                 $lateMins = 0;
-                if ($checkIn) {
+                if ($checkIn && $shiftStartStr) {
                     $inTimeSec = strtotime($dateStr . ' ' . $checkIn);
                     $shiftStartSec = strtotime($dateStr . ' ' . $shiftStartStr);
-                    if ($inTimeSec > $shiftStartSec) {
+                    if ($inTimeSec !== false && $shiftStartSec !== false && $inTimeSec > $shiftStartSec) {
                         $lateMins = (int) floor(($inTimeSec - $shiftStartSec) / 60);
                     }
                 }

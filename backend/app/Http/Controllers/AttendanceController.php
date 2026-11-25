@@ -1581,8 +1581,9 @@ class AttendanceController extends Controller
         if ($perPage < 1) {
             $perPage = 20;
         }
-        if ($perPage > 100) {
-            $perPage = 100;
+        $maxPerPage = $request->user()?->isPjOrAdmin() ? 1000 : 100;
+        if ($perPage > $maxPerPage) {
+            $perPage = $maxPerPage;
         }
 
         $col = collect($rows);
@@ -1819,7 +1820,7 @@ class AttendanceController extends Controller
                         $status = 'alpha';
                         $note = 'Tidak Hadir Tanpa Keterangan'.($holiday ? ' (Mangkir Penugasan)' : '');
 
-                        if ($carbonDate->isToday() && $matchingShift) {
+                        if ($carbonDate->isToday() && $matchingShift && ! empty($matchingShift->start_time) && ! empty($matchingShift->end_time)) {
                             $now = Carbon::now('Asia/Jakarta');
                             $shiftStart = $matchingShift->start_time;
                             $resolvedCloseTime = $matchingShift->checkin_window_end_time;
@@ -1840,6 +1841,9 @@ class AttendanceController extends Controller
                                 $status = 'belum_hadir';
                                 $note = 'Belum Absen Masuk';
                             }
+                        } elseif ($carbonDate->isToday()) {
+                            $status = 'belum_hadir';
+                            $note = 'Belum Absen Masuk';
                         }
 
                         $rows[] = $this->formatRowForAbsent($emp, $targetDate, $status, $note, $matchingShift);
@@ -1903,15 +1907,15 @@ class AttendanceController extends Controller
 
         // Sort: date DESC, name A-Z
         usort($rows, function ($a, $b) {
-            $dateA = $a['row_type'] === 'leave_period' ? $a['start_date'] : $a['date'];
-            $dateB = $b['row_type'] === 'leave_period' ? $b['start_date'] : $b['date'];
+            $dateA = (string) (($a['row_type'] === 'leave_period' ? $a['start_date'] : $a['date']) ?? '');
+            $dateB = (string) (($b['row_type'] === 'leave_period' ? $b['start_date'] : $b['date']) ?? '');
 
             $dateComp = strcmp($dateB, $dateA);
             if ($dateComp !== 0) {
                 return $dateComp;
             }
 
-            return strcmp($a['employee']['name'], $b['employee']['name']);
+            return strcmp((string) ($a['employee']['name'] ?? ''), (string) ($b['employee']['name'] ?? ''));
         });
 
         return $rows;
@@ -1969,7 +1973,7 @@ class AttendanceController extends Controller
         return [
             'id' => 'leave_'.$leave->id,
             'employee_id' => $emp->id,
-            'date' => $date,
+            'date' => $date instanceof Carbon ? $date->toDateString() : $date,
             'start_date' => $leave->start_date ? $leave->start_date->toDateString() : null,
             'end_date' => $leave->end_date ? $leave->end_date->toDateString() : null,
             'days' => $leave->days_count,

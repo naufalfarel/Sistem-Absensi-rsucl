@@ -274,9 +274,24 @@ export function StaffAttendanceTab({ user }: StaffAttendanceTabProps) {
     fetchData();
   };
 
+  const escapeHtml = (value: unknown): string => {
+    const str = String(value ?? "");
+    return str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  };
+
   const formatDateShort = (dateStr?: string | null) => {
     if (!dateStr) return '-';
-    const d = new Date(dateStr);
+    const clean = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
+    const parts = clean.split('-');
+    const d = parts.length === 3
+      ? new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]))
+      : new Date(dateStr);
+    if (Number.isNaN(d.getTime())) return dateStr;
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
     const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
     return `${days[d.getDay()]}, ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
@@ -338,10 +353,19 @@ export function StaffAttendanceTab({ user }: StaffAttendanceTabProps) {
   const exportToExcel = async () => {
     setExporting(true);
     try {
-      // Ambil seluruh data terfilter (sampai 1000 rekaman) untuk hasil ekspor komprehensif
-      const exportParams = { ...activeParams, page: 1, per_page: 1000 };
-      const res = await attendanceApi.historyAdmin(exportParams);
-      const exportRecords: AttendanceRecord[] = (res.success && res.data && res.data.length > 0) ? res.data : records;
+      // Ambil seluruh halaman data terfilter agar tidak terpotong batas pagination
+      const exportRecords: AttendanceRecord[] = [];
+      let page = 1;
+      let lastPage = 1;
+      do {
+        const res = await attendanceApi.historyAdmin({ ...activeParams, page, per_page: 1000 });
+        if (!res.success) {
+          throw new Error('Gagal memuat data absensi staf.');
+        }
+        exportRecords.push(...(res.data || []));
+        lastPage = Math.max(1, res.meta?.last_page ?? 1);
+        page += 1;
+      } while (page <= lastPage);
 
       const sanitizedDeptName = currentDeptLabel.replace(/[^a-zA-Z0-9]/g, '_');
       const sanitizedPeriod = activePeriodText.replace(/[^a-zA-Z0-9]/g, '_');
@@ -359,14 +383,14 @@ export function StaffAttendanceTab({ user }: StaffAttendanceTabProps) {
         return `
           <tr>
             <td style="border:1px solid #000000;text-align:center;padding:5px 8px;">${idx + 1}</td>
-            <td style="border:1px solid #000000;text-align:left;padding:5px 8px;font-weight:bold;">${r.employee?.name || 'Karyawan'}</td>
-            <td style="border:1px solid #000000;text-align:center;padding:5px 8px;">${formatDateShort(r.date)}</td>
-            <td style="border:1px solid #000000;text-align:left;padding:5px 8px;">${r.employee?.department || currentDeptLabel}</td>
-            <td style="border:1px solid #000000;text-align:center;padding:5px 8px;">${r.shift_name || 'Reguler'}</td>
-            <td style="border:1px solid #000000;text-align:center;padding:5px 8px;">${r.check_in ? r.check_in.substring(0, 5) + ' WIB' : '-'}</td>
-            <td style="border:1px solid #000000;text-align:center;padding:5px 8px;">${r.check_out ? r.check_out.substring(0, 5) + ' WIB' : '-'}</td>
-            <td style="border:1px solid #000000;text-align:center;padding:5px 8px;font-weight:bold;">${statusText}</td>
-            <td style="border:1px solid #000000;text-align:left;padding:5px 8px;font-style:italic;">${noteText}</td>
+            <td style="border:1px solid #000000;text-align:left;padding:5px 8px;font-weight:bold;">${escapeHtml(r.employee?.name || 'Karyawan')}</td>
+            <td style="border:1px solid #000000;text-align:center;padding:5px 8px;">${escapeHtml(formatDateShort(r.date))}</td>
+            <td style="border:1px solid #000000;text-align:left;padding:5px 8px;">${escapeHtml(r.employee?.department || currentDeptLabel)}</td>
+            <td style="border:1px solid #000000;text-align:center;padding:5px 8px;">${escapeHtml(r.shift_name || 'Reguler')}</td>
+            <td style="border:1px solid #000000;text-align:center;padding:5px 8px;">${r.check_in ? escapeHtml(r.check_in.substring(0, 5)) + ' WIB' : '-'}</td>
+            <td style="border:1px solid #000000;text-align:center;padding:5px 8px;">${r.check_out ? escapeHtml(r.check_out.substring(0, 5)) + ' WIB' : '-'}</td>
+            <td style="border:1px solid #000000;text-align:center;padding:5px 8px;font-weight:bold;">${escapeHtml(statusText)}</td>
+            <td style="border:1px solid #000000;text-align:left;padding:5px 8px;font-style:italic;">${escapeHtml(noteText)}</td>
           </tr>
         `;
       }).join('');

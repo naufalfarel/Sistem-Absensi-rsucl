@@ -37,7 +37,6 @@ import {
   attendanceApi,
   AttendanceRecord,
   departmentApi,
-  getToken,
   overtimeApi,
   leaveApi,
   assignmentLetterApi,
@@ -139,21 +138,89 @@ export function ReportsTab() {
 
 
 
+  const resolveSelectedDepartmentName = (): string | null => {
+    if (selectedDepartment === "all") return null;
+    return (
+      departments.find((d) => String(d.id) === String(selectedDepartment))?.name ??
+      selectedDepartment
+    );
+  };
+
+  const escapeHtml = (value: unknown): string => {
+    const str = String(value ?? "");
+    return str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  };
+
+  const matchesYearMonth = (dateStr: string | undefined | null, year: number, month: number): boolean => {
+    if (!dateStr) return false;
+    const clean = dateStr.includes("T") ? dateStr.split("T")[0] : dateStr;
+    const parts = clean.split("-");
+    if (parts.length < 2) return false;
+    return Number(parts[0]) === year && Number(parts[1]) === month;
+  };
+
+  const fetchAllPaginated = async <T,>(
+    fetcher: (page: number) => Promise<{
+      success: boolean;
+      data: T[];
+      meta?: { last_page?: number };
+    }>,
+    failMessage: string,
+  ): Promise<T[]> => {
+    const items: T[] = [];
+    let page = 1;
+    let lastPage = 1;
+    do {
+      const res = await fetcher(page);
+      if (!res.success) {
+        throw new Error(failMessage);
+      }
+      items.push(...(res.data || []));
+      lastPage = Math.max(1, res.meta?.last_page ?? 1);
+      page += 1;
+    } while (page <= lastPage);
+    return items;
+  };
+
   /**
-   * Mengambil data base64 dari file gambar URL (digunakan untuk menyematkan logo resmi pada file PDF).
+   * Mengambil data base64 dari file gambar URL (digunakan untuk menyematkan logo resmi pada Excel & PDF).
+   * Memastikan fallback ke aset lokal jika URL kustom tidak dapat diakses atau bukan gambar valid.
    */
-  const getBase64Image = async (imgUrl: string): Promise<string> => {
-    try {
-      const response = await fetch(imgUrl);
+  const getBase64Image = async (imgUrl: string, fallbackUrl?: string): Promise<string> => {
+    const tryLoad = async (url: string): Promise<string> => {
+      const response = await fetch(url);
+      if (!response.ok) return "";
       const blob = await response.blob();
+      if (!blob.type.startsWith("image/")) return "";
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
+        reader.onloadend = () => resolve((reader.result as string) || "");
         reader.onerror = reject;
         reader.readAsDataURL(blob);
       });
+    };
+
+    try {
+      const primary = await tryLoad(imgUrl);
+      if (primary) return primary;
+      if (fallbackUrl && fallbackUrl !== imgUrl) {
+        return await tryLoad(fallbackUrl);
+      }
+      return "";
     } catch (err) {
-      console.error(err);
+      console.error("Failed to load logo image:", err);
+      if (fallbackUrl && fallbackUrl !== imgUrl) {
+        try {
+          return await tryLoad(fallbackUrl);
+        } catch {
+          return "";
+        }
+      }
       return "";
     }
   };
@@ -258,19 +325,7 @@ export function ReportsTab() {
 
       // Load logo as base64 for inline embedding in HTML Excel
       const logoPath = logoUrl && logoUrl !== "none" ? logoUrl : rsLogoImg;
-      let base64Logo = "";
-      try {
-        const response = await fetch(logoPath);
-        const blob = await response.blob();
-        base64Logo = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(blob);
-        });
-      } catch (e) {
-        console.error("Failed to load logo for Excel", e);
-      }
+      const base64Logo = await getBase64Image(logoPath, rsLogoImg);
 
       const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
       const defaultDateFrom = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-01`;
@@ -330,14 +385,13 @@ export function ReportsTab() {
         ? `<img src="${base64Logo}" width="140" height="54" style="display:block;" />`
         : '<span style="font-size:11pt;font-weight:bold;color:#16A34A;">RSUCL</span>';
 
-      const deptSuffix =
-        selectedDepartment !== "all"
-          ? `_${selectedDepartment.replace(/\s+/g, "_")}`
-          : "";
-      const deptLabelText =
-        selectedDepartment !== "all"
-          ? ` | Departemen: ${selectedDepartment.toUpperCase()}`
-          : "";
+      const deptNameFilter = resolveSelectedDepartmentName();
+      const deptSuffix = deptNameFilter
+        ? `_${deptNameFilter.replace(/\s+/g, "_")}`
+        : "";
+      const deptLabelText = deptNameFilter
+        ? ` | Departemen: ${escapeHtml(deptNameFilter.toUpperCase())}`
+        : "";
 
       if (type === "harian") {
         const res = await attendanceApi.history(selectedMonth, selectedYear);
@@ -346,12 +400,9 @@ export function ReportsTab() {
           return;
         }
 
-        const filteredData =
-          selectedDepartment !== "all"
-            ? res.data.filter(
-                (r) => r.employee?.department === selectedDepartment,
-              )
-            : res.data;
+        const filteredData = deptNameFilter
+          ? res.data.filter((r) => r.employee?.department === deptNameFilter)
+          : res.data;
 
         // Sort by department name (A-Z), then employee name (A-Z)
         const sortedData = [...filteredData].sort((a, b) => {
@@ -370,7 +421,7 @@ export function ReportsTab() {
         sortedData.forEach((r) => {
           const dept = r.employee?.department ?? "UMUM";
           if (dept !== lastDept) {
-            bodyRows += `<tr class="dept-row"><td colspan="10">${dept}</td></tr>`;
+            bodyRows += `<tr class="dept-row"><td colspan="10">${escapeHtml(dept)}</td></tr>`;
             lastDept = dept;
           }
           const dur = r.duration_min
@@ -385,15 +436,15 @@ export function ReportsTab() {
 
           bodyRows += `<tr>
             <td class="center">${rowNum++}</td>
-            <td class="center" style="mso-number-format:'\\@';" x:str>${r.employee?.nik_ktp ?? "--"}</td>
-            <td class="bold">${r.employee?.name ?? "Karyawan"}</td>
-            <td class="center">${r.date || "--"}</td>
-            <td>${dept}</td>
-            <td class="center">${r.check_in ?? "--"}</td>
-            <td class="center">${r.check_out ?? "--"}</td>
+            <td class="center" style="mso-number-format:'\\@';" x:str>${escapeHtml(r.employee?.nik_ktp ?? "--")}</td>
+            <td class="bold">${escapeHtml(r.employee?.name ?? "Karyawan")}</td>
+            <td class="center">${escapeHtml(r.date || "--")}</td>
+            <td>${escapeHtml(dept)}</td>
+            <td class="center">${escapeHtml(r.check_in ?? "--")}</td>
+            <td class="center">${escapeHtml(r.check_out ?? "--")}</td>
             <td class="center">${dur}</td>
             <td class="center">${otStr}</td>
-            <td class="center bold">${r.status?.toUpperCase() ?? "--"}</td>
+            <td class="center bold">${escapeHtml(r.status?.toUpperCase() ?? "--")}</td>
           </tr>`;
         });
 
@@ -439,10 +490,9 @@ export function ReportsTab() {
           return;
         }
 
-        const filteredData =
-          selectedDepartment !== "all"
-            ? res.data.filter((r) => r.department === selectedDepartment)
-            : res.data;
+        const filteredData = deptNameFilter
+          ? res.data.filter((r) => r.department === deptNameFilter)
+          : res.data;
 
         // Sort by department name (A-Z), then employee name (A-Z)
         const sortedData = [...filteredData].sort((a, b) => {
@@ -461,7 +511,7 @@ export function ReportsTab() {
         sortedData.forEach((r) => {
           const dept = r.department ?? "UMUM";
           if (dept !== lastDept) {
-            bodyRows += `<tr class="dept-row"><td colspan="10">${dept}</td></tr>`;
+            bodyRows += `<tr class="dept-row"><td colspan="10">${escapeHtml(dept)}</td></tr>`;
             lastDept = dept;
           }
           const dur = r.duration_min
@@ -469,8 +519,8 @@ export function ReportsTab() {
             : "0j 0m";
           bodyRows += `<tr>
             <td class="center">${rowNum++}</td>
-            <td class="center" style="mso-number-format:'\\@';" x:str>${r.nik_ktp}</td>
-            <td class="bold">${r.name}</td>
+            <td class="center" style="mso-number-format:'\\@';" x:str>${escapeHtml(r.nik_ktp)}</td>
+            <td class="bold">${escapeHtml(r.name)}</td>
             <td class="center">${r.hadir} d</td>
             <td class="center">${r.telat} d</td>
             <td class="center">${r.izin} d</td>
@@ -523,34 +573,16 @@ export function ReportsTab() {
   const handleExportEmployees = async () => {
     setExporting(true);
     try {
-      const token = getToken();
-      let envVal = import.meta.env.VITE_API_URL;
-      if (envVal === "") envVal = "";
-      else if (!envVal) envVal = "http://localhost:8000";
-      const apiUrl = envVal.replace(/\/api\/?$/, "");
       const params = new URLSearchParams();
       if (selectedDepartment !== "all") {
         params.set("department_id", selectedDepartment);
       }
       const query = params.toString() ? `?${params.toString()}` : "";
-      const response = await fetch(`${apiUrl}/api/reports/employees/export${query}`, {
-        method: "GET",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!response.ok) {
-        throw new Error("Gagal mengekspor data induk pegawai dan NIP.");
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "Data_Induk_Pegawai_dan_NIP_RSUCL.xlsx";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
+      await reportApi.downloadExport(
+        `/reports/employees/export${query}`,
+        "Data_Induk_Pegawai_dan_NIP_RSUCL.xlsx",
+        "Gagal mengekspor data induk pegawai dan NIP.",
+      );
     } catch (err: any) {
       console.error(err);
       alert(err.message || "Terjadi kesalahan saat mengekspor data pegawai.");
@@ -562,35 +594,11 @@ export function ReportsTab() {
   const handleExportVehicles = async () => {
     setExporting(true);
     try {
-      const token = getToken();
-      const getApiUrl = () => {
-        let envVal = import.meta.env.VITE_API_URL;
-        if (envVal === "") return "";
-        if (!envVal) envVal = "http://localhost:8000";
-        return envVal.replace(/\/api\/?$/, "");
-      };
-      const apiUrl = getApiUrl();
-      const response = await fetch(`${apiUrl}/api/reports/vehicles/export`, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (!response.ok) {
-        throw new Error(
-          "Gagal mengekspor data kendaraan. Pastikan Anda masuk sebagai Admin.",
-        );
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "Data_Kendaraan_Pegawai_RSUCL.xlsx";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
+      await reportApi.downloadExport(
+        "/reports/vehicles/export",
+        "Data_Kendaraan_Pegawai_RSUCL.xlsx",
+        "Gagal mengekspor data kendaraan. Pastikan Anda masuk sebagai Admin.",
+      );
     } catch (err: any) {
       console.error(err);
       alert(err.message || "Terjadi kesalahan saat mengekspor Excel.");
@@ -602,35 +610,11 @@ export function ReportsTab() {
   const handleExportSocialMedia = async () => {
     setExporting(true);
     try {
-      const token = getToken();
-      const getApiUrl = () => {
-        let envVal = import.meta.env.VITE_API_URL;
-        if (envVal === "") return "";
-        if (!envVal) envVal = "http://localhost:8000";
-        return envVal.replace(/\/api\/?$/, "");
-      };
-      const apiUrl = getApiUrl();
-      const response = await fetch(`${apiUrl}/api/reports/social-media/export`, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (!response.ok) {
-        throw new Error(
-          "Gagal mengekspor data media sosial. Pastikan Anda masuk sebagai Admin.",
-        );
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "Data_Media_Sosial_Pegawai_RSUCL.xlsx";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
+      await reportApi.downloadExport(
+        "/reports/social-media/export",
+        "Data_Media_Sosial_Pegawai_RSUCL.xlsx",
+        "Gagal mengekspor data media sosial. Pastikan Anda masuk sebagai Admin.",
+      );
     } catch (err: any) {
       console.error(err);
       alert(err.message || "Terjadi kesalahan saat mengekspor Excel.");
@@ -642,29 +626,11 @@ export function ReportsTab() {
   const handleExportFaskes = async () => {
     setExporting(true);
     try {
-      const token = getToken();
-      let envVal = import.meta.env.VITE_API_URL;
-      if (envVal === "") envVal = "";
-      else if (!envVal) envVal = "http://localhost:8000";
-      const apiUrl = envVal.replace(/\/api\/?$/, "");
-      const response = await fetch(`${apiUrl}/api/reports/faskes/export`, {
-        method: "GET",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!response.ok) {
-        throw new Error("Gagal mengekspor data faskes. Pastikan Anda masuk sebagai Admin.");
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "Data_Faskes_Pegawai_RSUCL.xlsx";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
+      await reportApi.downloadExport(
+        "/reports/faskes/export",
+        "Data_Faskes_Pegawai_RSUCL.xlsx",
+        "Gagal mengekspor data faskes. Pastikan Anda masuk sebagai Admin.",
+      );
     } catch (err: any) {
       console.error(err);
       alert(err.message || "Terjadi kesalahan saat mengekspor data faskes.");
@@ -683,19 +649,7 @@ export function ReportsTab() {
       }
 
       const logoPath = logoUrl && logoUrl !== "none" ? logoUrl : rsLogoImg;
-      let base64Logo = "";
-      try {
-        const response = await fetch(logoPath);
-        const blob = await response.blob();
-        base64Logo = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(blob);
-        });
-      } catch (e) {
-        console.error("Failed to load logo for Excel", e);
-      }
+      const base64Logo = await getBase64Image(logoPath, rsLogoImg);
 
       const logoImgHtml = base64Logo
         ? `<img src="${base64Logo}" width="140" height="54" style="display:block;" />`
@@ -703,7 +657,8 @@ export function ReportsTab() {
 
       const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
       const monthStr = monthNames[selectedMonth - 1] + " " + selectedYear;
-      const deptSuffix = selectedDepartment !== "all" ? `_${selectedDepartment.replace(/\s+/g, "_")}` : "";
+      const deptNameFilter = resolveSelectedDepartmentName();
+      const deptSuffix = deptNameFilter ? `_${deptNameFilter.replace(/\s+/g, "_")}` : "";
 
       let bodyRows = "";
       let rowNum = 1;
@@ -715,9 +670,9 @@ export function ReportsTab() {
         records.forEach((r: any) => {
           bodyRows += `<tr>
             <td style="text-align:center;">${rowNum++}</td>
-            <td style="text-align:center; mso-number-format:'\\@';">${r.nik_ktp}</td>
-            <td style="font-weight:bold;">${r.name}</td>
-            <td>${r.department}</td>
+            <td style="text-align:center; mso-number-format:'\\@';">${escapeHtml(r.nik_ktp)}</td>
+            <td style="font-weight:bold;">${escapeHtml(r.name)}</td>
+            <td>${escapeHtml(r.department)}</td>
             <td style="text-align:center;">${r.total_late_days} Hari</td>
             <td style="text-align:center; font-weight:bold; color:#DC2626;">${r.total_late_minutes} Menit</td>
             <td style="text-align:right;">Rp ${(r.rate_per_minute || 500).toLocaleString('id-ID')}</td>
@@ -745,7 +700,7 @@ export function ReportsTab() {
             <td colspan="6" class="header-rs" style="text-align:right;">RUMAH SAKIT UMUM CEMPAKA LIMA</td>
           </tr>
           <tr style="height:16px;">
-            <td colspan="6" class="header-period" style="text-align:right;">Periode: ${monthStr} ${selectedDepartment !== 'all' ? '| Unit Kerja: ' + selectedDepartment : ''}</td>
+            <td colspan="6" class="header-period" style="text-align:right;">Periode: ${monthStr} ${deptNameFilter ? '| Unit Kerja: ' + escapeHtml(deptNameFilter) : ''}</td>
           </tr>
           <tr style="height:3px;">
             <td colspan="8" class="separator">&nbsp;</td>
@@ -835,18 +790,12 @@ export function ReportsTab() {
       }
 
       const logoPath = logoUrl && logoUrl !== "none" ? logoUrl : logoImg;
-      let base64Logo = "";
-      if (logoPath) {
-        try {
-          base64Logo = await getBase64Image(logoPath);
-        } catch (e) {
-          console.error("Failed to load base64 logo", e);
-        }
-      }
+      const base64Logo = logoPath ? await getBase64Image(logoPath, logoImg) : "";
 
       const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
       const monthStr = monthNames[selectedMonth - 1] + " " + selectedYear;
-      const deptStr = selectedDepartment !== "all" ? ` - Unit Kerja: ${selectedDepartment}` : "";
+      const deptNameFilter = resolveSelectedDepartmentName();
+      const deptStr = deptNameFilter ? ` - Unit Kerja: ${escapeHtml(deptNameFilter)}` : "";
 
       const records = res.data.records || [];
       let rowsHtml = "";
@@ -856,9 +805,9 @@ export function ReportsTab() {
         rowsHtml += `
           <tr>
             <td style="text-align: center;">${rowNum++}</td>
-            <td style="font-[#111827]; font-weight: bold;">${r.name}</td>
-            <td>${r.nik_ktp}</td>
-            <td>${r.department}</td>
+            <td style="font-[#111827]; font-weight: bold;">${escapeHtml(r.name)}</td>
+            <td>${escapeHtml(r.nik_ktp)}</td>
+            <td>${escapeHtml(r.department)}</td>
             <td style="text-align: center;">${r.total_late_days} Hari</td>
             <td style="text-align: center; font-weight: bold; color: #B91C1C;">${r.total_late_minutes} Menit</td>
             <td style="text-align: right;">Rp ${(r.rate_per_minute || 500).toLocaleString('id-ID')}</td>
@@ -977,19 +926,7 @@ export function ReportsTab() {
     setExporting(true);
     try {
       const logoPath = logoUrl && logoUrl !== "none" ? logoUrl : rsLogoImg;
-      let base64Logo = "";
-      try {
-        const response = await fetch(logoPath);
-        const blob = await response.blob();
-        base64Logo = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(blob);
-        });
-      } catch (e) {
-        console.error("Failed to load logo for Excel", e);
-      }
+      const base64Logo = await getBase64Image(logoPath, rsLogoImg);
 
       const logoImgHtml = base64Logo
         ? `<img src="${base64Logo}" width="140" height="54" style="display:block;" />`
@@ -1016,9 +953,9 @@ export function ReportsTab() {
           dailyRows += `
             <tr>
               <td style="text-align:center; font-weight:bold;">${item.rank}</td>
-              <td style="text-align:left; font-weight:bold;">${item.name}</td>
-              <td style="text-align:left;">${item.department}</td>
-              <td style="text-align:center; font-family:monospace;">${item.check_in} WIB</td>
+              <td style="text-align:left; font-weight:bold;">${escapeHtml(item.name)}</td>
+              <td style="text-align:left;">${escapeHtml(item.department)}</td>
+              <td style="text-align:center; font-family:monospace;">${escapeHtml(item.check_in)} WIB</td>
             </tr>
           `;
         });
@@ -1032,8 +969,8 @@ export function ReportsTab() {
           monthlyRows += `
             <tr>
               <td style="text-align:center; font-weight:bold;">${item.rank}</td>
-              <td style="text-align:left; font-weight:bold;">${item.name}</td>
-              <td style="text-align:left;">${item.department}</td>
+              <td style="text-align:left; font-weight:bold;">${escapeHtml(item.name)}</td>
+              <td style="text-align:left;">${escapeHtml(item.department)}</td>
               <td style="text-align:center;">${item.hadir_count} Hari</td>
               <td style="text-align:center; font-family:monospace; font-weight:bold;">${item.punctuality_rate}%</td>
             </tr>
@@ -1171,14 +1108,8 @@ export function ReportsTab() {
 
     try {
       const logoPath = logoUrl && logoUrl !== "none" ? logoUrl : logoImg;
-      let base64Logo = "";
-      if (logoPath) {
-        try {
-          base64Logo = await getBase64Image(logoPath);
-        } catch (e) {
-          console.error("Failed to load base64 logo", e);
-        }
-      }
+      const base64Logo = logoPath ? await getBase64Image(logoPath, logoImg) : "";
+      const deptNameFilter = resolveSelectedDepartmentName();
 
       let tableHeaders = "";
       let tableRowsHtml = "";
@@ -1192,10 +1123,9 @@ export function ReportsTab() {
           return;
         }
 
-        const deptTitleSuffix =
-          selectedDepartment !== "all"
-            ? ` - Unit kerja ${selectedDepartment}`
-            : "";
+        const deptTitleSuffix = deptNameFilter
+          ? ` - Unit kerja ${escapeHtml(deptNameFilter)}`
+          : "";
         reportTitle = `Laporan Detail Kehadiran Harian${deptTitleSuffix}`;
         tableHeaders = `
           <tr>
@@ -1214,15 +1144,12 @@ export function ReportsTab() {
         let lastDateDept = "";
         let rowCounter = 1;
 
-        const filteredData =
-          selectedDepartment !== "all"
-            ? res.data.filter(
-                (r) => r.employee?.department === selectedDepartment,
-              )
-            : res.data;
+        const filteredData = deptNameFilter
+          ? res.data.filter((r) => r.employee?.department === deptNameFilter)
+          : res.data;
 
         tableRowsHtml = filteredData
-          .map((r, i) => {
+          .map((r) => {
             const dateStr = r.date;
             const deptName = r.employee?.department ?? "UMUM";
             const currentDateDept = `${dateStr} - ${deptName}`;
@@ -1232,7 +1159,7 @@ export function ReportsTab() {
               deptRow = `
               <tr style="background-color: #E5E7EB; font-weight: bold; font-size: 11px;">
                 <td colspan="9" style="padding: 8px; border-bottom: 1px solid #E5E7EB; border-right: 1px solid #E5E7EB; text-transform: uppercase; color: #374151;">
-                  ${deptName} (${dateStr})
+                  ${escapeHtml(deptName)} (${escapeHtml(dateStr)})
                 </td>
               </tr>
             `;
@@ -1250,14 +1177,14 @@ export function ReportsTab() {
               `
             <tr style="border-bottom: 1px solid #E5E7EB; font-size: 11px;">
               <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${rowCounter++}</td>
-              <td style="padding: 8px; border-right: 1px solid #E5E7EB;">${r.date}</td>
-              <td style="padding: 8px; border-right: 1px solid #E5E7EB;">${r.employee?.nik_ktp ?? "--"}</td>
-              <td style="padding: 8px; font-weight: bold; border-right: 1px solid #E5E7EB;">${r.employee?.name ?? "Karyawan"}</td>
-              <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB; font-family: monospace;">${r.check_in ?? "--"}</td>
-              <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB; font-family: monospace;">${r.check_out ?? "--"}</td>
+              <td style="padding: 8px; border-right: 1px solid #E5E7EB;">${escapeHtml(r.date)}</td>
+              <td style="padding: 8px; border-right: 1px solid #E5E7EB;">${escapeHtml(r.employee?.nik_ktp ?? "--")}</td>
+              <td style="padding: 8px; font-weight: bold; border-right: 1px solid #E5E7EB;">${escapeHtml(r.employee?.name ?? "Karyawan")}</td>
+              <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB; font-family: monospace;">${escapeHtml(r.check_in ?? "--")}</td>
+              <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB; font-family: monospace;">${escapeHtml(r.check_out ?? "--")}</td>
               <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${r.duration_min ? `${Math.floor(r.duration_min / 60)}j ${r.duration_min % 60}m` : "--"}</td>
               <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${otStr}</td>
-              <td style="padding: 8px; text-align: center; font-weight: bold; color: #1F2937;">${r.status.toUpperCase()}</td>
+              <td style="padding: 8px; text-align: center; font-weight: bold; color: #1F2937;">${escapeHtml(r.status.toUpperCase())}</td>
             </tr>
           `
             );
@@ -1276,10 +1203,9 @@ export function ReportsTab() {
           return;
         }
 
-        const deptTitleSuffix =
-          selectedDepartment !== "all"
-            ? ` - Unit kerja ${selectedDepartment}`
-            : "";
+        const deptTitleSuffix = deptNameFilter
+          ? ` - Unit kerja ${escapeHtml(deptNameFilter)}`
+          : "";
         reportTitle = `Laporan Rekap Bulanan Kehadiran${deptTitleSuffix}`;
         tableHeaders = `
           <tr>
@@ -1302,13 +1228,12 @@ export function ReportsTab() {
         let lastDept = "";
         let rowCounter = 1;
 
-        const filteredData =
-          selectedDepartment !== "all"
-            ? res.data.filter((r) => r.department === selectedDepartment)
-            : res.data;
+        const filteredData = deptNameFilter
+          ? res.data.filter((r) => r.department === deptNameFilter)
+          : res.data;
 
         tableRowsHtml = filteredData
-          .map((r, i) => {
+          .map((r) => {
             const deptName = r.department ?? "UMUM";
             let deptRow = "";
 
@@ -1316,7 +1241,7 @@ export function ReportsTab() {
               deptRow = `
               <tr style="background-color: #E5E7EB; font-weight: bold; font-size: 11px;">
                 <td colspan="13" style="padding: 8px; border-bottom: 1px solid #E5E7EB; border-right: 1px solid #E5E7EB; text-transform: uppercase; color: #374151;">
-                  ${deptName}
+                  ${escapeHtml(deptName)}
                 </td>
               </tr>
             `;
@@ -1328,8 +1253,8 @@ export function ReportsTab() {
               `
             <tr style="border-bottom: 1px solid #E5E7EB; font-size: 11px;">
               <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${rowCounter++}</td>
-              <td style="padding: 8px; border-right: 1px solid #E5E7EB;">${r.nik_ktp}</td>
-              <td style="padding: 8px; font-weight: bold; border-right: 1px solid #E5E7EB;">${r.name}</td>
+              <td style="padding: 8px; border-right: 1px solid #E5E7EB;">${escapeHtml(r.nik_ktp)}</td>
+              <td style="padding: 8px; font-weight: bold; border-right: 1px solid #E5E7EB;">${escapeHtml(r.name)}</td>
               <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${r.hadir} d</td>
               <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${r.telat} d</td>
               <td style="padding: 8px; text-align: center; border-right: 1px solid #E5E7EB;">${r.izin} d</td>
@@ -1534,16 +1459,7 @@ export function ReportsTab() {
 
   const loadLogoBase64 = async (): Promise<string> => {
     const logoPath = logoUrl && logoUrl !== "none" ? logoUrl : rsLogoImg;
-    try {
-      const res = await fetch(logoPath);
-      const blob = await res.blob();
-      return new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
-    } catch { return ""; }
+    return getBase64Image(logoPath, rsLogoImg);
   };
 
   const getMonthsLabel = (month: number, year: number) => {
@@ -1948,10 +1864,11 @@ export function ReportsTab() {
         : getMonthsLabel(selectedMonth, selectedYear);
       const res = await leaveApi.list();
       if (!res.success) { alert("Gagal memuat data cuti."); return; }
+      const deptNameFilter = resolveSelectedDepartmentName();
       const data = res.data.filter(r => {
         const requestStart = cleanDateStr(r.start_date);
         const requestEnd = cleanDateStr(r.effective_end_date || r.actual_end_date || r.end_date);
-        const deptOk = selectedDepartment === "all" || r.employee?.department === selectedDepartment;
+        const deptOk = !deptNameFilter || r.employee?.department === deptNameFilter;
         return r.status === "approved" && requestStart <= filterEnd && requestEnd >= filterStart && deptOk;
       });
       const typeLabel = (t: string) => ({ cuti: "Cuti Tahunan", sakit: "Izin Sakit", cuti_khusus: "Cuti Khusus", izin: "Izin" }[t] ?? t);
@@ -1959,16 +1876,16 @@ export function ReportsTab() {
       data.forEach(r => {
         rows += `<tr>
           <td class="center">${no++}</td>
-          <td class="center" x:str>${r.employee?.nik_ktp ?? "--"}</td>
-          <td class="bold">${r.employee?.name ?? "--"}</td>
-          <td>${r.employee?.department ?? "--"}</td>
-          <td class="center">${typeLabel(r.type)}</td>
-          <td class="center">${r.start_date}</td>
-          <td class="center">${r.end_date}</td>
+          <td class="center" x:str>${escapeHtml(r.employee?.nik_ktp ?? "--")}</td>
+          <td class="bold">${escapeHtml(r.employee?.name ?? "--")}</td>
+          <td>${escapeHtml(r.employee?.department ?? "--")}</td>
+          <td class="center">${escapeHtml(typeLabel(r.type))}</td>
+          <td class="center">${escapeHtml(r.start_date)}</td>
+          <td class="center">${escapeHtml(r.end_date)}</td>
           <td class="center">${r.days} hari</td>
-          <td>${r.reason ?? "--"}</td>
+          <td>${escapeHtml(r.reason ?? "--")}</td>
           ${statusBadge(r.status)}
-          <td>${r.reviewer?.name ?? "--"}</td>
+          <td>${escapeHtml(r.reviewer?.name ?? "--")}</td>
         </tr>`;
       });
       const body = buildHrHtmlHeader(logo, "REKAP PENGAJUAN CUTI / IZIN / SAKIT", period) +
@@ -2001,12 +1918,17 @@ export function ReportsTab() {
         ? `${leaveDateFrom} s.d ${leaveDateTo}`
         : getMonthsLabel(selectedMonth, selectedYear);
       const res = await leaveApi.list();
-      if (!res.success) { pw.close(); return; }
+      if (!res.success) {
+        alert("Gagal memuat data cuti.");
+        pw.close();
+        return;
+      }
+      const deptNameFilter = resolveSelectedDepartmentName();
       const typeLabel = (t: string) => ({ cuti: "Cuti Tahunan", sakit: "Izin Sakit", cuti_khusus: "Cuti Khusus", izin: "Izin" }[t] ?? t);
       const data = res.data.filter(r => {
         const requestStart = cleanDateStr(r.start_date);
         const requestEnd = cleanDateStr(r.effective_end_date || r.actual_end_date || r.end_date);
-        const deptOk = selectedDepartment === "all" || r.employee?.department === selectedDepartment;
+        const deptOk = !deptNameFilter || r.employee?.department === deptNameFilter;
         return r.status === "approved" && requestStart <= filterEnd && requestEnd >= filterStart && deptOk;
       });
       let rows = ""; let no = 1;
@@ -2015,20 +1937,23 @@ export function ReportsTab() {
         const st = r.status === "approved" ? "#065F46" : r.status === "pending" ? "#92400E" : "#991B1B";
         rows += `<tr style="border-bottom:1px solid #E5E7EB;font-size:10px;">
           <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${no++}</td>
-          <td style="padding:6px;border-right:1px solid #E5E7EB;">${r.employee?.nik_ktp ?? "--"}</td>
-          <td style="padding:6px;font-weight:bold;border-right:1px solid #E5E7EB;">${r.employee?.name ?? "--"}</td>
-          <td style="padding:6px;border-right:1px solid #E5E7EB;">${r.employee?.department ?? "--"}</td>
-          <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${typeLabel(r.type)}</td>
-          <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${r.start_date}</td>
-          <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${r.end_date}</td>
+          <td style="padding:6px;border-right:1px solid #E5E7EB;">${escapeHtml(r.employee?.nik_ktp ?? "--")}</td>
+          <td style="padding:6px;font-weight:bold;border-right:1px solid #E5E7EB;">${escapeHtml(r.employee?.name ?? "--")}</td>
+          <td style="padding:6px;border-right:1px solid #E5E7EB;">${escapeHtml(r.employee?.department ?? "--")}</td>
+          <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${escapeHtml(typeLabel(r.type))}</td>
+          <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${escapeHtml(r.start_date)}</td>
+          <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${escapeHtml(r.end_date)}</td>
           <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${r.days} hari</td>
-          <td style="padding:6px;text-align:center;font-weight:bold;background-color:${sc};color:${st};border-right:1px solid #E5E7EB;">${r.status.toUpperCase()}</td>
-          <td style="padding:6px;">${r.reviewer?.name ?? "--"}</td>
+          <td style="padding:6px;text-align:center;font-weight:bold;background-color:${sc};color:${st};border-right:1px solid #E5E7EB;">${escapeHtml(r.status.toUpperCase())}</td>
+          <td style="padding:6px;">${escapeHtml(r.reviewer?.name ?? "--")}</td>
         </tr>`;
       });
       pw.document.write(`<html><head><title>Rekap Cuti</title><style>body{font-family:Arial,sans-serif;padding:20px;} table{width:100%;border-collapse:collapse;border:1px solid #E5E7EB;} th{background:#16A34A;color:#fff;font-size:10px;padding:8px;text-align:left;} @media print{@page{margin:1cm;}}</style></head><body>${buildHrPdfHeader(logo,"REKAP PENGAJUAN CUTI / IZIN / SAKIT",`Periode: ${period}`)}<table><thead><tr><th>No</th><th>NIK KTP</th><th>Nama</th><th>Unit Kerja</th><th>Jenis</th><th>Tgl Mulai</th><th>Tgl Selesai</th><th>Durasi</th><th>Status</th><th>Disetujui Oleh</th></tr></thead><tbody>${rows || '<tr><td colspan="10" style="text-align:center;padding:20px;">Tidak ada data.</td></tr>'}</tbody></table><script>window.onload=function(){window.print();setTimeout(function(){window.close();},500);}<\/script></body></html>`);
       pw.document.close();
-    } catch(e) { pw.close(); } finally { setHrExporting(null); }
+    } catch(e) {
+      pw.close();
+      alert(e instanceof Error ? e.message : "Gagal mencetak rekap cuti.");
+    } finally { setHrExporting(null); }
   };
 
   // ── 3. EKSPOR SURAT TUGAS ────────────────────────────────────────
@@ -2040,21 +1965,29 @@ export function ReportsTab() {
       const startDate = `${selectedYear}-${String(selectedMonth).padStart(2,"0")}-01`;
       const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
       const endDate = `${selectedYear}-${String(selectedMonth).padStart(2,"0")}-${String(lastDay).padStart(2,"0")}`;
-      const res = await assignmentLetterApi.list({ start_date: startDate, end_date: endDate, department_id: selectedDepartment !== "all" ? selectedDepartment : undefined, per_page: 9999 } as any);
-      if (!res.success) { alert("Gagal memuat data surat tugas."); return; }
-      const data = res.data.filter(r => r.status === "approved" || r.status === "completed");
+      const items = await fetchAllPaginated(
+        (page) => assignmentLetterApi.list({
+          start_date: startDate,
+          end_date: endDate,
+          department_id: selectedDepartment !== "all" ? selectedDepartment : undefined,
+          per_page: 9999,
+          page,
+        }),
+        "Gagal memuat data surat tugas.",
+      );
+      const data = items.filter(r => r.status === "approved" || r.status === "completed");
       let rows = ""; let no = 1;
       data.forEach(r => {
         rows += `<tr>
           <td class="center">${no++}</td>
-          <td class="center" x:str>${r.employee?.nik_ktp ?? "--"}</td>
-          <td class="bold">${r.employee?.name ?? "--"}</td>
-          <td>${r.employee?.department ?? "--"}</td>
-          <td>${r.title ?? "--"}</td>
-          <td>${r.issuing_institution ?? "--"}</td>
-          <td>${r.purpose ?? "--"}</td>
-          <td class="center">${r.start_date}</td>
-          <td class="center">${r.end_date}</td>
+          <td class="center" x:str>${escapeHtml(r.employee?.nik_ktp ?? "--")}</td>
+          <td class="bold">${escapeHtml(r.employee?.name ?? "--")}</td>
+          <td>${escapeHtml(r.employee?.department ?? "--")}</td>
+          <td>${escapeHtml(r.title ?? "--")}</td>
+          <td>${escapeHtml(r.issuing_institution ?? "--")}</td>
+          <td>${escapeHtml(r.purpose ?? "--")}</td>
+          <td class="center">${escapeHtml(r.start_date)}</td>
+          <td class="center">${escapeHtml(r.end_date)}</td>
           ${statusBadge(r.status)}
         </tr>`;
       });
@@ -2076,28 +2009,39 @@ export function ReportsTab() {
       const startDate = `${selectedYear}-${String(selectedMonth).padStart(2,"0")}-01`;
       const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
       const endDate = `${selectedYear}-${String(selectedMonth).padStart(2,"0")}-${String(lastDay).padStart(2,"0")}`;
-      const res = await assignmentLetterApi.list({ start_date: startDate, end_date: endDate, department_id: selectedDepartment !== "all" ? selectedDepartment : undefined, per_page: 9999 } as any);
-      if (!res.success) { pw.close(); return; }
-      const data = res.data.filter(r => r.status === "approved" || r.status === "completed");
+      const items = await fetchAllPaginated(
+        (page) => assignmentLetterApi.list({
+          start_date: startDate,
+          end_date: endDate,
+          department_id: selectedDepartment !== "all" ? selectedDepartment : undefined,
+          per_page: 9999,
+          page,
+        }),
+        "Gagal memuat data surat tugas.",
+      );
+      const data = items.filter(r => r.status === "approved" || r.status === "completed");
       let rows = ""; let no = 1;
       data.forEach(r => {
         const sc = r.status === "approved" || r.status === "completed" ? "#D1FAE5" : r.status === "pending" ? "#FEF9C3" : "#FEE2E2";
         const st = r.status === "approved" || r.status === "completed" ? "#065F46" : r.status === "pending" ? "#92400E" : "#991B1B";
         rows += `<tr style="border-bottom:1px solid #E5E7EB;font-size:10px;">
           <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${no++}</td>
-          <td style="padding:6px;border-right:1px solid #E5E7EB;">${r.employee?.nik_ktp ?? "--"}</td>
-          <td style="padding:6px;font-weight:bold;border-right:1px solid #E5E7EB;">${r.employee?.name ?? "--"}</td>
-          <td style="padding:6px;border-right:1px solid #E5E7EB;">${r.employee?.department ?? "--"}</td>
-          <td style="padding:6px;border-right:1px solid #E5E7EB;">${r.title}</td>
-          <td style="padding:6px;border-right:1px solid #E5E7EB;">${r.issuing_institution}</td>
-          <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${r.start_date}</td>
-          <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${r.end_date}</td>
-          <td style="padding:6px;text-align:center;font-weight:bold;background-color:${sc};color:${st};">${r.status.toUpperCase()}</td>
+          <td style="padding:6px;border-right:1px solid #E5E7EB;">${escapeHtml(r.employee?.nik_ktp ?? "--")}</td>
+          <td style="padding:6px;font-weight:bold;border-right:1px solid #E5E7EB;">${escapeHtml(r.employee?.name ?? "--")}</td>
+          <td style="padding:6px;border-right:1px solid #E5E7EB;">${escapeHtml(r.employee?.department ?? "--")}</td>
+          <td style="padding:6px;border-right:1px solid #E5E7EB;">${escapeHtml(r.title)}</td>
+          <td style="padding:6px;border-right:1px solid #E5E7EB;">${escapeHtml(r.issuing_institution)}</td>
+          <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${escapeHtml(r.start_date)}</td>
+          <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${escapeHtml(r.end_date)}</td>
+          <td style="padding:6px;text-align:center;font-weight:bold;background-color:${sc};color:${st};">${escapeHtml(r.status.toUpperCase())}</td>
         </tr>`;
       });
       pw.document.write(`<html><head><title>Rekap Surat Tugas</title><style>body{font-family:Arial,sans-serif;padding:20px;} table{width:100%;border-collapse:collapse;border:1px solid #E5E7EB;} th{background:#16A34A;color:#fff;font-size:10px;padding:8px;text-align:left;} @media print{@page{margin:1cm;}}</style></head><body>${buildHrPdfHeader(logo,"REKAP SURAT TUGAS",`Periode: ${period}`)}<table><thead><tr><th>No</th><th>NIK KTP</th><th>Nama</th><th>Unit Kerja</th><th>Judul Surat</th><th>Institusi</th><th>Tgl Mulai</th><th>Tgl Selesai</th><th>Status</th></tr></thead><tbody>${rows || '<tr><td colspan="9" style="text-align:center;padding:20px;">Tidak ada data.</td></tr>'}</tbody></table><script>window.onload=function(){window.print();setTimeout(function(){window.close();},500);}<\/script></body></html>`);
       pw.document.close();
-    } catch(e) { pw.close(); } finally { setHrExporting(null); }
+    } catch(e) {
+      pw.close();
+      alert(e instanceof Error ? e.message : "Gagal mencetak rekap surat tugas.");
+    } finally { setHrExporting(null); }
   };
 
   // ── 4. EKSPOR PENGUNDURAN DIRI ───────────────────────────────────
@@ -2106,23 +2050,30 @@ export function ReportsTab() {
     try {
       const logo = await loadLogoBase64();
       const period = getMonthsLabel(selectedMonth, selectedYear);
-      const res = await resignationApi.list({ department_id: selectedDepartment !== "all" ? Number(selectedDepartment) : undefined });
-      if (!res.success) { alert("Gagal memuat data pengunduran diri."); return; }
-      const data = res.data.filter(r => {
-        const d = new Date(r.request_date);
-        return r.status === "approved" && d.getFullYear() === selectedYear && d.getMonth() + 1 === selectedMonth;
-      });
+      const deptIdParam = selectedDepartment !== "all" && !Number.isNaN(Number(selectedDepartment))
+        ? Number(selectedDepartment)
+        : undefined;
+      const items = await fetchAllPaginated(
+        (page) => resignationApi.list({
+          status: "approved",
+          department_id: deptIdParam,
+          per_page: 9999,
+          page,
+        }),
+        "Gagal memuat data pengunduran diri.",
+      );
+      const data = items.filter(r => r.status === "approved" && matchesYearMonth(r.request_date, selectedYear, selectedMonth));
       let rows = ""; let no = 1;
       data.forEach(r => {
         rows += `<tr>
           <td class="center">${no++}</td>
-          <td class="center" x:str>${r.employee?.nik_ktp ?? "--"}</td>
-          <td class="bold">${r.employee?.user?.name ?? "--"}</td>
-          <td>${r.employee?.department?.name ?? "--"}</td>
-          <td>${r.posisi ?? "--"}</td>
-          <td class="center">${cleanDateStr(r.request_date)}</td>
-          <td class="center">${cleanDateStr(r.effective_date)}</td>
-          <td>${r.reason ?? "--"}</td>
+          <td class="center" x:str>${escapeHtml(r.employee?.nik_ktp ?? "--")}</td>
+          <td class="bold">${escapeHtml(r.employee?.user?.name ?? "--")}</td>
+          <td>${escapeHtml(r.employee?.department?.name ?? "--")}</td>
+          <td>${escapeHtml(r.posisi ?? "--")}</td>
+          <td class="center">${escapeHtml(cleanDateStr(r.request_date))}</td>
+          <td class="center">${escapeHtml(cleanDateStr(r.effective_date))}</td>
+          <td>${escapeHtml(r.reason ?? "--")}</td>
           ${statusBadge(r.status)}
         </tr>`;
       });
@@ -2141,31 +2092,41 @@ export function ReportsTab() {
     try {
       const logo = await loadLogoBase64();
       const period = getMonthsLabel(selectedMonth, selectedYear);
-      const res = await resignationApi.list({ department_id: selectedDepartment !== "all" ? Number(selectedDepartment) : undefined });
-      if (!res.success) { pw.close(); return; }
-      const data = res.data.filter(r => {
-        const d = new Date(r.request_date);
-        return r.status === "approved" && d.getFullYear() === selectedYear && d.getMonth() + 1 === selectedMonth;
-      });
+      const deptIdParam = selectedDepartment !== "all" && !Number.isNaN(Number(selectedDepartment))
+        ? Number(selectedDepartment)
+        : undefined;
+      const items = await fetchAllPaginated(
+        (page) => resignationApi.list({
+          status: "approved",
+          department_id: deptIdParam,
+          per_page: 9999,
+          page,
+        }),
+        "Gagal memuat data pengunduran diri.",
+      );
+      const data = items.filter(r => r.status === "approved" && matchesYearMonth(r.request_date, selectedYear, selectedMonth));
       let rows = ""; let no = 1;
       data.forEach(r => {
         const sc = r.status === "approved" ? "#D1FAE5" : r.status === "pending" ? "#FEF9C3" : "#FEE2E2";
         const st = r.status === "approved" ? "#065F46" : r.status === "pending" ? "#92400E" : "#991B1B";
         rows += `<tr style="border-bottom:1px solid #E5E7EB;font-size:10px;">
           <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${no++}</td>
-          <td style="padding:6px;border-right:1px solid #E5E7EB;">${r.employee?.nik_ktp ?? "--"}</td>
-          <td style="padding:6px;font-weight:bold;border-right:1px solid #E5E7EB;">${r.employee?.user?.name ?? "--"}</td>
-          <td style="padding:6px;border-right:1px solid #E5E7EB;">${r.employee?.department?.name ?? "--"}</td>
-          <td style="padding:6px;border-right:1px solid #E5E7EB;">${r.posisi ?? "--"}</td>
-          <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${cleanDateStr(r.request_date)}</td>
-          <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${cleanDateStr(r.effective_date)}</td>
-          <td style="padding:6px;border-right:1px solid #E5E7EB;">${r.reason ?? "--"}</td>
-          <td style="padding:6px;text-align:center;font-weight:bold;background-color:${sc};color:${st};">${r.status.toUpperCase()}</td>
+          <td style="padding:6px;border-right:1px solid #E5E7EB;">${escapeHtml(r.employee?.nik_ktp ?? "--")}</td>
+          <td style="padding:6px;font-weight:bold;border-right:1px solid #E5E7EB;">${escapeHtml(r.employee?.user?.name ?? "--")}</td>
+          <td style="padding:6px;border-right:1px solid #E5E7EB;">${escapeHtml(r.employee?.department?.name ?? "--")}</td>
+          <td style="padding:6px;border-right:1px solid #E5E7EB;">${escapeHtml(r.posisi ?? "--")}</td>
+          <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${escapeHtml(cleanDateStr(r.request_date))}</td>
+          <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${escapeHtml(cleanDateStr(r.effective_date))}</td>
+          <td style="padding:6px;border-right:1px solid #E5E7EB;">${escapeHtml(r.reason ?? "--")}</td>
+          <td style="padding:6px;text-align:center;font-weight:bold;background-color:${sc};color:${st};">${escapeHtml(r.status.toUpperCase())}</td>
         </tr>`;
       });
       pw.document.write(`<html><head><title>Rekap Pengunduran Diri</title><style>body{font-family:Arial,sans-serif;padding:20px;} table{width:100%;border-collapse:collapse;border:1px solid #E5E7EB;} th{background:#16A34A;color:#fff;font-size:10px;padding:8px;text-align:left;} @media print{@page{margin:1cm;}}</style></head><body>${buildHrPdfHeader(logo,"REKAP PENGUNDURAN DIRI",`Periode: ${period}`)}<table><thead><tr><th>No</th><th>NIK KTP</th><th>Nama</th><th>Unit Kerja</th><th>Jabatan</th><th>Tgl Pengajuan</th><th>Tgl Efektif</th><th>Alasan</th><th>Status</th></tr></thead><tbody>${rows || '<tr><td colspan="9" style="text-align:center;padding:20px;">Tidak ada data.</td></tr>'}</tbody></table><script>window.onload=function(){window.print();setTimeout(function(){window.close();},500);}<\/script></body></html>`);
       pw.document.close();
-    } catch(e) { pw.close(); } finally { setHrExporting(null); }
+    } catch(e) {
+      pw.close();
+      alert(e instanceof Error ? e.message : "Gagal mencetak rekap pengunduran diri.");
+    } finally { setHrExporting(null); }
   };
 
   // ── 5. EKSPOR SANKSI DISIPLIN ────────────────────────────────────
@@ -2174,25 +2135,32 @@ export function ReportsTab() {
     try {
       const logo = await loadLogoBase64();
       const period = getMonthsLabel(selectedMonth, selectedYear);
-      const res = await disciplinarySanctionApi.list({ department_id: selectedDepartment !== "all" ? Number(selectedDepartment) : undefined });
-      if (!res.success) { alert("Gagal memuat data sanksi disiplin."); return; }
-      const data = res.data.filter(r => {
-        const d = new Date(r.created_at);
-        return d.getFullYear() === selectedYear && d.getMonth() + 1 === selectedMonth;
-      });
+      const deptIdParam = selectedDepartment !== "all" && !Number.isNaN(Number(selectedDepartment))
+        ? Number(selectedDepartment)
+        : undefined;
+      const items = await fetchAllPaginated(
+        (page) => disciplinarySanctionApi.list({
+          department_id: deptIdParam,
+          per_page: 9999,
+          page,
+        }),
+        "Gagal memuat data sanksi disiplin.",
+      );
+      const data = items.filter(r => matchesYearMonth(r.created_at, selectedYear, selectedMonth));
       const typeLabel = (t: string) => ({ teguran: "Teguran", sp1: "SP 1", sp2: "SP 2", phk: "PHK" }[t] ?? t.toUpperCase());
       const typeColor = (t: string) => ({ teguran: "#FEF9C3", sp1: "#FED7AA", sp2: "#FEE2E2", phk: "#FECACA" }[t] ?? "#F3F4F6");
       let rows = ""; let no = 1;
       data.forEach(r => {
+        const createdLabel = r.created_at ? new Date(r.created_at).toLocaleDateString("id-ID") : "--";
         rows += `<tr>
           <td class="center">${no++}</td>
-          <td class="center" x:str>${r.employee?.nik_ktp ?? "--"}</td>
-          <td class="bold">${r.employee?.user?.name ?? "--"}</td>
-          <td>${r.employee?.department?.name ?? "--"}</td>
-          <td class="center bold" style="background-color:${typeColor(r.type)};color:#7C2D12;">${typeLabel(r.type)}</td>
-          <td class="center">${new Date(r.created_at).toLocaleDateString("id-ID")}</td>
-          <td>${r.admin_note ?? "--"}</td>
-          <td>${r.creator?.name ?? "--"}</td>
+          <td class="center" x:str>${escapeHtml(r.employee?.nik_ktp ?? "--")}</td>
+          <td class="bold">${escapeHtml(r.employee?.user?.name ?? "--")}</td>
+          <td>${escapeHtml(r.employee?.department?.name ?? "--")}</td>
+          <td class="center bold" style="background-color:${typeColor(r.type)};color:#7C2D12;">${escapeHtml(typeLabel(r.type))}</td>
+          <td class="center">${escapeHtml(createdLabel)}</td>
+          <td>${escapeHtml(r.admin_note ?? "--")}</td>
+          <td>${escapeHtml(r.creator?.name ?? "--")}</td>
         </tr>`;
       });
       const body = buildHrHtmlHeader(logo, "REKAP SANKSI DISIPLIN", period) +
@@ -2210,30 +2178,40 @@ export function ReportsTab() {
     try {
       const logo = await loadLogoBase64();
       const period = getMonthsLabel(selectedMonth, selectedYear);
-      const res = await disciplinarySanctionApi.list({ department_id: selectedDepartment !== "all" ? Number(selectedDepartment) : undefined });
-      if (!res.success) { pw.close(); return; }
-      const data = res.data.filter(r => {
-        const d = new Date(r.created_at);
-        return d.getFullYear() === selectedYear && d.getMonth() + 1 === selectedMonth;
-      });
+      const deptIdParam = selectedDepartment !== "all" && !Number.isNaN(Number(selectedDepartment))
+        ? Number(selectedDepartment)
+        : undefined;
+      const items = await fetchAllPaginated(
+        (page) => disciplinarySanctionApi.list({
+          department_id: deptIdParam,
+          per_page: 9999,
+          page,
+        }),
+        "Gagal memuat data sanksi disiplin.",
+      );
+      const data = items.filter(r => matchesYearMonth(r.created_at, selectedYear, selectedMonth));
       const typeLabel = (t: string) => ({ teguran: "Teguran", sp1: "SP 1", sp2: "SP 2", phk: "PHK" }[t] ?? t.toUpperCase());
       const typeColor = (t: string) => ({ teguran: "#FEF9C3", sp1: "#FED7AA", sp2: "#FEE2E2", phk: "#FECACA" }[t] ?? "#F3F4F6");
       let rows = ""; let no = 1;
       data.forEach(r => {
+        const createdLabel = r.created_at ? new Date(r.created_at).toLocaleDateString("id-ID") : "--";
         rows += `<tr style="border-bottom:1px solid #E5E7EB;font-size:10px;">
           <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${no++}</td>
-          <td style="padding:6px;border-right:1px solid #E5E7EB;">${r.employee?.nik_ktp ?? "--"}</td>
-          <td style="padding:6px;font-weight:bold;border-right:1px solid #E5E7EB;">${r.employee?.user?.name ?? "--"}</td>
-          <td style="padding:6px;border-right:1px solid #E5E7EB;">${r.employee?.department?.name ?? "--"}</td>
-          <td style="padding:6px;text-align:center;font-weight:bold;background-color:${typeColor(r.type)};color:#7C2D12;border-right:1px solid #E5E7EB;">${typeLabel(r.type)}</td>
-          <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${new Date(r.created_at).toLocaleDateString("id-ID")}</td>
-          <td style="padding:6px;border-right:1px solid #E5E7EB;">${r.admin_note ?? "--"}</td>
-          <td style="padding:6px;">${r.creator?.name ?? "--"}</td>
+          <td style="padding:6px;border-right:1px solid #E5E7EB;">${escapeHtml(r.employee?.nik_ktp ?? "--")}</td>
+          <td style="padding:6px;font-weight:bold;border-right:1px solid #E5E7EB;">${escapeHtml(r.employee?.user?.name ?? "--")}</td>
+          <td style="padding:6px;border-right:1px solid #E5E7EB;">${escapeHtml(r.employee?.department?.name ?? "--")}</td>
+          <td style="padding:6px;text-align:center;font-weight:bold;background-color:${typeColor(r.type)};color:#7C2D12;border-right:1px solid #E5E7EB;">${escapeHtml(typeLabel(r.type))}</td>
+          <td style="padding:6px;text-align:center;border-right:1px solid #E5E7EB;">${escapeHtml(createdLabel)}</td>
+          <td style="padding:6px;border-right:1px solid #E5E7EB;">${escapeHtml(r.admin_note ?? "--")}</td>
+          <td style="padding:6px;">${escapeHtml(r.creator?.name ?? "--")}</td>
         </tr>`;
       });
       pw.document.write(`<html><head><title>Rekap Sanksi Disiplin</title><style>body{font-family:Arial,sans-serif;padding:20px;} table{width:100%;border-collapse:collapse;border:1px solid #E5E7EB;} th{background:#B91C1C;color:#fff;font-size:10px;padding:8px;text-align:left;} @media print{@page{margin:1cm;}}</style></head><body>${buildHrPdfHeader(logo,"REKAP SANKSI DISIPLIN",`Periode: ${period}`)}<table><thead><tr><th>No</th><th>NIK KTP</th><th>Nama</th><th>Unit Kerja</th><th>Jenis Sanksi</th><th>Tanggal</th><th>Catatan</th><th>Ditetapkan Oleh</th></tr></thead><tbody>${rows || '<tr><td colspan="8" style="text-align:center;padding:20px;">Tidak ada data.</td></tr>'}</tbody></table><script>window.onload=function(){window.print();setTimeout(function(){window.close();},500);}<\/script></body></html>`);
       pw.document.close();
-    } catch(e) { pw.close(); } finally { setHrExporting(null); }
+    } catch(e) {
+      pw.close();
+      alert(e instanceof Error ? e.message : "Gagal mencetak rekap sanksi disiplin.");
+    } finally { setHrExporting(null); }
   };
 
   useEffect(() => {

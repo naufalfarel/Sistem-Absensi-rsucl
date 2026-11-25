@@ -2,8 +2,8 @@
 
 namespace App\Exports;
 
+use App\Exports\Concerns\ResolvesExportLogo;
 use App\Models\Employee;
-use App\Models\Setting;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithCustomStartCell;
@@ -16,11 +16,12 @@ use Maatwebsite\Excel\Events\AfterSheet;
 use PhpOffice\PhpSpreadsheet\Cell\Cell;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Cell\DefaultValueBinder;
-use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 class FaskesExport extends DefaultValueBinder implements FromCollection, WithHeadings, ShouldAutoSize, WithStyles, WithDrawings, WithCustomStartCell, WithEvents, WithCustomValueBinder
 {
+    use ResolvesExportLogo;
+
     private array $deptHeaderRows = [];
 
     public function collection()
@@ -80,35 +81,7 @@ class FaskesExport extends DefaultValueBinder implements FromCollection, WithHea
 
     public function drawings()
     {
-        $logoUrl = Setting::get('logo_url');
-        $logoPath = null;
-
-        if ($logoUrl && $logoUrl !== 'none') {
-            $path = parse_url($logoUrl, PHP_URL_PATH);
-            if ($path) {
-                $candidate = storage_path(str_replace('/storage/', 'app/public/', $path));
-                if (file_exists($candidate)) {
-                    $logoPath = $candidate;
-                }
-            }
-        }
-
-        if (!$logoPath || !file_exists($logoPath)) {
-            $logoPath = public_path('rsucl_wide_logo.png');
-        }
-
-        if (!file_exists($logoPath)) {
-            return [];
-        }
-
-        $drawing = new Drawing();
-        $drawing->setName('Logo RSUCL');
-        $drawing->setDescription('Logo Instansi Rumah Sakit Umum Cempaka Lima');
-        $drawing->setPath($logoPath);
-        $drawing->setHeight(54);
-        $drawing->setCoordinates('A1');
-
-        return $drawing;
+        return $this->buildLogoDrawing();
     }
 
     public function styles(Worksheet $sheet)
@@ -159,9 +132,11 @@ class FaskesExport extends DefaultValueBinder implements FromCollection, WithHea
                 ]);
 
                 $highestRow = $sheet->getHighestRow();
-                $sheet->getStyle("A7:B{$highestRow}")->getAlignment()->setHorizontal('center');
-                $sheet->getStyle("E7:E{$highestRow}")->getAlignment()->setHorizontal('center');
-                $sheet->getStyle("G7:G{$highestRow}")->getAlignment()->setHorizontal('center');
+                if ($highestRow >= 7) {
+                    $sheet->getStyle("A7:B{$highestRow}")->getAlignment()->setHorizontal('center');
+                    $sheet->getStyle("E7:E{$highestRow}")->getAlignment()->setHorizontal('center');
+                    $sheet->getStyle("G7:G{$highestRow}")->getAlignment()->setHorizontal('center');
+                }
 
                 foreach ($this->deptHeaderRows as $rowNumber) {
                     $sheet->mergeCells("A{$rowNumber}:G{$rowNumber}");

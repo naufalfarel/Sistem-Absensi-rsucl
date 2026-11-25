@@ -88,7 +88,13 @@ class AssignmentLetterController extends Controller
             });
         }
 
-        $paginated = $query->paginate(15);
+        $perPage = (int) $request->query('per_page', 15);
+        if ($perPage < 1) {
+            $perPage = 15;
+        }
+        $perPage = min($perPage, $user->isAdmin() ? 10000 : 100);
+
+        $paginated = $query->paginate($perPage);
 
         return response()->json([
             'success' => true,

@@ -154,13 +154,16 @@ class Attendance extends Model
         $employees = $employeesQuery->get();
 
         // 3. Ambil data kehadiran aktual di bulan tersebut
-        $attendancesQuery = self::whereYear('date', $year)
+        $attendancesQuery = self::with(['schedule'])
+            ->whereYear('date', $year)
             ->whereMonth('date', $month);
         if ($employeeId) {
             $attendancesQuery->where('employee_id', $employeeId);
         }
         // Kelompokkan data kehadiran berdasarkan format: {employee_id}_{date_string} untuk lookup cepat
-        $attendances = $attendancesQuery->get()->groupBy(fn($att) => $att->employee_id . '_' . $att->date->toDateString());
+        $attendances = $attendancesQuery->get()->groupBy(
+            fn($att) => $att->employee_id . '_' . ($att->date ? $att->date->toDateString() : '')
+        );
 
         // 4. Ambil data pengajuan cuti/izin yang disetujui (status: approved) pada rentang bulan tersebut
         $leaveRequestsQuery = LeaveRequest::where('status', 'approved')
@@ -204,7 +207,16 @@ class Attendance extends Model
                     ->whereYear('employee_schedule.work_date', $year)
                     ->whereMonth('employee_schedule.work_date', $month)
                     ->whereNotNull('employee_schedule.work_date')
-                    ->select('employee_schedule.employee_id', 'employee_schedule.work_date', 'schedules.name', 'schedules.shift_type', 'schedules.id as schedule_id')
+                    ->select(
+                        'employee_schedule.employee_id',
+                        'employee_schedule.work_date',
+                        'schedules.name',
+                        'schedules.shift_type',
+                        'schedules.start_time',
+                        'schedules.end_time',
+                        'schedules.checkin_window_end_time',
+                        'schedules.id as schedule_id'
+                    )
                     ->get()
                     ->groupBy(fn($r) => $r->employee_id . '_' . $r->work_date);
             }
@@ -212,6 +224,17 @@ class Attendance extends Model
             \Illuminate\Support\Facades\Log::warning('dateRosters fetch notice: ' . $e->getMessage());
             $dateRosters = collect();
         }
+
+        // Pre-fetch seluruh hari libur dan penugasan libur bulan ini (menghindari ribuan query di dalam loop)
+        $holidaysByDate = \App\Models\Holiday::whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])
+            ->get()
+            ->keyBy(fn($h) => $h->date instanceof Carbon ? $h->date->toDateString() : (string) $h->date);
+        $holidayIds = $holidaysByDate->pluck('id')->all();
+        $holidayAssignedSet = !empty($holidayIds)
+            ? \App\Models\HolidayWorkAssignment::whereIn('holiday_id', $holidayIds)
+                ->get()
+                ->mapWithKeys(fn($a) => [$a->holiday_id . '_' . $a->employee_id => true])
+            : collect();
 
         $reportRecords = [];
 
@@ -225,10 +248,12 @@ class Attendance extends Model
         for ($date = $startDate->copy(); $date->lte($endDate); $date->addDay()) {
             $dateStr = $date->toDateString();
             $dayOfWeekName = $dayMap[$date->dayOfWeek];
+            $holiday = $holidaysByDate->get($dateStr);
 
             foreach ($employees as $emp) {
                 $keyDate = $emp->id . '_' . $dateStr;
                 $hasShift = false;
+                $matchingShift = null;
                 $matchingShiftName = null;
                 $matchingShiftType = 'normal';
 
@@ -236,6 +261,7 @@ class Attendance extends Model
                 if (isset($dateRosters[$keyDate]) && $dateRosters[$keyDate]->isNotEmpty()) {
                     $roster = $dateRosters[$keyDate]->first();
                     $hasShift = true;
+                    $matchingShift = $roster;
                     $matchingShiftName = $roster->name;
                     $matchingShiftType = $roster->shift_type ?? 'normal';
                 } else {
@@ -339,7 +365,7 @@ class Attendance extends Model
                             'overtime_minutes' => $attRecord->overtime_minutes,
                             'overtime_status' => $attRecord->overtime_status,
                             'shift_name' => $attRecord->schedule ? $attRecord->schedule->name : $shiftName,
-                            'shift_type' => $matchingShift ? ($matchingShift->shift_type ?? 'normal') : 'normal',
+                            'shift_type' => $matchingShiftType ?? 'normal',
                         ];
                     }
                 } else {
@@ -387,19 +413,17 @@ class Attendance extends Model
                             'checkout_distance_meters' => null,
 
                             'shift_name' => $shiftName,
-                            'shift_type' => $matchingShift ? ($matchingShift->shift_type ?? 'normal') : 'normal',
+                            'shift_type' => $matchingShiftType ?? 'normal',
                         ];
                     } else {
                         // Kasus C: Tidak ada absensi dan tidak ada izin.
                         // Karyawan dinyatakan Alpa jika tanggal tersebut adalah hari lalu/hari ini,
                         // dan setelah sistem absensi resmi dimulai.
                         if ($date->lte($limitDate) && $date->gte($systemStartDate)) {
-                            // Cek jika hari libur nasional
-                            $holiday = \App\Support\AttendanceRules::holidayOn($date);
+                            // Cek jika hari libur nasional (sudah di-prefetch sebelum loop)
                             if ($holiday) {
                                 // Cek jika tidak ditugaskan kerja pada hari libur ini
-                                $isAssigned = \App\Support\AttendanceRules::isAssignedToWorkOnHoliday($emp, $holiday);
-                                if (!$isAssigned) {
+                                if (!$holidayAssignedSet->has($holiday->id . '_' . $emp->id)) {
                                     continue; // Lewati, jangan catat sebagai alpa
                                 }
                             }
@@ -408,7 +432,7 @@ class Attendance extends Model
                             $note = 'Tidak Hadir Tanpa Keterangan';
 
                             if ($date->isToday()) {
-                                if ($matchingShift) {
+                                if ($matchingShift && !empty($matchingShift->start_time) && !empty($matchingShift->end_time)) {
                                     $now = Carbon::now('Asia/Jakarta');
                                     $shiftStart = $matchingShift->start_time; // "HH:mm:ss"
                                     $resolvedCloseTime = $matchingShift->checkin_window_end_time;
@@ -429,6 +453,9 @@ class Attendance extends Model
                                         $status = 'belum_hadir';
                                         $note = 'Belum Absen Masuk';
                                     }
+                                } else {
+                                    $status = 'belum_hadir';
+                                    $note = 'Belum Absen Masuk';
                                 }
                             }
 
@@ -467,7 +494,7 @@ class Attendance extends Model
                                 'checkout_distance_meters' => null,
 
                                 'shift_name' => $shiftName,
-                                'shift_type' => $matchingShift ? ($matchingShift->shift_type ?? 'normal') : 'normal',
+                                'shift_type' => $matchingShiftType ?? 'normal',
                             ];
                         }
                     }

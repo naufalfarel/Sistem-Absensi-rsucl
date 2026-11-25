@@ -8,12 +8,21 @@
 
 /**
  * Mendapatkan URL dasar API dari environment variables.
- * Jika VITE_API_URL dikonfigurasi kosong, akan mengembalikan path relatif.
+ * Jika VITE_API_URL dikonfigurasi kosong, atau berjalan di domain VPS / dev proxy,
+ * akan mengembalikan path relatif ("") agar request always same-origin.
  */
-const getApiUrl = () => {
+export const getApiUrl = () => {
   const envVal = import.meta.env.VITE_API_URL;
   if (envVal === "") return ""; // Path relatif untuk dukungan proxy
-  return envVal ?? "http://localhost:8000";
+  if (envVal) return envVal.replace(/\/api\/?$/, "");
+  if (typeof window !== "undefined") {
+    const { hostname, port } = window.location;
+    const isLocalHost = hostname === "localhost" || hostname === "127.0.0.1";
+    if (!isLocalHost || ["5173", "5174", "8000", "80", "443", ""].includes(port)) {
+      return "";
+    }
+  }
+  return "http://localhost:8000";
 };
 const BASE_URL = getApiUrl() + "/api";
 const TOKEN_KEY = "rsucl_token";
@@ -1141,6 +1150,41 @@ export const reportApi = {
       };
     }>(`/reports/lateness?${params.toString()}`);
   },
+  // Mengunduh file ekspor binary (Excel .xlsx) dari backend secara aman di local maupun VPS
+  downloadExport: async (path: string, fallbackFilename: string, defaultErrorMsg: string) => {
+    const token = getToken();
+    const headers: Record<string, string> = {
+      Accept: "application/json, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
+    const response = await fetch(`${BASE_URL}${path}`, {
+      method: "GET",
+      headers,
+    });
+
+    if (!response.ok) {
+      let msg = defaultErrorMsg;
+      try {
+        const errJson = await response.json();
+        if (errJson?.message) msg = errJson.message;
+      } catch {
+        // Ignore non-JSON error body
+      }
+      throw new Error(msg);
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fallbackFilename;
+    link.style.display = "none";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => window.URL.revokeObjectURL(url), 5000);
+  },
 };
 
 // ─────────────────────────────────────────────────────────────────────
@@ -1871,6 +1915,7 @@ export const assignmentLetterApi = {
     department_id?: string;
     search?: string;
     page?: number;
+    per_page?: number;
     personal?: boolean;
   }) => {
     const query = new URLSearchParams();
@@ -1881,6 +1926,7 @@ export const assignmentLetterApi = {
       query.append("department_id", params.department_id);
     if (params?.search) query.append("search", params.search);
     if (params?.page) query.append("page", params.page.toString());
+    if (params?.per_page) query.append("per_page", params.per_page.toString());
     if (params?.personal) query.append("personal", "1");
 
     return api.get<{
@@ -2197,12 +2243,14 @@ export const employeeRegistrationApi = {
 };
 
 export const resignationApi = {
-  list: (params?: { personal?: boolean; status?: string; department_id?: number; search?: string }) => {
+  list: (params?: { personal?: boolean; status?: string; department_id?: number; search?: string; page?: number; per_page?: number }) => {
     const query = new URLSearchParams();
     if (params?.personal) query.append('personal', '1');
     if (params?.status) query.append('status', params.status);
     if (params?.department_id) query.append('department_id', String(params.department_id));
     if (params?.search) query.append('search', params.search);
+    if (params?.page) query.append('page', String(params.page));
+    if (params?.per_page) query.append('per_page', String(params.per_page));
     return api.get<{
       success: boolean;
       data: ResignationRequest[];
@@ -2296,12 +2344,14 @@ export interface DisciplinarySanction {
 }
 
 export const disciplinarySanctionApi = {
-  list: (params?: { personal?: boolean; type?: string; department_id?: number; search?: string }) => {
+  list: (params?: { personal?: boolean; type?: string; department_id?: number; search?: string; page?: number; per_page?: number }) => {
     const query = new URLSearchParams();
     if (params?.personal) query.append('personal', '1');
     if (params?.type) query.append('type', params.type);
     if (params?.department_id) query.append('department_id', String(params.department_id));
     if (params?.search) query.append('search', params.search);
+    if (params?.page) query.append('page', String(params.page));
+    if (params?.per_page) query.append('per_page', String(params.per_page));
     return api.get<{
       success: boolean;
       data: DisciplinarySanction[];
